@@ -38,6 +38,18 @@ def write_sample_snp(in_file, in_sample, out_dir):
     print("Created Filtered VCF")
 
 
+def write_filter_gtf(gtf_file, feature, out_dir):
+    df = pd.read_csv(gtf_file, sep="\t", header=None, names=["seqname", "source", "feature", "start", "end", "score", "strand", "frame", "attribute"])
+
+    if feature is not None:
+        df = df.loc[df["feature"].isin(feature)]
+
+
+    if out_dir is not None:
+        df.to_csv(str(Path(out_dir) / "filter.gtf"), sep="\t", header=False, index=False)
+        print(f"GTF filtered by feature")
+
+
 def intersect_snp(vcf_file, region_file, out_dir):
     """
     Retrieves SNP's that intersect regions
@@ -65,7 +77,7 @@ def parse_intersect_df(intersect_file):
     df.columns = ["chrom", "pos", "ref", "alt", "peak_chrom", "peak_start", "peak_end"]
     df["peak"] = df["peak_chrom"] + "_" + df["peak_start"] + "_" + df["peak_end"]
 
-    return_df = df.drop_duplicates()[["chrom", "pos", "ref", "alt", "peak"]].reset_index(drop=True)
+    return_df = df[["chrom", "pos", "ref", "alt", "peak"]].drop_duplicates().reset_index(drop=True)
 
     print("SNP DF Created")
     return return_df
@@ -85,7 +97,7 @@ def parse_gene_df(intersect_file):
     df["genes"] = df["attributes"].str.extract(r'(?<=name\s)(.*?);')
     df["genes"] = df["genes"].str.strip('"')
 
-    return_df = df.drop_duplicates()[["chrom", "pos", "ref", "alt", "feature", "genes"]].reset_index(drop=True)
+    return_df = df[["chrom", "pos", "ref", "alt", "feature", "genes"]].drop_duplicates().reset_index(drop=True)
 
     print("SNP DF Created")
     return return_df

@@ -8,18 +8,23 @@ from pathlib import Path
 import argparse
 import time
 import tempfile
+import re
 
 # External package imports
 import pandas as pd
 
 # Local script imports
-from filter_data import write_sample_snp, intersect_snp, parse_intersect_df, process_bam
+from filter_data import write_sample_snp, intersect_snp, parse_intersect_df, parse_gene_df, process_bam, write_filter_gtf
 from count_alleles import make_count_df
 from count_alleles_sc import make_count_df_sc
 from as_analysis import get_imbalance, get_imbalance_sc
 
 
-def preprocess_data(in_bam, in_vcf, in_region, in_sample, nofilt, out_dir):
+def preprocess_data(in_bam, in_vcf, in_region, in_sample, stype, nofilt, out_dir, features=None):
+
+    if (stype == "rna") and features is not None:
+        write_filter_gtf(in_region, features, out_dir)
+        in_region = str(Path(out_dir) / "filter.gtf")
 
     if not nofilt:
         process_bam(in_bam, in_region, out_dir)
@@ -28,18 +33,22 @@ def preprocess_data(in_bam, in_vcf, in_region, in_sample, nofilt, out_dir):
 
     intersect_snp(str(Path(out_dir) / "filter.vcf"), in_region, out_dir)
 
-    intersect_df = parse_intersect_df(str(Path(out_dir) / "intersect.bed"))
+    if stype == "rna":
+        intersect_df = parse_gene_df(str(Path(out_dir) / "intersect.bed"))
+    else:
+        intersect_df = parse_intersect_df(str(Path(out_dir) / "intersect.bed"))
+
 
     return intersect_df
     
 
-def parse_counting(in_bam, in_vcf, in_region, in_sample, out_dir, nofilt=False, temp_loc=None):
+def parse_counting(in_bam, in_vcf, in_region, in_sample, out_dir, stype, nofilt=False, temp_loc=None, features=None):
 
     start = time.time()
     if temp_loc is None:
         with tempfile.TemporaryDirectory() as tmpdir:
 
-            intersect_df = preprocess_data(in_bam, in_vcf, in_region, in_sample, nofilt, tmpdir)
+            intersect_df = preprocess_data(in_bam, in_vcf, in_region, in_sample, stype, nofilt, tmpdir, features)
 
             if nofilt is True:
                 df = make_count_df(in_bam, intersect_df)
@@ -49,7 +58,7 @@ def parse_counting(in_bam, in_vcf, in_region, in_sample, out_dir, nofilt=False, 
             df.to_csv(str(Path(out_dir) / "as_counts.tsv"), sep="\t", header=True, index=False)
 
     else:
-        intersect_df = preprocess_data(in_bam, in_vcf, in_region, in_sample, nofilt, temp_loc)
+        intersect_df = preprocess_data(in_bam, in_vcf, in_region, in_sample, stype, nofilt, temp_loc, features)
 
         if nofilt is True:
             df = make_count_df(in_bam, intersect_df)
@@ -62,14 +71,14 @@ def parse_counting(in_bam, in_vcf, in_region, in_sample, out_dir, nofilt=False, 
     print(f"Counting pipeline completed in {end - start} seconds!")
 
 
-def parse_counting_sc(in_bam, in_vcf, in_region, in_sample, in_barcodes, out_dir, nofilt=False, temp_loc=None):
+def parse_counting_sc(in_bam, in_vcf, in_region, in_sample, in_barcodes, out_dir, stype, nofilt=False, temp_loc=None, features=None):
     bc_series = pd.read_csv(in_barcodes, sep="\t", header=None, index_col=0, names=["barcodes", "group"], squeeze=True)
 
     start = time.time()
     if temp_loc is None:
         with tempfile.TemporaryDirectory() as tmpdir:
 
-            intersect_df = preprocess_data(in_bam, in_vcf, in_region, in_sample, nofilt, tmpdir)
+            intersect_df = preprocess_data(in_bam, in_vcf, in_region, in_sample, stype, nofilt, tmpdir)
 
             if nofilt is True:
                 df = make_count_df_sc(in_bam, intersect_df, bc_series)
@@ -79,7 +88,7 @@ def parse_counting_sc(in_bam, in_vcf, in_region, in_sample, in_barcodes, out_dir
             df.to_csv(str(Path(out_dir) / "as_counts.tsv"), sep="\t", header=True, index=False)
 
     else:
-        intersect_df = preprocess_data(in_bam, in_vcf, in_region, in_sample, nofilt, temp_loc)
+        intersect_df = preprocess_data(in_bam, in_vcf, in_region, in_sample, stype, nofilt, temp_loc)
 
         if nofilt is True:
             df = make_count_df_sc(in_bam, intersect_df, bc_series)
@@ -92,13 +101,70 @@ def parse_counting_sc(in_bam, in_vcf, in_region, in_sample, in_barcodes, out_dir
     print(f"Counting pipeline completed in {end - start} seconds!")
 
 
+def validate_args(args):    # TODO Better parsing of valid files and inputs
+    singlecell = args.singlecell
+    command = args.command
+
+    if command == "count":
+
+        # If no directory given for --keeptemps, set to outdir
+        if args.keeptemps == 0:
+            args.keeptemps = args.output
+        
+
+        # Manual parsing of required inputs for single-cell
+        if singlecell and not args.barcodes:
+            return "count --singlecell requires --barcodes"
+        elif not singlecell and args.barcodes:
+            return "Single-Cell barcodes given for bulk analysis. Remove --barcode input, or instead run with --singlecell option"
+        
+
+        # Validate if rna-seq or ATAC-seq
+        f_ext = "".join(Path(args.regions).suffixes)
+
+        if re.search(r'\.(.*Peak|bed)(\.gz)?$', f_ext, re.I):
+            file_stype = "atac"
+        elif re.search(r'\.(gtf)(\.gz)?$', f_ext, re.I):
+            file_stype = "rna"
+        else:
+            return "Unrecognized file-type for region file"
+
+        if args.stype is None:
+            args.stype = file_stype
+        elif args.stype != file_stype:
+            return f"--{args.stype} option selected, but {f_ext} file given"
+        
+
+        # Validate feature options
+        if (args.stype != "rna") and (args.features is not None):
+            return f"--features only valid using rna-seq data, and gtf annotations"
+
+        elif (args.stype == "rna") and (args.features is None):
+            args.features = ["transcript"]
+        
+        elif (args.stype == "rna") and not args.features:
+            args.features = None
+    
+    elif command =="analysis":
+        if args.stype == "rna":
+            args.stype = True
+
+        
+
+    # TODO more sanity checks, as well as parsing different file types
+    return args
+
+
 def main():
     parent_parser = argparse.ArgumentParser(add_help=False)
     seq_type = parent_parser.add_mutually_exclusive_group() # Denote rna-seq vs atac-seq
-    seq_type.add_argument("--rna", action='store_true', help="TODO") # TODO make RNA-SEQ work with software
-    seq_type.add_argument("--atac", action='store_true', help="default")
+    seq_type.add_argument("--rna", action='store_const', const="rna", dest="stype")
+    seq_type.add_argument("--atac", action='store_const', const="atac", dest="stype")
 
     parent_parser.add_argument("-sc", "--singlecell", action="store_true", help="Single Cell Option")
+
+    parent_parser.add_argument("-ft", "--features", nargs="*", help="GTF features to analyze")
+
 
 
     parser = argparse.ArgumentParser()
@@ -115,9 +181,8 @@ def main():
     count_parser.add_argument("-o", "--output", type=str, help="Output Directory", default=str(Path.cwd()))
 
     count_parser.add_argument("--nofilt", action='store_true') # TODO filtering options
-    count_parser.add_argument("--keeptemps", type=str, nargs="?", const=str(Path.cwd())) # TODO allow for intermediate files to be saved
+    count_parser.add_argument("--keeptemps", type=str, nargs="?", const=0)
 
-   
 
     analysis_parser = subparser.add_parser("analysis", parents=[parent_parser])
     analysis_parser.add_argument("counts")
@@ -125,33 +190,32 @@ def main():
     analysis_parser.add_argument("-m", "--model", type=str, choices=["single", "linear", "binomial"], help="Analysis Model", default="single")
     analysis_parser.add_argument("-o", "--output", type=str, help="Output Directory", default=str(Path.cwd()))
 
-
     args = parser.parse_args()
 
-    # print(args)
-
+    validate_out = validate_args(args)
+    
+    if isinstance(validate_out, str):
+        parser.error(validate_out)
+    else:
+        args = validate_out
+    
+    print(args)
+    
     if args.singlecell: # Single Cell Data
         print("Single Cell Analysis")
-        if (args.command == "count") and not (args.barcodes):
-            parser.error("count --singlecell requires --barcodes")
-
-        elif (args.command == "count") and args.barcodes:
-            parse_counting_sc(args.alignment, args.genotypes, args.regions, args.sample, args.barcodes, args.output, nofilt=args.nofilt, temp_loc=args.keeptemps)
+        if args.command == "count":
+            parse_counting_sc(args.alignment, args.genotypes, args.regions, args.sample, args.barcodes, args.output, args.stype, nofilt=args.nofilt, temp_loc=args.keeptemps)
         
         elif args.command == "analysis":
             get_imbalance_sc(args.counts, args.min, args.model, args.output)
 
-
     else: # Bulk processing
         print("Bulk Analysis")
-        if (args.command == "count") and not (args.barcodes):
-            parse_counting(args.alignment, args.genotypes, args.regions, args.sample, args.output, nofilt=args.nofilt, temp_loc=args.keeptemps)
-
-        elif (args.command == "count") and args.barcodes:
-            parser.error("Single-Cell barcodes given for bulk analysis. Remove --barcode input, or instead run with --singlecell option")
+        if args.command == "count":
+            parse_counting(args.alignment, args.genotypes, args.regions, args.sample, args.output, args.stype, nofilt=args.nofilt, temp_loc=args.keeptemps, features=args.features)
 
         elif args.command == "analysis":
-            get_imbalance(args.counts, args.min, args.model, args.output)
+            get_imbalance(args.counts, args.min, args.model, args.output, is_gene=args.stype)
 
 
 if __name__ == '__main__':

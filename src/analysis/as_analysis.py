@@ -264,7 +264,7 @@ def binom_model(df):
     return ll_df
 
 
-def get_imbalance(in_data, min_count=10, method="single", out_dir=None):
+def get_imbalance(in_data, min_count=10, method="single", out_dir=None, is_gene=False):
     """
     Process input data and method for finding allelic imbalance
 
@@ -290,6 +290,11 @@ def get_imbalance(in_data, min_count=10, method="single", out_dir=None):
         df = in_data
     else:
         df = pd.read_csv(in_data, sep="\t")
+
+    # Change label for gene to peak temporarily
+    if is_gene is True:
+        df = df.rename(columns={"genes": "peak"})
+
     
     df["N"] = df["ref_count"] + df["alt_count"]
     df = df.loc[df["N"] >= min_count]
@@ -305,6 +310,10 @@ def get_imbalance(in_data, min_count=10, method="single", out_dir=None):
     merge_df = pd.merge(snp_counts, p_df, how="left", on="peak")
     
     as_df = pd.merge(count_alleles, merge_df, how="left", on="peak")
+
+    # Change label for gene to peak temporarily
+    if is_gene is True:
+        as_df = as_df.rename(columns={"peak": "genes"})
 
     if out_dir is not None:
         out_file = str(Path(out_dir) / f"as_results_{method}.tsv")
