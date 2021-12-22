@@ -5,6 +5,7 @@ Python Version: 3.9
 
 # Default Python package Imports
 from pathlib import Path
+from csv import DictReader
 import argparse
 import time
 import tempfile
@@ -12,6 +13,7 @@ import re
 
 # External package imports
 import pandas as pd
+from pandas.io import parsers
 
 # Local script imports
 from filter_data import write_sample_snp, intersect_snp, parse_intersect_df, parse_gene_df, process_bam, write_filter_gtf
@@ -101,6 +103,26 @@ def parse_counting_sc(in_bam, in_vcf, in_region, in_sample, in_barcodes, out_dir
     print(f"Counting pipeline completed in {end - start} seconds!")
 
 
+def parse_analysis(count_file, min_count, model, out_dir, stype, features=None):
+
+    if stype == "rna":
+        df = pd.read_csv(count_file, sep="\t")
+
+        if features:
+            df = df.loc[df["feature"].isin(features)]
+        
+        feature_list = df["feature"].unique()
+
+        for feat in feature_list:
+            feat_df = df.loc[df["feature"] == feat]
+            feat_df = feat_df.drop(columns=["feature"])
+
+            get_imbalance(feat_df, min_count, model, out_dir, is_gene=True, feature=feat)
+
+    else:
+        get_imbalance(count_file, min_count, model, out_dir, is_gene=False)
+
+
 def validate_args(args):    # TODO Better parsing of valid files and inputs
     singlecell = args.singlecell
     command = args.command
@@ -146,10 +168,19 @@ def validate_args(args):    # TODO Better parsing of valid files and inputs
             args.features = None
     
     elif command =="analysis":
-        if args.stype == "rna":
-            args.stype = True
 
-        
+        # Confirm input type
+        if args.stype is None: # Use columns to determine rna or atac
+            with open(args.counts, "r") as file:
+                header=DictReader(file, delimiter="\t").fieldnames
+            
+            if "genes" in header:
+                args.stype = "rna"
+            else:
+                args.stype = "atac"
+
+        if (args.stype != "rna") and (args.features is not None):
+            return f"--features only valid using rna-seq data"
 
     # TODO more sanity checks, as well as parsing different file types
     return args
@@ -158,8 +189,8 @@ def validate_args(args):    # TODO Better parsing of valid files and inputs
 def main():
     parent_parser = argparse.ArgumentParser(add_help=False)
     seq_type = parent_parser.add_mutually_exclusive_group() # Denote rna-seq vs atac-seq
-    seq_type.add_argument("--rna", action='store_const', const="rna", dest="stype")
-    seq_type.add_argument("--atac", action='store_const', const="atac", dest="stype")
+    seq_type.add_argument("--rna", action='store_const', const="rna", dest="stype", help="Explicitly denote RNA-seq data (Otherwise infers from input)")
+    seq_type.add_argument("--atac", action='store_const', const="atac", dest="stype", help="Explicitly denote ATAC-seq data (Otherwise infers from input)")
 
     parent_parser.add_argument("-sc", "--singlecell", action="store_true", help="Single Cell Option")
 
@@ -180,8 +211,8 @@ def main():
     count_parser.add_argument("-b", "--barcodes", type=str, help="Two row TSV mapping barcode to cell-group/cluster")
     count_parser.add_argument("-o", "--output", type=str, help="Output Directory", default=str(Path.cwd()))
 
-    count_parser.add_argument("--nofilt", action='store_true') # TODO filtering options
-    count_parser.add_argument("--keeptemps", type=str, nargs="?", const=0)
+    count_parser.add_argument("--nofilt", action='store_true', help="Skip step that filters BAM reads in regions of interest") # TODO filtering options
+    count_parser.add_argument("--keeptemps", type=str, nargs="?", const=0, help="Keep intermediate files created during prefiltering. Outputs to directory if given, otherwise outputs ")
 
 
     analysis_parser = subparser.add_parser("analysis", parents=[parent_parser])
@@ -207,7 +238,9 @@ def main():
             parse_counting_sc(args.alignment, args.genotypes, args.regions, args.sample, args.barcodes, args.output, args.stype, nofilt=args.nofilt, temp_loc=args.keeptemps)
         
         elif args.command == "analysis":
-            get_imbalance_sc(args.counts, args.min, args.model, args.output)
+            # TODO
+            # get_imbalance_sc(args.counts, args.min, args.model, args.output)
+            pass
 
     else: # Bulk processing
         print("Bulk Analysis")
@@ -215,7 +248,8 @@ def main():
             parse_counting(args.alignment, args.genotypes, args.regions, args.sample, args.output, args.stype, nofilt=args.nofilt, temp_loc=args.keeptemps, features=args.features)
 
         elif args.command == "analysis":
-            get_imbalance(args.counts, args.min, args.model, args.output, is_gene=args.stype)
+            parse_analysis(args.counts, args.min, args.model, args.output, args.stype, features=args.features)
+            # get_imbalance(args.counts, args.min, args.model, args.output, is_gene=args.stype)
 
 
 if __name__ == '__main__':

@@ -264,7 +264,7 @@ def binom_model(df):
     return ll_df
 
 
-def get_imbalance(in_data, min_count=10, method="single", out_dir=None, is_gene=False):
+def get_imbalance(in_data, min_count=10, method="single", out_dir=None, is_gene=False, feature=None):
     """
     Process input data and method for finding allelic imbalance
 
@@ -314,16 +314,19 @@ def get_imbalance(in_data, min_count=10, method="single", out_dir=None, is_gene=
     # Change label for gene to peak temporarily
     if is_gene is True:
         as_df = as_df.rename(columns={"peak": "genes"})
+    
+    if feature is None:
+        feature = "peak"
 
     if out_dir is not None:
-        out_file = str(Path(out_dir) / f"as_results_{method}.tsv")
+        out_file = str(Path(out_dir) / f"as_results_{feature}_{method}.tsv")
         as_df.to_csv(out_file, sep="\t", index=False)
         print(f"Results written to {out_file}")
 
     return as_df
 
 
-def get_imbalance_sc(in_data, min_count=10, method="single", out=None):
+def get_imbalance_sc(in_data, min_count=10, method="single", out=None, is_gene=False, feature=None):
     """
     Process input data and method for finding single-cell allelic imbalance
 
@@ -349,6 +352,10 @@ def get_imbalance_sc(in_data, min_count=10, method="single", out=None):
         df = in_data
     else:
         df = pd.read_csv(in_data, sep="\t")
+    
+    # # Change label for gene to peak temporarily
+    # if is_gene is True:
+    #     df = df.rename(columns={"genes": "peak"})
 
     default_df = df.iloc[:, :5]
     
@@ -388,6 +395,10 @@ def get_imbalance_sc(in_data, min_count=10, method="single", out=None):
 
         else:
             print(f"Not enough data to perform analysis on {key}")
+    
+    # # Change label for gene to peak temporarily
+    # if is_gene is True:
+    #     as_df = as_df.rename(columns={"peak": "genes"})
 
     if out is not None:
         
