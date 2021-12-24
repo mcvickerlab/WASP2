@@ -22,7 +22,7 @@ Analysis pipeline currently consists of two tools (Count and Analysis)
 
 &nbsp;
 ## Count Tool
-Counts alleles in ATAC peaks that overlap heterozygous SNP's
+Counts alleles in peaks or genes that overlap heterozygous SNP's
 
 **Usage**
 ```shell script
@@ -65,6 +65,7 @@ python run_analysis.py analysis [COUNTS] {OPTIONS}
 
 **Optional Arguments**
 - --rna/--atac: Denotes if analyzing rna-seq or atac-seq
+- -ft/--features: (RNA ONLY): Features to analyze in gtf. By default analyzes all features found separately.
 - --min: Minimum allele count needed for analysis. (Default. 10)
 - -o/--output: Directory to output counts. Defaults to CWD if not given. (Default. CWD)
 - -m/--model: Model used for measuring imbalance. Choice of "single", "linear", or "binomial". (Default. "single")
@@ -77,7 +78,6 @@ python run_analysis.py analysis [COUNTS] {OPTIONS}
 
 Allelic Imbalance Pipeline
 - Counts
-    - Need to implement Single-Cell RNA-Seq
     - More robust for different inputs for bulk and single-cell data
 
 - Analysis

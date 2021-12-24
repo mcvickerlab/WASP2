@@ -326,7 +326,7 @@ def get_imbalance(in_data, min_count=10, method="single", out_dir=None, is_gene=
     return as_df
 
 
-def get_imbalance_sc(in_data, min_count=10, method="single", out=None, is_gene=False, feature=None):
+def get_imbalance_sc(in_data, min_count=10, method="single", out_dir=None, is_gene=False, feature=None):
     """
     Process input data and method for finding single-cell allelic imbalance
 
@@ -353,9 +353,9 @@ def get_imbalance_sc(in_data, min_count=10, method="single", out=None, is_gene=F
     else:
         df = pd.read_csv(in_data, sep="\t")
     
-    # # Change label for gene to peak temporarily
-    # if is_gene is True:
-    #     df = df.rename(columns={"genes": "peak"})
+    # Change label for gene to peak temporarily
+    if is_gene is True:
+        df = df.rename(columns={"genes": "peak"})
 
     default_df = df.iloc[:, :5]
     
@@ -371,7 +371,7 @@ def get_imbalance_sc(in_data, min_count=10, method="single", out=None, is_gene=F
         df_dict[df_key] = cell_df
     
     as_dict = {}
-    # return_df = df["peak"]
+
     return_df = df["peak"].drop_duplicates().reset_index(drop=True)
     
     for key, cell_df in df_dict.items():
@@ -396,21 +396,27 @@ def get_imbalance_sc(in_data, min_count=10, method="single", out=None, is_gene=F
         else:
             print(f"Not enough data to perform analysis on {key}")
     
-    # # Change label for gene to peak temporarily
-    # if is_gene is True:
-    #     as_df = as_df.rename(columns={"peak": "genes"})
+    # Change label for gene to peak temporarily
+    if is_gene is True:
+        return_df = return_df.rename(columns={"peak": "genes"})
 
-    if out is not None:
-        
-        outdir = Path(out) / f"{method}_model"
-        
-        outdir.mkdir(parents=True, exist_ok=True)
+    if feature is None:
+        feature = "peak"
 
-        return_df.to_csv(str(outdir / "as_results_singlecell.tsv"), sep="\t", index=False)
+    if out_dir is not None:
+        out_file = str(Path(out_dir) / f"as_results_{feature}_{method}_singlecell.tsv")
+        return_df.to_csv(out_file, sep="\t", index=False)
+
+        feat_dir = Path(out_dir) / f"cell_results_{feature}"
+        feat_dir.mkdir(parents=True, exist_ok=True)
 
         for key, as_df in as_dict.items():
-            as_df.to_csv(str(outdir / f"{key}_results.tsv"), sep="\t", index=False)
+            
+            if is_gene is True:
+                as_df = as_df.rename(columns={"peak": "genes"})
 
-        print(f"Results written to {outdir}")
+            as_df.to_csv(str(feat_dir / f"{key}_results_{feature}_{method}.tsv"), sep="\t", index=False)
+        
+        print(f"Results written to {out_file}")
 
     return return_df

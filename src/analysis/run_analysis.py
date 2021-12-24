@@ -80,7 +80,7 @@ def parse_counting_sc(in_bam, in_vcf, in_region, in_sample, in_barcodes, out_dir
     if temp_loc is None:
         with tempfile.TemporaryDirectory() as tmpdir:
 
-            intersect_df = preprocess_data(in_bam, in_vcf, in_region, in_sample, stype, nofilt, tmpdir)
+            intersect_df = preprocess_data(in_bam, in_vcf, in_region, in_sample, stype, nofilt, tmpdir, features)
 
             if nofilt is True:
                 df = make_count_df_sc(in_bam, intersect_df, bc_series)
@@ -90,7 +90,7 @@ def parse_counting_sc(in_bam, in_vcf, in_region, in_sample, in_barcodes, out_dir
             df.to_csv(str(Path(out_dir) / "as_counts.tsv"), sep="\t", header=True, index=False)
 
     else:
-        intersect_df = preprocess_data(in_bam, in_vcf, in_region, in_sample, stype, nofilt, temp_loc)
+        intersect_df = preprocess_data(in_bam, in_vcf, in_region, in_sample, stype, nofilt, temp_loc, features)
 
         if nofilt is True:
             df = make_count_df_sc(in_bam, intersect_df, bc_series)
@@ -121,6 +121,26 @@ def parse_analysis(count_file, min_count, model, out_dir, stype, features=None):
 
     else:
         get_imbalance(count_file, min_count, model, out_dir, is_gene=False)
+
+
+def parse_analysis_sc(count_file, min_count, model, out_dir, stype, features=None):
+
+    if stype == "rna":
+        df = pd.read_csv(count_file, sep="\t")
+
+        if features:
+            df = df.loc[df["feature"].isin(features)]
+        
+        feature_list = df["feature"].unique()
+
+        for feat in feature_list:
+            feat_df = df.loc[df["feature"] == feat]
+            feat_df = feat_df.drop(columns=["feature"])
+
+            get_imbalance_sc(feat_df, min_count, model, out_dir, is_gene=True, feature=feat)
+        
+    else:
+        get_imbalance_sc(count_file, min_count, model, out_dir, is_gene=False)
 
 
 def validate_args(args):    # TODO Better parsing of valid files and inputs
@@ -216,7 +236,7 @@ def main():
 
 
     analysis_parser = subparser.add_parser("analysis", parents=[parent_parser])
-    analysis_parser.add_argument("counts")
+    analysis_parser.add_argument("counts", help="Count TSV output from count tool")
     analysis_parser.add_argument("--min", type=int, help="Minimum allele count for analysis", default=10)
     analysis_parser.add_argument("-m", "--model", type=str, choices=["single", "linear", "binomial"], help="Analysis Model", default="single")
     analysis_parser.add_argument("-o", "--output", type=str, help="Output Directory", default=str(Path.cwd()))
@@ -235,12 +255,10 @@ def main():
     if args.singlecell: # Single Cell Data
         print("Single Cell Analysis")
         if args.command == "count":
-            parse_counting_sc(args.alignment, args.genotypes, args.regions, args.sample, args.barcodes, args.output, args.stype, nofilt=args.nofilt, temp_loc=args.keeptemps)
+            parse_counting_sc(args.alignment, args.genotypes, args.regions, args.sample, args.barcodes, args.output, args.stype, nofilt=args.nofilt, temp_loc=args.keeptemps, features=args.features)
         
         elif args.command == "analysis":
-            # TODO
-            # get_imbalance_sc(args.counts, args.min, args.model, args.output)
-            pass
+            parse_analysis_sc(args.counts, args.min, args.model, args.output, args.stype, features=args.features)
 
     else: # Bulk processing
         print("Bulk Analysis")
@@ -249,7 +267,6 @@ def main():
 
         elif args.command == "analysis":
             parse_analysis(args.counts, args.min, args.model, args.output, args.stype, features=args.features)
-            # get_imbalance(args.counts, args.min, args.model, args.output, is_gene=args.stype)
 
 
 if __name__ == '__main__':

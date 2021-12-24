@@ -154,6 +154,7 @@ def make_count_df_sc(bam_file, df, bc_series):
     cell_groups = bc_series.unique()
     
     cols, ref_indices, alt_indices = make_col_data(cell_groups)
+    skip_chrom = []
     
     total_start = time.time()
 
@@ -164,13 +165,20 @@ def make_count_df_sc(bam_file, df, bc_series):
             ["pos", "ref", "alt"]].to_records(index=False)
 
         start = time.time()
-        count_list.extend(count_snp_alleles(bam_file, bc_series, chrom, snp_list, ref_indices, alt_indices))
-        end = time.time()
 
-        print(f"Counted {len(snp_list)} SNP's in {end - start} seconds!\n")
+        try:
+            count_list.extend(count_snp_alleles(bam_file, bc_series, chrom, snp_list, ref_indices, alt_indices))
+        except ValueError:
+            skip_chrom.append(chrom)
+            print(f"Skipping {chrom}: Contig not found\n")
+        else:
+            print(f"Counted {len(snp_list)} SNP's in {time.time() - start} seconds!\n")
 
     total_end = time.time()
     print(f"Counted all SNP's in {total_end - total_start} seconds!")
+
+    if skip_chrom:
+        df = df.loc[df["chrom"].isin(skip_chrom) == False]
 
     df[cols] = np.array(count_list, dtype=np.int32)
     df = df.astype({group: "Sparse[int]" for group in cols})

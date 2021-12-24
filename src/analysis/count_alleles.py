@@ -91,6 +91,7 @@ def make_count_df(bam_file, df):
     """
     count_list = []
     chrom_list = df["chrom"].unique()
+    skip_chrom = []
 
     total_start = time.time()
 
@@ -101,13 +102,20 @@ def make_count_df(bam_file, df):
             ["pos", "ref", "alt"]].to_records(index=False)
 
         start = time.time()
-        count_list.extend(count_snp_alleles(bam_file, chrom, snp_list))
-        end = time.time()
 
-        print(f"Counted {len(snp_list)} SNP's in {end - start} seconds!\n")
+        try:
+            count_list.extend(count_snp_alleles(bam_file, chrom, snp_list))
+        except ValueError:
+            skip_chrom.append(chrom)
+            print(f"Skipping {chrom}: Contig not found\n")
+        else:
+            print(f"Counted {len(snp_list)} SNP's in {time.time() - start} seconds!\n")
 
     total_end = time.time()
     print(f"Counted all SNP's in {total_end - total_start} seconds!")
+
+    if skip_chrom:
+        df = df.loc[df["chrom"].isin(skip_chrom) == False]
 
     df[["ref_count", "alt_count", "other_count"]] = count_list
     return df
