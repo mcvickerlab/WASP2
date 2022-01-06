@@ -206,6 +206,74 @@ def validate_args(args):    # TODO Better parsing of valid files and inputs
     return args
 
 
+def parse_cmd():
+    parent_parser = argparse.ArgumentParser(add_help=False)
+    seq_type = parent_parser.add_mutually_exclusive_group()  # Denote rna-seq vs atac-seq
+    seq_type.add_argument("--rna", action='store_const', const="rna", dest="stype",
+                          help="Explicitly denote RNA-seq data (Otherwise infers from input)")
+    seq_type.add_argument("--atac", action='store_const', const="atac", dest="stype",
+                          help="Explicitly denote ATAC-seq data (Otherwise infers from input)")
+
+    parent_parser.add_argument("-sc", "--singlecell", action="store_true", help="Single Cell Option")
+
+    parent_parser.add_argument("-ft", "--features", nargs="*", help="GTF features to analyze")
+
+    parser = argparse.ArgumentParser()
+
+    # Subparser options
+    subparser = parser.add_subparsers(dest="command")
+
+    count_parser = subparser.add_parser("count", parents=[parent_parser])
+    count_parser.add_argument("-a", "--alignment", required=True, type=str, help="Alignment BAM File")
+    count_parser.add_argument("-g", "--genotypes", required=True, type=str, help="Genotype VCF File")
+    count_parser.add_argument("-s", "--sample", required=True, type=str, help="Sample name in VCF")
+    count_parser.add_argument("-r", "--regions", required=True, type=str,
+                              help="Genes or Peak File in BED, narrowPeak, or GTF Format")
+    count_parser.add_argument("-b", "--barcodes", type=str, help="Two row TSV mapping barcode to cell-group/cluster")
+    count_parser.add_argument("-o", "--output", type=str, help="Output Directory", default=str(Path.cwd()))
+
+    count_parser.add_argument("--nofilt", action='store_true',
+                              help="Skip step that filters BAM reads in regions of interest")  # TODO filtering options
+    count_parser.add_argument("--keeptemps", type=str, nargs="?", const=0,
+                              help="Keep intermediate files created during prefiltering. Outputs to directory if given, otherwise outputs ")
+
+    analysis_parser = subparser.add_parser("analysis", parents=[parent_parser])
+    analysis_parser.add_argument("counts", help="Count TSV output from count tool")
+    analysis_parser.add_argument("--min", type=int, help="Minimum allele count for analysis", default=10)
+    analysis_parser.add_argument("-m", "--model", type=str, choices=["single", "linear", "binomial"],
+                                 help="Analysis Model", default="single")
+    analysis_parser.add_argument("-o", "--output", type=str, help="Output Directory", default=str(Path.cwd()))
+
+    args = parser.parse_args()
+
+    # print(args)
+
+    return args
+
+
+def run(args):
+    if args.singlecell: # Single Cell Data
+        # print("Single Cell Analysis")
+        if args.command == "count":
+            print("Count Single-Cell")
+            parse_counting_sc(args.alignment, args.genotypes, args.regions, args.sample, args.barcodes, args.output, args.stype, nofilt=args.nofilt, temp_loc=args.keeptemps, features=args.features)
+        
+        elif args.command == "analysis":
+            print("Analysis Single-Cell")
+            parse_analysis_sc(args.counts, args.min, args.model, args.output, args.stype, features=args.features)
+
+    else: # Bulk processing
+        # print("Bulk Analysis")
+        if args.command == "count":
+            print("Count Bulk")
+            parse_counting(args.alignment, args.genotypes, args.regions, args.sample, args.output, args.stype, nofilt=args.nofilt, temp_loc=args.keeptemps, features=args.features)
+
+        elif args.command == "analysis":
+            print("Analysis Bulk")
+            parse_analysis(args.counts, args.min, args.model, args.output, args.stype, features=args.features)
+
+
+
 def main():
     parent_parser = argparse.ArgumentParser(add_help=False)
     seq_type = parent_parser.add_mutually_exclusive_group() # Denote rna-seq vs atac-seq
@@ -215,8 +283,6 @@ def main():
     parent_parser.add_argument("-sc", "--singlecell", action="store_true", help="Single Cell Option")
 
     parent_parser.add_argument("-ft", "--features", nargs="*", help="GTF features to analyze")
-
-
 
     parser = argparse.ArgumentParser()
 
