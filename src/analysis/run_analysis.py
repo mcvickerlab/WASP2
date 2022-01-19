@@ -28,9 +28,6 @@ def preprocess_data(in_bam, in_vcf, in_region, in_sample, stype, nofilt, out_dir
         write_filter_gtf(in_region, features, out_dir)
         in_region = str(Path(out_dir) / "filter.gtf")
 
-    if not nofilt:
-        process_bam(in_bam, in_region, out_dir)
-
     write_sample_snp(in_vcf, in_sample, out_dir)
 
     intersect_snp(str(Path(out_dir) / "filter.vcf"), in_region, out_dir)
@@ -39,6 +36,9 @@ def preprocess_data(in_bam, in_vcf, in_region, in_sample, stype, nofilt, out_dir
         intersect_df = parse_gene_df(str(Path(out_dir) / "intersect.bed"))
     else:
         intersect_df = parse_intersect_df(str(Path(out_dir) / "intersect.bed"))
+    
+    if not nofilt:
+        process_bam(in_bam, str(Path(out_dir) / "intersect.bed"), out_dir)
 
 
     return intersect_df
