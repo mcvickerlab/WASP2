@@ -39,11 +39,12 @@ def write_sample_snp(in_file, in_sample, out_dir):
 
 
 def write_filter_gtf(gtf_file, feature, out_dir):
-    df = pd.read_csv(gtf_file, sep="\t", header=None, names=["seqname", "source", "feature", "start", "end", "score", "strand", "frame", "attribute"])
+    df = pd.read_csv(gtf_file, sep="\t", header=None,
+     names=["seqname", "source", "feature", "start", "end", "score", "strand", "frame", "attribute"],
+      dtype=object)
 
     if feature is not None:
         df = df.loc[df["feature"].isin(feature)]
-
 
     if out_dir is not None:
         df.to_csv(str(Path(out_dir) / "filter.gtf"), sep="\t", header=False, index=False)
