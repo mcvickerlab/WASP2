@@ -43,7 +43,7 @@ python run_analysis.py count -a [BAM] -g [VCF] -s [VCF Sample] -r [Peaks] {OPTIO
 
 **Optional Arguments**
 - --rna/--atac: Denotes if analyzing rna-seq or atac-seq, otherwise infer using inputs
-- -ft/--features: (RNA ONLY): Features to analyze in gtf. By default analyzes transcript. Analyzes all features if flag denoted without feature.
+- -ft/--features: (RNA ONLY): NAme of features to analyze in GTF file (eg. transcript, exon, CDS). By default analyzes transcript. Analyzes all features if flag denoted without feature.
 - -o/--output: Directory to output counts. (Default. CWD)
 - --nofilt: Skip step that pre-filters reads that overlap regions of interest 
 - --keeptemps: Keep intermediary files during preprocessing step, outputs to directory if given with flag, otherwise outputs to same location as final output.
@@ -72,6 +72,25 @@ python run_analysis.py analysis [COUNTS] {OPTIONS}
 
 
 &nbsp;
+## Comparison Tool (EXPERIMENTAL)
+Compares Allelic Imbalance between single-cell cells/clusters
+
+**Usage**
+```shell script
+python run_analysis.py compare [COUNTS] {OPTIONS}
+```
+**Required Arguments**
+- COUNTS: first positional argument, 1 or 2 output files from count tool. 
+    - One file will compare cells/clusters in the sample
+    - Two files will compare shared cells/clusters between samples
+
+**Optional Arguments**
+- --rna/--atac: Denotes if analyzing rna-seq or atac-seq
+- --min: Minimum allele count needed for analysis. (Default. 10)
+- -o/--output: Directory to output counts. Defaults to CWD if not given. (Default. CWD)
+
+
+&nbsp;
 ## TODO
 - Unbiased Read Mapping Curently in development
 
@@ -82,3 +101,8 @@ Allelic Imbalance Pipeline
 
 - Analysis
     - More specific implementations for single-cell data
+
+- Comparisdon
+    - Get Bulk rna/atac and single-cell rna inputs working
+    - Allow for analysis with different models
+    - Improved stability

@@ -20,6 +20,7 @@ from filter_data import write_sample_snp, intersect_snp, parse_intersect_df, par
 from count_alleles import make_count_df
 from count_alleles_sc import make_count_df_sc
 from as_analysis import get_imbalance, get_imbalance_sc
+from compare_ai import get_imbalance
 
 
 def preprocess_data(in_bam, in_vcf, in_region, in_sample, stype, nofilt, out_dir, features=None):
@@ -143,6 +144,18 @@ def parse_analysis_sc(count_file, min_count, model, out_dir, stype, features=Non
         get_imbalance_sc(count_file, min_count, model, out_dir, is_gene=False)
 
 
+def parse_comparison(count_files, groups, min_count, out_dir, stype, features=None):
+    # TODO GET BULK AND RNA_FEATURES WORKING
+    if stype == "rna":
+
+        # TODO GET FEATURES WORKING/ACCEPT DF AND FILE
+        get_imbalance(count_files, groups, min_count, out_dir, is_gene=True)
+    
+    else:
+        get_imbalance(count_files, groups, min_count, out_dir, is_gene=False)
+
+
+
 def validate_args(args):    # TODO Better parsing of valid files and inputs
     singlecell = args.singlecell
     command = args.command
@@ -179,17 +192,17 @@ def validate_args(args):    # TODO Better parsing of valid files and inputs
 
         # Validate feature options
         if (args.stype != "rna") and (args.features is not None):
-            return f"--features only valid using rna-seq data, and gtf annotations"
+            return "--features only valid using rna-seq data, and gtf annotations"
 
         elif (args.stype == "rna") and (args.features is None):
             args.features = ["transcript"]
         
         elif (args.stype == "rna") and not args.features:
             args.features = None
-    
-    elif command =="analysis":
 
-        # Confirm input type
+
+    elif command == "analysis":
+
         if args.stype is None: # Use columns to determine rna or atac
             with open(args.counts, "r") as file:
                 header=DictReader(file, delimiter="\t").fieldnames
@@ -200,7 +213,32 @@ def validate_args(args):    # TODO Better parsing of valid files and inputs
                 args.stype = "atac"
 
         if (args.stype != "rna") and (args.features is not None):
-            return f"--features only valid using rna-seq data"
+            return "--features only valid using rna-seq data"
+
+
+    elif command == "compare":
+
+        if len(args.counts) == 1:
+            multi = False
+        elif len(args.counts) == 2:
+            multi = True
+        else:
+            return "Please input one or two count files"
+        
+        if not multi and (args.groups is not None) and (len(args.groups) == 1):
+            return "At least 2 cells/clusters required when comparing single sample"
+        
+        if args.stype is None: # Use columns to determine rna or atac
+            with open(args.counts[0], "r") as file:
+                header=DictReader(file, delimiter="\t").fieldnames
+            
+            if "genes" in header:
+                args.stype = "rna"
+            else:
+                args.stype = "atac"
+
+        if (args.stype != "rna") and (args.features is not None):
+            return "--features only valid using rna-seq data"
 
     # TODO more sanity checks, as well as parsing different file types
     return args
@@ -244,9 +282,22 @@ def parse_cmd():
                                  help="Analysis Model", default="single")
     analysis_parser.add_argument("-o", "--output", type=str, help="Output Directory", default=str(Path.cwd()))
 
+
+    # TODO ADD compare parser options and validation!!!
+    compare_parser = subparser.add_parser("compare", parents=[parent_parser])
+    compare_parser.add_argument("counts", nargs="+", help="One or two count TSV output from count tool")
+    compare_parser.add_argument("-g", "-c", "--groups", "--cells", "--clusters", nargs="*", help="groups to compare")
+    compare_parser.add_argument("--min", type=int, help="Minimum allele count for comparison", default=10)
+    compare_parser.add_argument("-o", "--output", type=str, help="Output Directory", default=str(Path.cwd()))
+
     args = parser.parse_args()
 
-    # print(args)
+    validate_out = validate_args(args)
+    
+    if isinstance(validate_out, str):
+        parser.error(validate_out)
+    else:
+        args = validate_out
 
     return args
 
@@ -261,6 +312,10 @@ def run(args):
         elif args.command == "analysis":
             print("Analysis Single-Cell")
             parse_analysis_sc(args.counts, args.min, args.model, args.output, args.stype, features=args.features)
+        
+        elif args.command == "compare":
+            print("Compare Single-Cell")
+            parse_comparison(args.counts, args.groups, args.min, args.output, args.stype)
 
     else: # Bulk processing
         # print("Bulk Analysis")
@@ -273,66 +328,13 @@ def run(args):
             parse_analysis(args.counts, args.min, args.model, args.output, args.stype, features=args.features)
 
 
-
 def main():
-    parent_parser = argparse.ArgumentParser(add_help=False)
-    seq_type = parent_parser.add_mutually_exclusive_group() # Denote rna-seq vs atac-seq
-    seq_type.add_argument("--rna", action='store_const', const="rna", dest="stype", help="Explicitly denote RNA-seq data (Otherwise infers from input)")
-    seq_type.add_argument("--atac", action='store_const', const="atac", dest="stype", help="Explicitly denote ATAC-seq data (Otherwise infers from input)")
+    args = parse_cmd()
 
-    parent_parser.add_argument("-sc", "--singlecell", action="store_true", help="Single Cell Option")
-
-    parent_parser.add_argument("-ft", "--features", nargs="*", help="GTF features to analyze")
-
-    parser = argparse.ArgumentParser()
-
-    # Subparser options
-    subparser = parser.add_subparsers(dest="command")
-
-    count_parser = subparser.add_parser("count", parents=[parent_parser])
-    count_parser.add_argument("-a", "--alignment", required=True, type=str,help="Alignment BAM File")
-    count_parser.add_argument("-g", "--genotypes", required=True, type=str, help="Genotype VCF File")
-    count_parser.add_argument("-s", "--sample", required=True, type=str, help="Sample name in VCF")
-    count_parser.add_argument("-r", "--regions", required=True, type=str, help="Genes or Peak File in BED, narrowPeak, or GTF Format")
-    count_parser.add_argument("-b", "--barcodes", type=str, help="Two row TSV mapping barcode to cell-group/cluster")
-    count_parser.add_argument("-o", "--output", type=str, help="Output Directory", default=str(Path.cwd()))
-
-    count_parser.add_argument("--nofilt", action='store_true', help="Skip step that filters BAM reads in regions of interest") # TODO filtering options
-    count_parser.add_argument("--keeptemps", type=str, nargs="?", const=0, help="Keep intermediate files created during prefiltering. Outputs to directory if given, otherwise outputs ")
-
-
-    analysis_parser = subparser.add_parser("analysis", parents=[parent_parser])
-    analysis_parser.add_argument("counts", help="Count TSV output from count tool")
-    analysis_parser.add_argument("--min", type=int, help="Minimum allele count for analysis", default=10)
-    analysis_parser.add_argument("-m", "--model", type=str, choices=["single", "linear", "binomial"], help="Analysis Model", default="single")
-    analysis_parser.add_argument("-o", "--output", type=str, help="Output Directory", default=str(Path.cwd()))
-
-    args = parser.parse_args()
-
-    validate_out = validate_args(args)
-    
-    if isinstance(validate_out, str):
-        parser.error(validate_out)
-    else:
-        args = validate_out
-    
     print(args)
-    
-    if args.singlecell: # Single Cell Data
-        print("Single Cell Analysis")
-        if args.command == "count":
-            parse_counting_sc(args.alignment, args.genotypes, args.regions, args.sample, args.barcodes, args.output, args.stype, nofilt=args.nofilt, temp_loc=args.keeptemps, features=args.features)
-        
-        elif args.command == "analysis":
-            parse_analysis_sc(args.counts, args.min, args.model, args.output, args.stype, features=args.features)
+    print()
 
-    else: # Bulk processing
-        print("Bulk Analysis")
-        if args.command == "count":
-            parse_counting(args.alignment, args.genotypes, args.regions, args.sample, args.output, args.stype, nofilt=args.nofilt, temp_loc=args.keeptemps, features=args.features)
-
-        elif args.command == "analysis":
-            parse_analysis(args.counts, args.min, args.model, args.output, args.stype, features=args.features)
+    run(args)
 
 
 if __name__ == '__main__':
