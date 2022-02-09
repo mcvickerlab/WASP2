@@ -260,7 +260,7 @@ def group_comp(count_file, cells, min_count=10, is_gene=False):
     return return_df, as_dict
 
 
-def get_imbalance(count_files, cells, min_count=10, out_dir=None, is_gene=False):
+def get_comparison(count_files, cells, min_count=10, out_dir=None, is_gene=False):
     multi = True if len(count_files) > 1 else False
 
     # if cells not provided, get all groups:

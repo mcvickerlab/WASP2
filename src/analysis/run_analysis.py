@@ -20,7 +20,7 @@ from filter_data import write_sample_snp, intersect_snp, parse_intersect_df, par
 from count_alleles import make_count_df
 from count_alleles_sc import make_count_df_sc
 from as_analysis import get_imbalance, get_imbalance_sc
-from compare_ai import get_imbalance
+from compare_ai import get_comparison
 
 
 def preprocess_data(in_bam, in_vcf, in_region, in_sample, stype, nofilt, out_dir, features=None):
@@ -149,10 +149,10 @@ def parse_comparison(count_files, groups, min_count, out_dir, stype, features=No
     if stype == "rna":
 
         # TODO GET FEATURES WORKING/ACCEPT DF AND FILE
-        get_imbalance(count_files, groups, min_count, out_dir, is_gene=True)
+        get_comparison(count_files, groups, min_count, out_dir, is_gene=True)
     
     else:
-        get_imbalance(count_files, groups, min_count, out_dir, is_gene=False)
+        get_comparison(count_files, groups, min_count, out_dir, is_gene=False)
 
 
 
