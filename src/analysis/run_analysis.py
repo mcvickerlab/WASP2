@@ -43,7 +43,7 @@ def preprocess_data(in_bam, in_vcf, in_region, in_sample, stype, nofilt, out_dir
 
 
     return intersect_df
-    
+
 
 def parse_counting(in_bam, in_vcf, in_region, in_sample, out_dir, stype, nofilt=False, temp_loc=None, features=None):
 

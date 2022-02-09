@@ -319,6 +319,7 @@ def get_imbalance(in_data, min_count=10, method="single", out_dir=None, is_gene=
         feature = "peak"
 
     if out_dir is not None:
+        Path(out_dir).mkdir(parents=True, exist_ok=True)
         out_file = str(Path(out_dir) / f"as_results_{feature}_{method}.tsv")
         as_df.to_csv(out_file, sep="\t", index=False)
         print(f"Results written to {out_file}")
@@ -360,8 +361,9 @@ def get_imbalance_sc(in_data, min_count=10, method="single", out_dir=None, is_ge
     default_df = df.iloc[:, :5]
     
     df_dict = {}
-    # start = 6 when including initial noPred counts
-    for i in range(6, len(df.columns), 2):
+
+    start_index = min([df.columns.get_loc(c) for c in df.columns if "_ref" in c])
+    for i in range(start_index, len(df.columns), 2):
         df_key = df.columns[i].split("_ref")[0]
         cell_df = pd.merge(default_df, df.iloc[:, [i, i+1]], left_index=True, right_index=True)
         
@@ -381,8 +383,8 @@ def get_imbalance_sc(in_data, min_count=10, method="single", out_dir=None, is_ge
         
         if not cell_df.empty:
             p_df = model_dict[method](cell_df)
-            p_df.rename(columns={"pval": f"{key}_pval"}, inplace=True)
-            return_df = pd.merge(return_df, p_df[["peak", p_df.columns[-1]]], on="peak", how="left")
+            return_df = pd.merge(return_df, p_df[["peak", "pval"]], on="peak", how="left")
+            return_df = return_df.rename(columns={"pval": f"{key}_pval"})
             
             snp_counts = pd.DataFrame(cell_df["peak"].value_counts(sort=False)).reset_index() # get individual counts
             snp_counts.columns = ["peak", "snp_count"]
@@ -395,8 +397,11 @@ def get_imbalance_sc(in_data, min_count=10, method="single", out_dir=None, is_ge
 
         else:
             print(f"Not enough data to perform analysis on {key}")
-    
-    # Change label for gene to peak temporarily
+
+    # Remove empty columns
+    return_df = return_df.set_index("peak")
+    return_df = return_df.dropna(axis=0, how="all").reset_index()
+
     if is_gene is True:
         return_df = return_df.rename(columns={"peak": "genes"})
 
@@ -404,6 +409,8 @@ def get_imbalance_sc(in_data, min_count=10, method="single", out_dir=None, is_ge
         feature = "peak"
 
     if out_dir is not None:
+        Path(out_dir).mkdir(parents=True, exist_ok=True)
+
         out_file = str(Path(out_dir) / f"as_results_{feature}_{method}_singlecell.tsv")
         return_df.to_csv(out_file, sep="\t", index=False)
 
