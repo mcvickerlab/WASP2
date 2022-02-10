@@ -10,7 +10,7 @@ import time
 # External package imports
 import pandas as pd
 import numpy as np
-from scipy.stats import betabinom, chi2, binom
+from scipy.stats import betabinom, chi2, binom, rankdata
 from scipy.optimize import minimize_scalar, minimize
 from scipy.special import expit
 
@@ -264,6 +264,44 @@ def binom_model(df):
     return ll_df
 
 
+def bh_correction(df):
+    if "pval" in df.columns:
+        pcol = "pval"
+    elif "pval" in df.columns[-1]:
+        pcol = str(df.columns[-1])
+    else:
+        print("Pvalues not found! Returning Original Data")
+        return df
+    
+    df["rank"] = rankdata(df[pcol], method="max").astype(int)
+
+    num_test = df.shape[0]
+    df["adj_pval"] = df[pcol] * (num_test / df["rank"])
+    
+    rank_df = df[["rank", "adj_pval"]].drop_duplicates()
+    rank_df = rank_df.sort_values(by=["rank"], ascending=False)
+
+    rank_p = rank_df.set_index("rank").squeeze()
+    rank_p = rank_p.rename("fdr_pval")
+    rank_p[rank_p > 1] = 1
+    
+    # test_adj
+    prev = None
+    for index, value in rank_p.items():
+        if prev is None:
+            prev = value
+        elif value > prev:
+            rank_p.at[index] = prev
+        else:
+            prev = value
+
+    # Combine back into df
+    return_df = pd.merge(df, rank_p, left_on="rank", right_index=True).sort_index()
+    return_df = return_df.drop(columns=["rank", "adj_pval"])
+
+    return return_df
+
+
 def get_imbalance(in_data, min_count=10, method="single", out_dir=None, is_gene=False, feature=None):
     """
     Process input data and method for finding allelic imbalance
@@ -310,6 +348,7 @@ def get_imbalance(in_data, min_count=10, method="single", out_dir=None, is_gene=
     merge_df = pd.merge(snp_counts, p_df, how="left", on="peak")
     
     as_df = pd.merge(count_alleles, merge_df, how="left", on="peak")
+    as_df = bh_correction(as_df)
 
     # Change label for gene to peak temporarily
     if is_gene is True:
@@ -375,6 +414,7 @@ def get_imbalance_sc(in_data, min_count=10, method="single", out_dir=None, is_ge
     as_dict = {}
 
     return_df = df["peak"].drop_duplicates().reset_index(drop=True)
+    fdr_df = df["peak"].drop_duplicates().reset_index(drop=True)
     
     for key, cell_df in df_dict.items():
         print(f"Analyzing imbalance for {key}")
@@ -383,8 +423,13 @@ def get_imbalance_sc(in_data, min_count=10, method="single", out_dir=None, is_ge
         
         if not cell_df.empty:
             p_df = model_dict[method](cell_df)
+            p_df = bh_correction(p_df)
+
             return_df = pd.merge(return_df, p_df[["peak", "pval"]], on="peak", how="left")
             return_df = return_df.rename(columns={"pval": f"{key}_pval"})
+
+            fdr_df = pd.merge(fdr_df, p_df[["peak", "fdr_pval"]], on="peak", how="left")
+            fdr_df = fdr_df.rename(columns={"fdr_pval": f"{key}_fdr"})
             
             snp_counts = pd.DataFrame(cell_df["peak"].value_counts(sort=False)).reset_index() # get individual counts
             snp_counts.columns = ["peak", "snp_count"]
@@ -402,8 +447,12 @@ def get_imbalance_sc(in_data, min_count=10, method="single", out_dir=None, is_ge
     return_df = return_df.set_index("peak")
     return_df = return_df.dropna(axis=0, how="all").reset_index()
 
+    fdr_df = fdr_df.set_index("peak")
+    fdr_df = fdr_df.dropna(axis=0, how="all").reset_index()
+
     if is_gene is True:
         return_df = return_df.rename(columns={"peak": "genes"})
+        fdr_df = fdr_df.rename(columns={"peak": "genes"})
 
     if feature is None:
         feature = "peak"
@@ -413,6 +462,9 @@ def get_imbalance_sc(in_data, min_count=10, method="single", out_dir=None, is_ge
 
         out_file = str(Path(out_dir) / f"as_results_{feature}_{method}_singlecell.tsv")
         return_df.to_csv(out_file, sep="\t", index=False)
+
+        fdr_file = str(Path(out_dir) / f"as_results_{feature}_{method}_singlecell_fdr.tsv")
+        fdr_df.to_csv(fdr_file, sep="\t", index=False)
 
         feat_dir = Path(out_dir) / f"cell_results_{feature}"
         feat_dir.mkdir(parents=True, exist_ok=True)

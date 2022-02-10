@@ -12,7 +12,7 @@ from scipy.stats import betabinom, chi2
 from scipy.optimize import minimize_scalar
 
 # Local package imports
-from as_analysis import opt_prob, opt_phase
+from as_analysis import opt_prob, opt_phase, bh_correction
 
 
 def opt_compare_null(df, cell_a, cell_b):
@@ -192,6 +192,8 @@ def sample_comp(count_files, cells, min_count=10, is_gene=False):
     s2_idx = pd.Index(s2_df["peak"].drop_duplicates())
 
     return_df = pd.DataFrame(index=s1_idx.union(s2_idx))
+    fdr_df = pd.DataFrame(index=s1_idx.union(s2_idx))
+
     as_dict = {}
 
     for cell in cell_list:
@@ -200,9 +202,13 @@ def sample_comp(count_files, cells, min_count=10, is_gene=False):
         if not c_df.empty:
             print(f"Comparing allelic imbalance in {cell} between samples")
             diff_df = compare_imbalance(c_df, "S1", "S2")
+            diff_df = bh_correction(diff_df)
 
             return_df = pd.concat([return_df, diff_df["pval"]], axis=1)
             return_df = return_df.rename(columns={"pval": f"{cell}_pval"})
+
+            fdr_df = pd.concat([fdr_df, diff_df["fdr_pval"]], axis=1)
+            fdr_df = fdr_df.rename(columns={"fdr_pval": f"{cell}_fdr"})
 
             diff_df = diff_df.reset_index()
             if is_gene:
@@ -214,7 +220,7 @@ def sample_comp(count_files, cells, min_count=10, is_gene=False):
         else:
             print(f"Not enough {cell} data to compare samples\n")
     
-    return return_df, as_dict
+    return return_df, fdr_df, as_dict
 
 
 def group_comp(count_file, cells, min_count=10, is_gene=False):
@@ -226,6 +232,7 @@ def group_comp(count_file, cells, min_count=10, is_gene=False):
 
     as_dict = {}
     return_df = pd.DataFrame(index=df["peak"].drop_duplicates())
+    fdr_df = pd.DataFrame(index=df["peak"].drop_duplicates())
 
     for cell_a, cell_b in list(combinations(cells, 2)):
         comp_cols = ["peak", f"{cell_a}_ref", f"{cell_a}_alt", f"{cell_b}_ref", f"{cell_b}_alt"]
@@ -243,9 +250,13 @@ def group_comp(count_file, cells, min_count=10, is_gene=False):
 
             print(f"Comparing allelic imbalance in {cell_a} and {cell_b}")
             diff_df = compare_imbalance(c_df, cell_a, cell_b)
+            diff_df = bh_correction(diff_df)
 
             return_df = pd.concat([return_df, diff_df["pval"]], axis=1)
             return_df = return_df.rename(columns={"pval": f"{key}_pval"})
+
+            fdr_df = pd.concat([fdr_df, diff_df["fdr_pval"]], axis=1)
+            fdr_df = fdr_df.rename(columns={"fdr_pval": f"{key}_fdr"})
 
             diff_df = diff_df.reset_index()
             if is_gene:
@@ -257,7 +268,7 @@ def group_comp(count_file, cells, min_count=10, is_gene=False):
         else:
             print(f"Not enough data to compare {cell_a} and {cell_b}\n")
 
-    return return_df, as_dict
+    return return_df, fdr_df, as_dict
 
 
 def get_comparison(count_files, cells, min_count=10, out_dir=None, is_gene=False):
@@ -272,30 +283,39 @@ def get_comparison(count_files, cells, min_count=10, out_dir=None, is_gene=False
         cells = [col.split("_ref")[0] for col in header if col.endswith("_ref")]
 
     if multi:
-        return_df, as_dict = sample_comp(count_files, cells,
-                                         min_count=min_count,is_gene=is_gene)
+        return_df, fdr_df, as_dict = sample_comp(count_files, cells,
+         min_count=min_count, is_gene=is_gene)
     else:
-        return_df, as_dict = group_comp(count_files[0], cells,
-                                        min_count=min_count,is_gene=is_gene)
+        return_df, fdr_df, as_dict = group_comp(count_files[0], cells,
+         min_count=min_count, is_gene=is_gene)
 
     return_df = return_df.dropna(axis=0, how="all")
     return_df = return_df.reset_index()
 
+    fdr_df = fdr_df.dropna(axis=0, how="all")
+    fdr_df = fdr_df.reset_index()
+
     if is_gene:
         return_df = return_df.rename(columns={"index": "genes"})
+        fdr_df = fdr_df.rename(columns={"index": "genes"})
     else:
         return_df = return_df.rename(columns={"index": "peak"})
+        fdr_df = fdr_df.rename(columns={"index": "genes"})
 
     if out_dir is not None:
         if multi:
             out_file = Path(out_dir) / "ai_compare_samples.tsv"
+            fdr_file = Path(out_dir) / "ai_compare_samples_fdr.tsv"
             cell_dir = Path(out_dir) / "sample_results"
         else:
             out_file = Path(out_dir) / "ai_compare_groups.tsv"
+            fdr_file = Path(out_dir) / "ai_compare_groups_fdr.tsv"
             cell_dir = Path(out_dir) / "group_results"
 
-        return_df.to_csv(str(out_file), sep="\t", index=False)
         cell_dir.mkdir(parents=True, exist_ok=True)
+
+        return_df.to_csv(str(out_file), sep="\t", index=False)
+        fdr_df.to_csv(str(fdr_file), sep="\t", index=False)
 
         for key, as_df in as_dict.items():
             cell_file = cell_dir / f"{key}_results.tsv"
