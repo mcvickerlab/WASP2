@@ -273,9 +273,13 @@ def bh_correction(df):
         print("Pvalues not found! Returning Original Data")
         return df
     
-    df["rank"] = rankdata(df[pcol], method="max").astype(int)
-
     num_test = df.shape[0]
+
+    if num_test == 1:
+        df["fdr_pval"] = df[pcol]
+        return df
+    
+    df["rank"] = rankdata(df[pcol], method="max").astype(int)
     df["adj_pval"] = df[pcol] * (num_test / df["rank"])
     
     rank_df = df[["rank", "adj_pval"]].drop_duplicates()
