@@ -62,7 +62,7 @@ class WaspDataFiles:
                     self.is_phased = False
         
         if self.out_dir is None:
-            self.out_dir = Path(bam_file).parent
+            self.out_dir = Path(bam_file).parent # change to cwd?
         
         # TODO handle temp loc, maybe make default if temp not made?
         # Temporary workaround until figure out temp dir options
