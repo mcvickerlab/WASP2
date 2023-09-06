@@ -30,6 +30,9 @@ def vcf_to_bed(vcf_file, out_bed, samples=None):
         # 0 samps, no GTs
         view_cmd.append("--drop-genotypes")
         query_cmd.append("%CHROM\t%POS0\t%END\t%REF\t%ALT\n")
+        
+        view_process = subprocess.run(view_cmd, stdout=subprocess.PIPE, check=True)
+        
     else:
         
         # Samples
@@ -41,15 +44,23 @@ def vcf_to_bed(vcf_file, out_bed, samples=None):
             view_cmd.extend(["-s", samples_arg,
                              "--min-ac", "1",
                              "--max-ac", str((num_samples * 2) - 1)])
+            
+            view_process = subprocess.run(view_cmd, stdout=subprocess.PIPE, check=True)
+                    
         else:
-            # Single Samp
-            view_cmd.extend(["-s", samples_arg, "--genotype", "het"])
-        
+
+            # Single Samp subset
+            view_cmd.extend(["-s", samples_arg])
+            subset_process = subprocess.run(view_cmd, stdout=subprocess.PIPE, check=True)
+            
+            # Get het genotypes
+            new_view_cmd = ["bcftools", "view", "--genotype", "het", "-Ou"]
+            view_process = subprocess.run(new_view_cmd, input=subset_process.stdout,
+                                          stdout=subprocess.PIPE, check=True)
         
         query_cmd.append("%CHROM\t%POS0\t%END\t%REF\t%ALT[\t%TGT]\n")
     
     # Run Subprocess
-    view_process = subprocess.run(view_cmd, stdout=subprocess.PIPE, check=True)
     query_process = subprocess.run(query_cmd, input=view_process.stdout, check=True)
     
     return out_bed
@@ -206,7 +217,8 @@ def make_intersect_df(intersect_file, samples, is_paired=True):
 
     # df = df.unique() # Remove possible dups
     # should i remove instead of keep first?
-    df = df.unique(["chrom", "read", "start", "stop"], keep="first") # Remove dup snps
+    # df = df.unique(["chrom", "read", "start", "stop"], keep="first") # Remove dup snps
+    df = df.unique(["chrom", "read", "mate", "start", "stop"], keep="first") # Doesnt remove dup snp in pair?
     df = df.collect()
     
     return df

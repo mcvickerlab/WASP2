@@ -12,6 +12,9 @@ import polars as pl
 # same as in mapping...should create unified utils
 def vcf_to_bed(vcf_file, out_bed, samples=None, drop_gt=False):
     
+    # Maybe change this later?
+    # out_bed = f"{out_dir}/filt_variants.bed"
+    
     # Base commands
     view_cmd = ["bcftools", "view", str(vcf_file),
                 "-m2", "-M2", "-v", "snps", "-Ou"
@@ -27,6 +30,9 @@ def vcf_to_bed(vcf_file, out_bed, samples=None, drop_gt=False):
         # 0 samps, no GTs
         view_cmd.append("--drop-genotypes")
         query_cmd.append("%CHROM\t%POS0\t%END\t%REF\t%ALT\n")
+        
+        view_process = subprocess.run(view_cmd, stdout=subprocess.PIPE, check=True)
+        
     else:
         
         # Samples
@@ -38,9 +44,19 @@ def vcf_to_bed(vcf_file, out_bed, samples=None, drop_gt=False):
             view_cmd.extend(["-s", samples_arg,
                              "--min-ac", "1",
                              "--max-ac", str((num_samples * 2) - 1)])
+            
+            view_process = subprocess.run(view_cmd, stdout=subprocess.PIPE, check=True)
+                    
         else:
-            # Single Samp
-            view_cmd.extend(["-s", samples_arg, "--genotype", "het"])
+
+            # Single Samp subset
+            view_cmd.extend(["-s", samples_arg])
+            subset_process = subprocess.run(view_cmd, stdout=subprocess.PIPE, check=True)
+            
+            # Get het genotypes
+            new_view_cmd = ["bcftools", "view", "--genotype", "het", "-Ou"]
+            view_process = subprocess.run(new_view_cmd, input=subset_process.stdout,
+                                          stdout=subprocess.PIPE, check=True)
         
         # If we include GT
         if drop_gt:
@@ -49,10 +65,9 @@ def vcf_to_bed(vcf_file, out_bed, samples=None, drop_gt=False):
             query_cmd.append("%CHROM\t%POS0\t%END\t%REF\t%ALT[\t%TGT]\n")
     
     # Run Subprocess
-    view_process = subprocess.run(view_cmd, stdout=subprocess.PIPE, check=True)
     query_process = subprocess.run(query_cmd, input=view_process.stdout, check=True)
     
-    # return out_bed
+    return out_bed
 
 
 # Perform intersection
@@ -70,7 +85,8 @@ def intersect_vcf_region(vcf_file, region_file, out_file):
 
 # Convert Intersect file to df
 def parse_intersect_region(intersect_file, use_region_names=False):
-    df = pl.scan_csv(intersect_file, separator="\t", has_header=False)
+    df = pl.scan_csv(intersect_file, separator="\t",
+                     has_header=False, infer_schema_length=0)
     
     # If we need to use coords as name
     use_coords = False
