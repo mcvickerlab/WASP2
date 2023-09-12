@@ -102,40 +102,40 @@ def parse_opt(df, in_disp=None):
     return alt_ll, mu
 
 
-def binom_phase(df):
-    """
-    Process phasing data for binomial model
+# def binom_phase(df):
+#     """
+#     Process phasing data for binomial model
 
-    :param df: Dataframe with allele counts
-    :type df: DataFrame
-    :return: Array with alternate hypothesis likelihoods
-    :rtype: Array
-    """
+#     :param df: Dataframe with allele counts
+#     :type df: DataFrame
+#     :return: Array with alternate hypothesis likelihoods
+#     :rtype: Array
+#     """
     
-    snp_count = df.shape[0]
+#     snp_count = df.shape[0]
     
-    if snp_count > 1:
-        first_data = df[:1][["ref_count", "N"]].to_numpy()[0]
-        first_ll = binom.logpmf(first_data[0], first_data[1], (first_data[0]/first_data[1]))
+#     if snp_count > 1:
+#         first_data = df[:1][["ref_count", "N"]].to_numpy()[0]
+#         first_ll = binom.logpmf(first_data[0], first_data[1], (first_data[0]/first_data[1]))
 
 
-        phase_data = df[1:][["ref_count", "N"]].to_numpy().T
+#         phase_data = df[1:][["ref_count", "N"]].to_numpy().T
 
-        phase1_lls = binom.pmf(phase_data[0], phase_data[1], (phase_data[0]/phase_data[1]))
-        phase2_lls = binom.pmf(phase_data[0], phase_data[1], 1 - (phase_data[0]/phase_data[1]))
+#         phase1_lls = binom.pmf(phase_data[0], phase_data[1], (phase_data[0]/phase_data[1]))
+#         phase2_lls = binom.pmf(phase_data[0], phase_data[1], 1 - (phase_data[0]/phase_data[1]))
 
-        combined_lls = (0.5 * phase1_lls) + (0.5 * phase2_lls)
+#         combined_lls = (0.5 * phase1_lls) + (0.5 * phase2_lls)
 
-        alt_ll = first_ll + np.sum(np.log(combined_lls))
+#         alt_ll = first_ll + np.sum(np.log(combined_lls))
 
-    else:
-        snp_data = df[["ref_count", "N"]].to_numpy()[0]
-        alt_ll = binom.logpmf(snp_data[0], snp_data[1], (snp_data[0]/snp_data[1]))
+#     else:
+#         snp_data = df[["ref_count", "N"]].to_numpy()[0]
+#         alt_ll = binom.logpmf(snp_data[0], snp_data[1], (snp_data[0]/snp_data[1]))
 
-    return alt_ll
+#     return alt_ll
 
 
-def single_model(df):
+def single_model(df, region_col=None):
     """
     Find allelic imbalance using normal beta-binomial model
 
@@ -144,6 +144,13 @@ def single_model(df):
     :return: Dataframe with imbalance likelihood
     :rtype: DataFrame
     """
+    
+    # Process region col: TODO shouldnt nneed in future
+    if region_col is None:
+        if "region" in df.columns:
+            region_col = "region"
+        else:
+            region_col = "peak"
 
     print("Running analysis with single dispersion model")
 
@@ -160,7 +167,7 @@ def single_model(df):
     print(f"Optimized dispersion parameter in {time.time() - disp_start} seconds")
 
 
-    group_df = df.groupby("peak", sort=False)
+    group_df = df.groupby(region_col, sort=False)
 
     print("Optimizing imbalance likelihood")
     ll_start = time.time()
@@ -174,7 +181,7 @@ def single_model(df):
     print(f"Optimized imbalance likelihood in {time.time() - ll_start} seconds")
 
     ll_df = pd.concat([null_test, alt_df], axis=1).reset_index()
-    ll_df.columns = ["peak", "null_ll", "alt_ll", "mu"]
+    ll_df.columns = [region_col, "null_ll", "alt_ll", "mu"]
 
     ll_df["lrt"] = -2 * (ll_df["null_ll"] - ll_df["alt_ll"])
     ll_df["pval"] = chi2.sf(ll_df["lrt"], 1)
@@ -182,7 +189,7 @@ def single_model(df):
     return ll_df
 
 
-def linear_model(df):
+def linear_model(df, region_col=None):
     """
     Find allelic imbalance using linear allelic imbalance model,
     weighting imbalance linear with N counts
@@ -192,6 +199,13 @@ def linear_model(df):
     :return: Dataframe with imbalance likelihood
     :rtype: DataFrame
     """
+    
+    # Process region col: TODO shouldnt nneed in future
+    if region_col is None:
+        if "region" in df.columns:
+            region_col = "region"
+        else:
+            region_col = "peak"
 
     print("Running analysis with linear dispersion model")
     in_data = df[["ref_count", "N"]].to_numpy().T
@@ -206,7 +220,7 @@ def linear_model(df):
     print(f"Optimized dispersion parameters in {time.time() - disp_start} seconds")
 
     # Group by region
-    group_df = df.groupby("peak", sort=False)
+    group_df = df.groupby(region_col, sort=False)
 
     # Get null test
     print("Optimizing imbalance likelihood")
@@ -223,7 +237,7 @@ def linear_model(df):
     print(f"Optimized imbalance likelihood in {time.time() - ll_start} seconds")
     
     ll_df = pd.concat([null_test, alt_df], axis=1).reset_index()
-    ll_df.columns = ["peak", "null_ll", "alt_ll", "mu"]
+    ll_df.columns = [region_col, "null_ll", "alt_ll", "mu"]
 
     ll_df["lrt"] = -2 * (ll_df["null_ll"] - ll_df["alt_ll"])
     ll_df["pval"] = chi2.sf(ll_df["lrt"], 1)
@@ -231,37 +245,37 @@ def linear_model(df):
     return ll_df
 
 
-def binom_model(df):
-    """
-    Find allelic imbalance using a standard binomial model
+# def binom_model(df):
+#     """
+#     Find allelic imbalance using a standard binomial model
 
-    :param df: Dataframe with allele counts
-    :type df: DataFrame
-    :return: Dataframe with imbalance likelihood
-    :rtype: DataFrame
-    """
+#     :param df: Dataframe with allele counts
+#     :type df: DataFrame
+#     :return: Dataframe with imbalance likelihood
+#     :rtype: DataFrame
+#     """
 
-    print("Running analysis with binomial model")
-    group_df = df.groupby("peak", sort=False)
+#     print("Running analysis with binomial model")
+#     group_df = df.groupby("peak", sort=False)
     
-    print(f"Calculating imbalance likelihood")
-    ll_start = time.time()
+#     print(f"Calculating imbalance likelihood")
+#     ll_start = time.time()
     
-    # Get null test
-    null_test = group_df.apply(lambda x: np.sum(binom.logpmf(x["ref_count"].to_numpy(), x["N"].to_numpy(), 0.5)))
+#     # Get null test
+#     null_test = group_df.apply(lambda x: np.sum(binom.logpmf(x["ref_count"].to_numpy(), x["N"].to_numpy(), 0.5)))
     
-    # Optimize Alt
-    alt_test = group_df.apply(lambda x: binom_phase(x))
+#     # Optimize Alt
+#     alt_test = group_df.apply(lambda x: binom_phase(x))
 
-    print(f"Calculated imbalance likelihood in {time.time() - ll_start} seconds")
+#     print(f"Calculated imbalance likelihood in {time.time() - ll_start} seconds")
 
-    ll_df = pd.concat([null_test, alt_test], axis=1).reset_index()
-    ll_df.columns = ["peak", "null_ll", "alt_ll"]
+#     ll_df = pd.concat([null_test, alt_test], axis=1).reset_index()
+#     ll_df.columns = ["peak", "null_ll", "alt_ll"]
     
-    ll_df["lrt"] = -2 * (ll_df["null_ll"] - ll_df["alt_ll"])
-    ll_df["pval"] = chi2.sf(ll_df["lrt"], 1)
+#     ll_df["lrt"] = -2 * (ll_df["null_ll"] - ll_df["alt_ll"])
+#     ll_df["pval"] = chi2.sf(ll_df["lrt"], 1)
     
-    return ll_df
+#     return ll_df
 
 
 def bh_correction(df):
@@ -322,7 +336,8 @@ def get_imbalance(in_data, min_count=10, method="single", out_dir=None, is_gene=
     :rtype: DataFrame
     """
 
-    model_dict = {"single": single_model, "linear": linear_model, "binomial": binom_model}
+    model_dict = {"single": single_model, "linear": linear_model}
+    # model_dict = {"single": single_model, "linear": linear_model, "binomial": binom_model}
     
     if method not in model_dict:
         print("Please input a valid method (single, linear, binomial)")
@@ -332,35 +347,58 @@ def get_imbalance(in_data, min_count=10, method="single", out_dir=None, is_gene=
         df = in_data
     else:
         df = pd.read_csv(in_data, sep="\t")
+    
+    # Process diff region names
+    region_col = None
+    col_names = df.columns
+
+    # TODO also handle "genes"
+    if "region" in col_names:
+        region_col = "region"
+    elif "peak" in col_names:
+        region_col = "peak"
+    elif "genes" in col_names:
+        region_col = "genes"
+    else:
+        # SNPs only
+        df["region"] = df["chrom"] + "_" + df["pos"].astype(str)
+        region_col = "region"
+    
+
 
     # Change label for gene to peak temporarily
-    if is_gene is True:
-        df = df.rename(columns={"genes": "peak"})
+    # if is_gene is True:
+    #     df = df.rename(columns={"genes": "peak"})
 
-    
+
+
+    # TODO REPLACE ALL PEAKS WITH REGION_COL
     df["N"] = df["ref_count"] + df["alt_count"]
     df = df.loc[df["N"] >= min_count]
     
-    p_df = model_dict[method](df) # Perform analysis
-    
-    snp_counts = pd.DataFrame(df["peak"].value_counts(sort=False)).reset_index()
-    snp_counts.columns = ["peak", "snp_count"]
+    p_df = model_dict[method](df, region_col) # Perform analysis
     
     
-    count_alleles = df[["peak", "ref_count", "alt_count", "N"]].groupby("peak", sort=False).sum()
+    snp_counts = pd.DataFrame(df[region_col].value_counts(sort=False)).reset_index()
+    snp_counts.columns = [region_col, "snp_count"]
     
-    merge_df = pd.merge(snp_counts, p_df, how="left", on="peak")
     
-    as_df = pd.merge(count_alleles, merge_df, how="left", on="peak")
+    count_alleles = df[[region_col, "ref_count", "alt_count", "N"]].groupby(region_col, sort=False).sum()
+    
+    merge_df = pd.merge(snp_counts, p_df, how="left", on=region_col)
+    
+    as_df = pd.merge(count_alleles, merge_df, how="left", on=region_col)
     as_df = bh_correction(as_df)
 
     # Change label for gene to peak temporarily
-    if is_gene is True:
-        as_df = as_df.rename(columns={"peak": "genes"})
+    # if is_gene is True:
+    #     as_df = as_df.rename(columns={"peak": "genes"})
     
     if feature is None:
-        feature = "peak"
+        feature = region_col
+    
 
+    # TODO ALLOW FOR OUTPUT FILE NAME
     if out_dir is not None:
         Path(out_dir).mkdir(parents=True, exist_ok=True)
         out_file = str(Path(out_dir) / f"as_results_{feature}_{method}.tsv")
@@ -370,6 +408,7 @@ def get_imbalance(in_data, min_count=10, method="single", out_dir=None, is_gene=
     return as_df
 
 
+# TODO UPDATE to use region_col parameter
 def get_imbalance_sc(in_data, min_count=10, method="single", out_dir=None, is_gene=False, feature=None):
     """
     Process input data and method for finding single-cell allelic imbalance
@@ -386,7 +425,8 @@ def get_imbalance_sc(in_data, min_count=10, method="single", out_dir=None, is_ge
     :rtype: DataFrame
     """
 
-    model_dict = {"single": single_model, "linear": linear_model, "binomial": binom_model}
+    model_dict = {"single": single_model, "linear": linear_model}
+    # model_dict = {"single": single_model, "linear": linear_model, "binomial": binom_model}
 
     if method not in model_dict:
         print("Please input a valid method (single, linear, binomial)")
