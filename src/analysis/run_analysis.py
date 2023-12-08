@@ -118,10 +118,10 @@ def parse_analysis(count_file, min_count, model, out_dir, stype, features=None):
             feat_df = df.loc[df["feature"] == feat]
             feat_df = feat_df.drop(columns=["feature"])
 
-            get_imbalance(feat_df, min_count, model, out_dir, is_gene=True, feature=feat)
+            get_imbalance(feat_df, min_count=min_count, method=model, out_dir=out_dir, is_gene=True, feature=feat)
 
     else:
-        get_imbalance(count_file, min_count, model, out_dir, is_gene=False)
+        get_imbalance(count_file, min_count=min_count, method=model, out_dir=out_dir, is_gene=False)
 
 
 def parse_analysis_sc(count_file, min_count, model, out_dir, stype, features=None):
@@ -326,6 +326,7 @@ def run(args):
         elif args.command == "analysis":
             print("Analysis Bulk")
             parse_analysis(args.counts, args.min, args.model, args.output, args.stype, features=args.features)
+            # parse_analysis(args.counts, args.min, args.model, args.output, args.stype, features=args.features)
 
 
 def main():
