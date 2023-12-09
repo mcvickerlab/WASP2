@@ -7,6 +7,8 @@ dependencies:
   - python=3.9.*
   - numpy
   - pandas
+  - polars
   - scipy
   - pysam
   - pybedtools
+  - typer
