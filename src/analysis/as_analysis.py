@@ -144,75 +144,7 @@ def parse_opt(df, in_disp=None, phased=False):
     return alt_ll, mu
 
 
-# def parse_opt(df, in_disp=None):
-#     """
-#     Optimize necessary data when running model
-
-#     :param df: Dataframe with allele counts
-#     :type df: DataFrame
-#     :param in_disp: pre-computed dispersion parameter, defaults to None
-#     :type in_disp: float, optional
-#     :return: Liklihood of alternate model, and imbalance proportion
-#     :rtype: array, array
-#     """
-
-#     snp_count = df.shape[0]
-    
-#     if in_disp is not None:
-#         df["disp"] = in_disp
-
-#     if snp_count > 1:
-#         first_data = df[:1][["disp", "ref_count", "N"]].to_numpy()[0]
-#         phase_data = df[1:][["disp", "ref_count", "N"]].to_numpy().T
-        
-#         res = minimize_scalar(opt_phase, args=(first_data, phase_data), method="bounded", bounds=(0, 1))
-#         mu = res["x"]
-#         alt_ll = -1 * res["fun"]
-
-#     else:
-#         snp_data = df[["disp", "ref_count", "N"]].to_numpy()[0]
-
-#         res = minimize_scalar(opt_prob, args=(snp_data[0], snp_data[1], snp_data[2]), method="bounded", bounds=(0, 1))
-#         mu = res["x"]
-#         alt_ll = -1 * res["fun"]
-
-#     return alt_ll, mu
-
-
-# def binom_phase(df):
-#     """
-#     Process phasing data for binomial model
-
-#     :param df: Dataframe with allele counts
-#     :type df: DataFrame
-#     :return: Array with alternate hypothesis likelihoods
-#     :rtype: Array
-#     """
-    
-#     snp_count = df.shape[0]
-    
-#     if snp_count > 1:
-#         first_data = df[:1][["ref_count", "N"]].to_numpy()[0]
-#         first_ll = binom.logpmf(first_data[0], first_data[1], (first_data[0]/first_data[1]))
-
-
-#         phase_data = df[1:][["ref_count", "N"]].to_numpy().T
-
-#         phase1_lls = binom.pmf(phase_data[0], phase_data[1], (phase_data[0]/phase_data[1]))
-#         phase2_lls = binom.pmf(phase_data[0], phase_data[1], 1 - (phase_data[0]/phase_data[1]))
-
-#         combined_lls = (0.5 * phase1_lls) + (0.5 * phase2_lls)
-
-#         alt_ll = first_ll + np.sum(np.log(combined_lls))
-
-#     else:
-#         snp_data = df[["ref_count", "N"]].to_numpy()[0]
-#         alt_ll = binom.logpmf(snp_data[0], snp_data[1], (snp_data[0]/snp_data[1]))
-
-#     return alt_ll
-
-
-def single_model(df, region_col=None, phased=False):
+def single_model(df, region_col, phased=False):
     """
     Find allelic imbalance using normal beta-binomial model
 
@@ -223,14 +155,6 @@ def single_model(df, region_col=None, phased=False):
     """
     
     # TODO HANDLE PHASED VERSION
-    
-    # Process region col: TODO shouldnt nneed in future
-    if region_col is None:
-        if "region" in df.columns:
-            region_col = "region"
-        else:
-            region_col = "peak"
-
     print("Running analysis with single dispersion model")
 
     opt_disp = lambda rho, data: -np.sum(betabinom.logpmf(data[0], data[1], (0.5 * (1 - rho) / rho), (0.5 * (1 - rho) / rho)))
@@ -268,61 +192,7 @@ def single_model(df, region_col=None, phased=False):
     return ll_df
 
 
-# def single_model(df, region_col=None):
-#     """
-#     Find allelic imbalance using normal beta-binomial model
-
-#     :param df: Dataframe with allele counts
-#     :type df: DataFrame
-#     :return: Dataframe with imbalance likelihood
-#     :rtype: DataFrame
-#     """
-    
-#     # Process region col: TODO shouldnt nneed in future
-#     if region_col is None:
-#         if "region" in df.columns:
-#             region_col = "region"
-#         else:
-#             region_col = "peak"
-
-#     print("Running analysis with single dispersion model")
-
-#     opt_disp = lambda rho, data: -np.sum(betabinom.logpmf(data[0], data[1], (0.5 * (1 - rho) / rho), (0.5 * (1 - rho) / rho)))
-#     in_data = df[["ref_count", "N"]].to_numpy().T
-
-
-#     print("Optimizing dispersion parameter...")
-#     disp_start = time.time()
-
-#     disp = minimize_scalar(opt_disp, args=(in_data),
-#                            method="bounded", bounds=(0,1))["x"]
-
-#     print(f"Optimized dispersion parameter in {time.time() - disp_start} seconds")
-
-
-#     group_df = df.groupby(region_col, sort=False)
-
-#     print("Optimizing imbalance likelihood")
-#     ll_start = time.time()
-#     null_test = group_df.apply(lambda x: np.sum(betabinom.logpmf(x["ref_count"].to_numpy(), x["N"].to_numpy(),
-#                                                                  (0.5 * (1 - disp) / disp), (0.5 * (1 - disp) / disp))))
-
-#     # Optimize Alt
-#     alt_test = group_df.apply(lambda x: parse_opt(x, disp))
-#     alt_df = pd.DataFrame(alt_test.to_list(), columns=["alt_ll", "mu"], index=alt_test.index)
-
-#     print(f"Optimized imbalance likelihood in {time.time() - ll_start} seconds")
-
-#     ll_df = pd.concat([null_test, alt_df], axis=1).reset_index()
-#     ll_df.columns = [region_col, "null_ll", "alt_ll", "mu"]
-
-#     ll_df["lrt"] = -2 * (ll_df["null_ll"] - ll_df["alt_ll"])
-#     ll_df["pval"] = chi2.sf(ll_df["lrt"], 1)
-
-#     return ll_df
-
-
-def linear_model(df, region_col=None):
+def linear_model(df, region_col):
     """
     Find allelic imbalance using linear allelic imbalance model,
     weighting imbalance linear with N counts
@@ -332,13 +202,6 @@ def linear_model(df, region_col=None):
     :return: Dataframe with imbalance likelihood
     :rtype: DataFrame
     """
-    
-    # Process region col: TODO shouldnt nneed in future
-    if region_col is None:
-        if "region" in df.columns:
-            region_col = "region"
-        else:
-            region_col = "peak"
 
     print("Running analysis with linear dispersion model")
     in_data = df[["ref_count", "N"]].to_numpy().T
@@ -453,7 +316,7 @@ def bh_correction(df):
     return return_df
 
 
-def get_imbalance(in_data, min_count=10, phased=False, method="single", out_file=None, out_dir=None, is_gene=False, feature=None):
+def get_imbalance(in_data, min_count=10, phased=False, method="single", region_col=None, is_gene=False, feature=None):
     """
     Process input data and method for finding allelic imbalance
 
@@ -469,10 +332,8 @@ def get_imbalance(in_data, min_count=10, phased=False, method="single", out_file
     :rtype: DataFrame
     """
 
-    # model_dict = {"single": single_model}
     model_dict = {"single": single_model, "linear": linear_model}
-    # model_dict = {"single": single_model, "linear": linear_model, "binomial": binom_model}
-    
+
     if method not in model_dict:
         print("Please input a valid method (single, linear, binomial)")
         return -1
@@ -482,21 +343,22 @@ def get_imbalance(in_data, min_count=10, phased=False, method="single", out_file
     else:
         df = pd.read_csv(in_data, sep="\t")
     
+    
     # Process diff region names
-    region_col = None
-    col_names = df.columns
+    if region_col is None:
+        col_names = df.columns
 
-    # TODO also handle "genes"
-    if "region" in col_names:
-        region_col = "region"
-    elif "peak" in col_names:
-        region_col = "peak"
-    elif "genes" in col_names:
-        region_col = "genes"
-    else:
-        # SNPs only
-        df["region"] = df["chrom"] + "_" + df["pos"].astype(str)
-        region_col = "region"
+        # TODO also handle "genes"
+        if "region" in col_names:
+            region_col = "region"
+        elif "peak" in col_names:
+            region_col = "peak"
+        elif "genes" in col_names:
+            region_col = "genes"
+        else:
+            # SNPs only
+            df["region"] = df["chrom"] + "_" + df["pos"].astype(str)
+            region_col = "region"
 
 
     # Change label for gene to peak temporarily
@@ -527,21 +389,8 @@ def get_imbalance(in_data, min_count=10, phased=False, method="single", out_file
     # if is_gene is True:
     #     as_df = as_df.rename(columns={"peak": "genes"})
     
-    if feature is None:
-        feature = region_col
-    
-    # TODO
-    # if out_file is None:
-    #     out_file = str(Path.cwd() / f"as_results_{feature}_{method}.tsv")
-
-
-
-    # TODO ALLOW FOR OUTPUT FILE NAME
-    # if out_dir is not None:
-    #     Path(out_dir).mkdir(parents=True, exist_ok=True)
-    #     out_file = str(Path(out_dir) / f"as_results_{feature}_{method}.tsv")
-    #     as_df.to_csv(out_file, sep="\t", index=False)
-    #     print(f"Results written to {out_file}")
+    # if feature is None:
+    #     feature = region_col
 
     return as_df
 
