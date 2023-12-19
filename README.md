@@ -31,7 +31,7 @@ Providing samples and regions is highly recommended for allelic-imbalance analys
 
 **Usage**
 ```shell script
-python WASP2/src/counting count-variants [BAM] [VCF] {OPTIONS}
+python WASP2/src/counting [BAM] [VCF] {OPTIONS}
 ```
 
 **Required Arguments**
@@ -53,15 +53,16 @@ Analyzes Allelic Imbalance per ATAC peak given allelic count data
 
 **Usage**
 ```shell script
-python run_analysis.py analysis [COUNTS] {OPTIONS}
+python WASP2/src/analysis [COUNTS] {OPTIONS}
 ```
 **Required Arguments**
-- COUNTS: first positional argument, output data from count tool
+- COUNTS: Output data from count tool
 
 **Optional Arguments**
+- -o/--out_file: Output file to write analysis results to. (Default. ai_results.tsv)
 - --min: Minimum allele count needed for analysis. (Default. 10)
-- -o/--output: Directory to output counts. Defaults to CWD if not given. (Default. CWD)
-- -m/--model: Model used for measuring imbalance. Choice of "single", "linear", or "binomial". (Default. "single")
+- -m/--model: Model used for measuring imbalance dispersion parameter.  Choice of "single" or "linear" (Default. "single")
+- --region_col: Name of region column for current data. Use 'region' for ATAC-seq. Plans for 'genes' for RNA-seq and 'SNP' for per SNP. Recommended to leave blank. (Default: Auto-parses if none provided)
 
 
 &nbsp;
