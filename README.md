@@ -1,6 +1,10 @@
-# WASP2 (Currently in development): Allele-specific pipeline for unbiased read mapping, allelic-imbalance analysis, and QTL discovery(WIP)
-
+<h1 align="center">
+<img src=doc/wasp_hex_logo_v1.png>
+</h1>
 &nbsp;
+
+# WASP2: Allele-specific pipeline for unbiased read mapping and allelic-imbalance analysis
+
 ## Requirements
 - Python >= 3.7
 - numpy
