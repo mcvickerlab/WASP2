@@ -22,7 +22,6 @@ class WaspGeneData:
         
         # Maybe should create dataframe in here...
     
-
     def update_data(self, data):
         
         # Update attributes with namedtuple after parsing
@@ -56,6 +55,8 @@ def parse_gene_file(gene_file, feature=None, attribute=None, parent_attribute=No
 
         if "exon" in feature_list:
             feature = "exon"
+        elif "transcript" in feature_list:
+            feature = "transcript"
         elif "gene" in feature_list:
             feature = "gene"
         else:
@@ -89,10 +90,10 @@ def parse_gene_file(gene_file, feature=None, attribute=None, parent_attribute=No
 
         if df.get_column("attribute").str.contains("Parent").all() is True:
             parent_attribute = "Parent"
-        elif df.get_column("attribute").str.contains("gene_id").all() is True:
-            parent_attribute = "gene_id"
         elif df.get_column("attribute").str.contains("transcript_id").all() is True:
             parent_attribute = "transcript_id"
+        elif df.get_column("attribute").str.contains("gene_id").all() is True:
+            parent_attribute = "gene_id"
         else:
             parent_attribute = attribute
     
@@ -115,6 +116,37 @@ def parse_gene_file(gene_file, feature=None, attribute=None, parent_attribute=No
     return parsed_data(df, feature, attribute, parent_attribute)
 
 
+# Parse and create gtf_bed for intersection
+# and return parsed WaspGeneData obj
+def make_gene_data(gene_file,
+                   out_bed,
+                   feature=None,
+                   attribute=None,
+                   parent_attribute=None,
+                   ):
+    
+    gene_data = WaspGeneData(gene_file=gene_file,
+                             feature=feature,
+                             attribute=attribute,
+                             parent_attribute=parent_attribute)
+    
+    parsed_file_data = parse_gene_file(
+        gene_data.gene_file,
+        feature=gene_data.feature,
+        attribute=gene_data.attribute,
+        parent_attribute=gene_data.parent_attribute)
+    
+    # Update gene_data obj
+    gene_data.update_data(parsed_file_data)
+    
+    # Write out_bed
+    parsed_file_data.gene_df.write_csv(
+        out_bed, separator="\t",
+        include_header=False)
+    
+    return gene_data
+
+
 def parse_intersect_genes(intersect_file, attribute=None, parent_attribute=None):
     
     if attribute is None:
@@ -123,7 +155,7 @@ def parse_intersect_genes(intersect_file, attribute=None, parent_attribute=None)
     if parent_attribute is None:
         parent_attribute = "Parent"
 
-
+    # AFTER performing gtf_to_bed and intersecting!
     df = pl.scan_csv(intersect_file, separator="\t",
                      has_header=False, infer_schema_length=0)
     
@@ -139,5 +171,3 @@ def parse_intersect_genes(intersect_file, attribute=None, parent_attribute=None)
         rename_cols).with_columns(pl.col("pos").cast(pl.UInt32))
     
     return df.unique(maintain_order=True).collect()
-
-

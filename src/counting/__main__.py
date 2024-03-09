@@ -76,7 +76,41 @@ def count_variants(
                          "Ignored if no name column in file. "
                          "Defaults to using coordinates."
                          )
-                     )] = False
+                     )] = False,
+    gene_feature: Annotated[
+        Optional[str],
+        typer.Option(
+            "--gene_feature",
+            "--feature",
+            "--feat",
+            help=(
+                "Feature type in gtf/gff3 for counting intersecting SNPs. "
+                "Defaults to 'exon' for snp counting")
+            )] = None,
+    gene_attribute: Annotated[
+        Optional[str],
+        typer.Option(
+            "--gene_attribute",
+            "--attribute",
+            "--attributes",
+            "--attrs",
+            "--attr",
+            help=(
+                "Attribute name from gtf/gff3 attribute column to use as ID. "
+                "Defaults to '<feature>_id' in gtf and 'ID' in gff3")
+            )] = None,
+    gene_parent: Annotated[
+        Optional[str],
+        typer.Option(
+            "--gene_parent",
+            "--parent",
+            "--parent_feature",
+            "--parent_attribute",
+            help=(
+                "Parent attribute in gtf/gff3 for feature used in counting"
+                "Defaults to 'transcript_id' in gtf and 'Parent' in gff3")
+            )] = None,
+    
 ):
     
     # Parse sample string
@@ -95,7 +129,11 @@ def count_variants(
                        samples=samples,
                        use_region_names=use_region_names,
                        out_file=out_file,
-                       temp_loc=temp_loc)
+                       temp_loc=temp_loc,
+                       gene_feature=gene_feature,
+                       gene_attribute=gene_attribute,
+                       gene_parent=gene_parent
+                       )
     
     # TODO TEST CASES FOR TYPER
     # TODO UNIT TEST NEXT

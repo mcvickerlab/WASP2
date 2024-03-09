@@ -70,6 +70,39 @@ def vcf_to_bed(vcf_file, out_bed, samples=None, drop_gt=False):
     return out_bed
 
 
+def gtf_to_bed(gtf_file, out_bed, feature, attribute):
+    
+    # Use gtf col names
+    gtf_cols = [
+        "seqname", "source", "feature",
+        "start", "end", "score",
+        "strand", "frame", "attribute"]
+    
+    
+    # Cant use lazyframe in case of compressed
+    df = pl.read_csv(gtf_file, separator="\t",
+                     comment_prefix="#",
+                     has_header=False,
+                     new_columns=gtf_cols)
+    
+    # Extract from attribute col
+    attr_regex = fr'{attribute}[=\s]\"?\'?(.*?)\"?\'?;' # works for gtf/gff3
+    
+    # Extract feature only and attributes
+    df = df.filter(pl.col("feature") == feature
+                  ).with_columns(
+        pl.col("start").sub(1),
+        pl.col("attribute").str.extract(attr_regex).alias(attribute)
+    ).select(["seqname", "start", "end", attribute])
+    
+    # TODO Extra validation and may want to return some data?
+    
+    # Write to BED
+    df.write_csv(out_bed, separator="\t", include_header=False)
+    
+    return out_bed
+
+
 # Perform intersection
 def intersect_vcf_region(vcf_file, region_file, out_file):
     
@@ -84,13 +117,17 @@ def intersect_vcf_region(vcf_file, region_file, out_file):
 
 
 # Convert Intersect file to df
-def parse_intersect_region(intersect_file, use_region_names=False):
+def parse_intersect_region(intersect_file, use_region_names=False, region_col=None):
+    
     df = pl.scan_csv(intersect_file, separator="\t",
                      has_header=False, infer_schema_length=0)
     
     # If we need to use coords as name
     use_coords = False
     
+    if region_col is None:
+        region_col = "region"
+
     # No regions, only variants
     if len(df.columns) <= 5:
         # No regions, only variants
@@ -100,7 +137,7 @@ def parse_intersect_region(intersect_file, use_region_names=False):
     elif use_region_names and len(df.columns) >= 9:
         # Use included names in region file
         subset_cols = [df.columns[i] for i in [0, 2, 3, 4, 8]]
-        new_cols = ["chrom", "pos", "ref", "alt", "region"]
+        new_cols = ["chrom", "pos", "ref", "alt", region_col]
         
     elif len(df.columns) >= 8:
         # Either no names included or use coords instead
@@ -113,7 +150,6 @@ def parse_intersect_region(intersect_file, use_region_names=False):
         # CHANGE TO RAISE ERROR
         print("COULD NOT RECOGNIZE FORMAT OR WRONG NUMBER OF COLS")
         return
-    
     
     # Parse dataframe columns
     rename_cols = {old_col: new_col for old_col, new_col in zip(subset_cols, new_cols)}
