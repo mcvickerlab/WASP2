@@ -60,8 +60,7 @@ def parse_gene_file(gene_file, feature=None, attribute=None, parent_attribute=No
         elif "gene" in feature_list:
             feature = "gene"
         else:
-            # TODO return an error
-            print("Exon and Gene not found in feature list")
+            print(f"exon, gene or transcript not found in feature list: \n{feature_list}")
     
     # feature filter
     df = df.filter(pl.col("feature") == feature)
@@ -97,15 +96,22 @@ def parse_gene_file(gene_file, feature=None, attribute=None, parent_attribute=No
         else:
             parent_attribute = attribute
     
+    # TODO: Allow for count output without parent column
+    if parent_attribute == attribute:
+        parent_col = f"groupby_{attribute}"
+    else:
+        parent_col = parent_attribute
+        
+    
     # Extract relevant attributes
-    attr_regex = fr'{attribute}[=\s]\"?\'?(.*?)\"?\'?;' # OG attribute extract
-    parent_regex = fr'{parent_attribute}[=\s]\"?\'?(.*?)\"?\'?;' # OG attribute extract
+    attr_regex = fr'{attribute}[=\s]\"?\'?(.*?)\"?\'?;'
+    parent_regex = fr'{parent_attribute}[=\s]\"?\'?(.*?)\"?\'?;' 
     
     df = df.with_columns(
         pl.col("start").sub(1),
         pl.col("attribute").str.extract(attr_regex).alias(attribute),
-        pl.col("attribute").str.extract(parent_regex).alias(parent_attribute)
-    ).select(["seqname", "start", "end", attribute, parent_attribute])
+        pl.col("attribute").str.extract(parent_regex).alias(parent_col)
+    ).select(["seqname", "start", "end", attribute, parent_col])
     
     # metadata...maybe should create a method
     parsed_data = namedtuple(
