@@ -29,6 +29,18 @@ def find_imbalance(
                   )
             )
         ] = None,
+    pseudocount: Annotated[
+        Optional[int],
+        typer.Option(
+            "-p",
+            "--ps",
+            "--pseudo",
+            "--pseudocount",
+            help=("Pseudocount added when measuring allelic imbalance. "
+                  "(Default: 1)"
+                  )
+            )
+        ] = None,
     out_file: Annotated[
         Optional[str],
         typer.Option(
@@ -59,19 +71,35 @@ def find_imbalance(
             "--region_col",
             help=(
                 "Name of region column for current data..."
-                "Choice of 'region' or 'peak' for ATAC-seq. " 
-                "Plans for 'genes' for RNA-seq and 'SNP' for per SNP."
+                "'region' for ATAC-seq. " 
+                "Attribute name for RNA-seq."
                 "(Default: Auto-parses if none provided)"
                 ),
             )] = None,
+    groupby: Annotated[
+        Optional[str],
+        typer.Option(
+            "--groupby",
+            "--group",
+            "--parent_col",
+            "--parent",
+            help=(
+                "Report allelic imbalance by parent group instead of feature level in RNA-seq counts. \n"
+                "Name of parent column. Not valid if no parent column or if using ATAC-seq peaks. \n"
+                "(Default: Report by feature level instead of parent level)"
+                ),
+            )] = None,
+    
 ):
     
     # Run
     run_ai_analysis(count_file=counts,
                     min_count=min,
                     model=model,
+                    pseudocount=pseudocount,
                     out_file=out_file,
-                    region_col=region_col)
+                    region_col=region_col,
+                    groupby=groupby)
     
     # TODO TEST CASES FOR TYPER
 

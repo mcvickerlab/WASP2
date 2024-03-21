@@ -51,21 +51,21 @@ def opt_prob(in_prob, in_rho, k, n, log=True):
 
 
 # Old version
-def opt_phase(prob, first_data, phase_data):
-    """
-    Optimize likelihood while taking phase into account
-    (Function called by optimizer)
-    """
+# def opt_phase(prob, first_data, phase_data):
+#     """
+#     Optimize likelihood while taking phase into account
+#     (Function called by optimizer)
+#     """
     
-    first_ll = opt_prob(prob, first_data[0], first_data[1], first_data[2])
+#     first_ll = opt_prob(prob, first_data[0], first_data[1], first_data[2])
     
-    # Sum opts given prob
-    phase1_lls = opt_prob(prob, phase_data[0], phase_data[1], phase_data[2], log=False)
-    phase2_lls = opt_prob(1 - prob, phase_data[0], phase_data[1], phase_data[2], log=False)
+#     # Sum opts given prob
+#     phase1_lls = opt_prob(prob, phase_data[0], phase_data[1], phase_data[2], log=False)
+#     phase2_lls = opt_prob(1 - prob, phase_data[0], phase_data[1], phase_data[2], log=False)
 
 
-    combined_lls = (0.5 * phase1_lls) + (0.5 * phase2_lls)
-    return first_ll + -np.sum(np.log(combined_lls))
+#     combined_lls = (0.5 * phase1_lls) + (0.5 * phase2_lls)
+#     return first_ll + -np.sum(np.log(combined_lls))
 
 
 # Handle optimization if phased
@@ -316,67 +316,58 @@ def bh_correction(df):
     return return_df
 
 
-def get_imbalance(in_data, min_count=10, phased=False, method="single", region_col=None, is_gene=False, feature=None):
-    """
-    Process input data and method for finding allelic imbalance
-
-    :param in_data: Dataframe with allele counts
-    :type in_data: DataFrame
-    :param min_count: minimum allele count for analysis, defaults to 10
-    :type min_count: int, optional
-    :param method: analysis method, defaults to "single"
-    :type method: str, optional
-    :param out_dir: output directory, defaults to None
-    :type out_dir: str, optional
-    :return: DataFrame with imbalance Pvals per region
-    :rtype: DataFrame
-    """
+def get_imbalance(in_data, min_count=10, pseudocount=1, method="single", region_col=None, groupby=None):
 
     model_dict = {"single": single_model, "linear": linear_model}
-
-    if method not in model_dict:
-        print("Please input a valid method (single, linear, binomial)")
-        return -1
     
+    phased=False # TODO
+
+    # If preparsed dataframe or filepath
     if isinstance(in_data, pd.DataFrame):
         df = in_data
     else:
-        df = pd.read_csv(in_data, sep="\t")
+        df = pd.read_csv(in_data,
+                         sep="\t",
+                         dtype={
+                             "chrom": "category",
+                             "pos": np.uint32,
+                             "ref": "category",
+                             "alt": "category",
+                             "ref_count": np.uint16,
+                             "alt_count": np.uint16,
+                             "other_count": np.uint16}
+                        )
     
     
-    # Process diff region names
+    # If no region_col measure imbalance per variant
     if region_col is None:
-        col_names = df.columns
+        region_col = "variant"
+        groupby = None # no parent
 
-        # TODO also handle "genes"
-        if "region" in col_names:
-            region_col = "region"
-        elif "peak" in col_names:
-            region_col = "peak"
-        elif "genes" in col_names:
-            region_col = "genes"
-        else:
-            # SNPs only
-            df["region"] = df["chrom"] + "_" + df["pos"].astype(str)
-            region_col = "region"
-
-
-    # Change label for gene to peak temporarily
-    # if is_gene is True:
-    #     df = df.rename(columns={"genes": "peak"})
-
-
-
-    # TODO REPLACE ALL PEAKS WITH REGION_COL
+        df[region_col] = (df["chrom"].astype("string")
+                          + "_" + df["pos"].astype("string"))
+    
+    
+    # Process pseudocount values and filter data by min
+    df[["ref_count", "alt_count"]] += pseudocount
     df["N"] = df["ref_count"] + df["alt_count"]
-    df = df.loc[df["N"] >= min_count]
+    df = df.loc[df["N"].ge(min_count + (2*pseudocount)), :]
+    
+    # Get unique values based on group
+    if groupby is not None:
+        region_col = groupby
+    
+    df = df[["chrom", "pos", "ref_count", "alt_count", "N", region_col]].drop_duplicates()
+
     
     p_df = model_dict[method](df, region_col, phased=phased) # Perform analysis
     
+    # remove pseudocount
+    df[["ref_count", "alt_count"]] -= pseudocount
+    df["N"] -= pseudocount * 2
     
     snp_counts = pd.DataFrame(df[region_col].value_counts(sort=False)).reset_index()
     snp_counts.columns = [region_col, "snp_count"]
-    
     
     count_alleles = df[[region_col, "ref_count", "alt_count", "N"]].groupby(region_col, sort=False).sum()
     
@@ -385,17 +376,10 @@ def get_imbalance(in_data, min_count=10, phased=False, method="single", region_c
     as_df = pd.merge(count_alleles, merge_df, how="left", on=region_col)
     as_df = bh_correction(as_df)
 
-    # Change label for gene to peak temporarily
-    # if is_gene is True:
-    #     as_df = as_df.rename(columns={"peak": "genes"})
-    
-    # if feature is None:
-    #     feature = region_col
-
     return as_df
 
 
-# def get_imbalance(in_data, min_count=10, method="single", out_dir=None, is_gene=False, feature=None):
+# def get_imbalance(in_data, min_count=10, phased=False, method="single", region_col=None, is_gene=False, feature=None):
 #     """
 #     Process input data and method for finding allelic imbalance
 
@@ -412,8 +396,7 @@ def get_imbalance(in_data, min_count=10, phased=False, method="single", region_c
 #     """
 
 #     model_dict = {"single": single_model, "linear": linear_model}
-#     # model_dict = {"single": single_model, "linear": linear_model, "binomial": binom_model}
-    
+
 #     if method not in model_dict:
 #         print("Please input a valid method (single, linear, binomial)")
 #         return -1
@@ -423,22 +406,22 @@ def get_imbalance(in_data, min_count=10, phased=False, method="single", region_c
 #     else:
 #         df = pd.read_csv(in_data, sep="\t")
     
-#     # Process diff region names
-#     region_col = None
-#     col_names = df.columns
-
-#     # TODO also handle "genes"
-#     if "region" in col_names:
-#         region_col = "region"
-#     elif "peak" in col_names:
-#         region_col = "peak"
-#     elif "genes" in col_names:
-#         region_col = "genes"
-#     else:
-#         # SNPs only
-#         df["region"] = df["chrom"] + "_" + df["pos"].astype(str)
-#         region_col = "region"
     
+#     # Process diff region names
+#     if region_col is None:
+#         col_names = df.columns
+
+#         # TODO also handle "genes"
+#         if "region" in col_names:
+#             region_col = "region"
+#         elif "peak" in col_names:
+#             region_col = "peak"
+#         elif "genes" in col_names:
+#             region_col = "genes"
+#         else:
+#             # SNPs only
+#             df["region"] = df["chrom"] + "_" + df["pos"].astype(str)
+#             region_col = "region"
 
 
 #     # Change label for gene to peak temporarily
@@ -451,7 +434,7 @@ def get_imbalance(in_data, min_count=10, phased=False, method="single", region_c
 #     df["N"] = df["ref_count"] + df["alt_count"]
 #     df = df.loc[df["N"] >= min_count]
     
-#     p_df = model_dict[method](df, region_col) # Perform analysis
+#     p_df = model_dict[method](df, region_col, phased=phased) # Perform analysis
     
     
 #     snp_counts = pd.DataFrame(df[region_col].value_counts(sort=False)).reset_index()
@@ -469,16 +452,8 @@ def get_imbalance(in_data, min_count=10, phased=False, method="single", region_c
 #     # if is_gene is True:
 #     #     as_df = as_df.rename(columns={"peak": "genes"})
     
-#     if feature is None:
-#         feature = region_col
-    
-
-#     # TODO ALLOW FOR OUTPUT FILE NAME
-#     if out_dir is not None:
-#         Path(out_dir).mkdir(parents=True, exist_ok=True)
-#         out_file = str(Path(out_dir) / f"as_results_{feature}_{method}.tsv")
-#         as_df.to_csv(out_file, sep="\t", index=False)
-#         print(f"Results written to {out_file}")
+#     # if feature is None:
+#     #     feature = region_col
 
 #     return as_df
 

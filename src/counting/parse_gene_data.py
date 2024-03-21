@@ -119,7 +119,7 @@ def parse_gene_file(gene_file, feature=None, attribute=None, parent_attribute=No
         ["gene_df", "feature", "attribute", "parent_attribute"]
     )
     
-    return parsed_data(df, feature, attribute, parent_attribute)
+    return parsed_data(df, feature, attribute, parent_col)
 
 
 # Parse and create gtf_bed for intersection
