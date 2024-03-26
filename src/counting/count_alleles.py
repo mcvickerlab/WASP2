@@ -65,11 +65,12 @@ def count_snp_alleles(bam, chrom, snp_list):
     make_count_df()
     """
     
+    read_set = set()
     allele_counts = []
 
     for pos, ref, alt in snp_list:
 
-        read_set = set()
+        # read_set = set()
         ref_count, alt_count, other_count = 0, 0, 0
 
         # Got make sure read is not double counted
