@@ -22,7 +22,7 @@ def make_count_df(bam_file, df):
 
     total_start = timeit.default_timer()
     
-    with AlignmentFile(bam_file, "r") as bam:
+    with AlignmentFile(bam_file, "rb") as bam:
         
         for chrom in chrom_list:
             chrom_df = df.filter(pl.col("chrom") == chrom)

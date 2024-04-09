@@ -11,4 +11,5 @@ dependencies:
   - scipy
   - pysam
   - pybedtools
+  - bedtools
   - typer

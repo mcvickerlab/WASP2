@@ -154,7 +154,14 @@ def parse_intersect_region(intersect_file, use_region_names=False, region_col=No
     # Parse dataframe columns
     rename_cols = {old_col: new_col for old_col, new_col in zip(subset_cols, new_cols)}
     df = df.select(subset_cols).rename(
-        rename_cols).with_columns(pl.col("pos").cast(pl.UInt32))
+        rename_cols).with_columns(
+            [
+                pl.col("chrom").cast(pl.Categorical),
+                pl.col("pos").cast(pl.UInt32),
+                pl.col("ref").cast(pl.Categorical),
+                pl.col("alt").cast(pl.Categorical)
+                ]
+            )
     
     # Create coords
     if use_coords:
