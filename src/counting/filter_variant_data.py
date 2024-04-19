@@ -10,7 +10,7 @@ import numpy as np
 import polars as pl
 
 # same as in mapping...should create unified utils
-def vcf_to_bed(vcf_file, out_bed, samples=None, drop_gt=False):
+def vcf_to_bed(vcf_file, out_bed, samples=None, include_gt=True):
     
     # Maybe change this later?
     # out_bed = f"{out_dir}/filt_variants.bed"
@@ -59,10 +59,12 @@ def vcf_to_bed(vcf_file, out_bed, samples=None, drop_gt=False):
                                           stdout=subprocess.PIPE, check=True)
         
         # If we include GT
-        if drop_gt:
-            query_cmd.append("%CHROM\t%POS0\t%END\t%REF\t%ALT\n")
+        if include_gt:
+            # Changed %TGT to GT, ref/alt -> 0/1
+            query_cmd.append("%CHROM\t%POS0\t%END\t%REF\t%ALT[\t%GT]\n")
         else:
-            query_cmd.append("%CHROM\t%POS0\t%END\t%REF\t%ALT[\t%TGT]\n")
+            query_cmd.append("%CHROM\t%POS0\t%END\t%REF\t%ALT\n")
+
     
     # Run Subprocess
     query_process = subprocess.run(query_cmd, input=view_process.stdout, check=True)
@@ -116,7 +118,65 @@ def intersect_vcf_region(vcf_file, region_file, out_file):
         intersect_process = subprocess.run(intersect_cmd, stdout=file, check=True)
 
 
+# TODO, update old software to use this new version
 # Convert Intersect file to df
+def parse_intersect_region_new(intersect_file, samples=None, use_region_names=False, region_col=None):
+    
+    if region_col is None:
+        region_col = "region"
+
+
+    # Default number of columns
+    vcf_cols = ["chrom", "pos0", "pos", "ref", "alt"] # Default columns for vcf
+    vcf_schema = [pl.Categorical, pl.UInt32, pl.UInt32,
+                  pl.Categorical, pl.Categorical]
+
+
+    if samples is not None:
+        vcf_cols.extend(samples)
+        vcf_schema.extend([pl.Categorical] * len(samples))
+
+
+    vcf_ncols = len(vcf_cols)
+
+    # Process with gt
+    df = pl.scan_csv(intersect_file, separator="\t",
+                     has_header=False, infer_schema_length=0,
+                     new_columns=vcf_cols, dtypes=vcf_schema
+                    )
+
+
+    # Check how many region columns
+    subset_cols = [vcf_cols[0], *vcf_cols[2:]] # skip pos0
+    intersect_ncols = len(df.columns)
+
+
+    # Intersected with peak, check if region col needs to be made
+    if intersect_ncols > vcf_ncols:
+
+        subset_cols.append(region_col)
+
+        # Contains a fourth column to be used as regions
+        if use_region_names and (intersect_ncols - vcf_ncols) > 3:
+
+            df = df.rename({df.columns[vcf_ncols+3]: region_col})
+
+        else:
+            df = df.with_columns(
+                pl.concat_str(
+                    [
+                        pl.col(i) for i in df.columns[vcf_ncols:vcf_ncols+3]
+                    ],
+                    separator="_"
+                ).alias(region_col)
+            )
+
+        # Retrieve region col
+        df = df.select(subset_cols)
+        
+    return df.unique(maintain_order=True).collect()
+
+
 def parse_intersect_region(intersect_file, use_region_names=False, region_col=None):
     
     df = pl.scan_csv(intersect_file, separator="\t",

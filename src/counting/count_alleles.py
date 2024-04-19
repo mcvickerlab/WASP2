@@ -1,9 +1,22 @@
 import timeit
 from pathlib import Path
+from bisect import bisect_left
 
 import polars as pl
 
 from pysam.libcalignmentfile import AlignmentFile
+
+# Helper that does binary search
+def find_read_aln_pos(read, pos):
+    
+    aln_list = read.get_aligned_pairs(True)
+
+    i = bisect_left(aln_list, pos, key=lambda x: x[1])
+    
+    if i != len(aln_list) and aln_list[i][1] == pos:
+        return aln_list[i][0]
+    else:
+        return None
 
 
 def make_count_df(bam_file, df):
@@ -86,7 +99,7 @@ def count_snp_alleles(bam, chrom, snp_list):
             
             for qpos, refpos in read.get_aligned_pairs(True):
                 
-                # Maybe implement a binary search
+                # TODO Update with binary search
                 if refpos == pos-1:
                     
                     if seq[qpos] == ref:

@@ -149,7 +149,7 @@ def run_count_variants(bam_file, vcf_file,
     vcf_to_bed(vcf_file=count_files.vcf_file,
                out_bed=count_files.vcf_bed,
                samples=count_files.samples,
-               drop_gt=True
+               include_gt=False
               )
     
     

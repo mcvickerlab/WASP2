@@ -7,6 +7,7 @@ import sys
 
 # Local Imports
 from run_counting import run_count_variants
+from run_counting_sc import run_count_variants_sc
 
 # app = typer.Typer()
 # app = typer.Typer(pretty_exceptions_show_locals=False)
@@ -42,7 +43,6 @@ def count_variants(
                      help=(
                          "Only use variants overlapping regions in file. "
                          "Accepts BED or MACS2 formatted .(narrow/broad)Peak files. "
-                         "TODO: Implement genes gtf/gff format"
                      )
                      )] = None,
     out_file: Annotated[
@@ -138,6 +138,82 @@ def count_variants(
     # TODO TEST CASES FOR TYPER
     # TODO UNIT TEST NEXT
 
+
+@app.command()
+def count_variants_sc(
+    bam: Annotated[str, typer.Argument(help="Bam File")],
+    vcf: Annotated[str, typer.Argument(help="VCF File")],
+    barcodes: Annotated[str, typer.Argument(
+        help="File with one barcode per line. Used as index")],
+    samples: Annotated[
+        Optional[List[str]],
+        typer.Option(
+            "--samples",
+            "--sample",
+            "--samps",
+            "--samps",
+            "-s",
+            help=(
+                "One or more samples to use in VCF. "
+                "Accepts comma delimited string "
+                "or file with one sample per line. "
+                "RECOMMENDED TO USE ONE SAMPLE AT A TIME."
+            )
+            )] = None,
+    feature_file: Annotated[
+        Optional[str],
+        typer.Option("--feature",
+                     "--features",
+                     "--feat",
+                     "-f",
+                     "--region",
+                     "--regions",
+                     "-r",
+                     help=("Features used in single-cell experiment. "
+                         "Only use variants overlapping features in file. "
+                         "Accepts BED or MACS2 formatted .(narrow/broad)Peak files. "
+                         "TODO: Implement genes gtf/gff format"
+                     )
+                     )] = None,
+    out_file: Annotated[
+        Optional[str],
+        typer.Option(
+            "--out_file",
+            "--outfile",
+            "--out",
+            "-o",
+            help=("Output file to write Anndata allele counts. "
+                "H5ad file format. "
+                "Defaults to allele_counts.h5ad"
+                ),
+            )] = None,
+    temp_loc: Annotated[
+        Optional[str],
+        typer.Option(
+            "--temp_loc",
+            "--temp",
+            "-t",
+            help=(
+                "Directory for keeping intermediary files. "
+                "Defaults to removing intermediary files using temp directory")
+            )] = None
+):
+    
+    # Parse sample string
+    if len(samples) > 0:
+        samples=samples[0]
+    else:
+        samples=None
+
+    # run
+    run_count_variants_sc(bam_file=bam,
+                          vcf_file=vcf,
+                          barcode_file=barcodes,
+                          feature_file=feature_file,
+                          samples=samples,
+                          out_file=out_file,
+                          temp_loc=temp_loc
+                          )
 
 
 if __name__ == "__main__":
