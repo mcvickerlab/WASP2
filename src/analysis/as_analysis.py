@@ -85,6 +85,25 @@ def opt_phased(prob, first_data, phase_data):
     combined_lls = (0.5 * phase1_lls) + (0.5 * phase2_lls)
     return first_ll + -np.sum(np.log(combined_lls))
 
+# updated phasing optimizer: currently used in single-cell analysis
+def opt_phased_new(prob, disp, ref_data, n_data, gt_data):
+    
+    # Get phase with first snp as ref
+    if gt_data[0] > 0:
+        gt_data = 1 - gt_data
+
+    prob_arr = np.full(
+        shape=ref_data.shape[0],
+        fill_value=prob,
+        dtype=np.float64
+    )
+
+    # Get the probs with respect to GT
+    prob_arr = np.abs(prob_arr - gt_data)
+    phased_ll = opt_prob(prob_arr, disp, ref_data, n_data)
+
+    return np.sum(phased_ll)
+
 
 # Previous version not knowing phasing
 def opt_unphased(prob, first_data, phase_data):
@@ -102,6 +121,28 @@ def opt_unphased(prob, first_data, phase_data):
 
     combined_lls = (0.5 * phase1_lls) + (0.5 * phase2_lls)
     return first_ll + -np.sum(np.log(combined_lls))
+
+# Updated unphasing optimizer using DP: currently used in single-cell analysis
+def opt_unphased_dp(prob, disp, first_ref, first_n, phase_ref, phase_n):
+    """
+    Optimize likelihood while taking phase into account
+    (Function called by optimizer)
+    """
+
+    # Get likelihood of first pos
+    first_ll = opt_prob(prob, disp, first_ref[0], first_n[0])
+
+    # Get likelihood witth regard to phasing of first pos
+    phase1_like = opt_prob(prob, disp, phase_ref, phase_n, log=False)
+    phase2_like = opt_prob(1-prob, disp, phase_ref, phase_n, log=False)
+    
+    prev_like = 1
+    for p1, p2 in zip(phase1_like, phase2_like):
+        p1_combined_like = prev_like * p1
+        p2_combined_like = prev_like * p2
+        prev_like = (0.5 * p1_combined_like) + (0.5 * p2_combined_like)
+
+    return first_ll + -np.log(prev_like)
 
 
 def parse_opt(df, in_disp=None, phased=False):

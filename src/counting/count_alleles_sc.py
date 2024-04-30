@@ -154,13 +154,19 @@ def make_count_matrix(bam_file, df, bc_dict,
     if "region" in df.columns:
         
         # Get unique snps and associated regions
-        region_snp_dict = dict(
-            df.join(snp_df, on=["chrom", "pos", "ref", "alt"], how="left"
-                   ).group_by("region", maintain_order=True
-                             ).agg("index").iter_rows()
-        )
-
-        adata.uns["region_snps"] = region_snp_dict
+        
+        # Create dict during analysis step instead
+        adata.uns["feature"] = df.join(snp_df,
+                                       on=["chrom", "pos", "ref", "alt"],
+                                       how="left").select(
+                                           ["region", "index"]).to_pandas()
+        
+        # region_snp_dict = dict(
+        #     df.join(snp_df, on=["chrom", "pos", "ref", "alt"], how="left"
+        #            ).group_by("region", maintain_order=True
+        #                      ).agg("index").iter_rows()
+        # )
+        # adata.uns["region_snps"] = region_snp_dict
 
         
     # Write out count stats
