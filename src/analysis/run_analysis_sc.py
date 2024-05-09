@@ -141,16 +141,21 @@ def process_adata_inputs(adata, ai_files=None, bc_map=None, sample=None, groups=
             
             # Using copy instead of view stops implicit mod warning, need to check memory usage
             adata = adata[adata.obs[sample].isin(['1|0', '0|1', '1/0', '0/1'])].copy()
+            adata.obs = adata.obs.reset_index(drop=True) # Have to reset index every time i subset adata
 
             # Have to reindex the regions after filtering GT's
             if "feature" in adata.uns_keys():
                 
-                idx_df = adata.obs[["index"]].reset_index(
-                    drop=True).copy().reset_index(names="filt_index")
+                # idx_df = adata.obs[["index"]].reset_index(
+                #     drop=True).copy().reset_index(names="filt_index")
                 
                 adata.uns["feature"] = adata.uns["feature"].merge(
-                    idx_df, on="index")[["region", "filt_index"]].rename(
+                    adata.obs[["index"]].reset_index(names="filt_index"),
+                    on="index")[["region", "filt_index"]].rename(
                     columns={"filt_index": "index"})
+                    
+                # Need to update adata.obs index col as well
+                adata.obs["index"] = adata.obs.index
 
     # Check phasing if True or None
     if phased is not False:
