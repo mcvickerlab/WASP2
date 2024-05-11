@@ -10,7 +10,7 @@ import pandas as pd
 import anndata as ad
 
 # local imports
-from as_analysis_sc import get_imbalance_sc
+from as_analysis_sc import get_imbalance_sc, adata_count_qc
 
 # Class that stores relevant data
 class WaspAnalysisSC:
@@ -23,7 +23,8 @@ class WaspAnalysisSC:
                  sample=None,
                  groups=None,
                  model=None,
-                 out_file=None
+                 out_file=None,
+                 z_cutoff=None
                 ):
         
         # User input data
@@ -36,7 +37,7 @@ class WaspAnalysisSC:
         self.model = model
         self.out_file = out_file
         self.phased = phased
-
+        self.z_cutoff = z_cutoff # Should i default to something like 4 or 5?
 
         # Default to single dispersion model
         # TODO ADD GROUP DISP and other model types
@@ -207,7 +208,8 @@ def run_ai_analysis_sc(count_file,
                        phase=None,
                        sample=None,
                        groups=None,
-                       out_file=None
+                       out_file=None,
+                       z_cutoff=None
                        ):
     
     # Create data class that holds input data
@@ -219,7 +221,8 @@ def run_ai_analysis_sc(count_file,
                               sample=sample,
                               groups=groups,
                               model="single",
-                              out_file=out_file
+                              out_file=out_file,
+                              z_cutoff=z_cutoff
                               )
     
     adata_inputs = process_adata_inputs(ad.read_h5ad(ai_files.adata_file), ai_files=ai_files)
@@ -231,7 +234,13 @@ def run_ai_analysis_sc(count_file,
     # Update class attributes
     ai_files.update_data(adata_inputs)
     
-    adata = adata_inputs.adata # Hold parsed adata file obj in memory
+    # adata = adata_inputs.adata # Hold parsed adata file obj in memory
+    
+    # Prefilter and hold adata data in memory
+    adata = adata_count_qc(adata_inputs.adata,
+                           z_cutoff=ai_files.z_cutoff,
+                           gt_error=None
+                           )
     
     # Create dictionary of resulting dataframes
     df_dict = get_imbalance_sc(adata,
@@ -248,7 +257,7 @@ def run_ai_analysis_sc(count_file,
     for key, value in df_dict.items():
         group_out_file = out_path / f"{ai_files.prefix}_{key.replace('/', '-')}.tsv"
         
-        value.sort_values(by="fdr_pval", ascending=True).to_csv(
+        value.sort_values(by="pval", ascending=True).to_csv(
             group_out_file, sep="\t", header=True, index=False)
         
     print(

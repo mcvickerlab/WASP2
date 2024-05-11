@@ -3,6 +3,7 @@ from pathlib import Path
 import anndata as ad
 import pandas as pd
 
+from as_analysis_sc import adata_count_qc
 from run_analysis_sc import WaspAnalysisSC, process_adata_inputs
 from compare_ai import get_compared_imbalance
 
@@ -13,7 +14,9 @@ def run_ai_comparison(count_file,
                        phase=None,
                        sample=None,
                        groups=None,
-                       out_file=None):
+                       out_file=None,
+                       z_cutoff=None
+                       ):
     
     
     # Might be smart to change some of the defaults in the class
@@ -26,7 +29,8 @@ def run_ai_comparison(count_file,
                               sample=sample,
                               groups=groups,
                               model="single",
-                              out_file=out_file
+                              out_file=out_file,
+                              z_cutoff=z_cutoff
                               )
     
     adata_inputs = process_adata_inputs(ad.read_h5ad(ai_files.adata_file), ai_files=ai_files)
@@ -38,7 +42,13 @@ def run_ai_comparison(count_file,
     # Update class attributes
     ai_files.update_data(adata_inputs)
     
-    adata = adata_inputs.adata # Hold parsed adata file obj in memory
+    # adata = adata_inputs.adata # Hold parsed adata file obj in memory
+    
+    # Prefilter and hold adata data in memory
+    adata = adata_count_qc(adata_inputs.adata,
+                           z_cutoff=ai_files.z_cutoff,
+                           gt_error=None
+                           )
     
     df_dict = get_compared_imbalance(adata,
                                      min_count=ai_files.min_count,

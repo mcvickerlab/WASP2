@@ -121,7 +121,7 @@ def find_imbalance_sc(
         typer.Option(
             "--min",
             "--min_count",
-            help=("Minimum allele count for measuring imbalance."
+            help=("Minimum allele count per region for measuring imbalance."
                   " (Default: 10)"
                   )
             )
@@ -184,6 +184,22 @@ def find_imbalance_sc(
                 "Defaults to ai_results_[GROUP].tsv"
                 ),
             )] = None,
+    z_cutoff: Annotated[
+        Optional[int],
+        typer.Option(
+            "-z",
+            "--z_cutoff",
+            "--zscore_cutoff",
+            "--remove_outliers",
+            "--remove_extreme",
+            "--z_boundary",
+            "--zcore_boundary",
+            help=("Remove SNPs and associated regions whose counts exceed Z-Score cutoff.\n"
+                  "Removing extreme outliers can provide extra layer of QC when measuring allelic imbalance. "
+                  "(Default: None)"
+                  )
+            )
+        ] = None,
 ):
     
     if len(groups) > 0:
@@ -199,7 +215,8 @@ def find_imbalance_sc(
                        phase=phased,
                        sample=sample,
                        groups=groups,
-                       out_file=out_file
+                       out_file=out_file,
+                       z_cutoff=z_cutoff
                        )
 
 
@@ -282,6 +299,22 @@ def compare_imbalance(
                 "Defaults to ai_results_[GROUP1]_[GROUP2].tsv"
                 ),
             )] = None,
+    z_cutoff: Annotated[
+        Optional[int],
+        typer.Option(
+            "-z",
+            "--z_cutoff",
+            "--zscore_cutoff",
+            "--remove_outliers",
+            "--remove_extreme",
+            "--z_boundary",
+            "--zcore_boundary",
+            help=("Remove SNPs and associated regions whose counts exceed Z-Score cutoff.\n"
+                  "Removing extreme outliers can provide extra layer of QC when measuring allelic imbalance. "
+                  "(Default: None)"
+                  )
+            )
+        ] = None,
 ):
     
     if len(groups) > 0:
@@ -297,7 +330,8 @@ def compare_imbalance(
                       phase=phased,
                       sample=sample,
                       groups=groups,
-                      out_file=out_file
+                      out_file=out_file,
+                      z_cutoff=z_cutoff
                       )
     
 

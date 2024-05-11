@@ -85,22 +85,33 @@ def opt_phased(prob, first_data, phase_data):
     combined_lls = (0.5 * phase1_lls) + (0.5 * phase2_lls)
     return first_ll + -np.sum(np.log(combined_lls))
 
+
+# def opt_phased_new(prob, disp, ref_data, n_data, gt_data):
+    
+#     # Get phase with first snp as ref
+#     if gt_data[0] > 0:
+#         gt_data = 1 - gt_data
+
+#     prob_arr = np.full(
+#         shape=ref_data.shape[0],
+#         fill_value=prob,
+#         dtype=np.float64
+#     )
+
+#     # Get the probs with respect to GT
+#     prob_arr = np.abs(prob_arr - gt_data)
+#     phased_ll = opt_prob(prob_arr, disp, ref_data, n_data)
+
+#     return np.sum(phased_ll)
+
+
 # updated phasing optimizer: currently used in single-cell analysis
+# This version modifies prob arr outside of func
+# GT phase should be with respect to first snp on first chrom
 def opt_phased_new(prob, disp, ref_data, n_data, gt_data):
     
-    # Get phase with first snp as ref
-    if gt_data[0] > 0:
-        gt_data = 1 - gt_data
-
-    prob_arr = np.full(
-        shape=ref_data.shape[0],
-        fill_value=prob,
-        dtype=np.float64
-    )
-
-    # Get the probs with respect to GT
-    prob_arr = np.abs(prob_arr - gt_data)
-    phased_ll = opt_prob(prob_arr, disp, ref_data, n_data)
+    # phase and prob with respect to snp1 as ref
+    phased_ll = opt_prob(np.abs(prob - gt_data), disp, ref_data, n_data)
 
     return np.sum(phased_ll)
 
