@@ -140,17 +140,33 @@ def get_compared_imbalance(adata,
         # Get shared snps -> get regions that meet cutoff
         shared_df = region_snp_df1[["region", "index", "N"]].merge(
             region_snp_df2[["index", "N"]], on="index", suffixes=("1", "2"))
+        
+        
+        # Take into account pseudocounts added to total N
+        region_agg_df = shared_df.groupby("region", sort=False).agg(
+            snp_idx=("index", tuple), num_snps=("index", "size"),
+            N1=("N1", np.sum), N2=("N2", np.sum)
+        )
+        
+        region_agg_df["region_cutoff"] = (region_agg_df["num_snps"] * snp_cutoff) + min_count
 
 
         # Find regions where N is satisfied for both 
-        region_agg_df = shared_df.groupby("region", sort=False).agg(
-            snp_idx=("index", tuple), N1=("N1", np.sum), N2=("N2", np.sum)
-        )
+        # region_agg_df = shared_df.groupby("region", sort=False).agg(
+        #     snp_idx=("index", tuple), N1=("N1", np.sum), N2=("N2", np.sum)
+        # )
 
         # Per group snp_dict
         region_snp_dict = region_agg_df.loc[
-            (region_agg_df["N1"] >= region_cutoff) & (region_agg_df["N2"] >= region_cutoff),
+            (
+                (region_agg_df["N1"] >= region_agg_df["region_cutoff"]) & 
+                (region_agg_df["N2"] >= region_agg_df["region_cutoff"])
+                ),
             "snp_idx"].to_dict()
+        
+        # region_snp_dict = region_agg_df.loc[
+        #     (region_agg_df["N1"] >= region_cutoff) & (region_agg_df["N2"] >= region_cutoff),
+        #     "snp_idx"].to_dict()
 
         if not region_snp_dict:
             print(

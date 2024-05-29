@@ -72,7 +72,7 @@ def get_imbalance_sc(adata,
         groups = list(adata.var["group"].dropna().unique())
 
     # Process initial minimums for whole data dispersion
-    region_cutoff = min_count + (2*pseudocount)
+    # region_cutoff = min_count + (2*pseudocount)
     snp_cutoff = (2*pseudocount)
     
     ref_counts = adata.layers["ref"].sum(axis=1, dtype=np.uint16).T.A1 + pseudocount
@@ -118,10 +118,17 @@ def get_imbalance_sc(adata,
         #     pd.DataFrame(n_counts_group, columns=["N"]).reset_index(names="index"),
         #     on="index")
         
-        region_agg_df = region_n_df.groupby("region", sort=False).agg(snp_idx=("index", tuple), N=("N", np.sum))
+        
+        # Take into account pseudocounts added to total N
+        region_agg_df = region_n_df.groupby("region", sort=False).agg(
+            snp_idx=("index", tuple), num_snps=("index", "size"), N=("N", np.sum))
+        
+        # Take into account pseudocounts added to total N
+        region_agg_df["region_cutoff"] = (region_agg_df["num_snps"] * snp_cutoff) + min_count
         
         # Per group snp_dict
-        region_snp_dict = region_agg_df.loc[region_agg_df["N"] >= region_cutoff, "snp_idx"].to_dict()
+        region_snp_dict = region_agg_df.loc[region_agg_df["N"] >= region_agg_df["region_cutoff"], "snp_idx"].to_dict()
+        # region_snp_dict = region_agg_df.loc[region_agg_df["N"] >= region_cutoff, "snp_idx"].to_dict()
         
         if not region_snp_dict:
             print(f"Skipping {group_name}: No regions with total allele counts >= {min_count}")
