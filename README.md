@@ -30,12 +30,12 @@ Analysis pipeline currently consists of two tools (Count and Analysis)
 ### Count Tool
 Process allele specific read counts per SNP.\
 Sample names can be provided in order to filter out non-heterozygous SNPs.
-ATAC-seq peaks can also be provided to include SNPs that overlap regions of interest.\
+Genes and ATAC-seq peaks can also be provided to include SNPs that overlap regions of interest.\
 Providing samples and regions is highly recommended for allelic-imbalance analysis
 
 **Usage**
 ```shell script
-python WASP2/src/counting [BAM] [VCF] {OPTIONS}
+python WASP2/src/counting count-variants [BAM] [VCF] {OPTIONS}
 ```
 
 **Required Arguments**
@@ -45,10 +45,16 @@ python WASP2/src/counting [BAM] [VCF] {OPTIONS}
 
 **Optional Arguments**
 - -s/--samples: Filter SNPs whose genotypes are heterozygous in one or more samples. Accepts comma delimited string, or file with one sample per line. 
-- -r/--region: Filter SNPs that overlap peaks/regions of interest. Accepts files in narrowPeak or BED format.
+- -r/--region: Filter SNPs that overlap peaks/regions of interest. Accepts files in narrowPeak, BED, gtf and gff3 format.
 - -o/--out_file: Output file for counts. Defaults to counts.tsv
 - -t/--temp_loc: Write intermediary files to a directory instead of deleting. Useful for debugging issues.
 - --use_region_names: If regions are provided use region names as identifiers instead of coordinates. Names are denoted in fourth column of BED. Ignored if no name column in BED file.
+
+
+**RNA-Seq Specific Arguments**
+- --gene_feature: Feature type in gtf/gff3 for counting intersecting SNPs. Defaults to 'exon' for snp counting.
+- --gene_attribute: Attribute name from gtf/gff3 attribute column to use as ID. Defaults to '<feature>_id' in gtf and 'ID' in gff3.
+- --gene_parent: Parent attribute in gtf/gff3 for feature used in counting. Defaults to 'transcript_id' in gtf and 'Parent' in gff3.
 
 
 &nbsp;
@@ -65,8 +71,10 @@ python WASP2/src/analysis [COUNTS] {OPTIONS}
 **Optional Arguments**
 - -o/--out_file: Output file to write analysis results to. (Default. ai_results.tsv)
 - --min: Minimum allele count needed for analysis. (Default. 10)
+- -p/--pseudocount: Pseudocount added when measuring allelic imbalance. (Default. 1)
 - -m/--model: Model used for measuring imbalance dispersion parameter.  Choice of "single" or "linear" (Default. "single")
 - --region_col: Name of region column for current data. Use 'region' for ATAC-seq. Plans for 'genes' for RNA-seq and 'SNP' for per SNP. Recommended to leave blank. (Default: Auto-parses if none provided)
+- --groupby: Report allelic imbalance by parent group instead of feature level in RNA-seq counts.  Name of parent column. Not valid if no parent column or if using ATAC-seq peaks. (Default: Report by feature level instead of parent level)
 
 
 &nbsp;

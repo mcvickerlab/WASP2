@@ -141,7 +141,8 @@ def intersect_reads(remap_bam, vcf_bed, out_bed):
     # out_bed = str(Path(out_dir) / "intersect.bed")
 
     # Perform intersections
-    a.intersect(b, wb=True, bed=True, sorted=True, output=str(out_bed))
+    # a.intersect(b, wb=True, bed=True, sorted=True, output=str(out_bed))
+    a.intersect(b, wb=True, bed=True, sorted=False, output=str(out_bed))
 
     # print("Created Intersection File")
 
@@ -176,49 +177,130 @@ def intersect_reads(remap_bam, vcf_bed, out_bed):
 
 
 # Should this be here?
+# def make_intersect_df(intersect_file, samples, is_paired=True):
+    
+#     # Create Dataframe
+#     df = pl.scan_csv(intersect_file, separator="\t", has_header=False)
+    
+#     # Parse sample data
+#     num_samps = len(samples)
+    
+#     subset_cols = [df.columns[i] for i in np.r_[0, 3, 1, 2, -num_samps:0]]
+#     new_cols = ["chrom", "read", "start", "stop", *samples]
+#     rename_cols = {old_col: new_col for old_col, new_col in zip(subset_cols, new_cols)}
+    
+#     # Make sure types are correct
+#     df = df.select(subset_cols).rename(rename_cols).with_columns(
+#         [
+#             pl.col(col).cast(pl.UInt32) if (col == "start") or (col == "stop")
+#             else pl.col(col).cast(pl.Utf8) for col in new_cols
+#         ]
+#     )
+    
+#     # TODO CHANGE THESE TO BE A BIT CATEGORICAL
+#     # df = df.select(subset_cols).rename(
+#     #     rename_cols).with_columns(
+#     #         [
+#     #             pl.col("chrom").cast(pl.Categorical),
+#     #             pl.col("pos").cast(pl.UInt32),
+#     #             pl.col("ref").cast(pl.Categorical),
+#     #             pl.col("alt").cast(pl.Categorical)
+#     #             ]
+#     #         )
+    
+#     # Split sample alleles expr
+#     # Maybe don't do this for multi
+#     expr_list = [
+#         pl.col(s).str.split_exact(
+#             by="|", n=1).struct.rename_fields([f"{s}_a1", f"{s}_a2"])
+#         for s in df.columns[4:]
+#     ]
+
+#     # Split mate expr
+#     expr_list.append(
+#         pl.col("read").str.split_exact(
+#             by="/", n=1).struct.rename_fields(["read", "mate"])
+#     )
+
+
+#     df = df.with_columns(expr_list).unnest(
+#         [*df.columns[4:], "read"]).with_columns(
+#         pl.col("mate").cast(pl.UInt8))
+
+#     # df = df.unique() # Remove possible dups
+#     # should i remove instead of keep first?
+#     # df = df.unique(["chrom", "read", "start", "stop"], keep="first") # Remove dup snps
+#     df = df.unique(["chrom", "read", "mate", "start", "stop"], keep="first") # Doesnt remove dup snp in pair?
+#     df = df.collect()
+    
+#     return df
+
+
 def make_intersect_df(intersect_file, samples, is_paired=True):
     
     # Create Dataframe
-    df = pl.scan_csv(intersect_file, separator="\t", has_header=False)
+    df = pl.scan_csv(intersect_file,
+                     separator="\t",
+                     has_header=False,
+                     infer_schema_length=0
+                    )
     
     # Parse sample data
     num_samps = len(samples)
     
     subset_cols = [df.columns[i] for i in np.r_[0, 3, 1, 2, -num_samps:0]]
     new_cols = ["chrom", "read", "start", "stop", *samples]
+    
+    
+    
     rename_cols = {old_col: new_col for old_col, new_col in zip(subset_cols, new_cols)}
     
-    # Make sure types are correct
-    df = df.select(subset_cols).rename(rename_cols).with_columns(
-        [
-            pl.col(col).cast(pl.UInt32) if (col == "start") or (col == "stop")
-            else pl.col(col).cast(pl.Utf8) for col in new_cols
-        ]
-    )
-    
-    # Split sample alleles expr
-    # Maybe don't do this for multi
-    expr_list = [
-        pl.col(s).str.split_exact(
-            by="|", n=1).struct.rename_fields([f"{s}_a1", f"{s}_a2"])
-        for s in df.columns[4:]
+    base_schema = [
+        pl.col("chrom").cast(pl.Categorical),
+        pl.col("read").cast(pl.Utf8),
+        pl.col("start").cast(pl.UInt32),
+        pl.col("stop").cast(pl.UInt32)
     ]
+    
+    sample_schema = [pl.col(samp).cast(pl.Utf8) for samp in samples]
+    col_schema = [*base_schema, *sample_schema]
+
+    
+    # Make sure types are correct
+    df = df.select(subset_cols).rename(rename_cols).with_columns(col_schema)
+
+    expr_list = []
+    cast_list = []
+    
+    for s in samples:
+        a1 = f"{s}_a1"
+        a2 = f"{s}_a2"
+
+        # Add split per sample
+        expr_list.append(
+            pl.col(s).str.split_exact(
+                by="|", n=1).struct.rename_fields([a1, a2])
+        )
+        
+        # cast new gt cols
+        cast_list.append(pl.col(a1).cast(pl.Categorical))
+        cast_list.append(pl.col(a2).cast(pl.Categorical))
 
     # Split mate expr
     expr_list.append(
         pl.col("read").str.split_exact(
             by="/", n=1).struct.rename_fields(["read", "mate"])
     )
-
-
-    df = df.with_columns(expr_list).unnest(
-        [*df.columns[4:], "read"]).with_columns(
-        pl.col("mate").cast(pl.UInt8))
-
-    # df = df.unique() # Remove possible dups
-    # should i remove instead of keep first?
-    # df = df.unique(["chrom", "read", "start", "stop"], keep="first") # Remove dup snps
-    df = df.unique(["chrom", "read", "mate", "start", "stop"], keep="first") # Doesnt remove dup snp in pair?
-    df = df.collect()
     
-    return df
+    cast_list.append(pl.col("mate").cast(pl.UInt8))
+    
+    df = df.with_columns(expr_list).unnest(
+        [*samples, "read"]).with_columns(
+        cast_list
+    )
+
+
+    # should i remove instead of keep first?
+    df = df.unique(["chrom", "read", "mate", "start", "stop"], keep="first") # Doesnt remove dup snp in pair?
+    
+    return df.collect()

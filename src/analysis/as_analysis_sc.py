@@ -85,7 +85,9 @@ def get_imbalance_sc(adata,
     )
     
     disp = minimize_scalar(opt_disp, args=(ref_counts, n_counts), method="bounded", bounds=(0,1))["x"]
-
+    
+    print(disp) # DEEBUG BY SHOWING DISP
+    
     df_dict = {}
     
     # Loop through groups

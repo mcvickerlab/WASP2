@@ -289,14 +289,25 @@ def swap_chrom_alleles_multi(bam_file, out_dir, df, chrom, read_stats):
             # Get snp_df
             r1_df = r1_het_dict.pop(og_name, None)
             r2_df = r2_het_dict.pop(og_name, None)
-
-
+            
             if (r1_df is not None) and (r2_df is not None):
                 read_df = r1_df.vstack(r2_df) # Combine for testing equality
             elif r1_df is not None:
                 read_df = r1_df
-            else:
+            elif r2_df is not None:
                 read_df = r2_df
+            else:
+                # TEMPORARY FIX FOR BUG????
+                # NOT SURE WHY SOME READS WOULD SHOW UP BUT NOT OVERLAP A SNP
+                continue
+
+
+            # if (r1_df is not None) and (r2_df is not None):
+            #     read_df = r1_df.vstack(r2_df) # Combine for testing equality
+            # elif r1_df is not None:
+            #     read_df = r1_df
+            # else:
+            #     read_df = r2_df
 
 
             # Get unique haps
