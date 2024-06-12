@@ -1,5 +1,5 @@
 <h1 align="center">
-<img src=doc/wasp_hex_logo_v1.png>
+<img src="doc/wasp2_hex_logo_v1.png" width="300">
 </h1>
 &nbsp;
 
