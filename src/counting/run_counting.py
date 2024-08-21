@@ -8,7 +8,7 @@ import warnings
 from pathlib import Path
 
 # local imports
-from filter_variant_data import vcf_to_bed, intersect_vcf_region, parse_intersect_region
+from filter_variant_data import vcf_to_bed, intersect_vcf_region, parse_intersect_region, parse_intersect_region_new
 from parse_gene_data import make_gene_data, parse_intersect_genes
 from count_alleles import make_count_df
 
@@ -144,12 +144,19 @@ def run_count_variants(bam_file, vcf_file,
                                 )
     
     # print(*vars(count_files).items(), sep="\n") # For debugging
+    with_gt = False
+    if (count_files.samples is not None) and (len(count_files.samples) == 1):
+        
+        # temporarily disable for ASE
+        if not count_files.is_gene_file:
+            with_gt = True
+            
     
     # Create Intermediary Files
     vcf_to_bed(vcf_file=count_files.vcf_file,
                out_bed=count_files.vcf_bed,
                samples=count_files.samples,
-               include_gt=False
+               include_gt=with_gt
               )
     
     
@@ -185,16 +192,30 @@ def run_count_variants(bam_file, vcf_file,
     
 
     # Create Variant Dataframe
+    # TODO validate
     if intersect_genes:
         df = parse_intersect_genes(
             intersect_file=count_files.intersect_file,
             attribute=gene_data.attribute,
             parent_attribute=gene_data.parent_attribute)
-    else:    
-        df = parse_intersect_region(
+    elif with_gt:
+        df = parse_intersect_region_new(
             intersect_file=count_files.intersect_file,
+            samples=["GT"],
             use_region_names=count_files.use_region_names,
-            region_col=region_col_name)
+            region_col=region_col_name
+            )
+    else:
+        df = parse_intersect_region_new(
+            intersect_file=count_files.intersect_file,
+            samples=None,
+            use_region_names=count_files.use_region_names,
+            region_col=region_col_name
+            )
+        # df = parse_intersect_region(
+        #     intersect_file=count_files.intersect_file,
+        #     use_region_names=count_files.use_region_names,
+        #     region_col=region_col_name)
     
     # Should I include a filt bam step???
     

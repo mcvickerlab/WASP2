@@ -56,6 +56,15 @@ def find_imbalance(
                 "Defaults to ai_results.tsv"
                 ),
             )] = None,
+    phased: Annotated[
+        Optional[bool],
+        typer.Option(
+            "--phased",
+            help=("Calculate allelic imbalance using the phased haplotype model. "
+                  "Genotype info must phased and included in allelic count data!"
+                  "\nBy default, calculates unphased AI assuming equal liklihood for each haplotype."
+                  )
+            )] = False,
     model: Annotated[
         Optional[str],
         typer.Option(
@@ -63,6 +72,7 @@ def find_imbalance(
             "--model",
             help=(
                 "Model used for measuring optimization parameter when finding imbalance. "
+                "HIGHLY RECOMMENDED TO LEAVE AS DEFAULT FOR SINGLE DISPERSION MODEL. "
                 "Choice of 'single' or 'linear'. "
                 "(Default: 'single')"
                 ),
@@ -99,6 +109,7 @@ def find_imbalance(
                     min_count=min,
                     model=model,
                     pseudocount=pseudocount,
+                    phased=phased,
                     out_file=out_file,
                     region_col=region_col,
                     groupby=groupby)

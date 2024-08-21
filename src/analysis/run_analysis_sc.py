@@ -173,7 +173,7 @@ def process_adata_inputs(adata, ai_files=None, bc_map=None, sample=None, groups=
     
     # Add groups if barcode mapping provided
     if bc_map is not None:
-        map_df = pd.read_csv(bc_map, sep="\t", header=None, names=["group"], index_col=0)
+        map_df = pd.read_csv(bc_map, sep="\t", header=None, names=["group"], index_col=0, dtype="category")
         adata.var = adata.var.join(map_df, how="left")
     
     # No existing groups or mapping provided
@@ -228,8 +228,8 @@ def run_ai_analysis_sc(count_file,
     adata_inputs = process_adata_inputs(ad.read_h5ad(ai_files.adata_file), ai_files=ai_files)
     
     
-    print(*vars(ai_files).items(), sep="\n") # For debugging
-    print(adata_inputs) # For debugging
+    # print(*vars(ai_files).items(), sep="\n") # For debugging
+    # print(adata_inputs) # For debugging
     
     # Update class attributes
     ai_files.update_data(adata_inputs)

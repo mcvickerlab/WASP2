@@ -6,11 +6,12 @@ Python Version: 3.9
 # Default Python package Imports
 from pathlib import Path
 import time
+import timeit
 
 # External package imports
 import pandas as pd
 import numpy as np
-from scipy.stats import betabinom, chi2, binom, rankdata
+from scipy.stats import betabinom, chi2, binom, rankdata, false_discovery_control
 from scipy.optimize import minimize_scalar, minimize
 from scipy.special import expit
 
@@ -48,24 +49,6 @@ def opt_prob(in_prob, in_rho, k, n, log=True):
         ll = betabinom.pmf(k, n, alpha, beta)
 
     return ll
-
-
-# Old version
-# def opt_phase(prob, first_data, phase_data):
-#     """
-#     Optimize likelihood while taking phase into account
-#     (Function called by optimizer)
-#     """
-    
-#     first_ll = opt_prob(prob, first_data[0], first_data[1], first_data[2])
-    
-#     # Sum opts given prob
-#     phase1_lls = opt_prob(prob, phase_data[0], phase_data[1], phase_data[2], log=False)
-#     phase2_lls = opt_prob(1 - prob, phase_data[0], phase_data[1], phase_data[2], log=False)
-
-
-#     combined_lls = (0.5 * phase1_lls) + (0.5 * phase2_lls)
-#     return first_ll + -np.sum(np.log(combined_lls))
 
 
 # Handle optimization if phased
@@ -116,7 +99,7 @@ def opt_phased_new(prob, disp, ref_data, n_data, gt_data):
     return np.sum(phased_ll)
 
 
-# Previous version not knowing phasing
+# Previous version not knowing phasing: OLD
 def opt_unphased(prob, first_data, phase_data):
     """
     Optimize likelihood while taking phase into account
@@ -133,7 +116,8 @@ def opt_unphased(prob, first_data, phase_data):
     combined_lls = (0.5 * phase1_lls) + (0.5 * phase2_lls)
     return first_ll + -np.sum(np.log(combined_lls))
 
-# Updated unphasing optimizer using DP: currently used in single-cell analysis
+
+# Updated unphasing optimizer using DP
 def opt_unphased_dp(prob, disp, first_ref, first_n, phase_ref, phase_n):
     """
     Optimize likelihood while taking phase into account
@@ -156,7 +140,7 @@ def opt_unphased_dp(prob, disp, first_ref, first_n, phase_ref, phase_n):
     return first_ll + -np.log(prev_like)
 
 
-def parse_opt(df, in_disp=None, phased=False):
+def parse_opt(df, disp=None, phased=False):
     """
     Optimize necessary data when running model
 
@@ -170,30 +154,92 @@ def parse_opt(df, in_disp=None, phased=False):
 
     snp_count = df.shape[0]
 
-    if in_disp is not None:
-        df["disp"] = in_disp
+    # Create array used for AI analysis
+    ref_array = df["ref_count"].to_numpy()
+    n_array = df["N"].to_numpy()
+
+    # In the case that we do use linear model with disp per N
+    if disp is None:
+        disp = df["disp"].to_numpy()
 
     if snp_count > 1:
 
-        # TODO HANDLE PHASED VERSION
+        # If data is phased
         if phased:
-            phase_data = df[["disp", "ref_count", "N"]].to_numpy().T
 
-            res = minimize_scalar(opt_phased, args=(phase_data), method="bounded", bounds=(0, 1))
+            # Use known phasing info 
+            gt_array = df["GT"].to_numpy()
+
+            # First pos with respect to ref
+            if gt_array[0] > 0:
+                gt_array = 1 - gt_array
+
+            res = minimize_scalar(opt_phased_new,
+                                  args=(disp, ref_array, n_array, gt_array),
+                                  method="bounded", bounds=(0, 1))
 
         else:
-            first_data = df[:1][["disp", "ref_count", "N"]].to_numpy()[0]
-            phase_data = df[1:][["disp", "ref_count", "N"]].to_numpy().T
-            res = minimize_scalar(opt_unphased, args=(first_data, phase_data), method="bounded", bounds=(0, 1))
+
+            # Use unphased algorithm for subsequent phases
+            first_ref = ref_array[:1]
+            first_n = n_array[:1]
+
+            phase_ref = ref_array[1:]
+            phase_n = n_array[1:]
+
+            res = minimize_scalar(opt_unphased_dp, args=(disp, first_ref, first_n, phase_ref, phase_n),
+                                  method="bounded", bounds=(0, 1))
+
     else:
-        snp_data = df[["disp", "ref_count", "N"]].to_numpy()[0]
-        res = minimize_scalar(opt_prob, args=(snp_data[0], snp_data[1], snp_data[2]), method="bounded", bounds=(0, 1))
+        # Single site optimize
+        res = minimize_scalar(opt_prob, args=(disp, ref_array[0], n_array[0]),
+                              method="bounded", bounds=(0, 1))
 
     # Get res data
     mu = res["x"]
     alt_ll = -1 * res["fun"]
 
     return alt_ll, mu
+
+
+# def parse_opt(df, in_disp=None, phased=False):
+#     """
+#     Optimize necessary data when running model
+
+#     :param df: Dataframe with allele counts
+#     :type df: DataFrame
+#     :param in_disp: pre-computed dispersion parameter, defaults to None
+#     :type in_disp: float, optional
+#     :return: Liklihood of alternate model, and imbalance proportion
+#     :rtype: array, array
+#     """
+
+#     snp_count = df.shape[0]
+
+#     if in_disp is not None:
+#         df["disp"] = in_disp
+
+#     if snp_count > 1:
+
+#         # TODO HANDLE PHASED VERSION
+#         if phased:
+#             phase_data = df[["disp", "ref_count", "N"]].to_numpy().T
+
+#             res = minimize_scalar(opt_phased, args=(phase_data), method="bounded", bounds=(0, 1))
+
+#         else:
+#             first_data = df[:1][["disp", "ref_count", "N"]].to_numpy()[0]
+#             phase_data = df[1:][["disp", "ref_count", "N"]].to_numpy().T
+#             res = minimize_scalar(opt_unphased, args=(first_data, phase_data), method="bounded", bounds=(0, 1))
+#     else:
+#         snp_data = df[["disp", "ref_count", "N"]].to_numpy()[0]
+#         res = minimize_scalar(opt_prob, args=(snp_data[0], snp_data[1], snp_data[2]), method="bounded", bounds=(0, 1))
+
+#     # Get res data
+#     mu = res["x"]
+#     alt_ll = -1 * res["fun"]
+
+#     return alt_ll, mu
 
 
 def single_model(df, region_col, phased=False):
@@ -205,27 +251,25 @@ def single_model(df, region_col, phased=False):
     :return: Dataframe with imbalance likelihood
     :rtype: DataFrame
     """
-    
-    # TODO HANDLE PHASED VERSION
+
     print("Running analysis with single dispersion model")
+    opt_disp = lambda rho, ref_data, n_data: -np.sum(
+        betabinom.logpmf(ref_data, n_data, (0.5 * (1 - rho) / rho), (0.5 * (1 - rho) / rho)))
+    
+    ref_array = df["ref_count"].to_numpy()
+    n_array = df["N"].to_numpy()
 
-    opt_disp = lambda rho, data: -np.sum(betabinom.logpmf(data[0], data[1], (0.5 * (1 - rho) / rho), (0.5 * (1 - rho) / rho)))
-    in_data = df[["ref_count", "N"]].to_numpy().T
-
-
-    print("Optimizing dispersion parameter...")
-    disp_start = time.time()
-
-    disp = minimize_scalar(opt_disp, args=(in_data),
+    disp_start = timeit.default_timer()
+    
+    disp = minimize_scalar(opt_disp, args=(ref_array, n_array),
                            method="bounded", bounds=(0,1))["x"]
 
-    print(f"Optimized dispersion parameter in {time.time() - disp_start} seconds")
-
+    print(f"Optimized dispersion parameter in {timeit.default_timer() - disp_start:.2f} seconds")
 
     group_df = df.groupby(region_col, sort=False)
 
     print("Optimizing imbalance likelihood")
-    ll_start = time.time()
+    ll_start = timeit.default_timer()
     null_test = group_df.apply(lambda x: np.sum(betabinom.logpmf(x["ref_count"].to_numpy(), x["N"].to_numpy(),
                                                                  (0.5 * (1 - disp) / disp), (0.5 * (1 - disp) / disp))))
 
@@ -233,7 +277,7 @@ def single_model(df, region_col, phased=False):
     alt_test = group_df.apply(lambda x: parse_opt(x, disp, phased=phased))
     alt_df = pd.DataFrame(alt_test.to_list(), columns=["alt_ll", "mu"], index=alt_test.index)
 
-    print(f"Optimized imbalance likelihood in {time.time() - ll_start} seconds")
+    print(f"Optimized imbalance likelihood in {timeit.default_timer() - ll_start:.2f} seconds")
 
     ll_df = pd.concat([null_test, alt_df], axis=1).reset_index()
     ll_df.columns = [region_col, "null_ll", "alt_ll", "mu"]
@@ -244,7 +288,7 @@ def single_model(df, region_col, phased=False):
     return ll_df
 
 
-def linear_model(df, region_col):
+def linear_model(df, region_col, phased=False):
     """
     Find allelic imbalance using linear allelic imbalance model,
     weighting imbalance linear with N counts
@@ -368,11 +412,10 @@ def bh_correction(df):
     return return_df
 
 
-def get_imbalance(in_data, min_count=10, pseudocount=1, method="single", region_col=None, groupby=None):
+def get_imbalance(in_data, min_count=10, pseudocount=1, method="single", phased=False, region_col=None, groupby=None):
 
     model_dict = {"single": single_model, "linear": linear_model}
     
-    phased=False # TODO
 
     # If preparsed dataframe or filepath
     if isinstance(in_data, pd.DataFrame):
@@ -389,8 +432,7 @@ def get_imbalance(in_data, min_count=10, pseudocount=1, method="single", region_
                              "alt_count": np.uint16,
                              "other_count": np.uint16}
                         )
-    
-    
+
     # If no region_col measure imbalance per variant
     if region_col is None:
         region_col = "variant"
@@ -399,19 +441,39 @@ def get_imbalance(in_data, min_count=10, pseudocount=1, method="single", region_
         df[region_col] = (df["chrom"].astype("string")
                           + "_" + df["pos"].astype("string"))
     
-    
     # Process pseudocount values and filter data by min
     df[["ref_count", "alt_count"]] += pseudocount
     df["N"] = df["ref_count"] + df["alt_count"]
     df = df.loc[df["N"].ge(min_count + (2*pseudocount)), :]
+
     
     # Get unique values based on group
     if groupby is not None:
         region_col = groupby
-    
-    df = df[["chrom", "pos", "ref_count", "alt_count", "N", region_col]].drop_duplicates()
 
+    keep_cols = ["chrom", "pos", "ref_count", "alt_count", "N", region_col]
     
+    # Check validity of phasing info
+    if phased:
+        
+        # Check if GT are actually phased
+        if "GT" not in df.columns:
+            print("Genotypes not found: Switching to unphased model")
+            phased = False
+        elif len(df["GT"].unique()) <= 1:
+            print(f"All genotypes {df['GT'].unique()}: Switching to unphased model")
+            phased = False
+        elif not any(i in ['1|0', '0|1'] for i in df["GT"].unique()):
+            print(f"Expected GT as 0|1 and 1|0 but found: {df['GT'].unique()}")
+            print("Switching to unphased model")
+            phased = False
+        else:
+            # GT is indeed phased
+            df["GT"] = df["GT"].str.split("|", n=1).str[0].astype(dtype=np.uint8)
+            keep_cols.append("GT")
+
+    df = df[keep_cols].drop_duplicates()
+
     p_df = model_dict[method](df, region_col, phased=phased) # Perform analysis
     
     # remove pseudocount
@@ -426,72 +488,63 @@ def get_imbalance(in_data, min_count=10, pseudocount=1, method="single", region_
     merge_df = pd.merge(snp_counts, p_df, how="left", on=region_col)
     
     as_df = pd.merge(count_alleles, merge_df, how="left", on=region_col)
-    as_df = bh_correction(as_df)
+    as_df["fdr_pval"] = false_discovery_control(as_df["pval"], method="bh")
 
     return as_df
 
 
-# def get_imbalance(in_data, min_count=10, phased=False, method="single", region_col=None, is_gene=False, feature=None):
-#     """
-#     Process input data and method for finding allelic imbalance
-
-#     :param in_data: Dataframe with allele counts
-#     :type in_data: DataFrame
-#     :param min_count: minimum allele count for analysis, defaults to 10
-#     :type min_count: int, optional
-#     :param method: analysis method, defaults to "single"
-#     :type method: str, optional
-#     :param out_dir: output directory, defaults to None
-#     :type out_dir: str, optional
-#     :return: DataFrame with imbalance Pvals per region
-#     :rtype: DataFrame
-#     """
+# def get_imbalance(in_data, min_count=10, pseudocount=1, method="single", region_col=None, groupby=None):
 
 #     model_dict = {"single": single_model, "linear": linear_model}
-
-#     if method not in model_dict:
-#         print("Please input a valid method (single, linear, binomial)")
-#         return -1
     
+#     phased=False # TODO
+
+#     # If preparsed dataframe or filepath
 #     if isinstance(in_data, pd.DataFrame):
 #         df = in_data
 #     else:
-#         df = pd.read_csv(in_data, sep="\t")
+#         df = pd.read_csv(in_data,
+#                          sep="\t",
+#                          dtype={
+#                              "chrom": "category",
+#                              "pos": np.uint32,
+#                              "ref": "category",
+#                              "alt": "category",
+#                              "ref_count": np.uint16,
+#                              "alt_count": np.uint16,
+#                              "other_count": np.uint16}
+#                         )
     
     
-#     # Process diff region names
+#     # If no region_col measure imbalance per variant
 #     if region_col is None:
-#         col_names = df.columns
+#         region_col = "variant"
+#         groupby = None # no parent
 
-#         # TODO also handle "genes"
-#         if "region" in col_names:
-#             region_col = "region"
-#         elif "peak" in col_names:
-#             region_col = "peak"
-#         elif "genes" in col_names:
-#             region_col = "genes"
-#         else:
-#             # SNPs only
-#             df["region"] = df["chrom"] + "_" + df["pos"].astype(str)
-#             region_col = "region"
-
-
-#     # Change label for gene to peak temporarily
-#     # if is_gene is True:
-#     #     df = df.rename(columns={"genes": "peak"})
-
-
-
-#     # TODO REPLACE ALL PEAKS WITH REGION_COL
+#         df[region_col] = (df["chrom"].astype("string")
+#                           + "_" + df["pos"].astype("string"))
+    
+    
+#     # Process pseudocount values and filter data by min
+#     df[["ref_count", "alt_count"]] += pseudocount
 #     df["N"] = df["ref_count"] + df["alt_count"]
-#     df = df.loc[df["N"] >= min_count]
+#     df = df.loc[df["N"].ge(min_count + (2*pseudocount)), :]
+    
+#     # Get unique values based on group
+#     if groupby is not None:
+#         region_col = groupby
+    
+#     df = df[["chrom", "pos", "ref_count", "alt_count", "N", region_col]].drop_duplicates()
+
     
 #     p_df = model_dict[method](df, region_col, phased=phased) # Perform analysis
     
+#     # remove pseudocount
+#     df[["ref_count", "alt_count"]] -= pseudocount
+#     df["N"] -= pseudocount * 2
     
 #     snp_counts = pd.DataFrame(df[region_col].value_counts(sort=False)).reset_index()
 #     snp_counts.columns = [region_col, "snp_count"]
-    
     
 #     count_alleles = df[[region_col, "ref_count", "alt_count", "N"]].groupby(region_col, sort=False).sum()
     
@@ -500,17 +553,11 @@ def get_imbalance(in_data, min_count=10, pseudocount=1, method="single", region_
 #     as_df = pd.merge(count_alleles, merge_df, how="left", on=region_col)
 #     as_df = bh_correction(as_df)
 
-#     # Change label for gene to peak temporarily
-#     # if is_gene is True:
-#     #     as_df = as_df.rename(columns={"peak": "genes"})
-    
-#     # if feature is None:
-#     #     feature = region_col
-
 #     return as_df
 
 
-# TODO UPDATE to use region_col parameter
+
+# LEGACY, NOT REALLY USED
 def get_imbalance_sc(in_data, min_count=10, method="single", out_dir=None, is_gene=False, feature=None):
     """
     Process input data and method for finding single-cell allelic imbalance

@@ -57,17 +57,24 @@ def make_count_df(bam_file, df):
         total_end = timeit.default_timer()
         print(f"Counted all SNP's in {total_end - total_start:.2f} seconds!")
         
+        # Previously used str as chrom instead of cat
+        chrom_enum = pl.Enum(df.get_column("chrom").cat.get_categories())
+        
         count_df = pl.DataFrame(
             count_list,
-            schema={"chrom": pl.Utf8,
+            schema={"chrom": chrom_enum,
                     "pos": pl.UInt32,
                     "ref_count": pl.UInt16,
                     "alt_count": pl.UInt16,
                     "other_count": pl.UInt16
                    }
         )
-    
-        df = df.join(count_df, on=["chrom", "pos"], how="left")
+        
+        # possibly find better solution
+        df = df.with_columns([pl.col("chrom").cast(chrom_enum)]
+                             ).join(count_df, on=["chrom", "pos"], how="left")
+        
+        # df = df.join(count_df, on=["chrom", "pos"], how="left")
     
     return df
 
