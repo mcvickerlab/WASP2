@@ -9,7 +9,7 @@ from pathlib import Path
 
 # local imports
 from filter_variant_data import vcf_to_bed, intersect_vcf_region, parse_intersect_region, parse_intersect_region_new
-from parse_gene_data import make_gene_data, parse_intersect_genes
+from parse_gene_data import make_gene_data, parse_intersect_genes, parse_intersect_genes_new
 from count_alleles import make_count_df
 
 # Should I put this in separate file?
@@ -146,10 +146,11 @@ def run_count_variants(bam_file, vcf_file,
     # print(*vars(count_files).items(), sep="\n") # For debugging
     with_gt = False
     if (count_files.samples is not None) and (len(count_files.samples) == 1):
+        with_gt = True
         
         # temporarily disable for ASE
-        if not count_files.is_gene_file:
-            with_gt = True
+        # if not count_files.is_gene_file:
+        #     with_gt = True
             
     
     # Create Intermediary Files
@@ -194,7 +195,7 @@ def run_count_variants(bam_file, vcf_file,
     # Create Variant Dataframe
     # TODO validate
     if intersect_genes:
-        df = parse_intersect_genes(
+        df = parse_intersect_genes_new(
             intersect_file=count_files.intersect_file,
             attribute=gene_data.attribute,
             parent_attribute=gene_data.parent_attribute)

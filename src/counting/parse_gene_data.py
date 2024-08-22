@@ -177,3 +177,38 @@ def parse_intersect_genes(intersect_file, attribute=None, parent_attribute=None)
         rename_cols).with_columns(pl.col("pos").cast(pl.UInt32))
     
     return df.unique(maintain_order=True).collect()
+
+
+def parse_intersect_genes_new(intersect_file, attribute=None, parent_attribute=None):
+    
+    if attribute is None:
+        attribute = "ID"
+    
+    if parent_attribute is None:
+        parent_attribute = "Parent"
+
+    # AFTER performing gtf_to_bed and intersecting!
+    df = pl.scan_csv(intersect_file, separator="\t",
+                     has_header=False, infer_schema_length=0)
+
+    
+    vcf_schema = [pl.col("chrom").cast(pl.Categorical),
+                  pl.col("pos").cast(pl.UInt32),
+                  pl.col("ref").cast(pl.Categorical),
+                  pl.col("alt").cast(pl.Categorical)]
+
+    
+    # Expect at min 10 cols, 11 if GT included
+    if len(df.columns) > 10:
+        subset_cols = [df.columns[i] for i in [0, 2, 3, 4, 5, -2, -1]]
+        new_cols = ["chrom", "pos", "ref", "alt", "GT", attribute, parent_attribute]
+        vcf_schema.append(pl.col("GT").cast(pl.Categorical))
+    else:
+        subset_cols = [df.columns[i] for i in [0, 2, 3, 4, -2, -1]]
+        new_cols = ["chrom", "pos", "ref", "alt", attribute, parent_attribute]
+    
+    # Parse dataframe columns
+    rename_cols = {old_col: new_col for old_col, new_col in zip(subset_cols, new_cols)}
+    df = df.select(subset_cols).rename(rename_cols).with_columns(vcf_schema)
+    
+    return df.unique(maintain_order=True).collect()
