@@ -42,7 +42,7 @@ def opt_prob(in_prob, in_rho, k, n, log=True):
 
     alpha = (prob * (1 - in_rho) / in_rho)
     beta = ((1 - prob) * (1 - in_rho) / in_rho)
-    
+     
     if log is True:
         ll = -1 * betabinom.logpmf(k, n, alpha, beta)
     else:

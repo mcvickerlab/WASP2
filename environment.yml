@@ -13,3 +13,4 @@ dependencies:
   - pybedtools
   - bedtools
   - typer
+  - anndata

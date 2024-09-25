@@ -14,6 +14,7 @@
 - pysam
 - pybedtools
 - typer
+- anndata
 
 
 ## Installation
@@ -63,7 +64,7 @@ Analyzes Allelic Imbalance per ATAC peak given allelic count data
 
 **Usage**
 ```shell script
-python WASP2/src/analysis [COUNTS] {OPTIONS}
+python WASP2/src/analysis find-imbalance [COUNTS] {OPTIONS}
 ```
 **Required Arguments**
 - COUNTS: Output data from count tool
@@ -72,7 +73,7 @@ python WASP2/src/analysis [COUNTS] {OPTIONS}
 - -o/--out_file: Output file to write analysis results to. (Default. ai_results.tsv)
 - --min: Minimum allele count needed for analysis. (Default. 10)
 - -p/--pseudocount: Pseudocount added when measuring allelic imbalance. (Default. 1)
-- -m/--model: Model used for measuring imbalance dispersion parameter.  Choice of "single" or "linear" (Default. "single")
+- --phased: Calculate allelic imbalance using phased haplotype model. By default, calculates AI assuming unphased/equal likelihood for each haplotype.
 - --region_col: Name of region column for current data. Use 'region' for ATAC-seq. Plans for 'genes' for RNA-seq and 'SNP' for per SNP. Recommended to leave blank. (Default: Auto-parses if none provided)
 - --groupby: Report allelic imbalance by parent group instead of feature level in RNA-seq counts.  Name of parent column. Not valid if no parent column or if using ATAC-seq peaks. (Default: Report by feature level instead of parent level)
 
@@ -99,6 +100,7 @@ python WASP2/src/mapping make-reads [BAM] [VCF] {OPTIONS}
 
 
 **Optional Arguments**
+- --threads: Threads to allocate.
 - -s/--samples: Filter Polymorphic SNPs in one or more samples. Accepts comma delimited string, or file with one sample per line. 
 - -o/--out_dir: Output directory for data to be remapped
 - -t/--temp_loc: Write intermediary files to a directory instead of deleting. Useful for debugging issues.
@@ -139,20 +141,83 @@ python WASP2/src/mapping filter-remapped "${prefix}_remapped.bam" "${prefix}_to_
     - keep_bam: BAM containing reads that were not remapped. Default: [BAM_PREFIX]_keep.bam
 
 **Optional Arguments**
+- --threads: Threads to allocate.
 - -o/--out_bam: File to write filtered bam. Defaults to [BAM_PREFIX]_wasp_filt.bam.
 -  --remap_keep_bam: Output bam file with kept reads to this file if provided.
 -  --remap_keep_file: Output txt file with kept reads names to this file if provided.
 
 
-## Future Updates
+&nbsp;
+## Single-Cell Allelic Counts
 
-- Count and Analysis
-    - Need to implement RNA-Seq and Gene support 
-    - Update Analysis CLI to better work with new counts (Previous analysis CLI in feat-singlecell branch)
-    - Reimplement single-cell ssupport and add to CLI parser (Previous Single-Cell counting in feat-singlecell branch)
+Process allele specific read counts for single-cell datasets.\
+Output counts as anndata containing cell x SNP count matrix.
 
-- Remapping
-    - Need to implement single-end and unphased data support
-    - Add rmdup step into pipeline
-    - More optimization needed
+**Usage**
+```shell script
+python WASP2/src/counting count-variants-sc [BAM] [VCF] [BARCODES] {OPTIONS}
+```
 
+**Required Arguments**
+- BAM file containing aligned reads.
+- VCF file containing SNP info
+- BARCODE file used as index, contains one cell barcode per line
+
+**Optional Arguments**
+- -s/--samples: Filter SNPs whose genotypes are heterozygous in one or more samples. Accepts comma delimited string, or file with one sample per line. RECOMMENDED TO USE ONE SAMPLE AT A TIME.
+- -f/--feature: Features used in single-cell experiment. Filter SNPs that overlap regions/features of interest. Accepts BED formatted files.
+- -o/--out_file: Output file for counts. Defaults to allele_counts.h5ad
+- -t/--temp_loc: Write intermediary files to a directory instead of deleting. Useful for debugging issues.
+
+
+&nbsp;
+## Single-Cell Allelic Imbalance
+
+Estimate allele-specific chromatin acccessibility using single-cell allelic counts.\
+Allelic-Imbalance is estimated on a per-celltype basis.
+
+**Usage**
+```shell script
+python WASP2/src/counting find-imbalance-sc [COUNTS] [BARCODE_MAP] {OPTIONS}
+```
+
+**Required Arguments**
+- COUNTS file (.h5ad) containing matrix of single-cell allelic counts.
+- BARCODE MAP: Two column TSV file mapping specific cell barcodes to some group/celltype.\
+Each line following format ... [BARCODE] \t [CELLTYPE]
+
+**Optional Arguments**
+- -o/--out_file: Output file to write analysis results to. (Default. ai_results_[GROUP].tsv)
+- --min: Minimum allele count needed for analysis. (Default. 10)
+- -p/--pseudocount: Pseudocount added when measuring allelic imbalance. (Default. 1)
+- -s/--sample: Use het genotypes for this sample in count matrix. Automatically parse if data contains 0 or 1 sample. REQUIRED IF MULTIPLE SAMPLES IN DATA.
+- --phased: Calculate allelic imbalance using phased haplotype model. By default, calculates AI assuming unphased/equal likelihood for each haplotype.
+- --unphased: Explicitly use unphased model.
+- -z/--z_cutoff: Remove SNPS and associated regions whose counts exceed Z-score cutoff. Extra layer of QC for single-cell allelic counts
+
+
+&nbsp;
+## Single-Cell Comparative Imbalance
+
+Compare differential allelic-imbalance between celltypes/groups.
+
+**Usage**
+```shell script
+python WASP2/src/counting compare-imbalance [COUNTS] [BARCODE_MAP] {OPTIONS}
+```
+
+**Required Arguments**
+- COUNTS file (.h5ad) containing matrix of single-cell allelic counts.
+- BARCODE MAP: Two column TSV file mapping specific cell barcodes to some group/celltype.\
+Each line following format ... [BARCODE] \t [CELLTYPE]
+
+
+**Optional Arguments**
+- -o/--out_file: Output file to write analysis results to. (Default. ai_results_[GROUP1]_[GROUP2].tsv)
+- --groups/--celltypes: Specific groups in barcode map to compare differential allelic imbalance. If providing input requires 2 groups minimum, otherwise compare all group combinations.
+- --min: Minimum allele count needed for analysis. (Default. 10)
+- -p/--pseudocount: Pseudocount added when measuring allelic imbalance. (Default. 1)
+- -s/--sample: Use het genotypes for this sample in count matrix. Automatically parse if data contains 0 or 1 sample. REQUIRED IF MULTIPLE SAMPLES IN DATA.
+- --phased: Calculate allelic imbalance using phased haplotype model. By default, calculates AI assuming unphased/equal likelihood for each haplotype.
+- --unphased: Explicitly use unphased model.
+- -z/--z_cutoff: Remove SNPS and associated regions whose counts exceed Z-score cutoff. Extra layer of QC for single-cell allelic counts
