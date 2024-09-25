@@ -13,7 +13,8 @@ class WaspDataFiles:
 
     def __init__(self, bam_file, vcf_file, is_paired=None,
                  samples=None, is_phased=None,
-                 out_dir=None, temp_loc=None):
+                 out_dir=None, temp_loc=None,
+                 threads=None):
         
         # User input files
         self.bam_file = bam_file
@@ -23,9 +24,15 @@ class WaspDataFiles:
         self.is_phased = is_phased
         self.out_dir = out_dir
         self.temp_loc = temp_loc
+        self.threads = threads
         
         
         # Autoparse args
+        
+        # Single threaded by default
+        if self.threads is None:
+            self.threads = 0
+        
         if self.is_paired is None:
             with AlignmentFile(self.bam_file, "r") as bam:
                 self.is_paired = next(bam.head(1)).is_paired

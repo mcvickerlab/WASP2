@@ -35,7 +35,7 @@ def tempdir_decorator(func):
 @tempdir_decorator
 def run_make_remap_reads(bam_file, vcf_file, is_paired=None, samples=None,
                          is_phased=None, out_dir=None, temp_loc=None,
-                         out_json=None):
+                         threads=None, out_json=None):
     """
     Parser that parses initial input.
     Finds intersecting variants and generates
@@ -67,7 +67,8 @@ def run_make_remap_reads(bam_file, vcf_file, is_paired=None, samples=None,
                                samples=samples,
                                is_phased=is_phased,
                                out_dir=out_dir,
-                               temp_loc=temp_loc)
+                               temp_loc=temp_loc,
+                               threads=threads)
     
     # print(*vars(wasp_files).items(), sep="\n")
     
@@ -97,7 +98,9 @@ def run_make_remap_reads(bam_file, vcf_file, is_paired=None, samples=None,
                 remap_bam=wasp_files.to_remap_bam,
                 remap_reads=wasp_files.remap_reads,
                 keep_bam=wasp_files.keep_bam,
-                is_paired=wasp_files.is_paired)
+                is_paired=wasp_files.is_paired,
+                threads=wasp_files.threads
+                )
 
 
     intersect_reads(remap_bam=wasp_files.to_remap_bam,
@@ -108,13 +111,20 @@ def run_make_remap_reads(bam_file, vcf_file, is_paired=None, samples=None,
     # print("INTERSECTION COMPLETE")
     
     # If a tempdir already exists??
-
     # Create remap fq
-    write_remap_bam(wasp_files.to_remap_bam,
-                    wasp_files.intersect_file,
-                    wasp_files.remap_fq1,
-                    wasp_files.remap_fq2,
-                    wasp_files.samples)
+    write_remap_bam(bam_file=wasp_files.to_remap_bam,
+                    intersect_file=wasp_files.intersect_file,
+                    r1_out=wasp_files.remap_fq1,
+                    r2_out=wasp_files.remap_fq2,
+                    samples=wasp_files.samples,
+                    threads=wasp_files.threads)
+
+    # write_remap_bam(wasp_files.to_remap_bam,
+    #                 wasp_files.intersect_file,
+    #                 wasp_files.remap_fq1,
+    #                 wasp_files.remap_fq2,
+    #                 wasp_files.samples
+    #                 )
     
     
     # print("WROTE READS TO BE REMAPPED")
@@ -195,7 +205,7 @@ def check_filt_input(func):
 
 @check_filt_input
 def run_wasp_filt(remapped_bam, to_remap_bam, keep_bam, wasp_out_bam,
-                  remap_keep_bam=None, remap_keep_file=None):
+                  threads=0, remap_keep_bam=None, remap_keep_file=None):
     """
     Filter reads that remap to the same loc
     and merges with non-remapped reads to create
@@ -221,18 +231,18 @@ def run_wasp_filt(remapped_bam, to_remap_bam, keep_bam, wasp_out_bam,
         with tempfile.TemporaryDirectory() as tmpdir:
             remap_keep_bam = f"{tmpdir}/wasp_remap_filt.bam"
             
-            filt_remapped_reads(to_remap_bam, remapped_bam,
-                                remap_keep_bam, keep_read_file=remap_keep_file)
+            filt_remapped_reads(to_remap_bam, remapped_bam, remap_keep_bam,
+                                keep_read_file=remap_keep_file, threads=threads)
             
-            merge_filt_bam(keep_bam, remap_keep_bam, wasp_out_bam)
+            merge_filt_bam(keep_bam, remap_keep_bam, wasp_out_bam, threads=threads)
     else:
         
         filt_remapped_reads(to_remap_bam, remapped_bam, remap_keep_bam,
-                            keep_read_file=remap_keep_file)
+                            keep_read_file=remap_keep_file, threads=threads)
         
         print(f"\nWrote remapped bam with filtered reads to...\n{remap_keep_bam}\n")
         
-        merge_filt_bam(keep_bam, remap_keep_bam, wasp_out_bam)
+        merge_filt_bam(keep_bam, remap_keep_bam, wasp_out_bam, threads=threads)
     
     # Finished
     print(f"\nWASP filtered Bam written to...\n{wasp_out_bam}\n")

@@ -1,4 +1,5 @@
 import tempfile
+import subprocess
 from pathlib import Path
 import timeit
 
@@ -7,7 +8,7 @@ from pysam.libcalignmentfile import AlignmentFile
 
 from remap_utils import paired_read_gen
 
-def filt_remapped_reads(to_remap_bam, remapped_bam, filt_out_bam, keep_read_file=None):
+def filt_remapped_reads(to_remap_bam, remapped_bam, filt_out_bam, keep_read_file=None, threads=0):
     
     pos_dict = {}
     total_dict = {}
@@ -15,7 +16,7 @@ def filt_remapped_reads(to_remap_bam, remapped_bam, filt_out_bam, keep_read_file
     
     num_removed = 0
     
-    with AlignmentFile(remapped_bam, "rb") as bam:
+    with AlignmentFile(remapped_bam, "rb", threads=threads+1) as bam:
 
         # nostat???
         for read1, read2 in paired_read_gen(bam):
@@ -69,29 +70,62 @@ def filt_remapped_reads(to_remap_bam, remapped_bam, filt_out_bam, keep_read_file
     if keep_read_file is None:
         with tempfile.NamedTemporaryFile("w") as file:
             file.write("\n".join(keep_set))
-            pysam.view("-N", file.name, "-o", filt_out_bam, to_remap_bam, catch_stdout=False)
+            # pysam.view("-@", str(threads), "-N", file.name, "-o", filt_out_bam, to_remap_bam, catch_stdout=False)
+            
+            subprocess.run(
+                [
+                    "samtools", "view", "-@", str(threads),
+                    "-N", file.name, "-o", filt_out_bam, to_remap_bam
+                    ],
+                check=True)
+            
     else:
         with open(keep_read_file, "w") as file:
             file.write("\n".join(keep_set))
         
         print(f"\nWrote Remapped Reads kept to...\n{keep_read_file}\n")
-        pysam.view("-N", keep_read_file, "-o", filt_out_bam, to_remap_bam, catch_stdout=False)
+        pysam.view("-@", str(threads), "-N", keep_read_file, "-o", filt_out_bam, to_remap_bam, catch_stdout=False)
+        # pysam.view("-N", keep_read_file, "-o", filt_out_bam, to_remap_bam, catch_stdout=False)
+        
+        subprocess.run(
+            [
+                "samtools", "view", "-@", str(threads),
+                "-N", keep_read_file, "-o", filt_out_bam, to_remap_bam
+                ],
+            check=True)
     
     # print(f"Wrote bam with filtered reads to {filt_out_bam}")
 
 
-def merge_filt_bam(keep_bam, remapped_filt_bam, out_bam):
+def merge_filt_bam(keep_bam, remapped_filt_bam, out_bam, threads=0):
     
     start_time = timeit.default_timer()
     
     # Merge for for complete filt bam
-    pysam.merge("-f", "-o", out_bam, keep_bam, remapped_filt_bam, catch_stdout=False)
+    subprocess.run(
+        ["samtools", "merge", "-@", str(threads),
+         "-f", "-o", out_bam, keep_bam, remapped_filt_bam],
+        check=True)
+    
     print(f"Merged BAM in {timeit.default_timer() - start_time:.2f} seconds")
     
-    start_sort = timeit.default_timer()
-    pysam.sort(out_bam, "-o", out_bam, catch_stdout=False)
-    pysam.index(out_bam, catch_stdout=False)
+    subprocess.run(
+        ["samtools", "index", "-@", str(threads), str(out_bam)],
+        check=True)
+
     
-    print(f"Sorted and Indexed BAM in {timeit.default_timer() - start_sort:.2f} seconds")
+# def merge_filt_bam(keep_bam, remapped_filt_bam, out_bam):
     
-    # print(f"\nWrote merged WASP filtered BAM to...\n{out_bam}")
+#     start_time = timeit.default_timer()
+    
+#     # Merge for for complete filt bam
+#     pysam.merge("-f", "-o", out_bam, keep_bam, remapped_filt_bam, catch_stdout=False)
+#     print(f"Merged BAM in {timeit.default_timer() - start_time:.2f} seconds")
+    
+#     start_sort = timeit.default_timer()
+#     # pysam.sort(out_bam, "-o", out_bam, catch_stdout=False)
+#     pysam.index(out_bam, catch_stdout=False)
+    
+#     # print(f"Sorted and Indexed BAM in {timeit.default_timer() - start_sort:.2f} seconds")
+    
+#     # print(f"\nWrote merged WASP filtered BAM to...\n{out_bam}")

@@ -62,6 +62,14 @@ def make_reads(
                          "Defaults to [BAM_PREFIX]_wasp_data_files.json"
                      )
                      )] = None,
+    threads: Annotated[
+        Optional[int],
+        typer.Option(
+            "--threads",
+            help=("Number of ADDITIONAL threads to use for operations that support multiprocessing, like bam sorting"
+                  " (Default: single-thread/0)")
+            )
+        ] = 0,
     is_paired: Annotated[
         Optional[bool],
         typer.Option("--paired/--single",
@@ -96,7 +104,8 @@ def make_reads(
         temp_loc=temp_loc,
         out_json=out_json,
         is_paired=is_paired,
-        is_phased=is_phased
+        is_phased=is_phased,
+        threads=threads
         )
 
 
@@ -134,6 +143,14 @@ def filter_remapped(
                 "Will be created in default name and loc if not provided"
                 )
             )] = None,
+    threads: Annotated[
+        Optional[int],
+        typer.Option(
+            "--threads",
+            help=("Number of ADDITIONAL threads to use for operations that support multiprocessing, like bam sorting"
+                  " (Default: single-thread/0)")
+            )
+        ] = 0,
     remap_keep_bam: Annotated[
         Optional[str],
         typer.Option(
@@ -169,7 +186,8 @@ def filter_remapped(
         wasp_out_bam=out_bam,
         remap_keep_bam=remap_keep_bam,
         remap_keep_file=remap_keep_file,
-        wasp_data_json=wasp_data_json
+        wasp_data_json=wasp_data_json,
+        threads=threads
         )
     
 
