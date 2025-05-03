@@ -1,16 +1,20 @@
-name: WASP2
+name: WASP2_test
 channels:
   - bioconda
   - conda-forge
   - defaults
 dependencies:
-  - python=3.9.*
-  - numpy
+  - python=3.10.*
+  - numpy=2.0.2.*
+  - pandas=2.2.3.*
+  - polars=1.22.0.*
+  - scipy=1.13.1.*
+  - pysam=0.23.0.*
+  - pybedtools=0.11.0.*
+  - bedtools=2.31.1.*
+  - typer=0.15.1.*
+  - anndata=0.10.9.*
+  - samtools=1.21.*
+  - bcftools=1.21.*
   - pandas
-  - polars
-  - scipy
-  - pysam
-  - pybedtools
-  - bedtools
-  - typer
-  - anndata
+  - zlib
