@@ -1,0 +1,6 @@
+chrom	pos	ref	alt	peak	ref_count	alt_count	other_count
+chr1	1019397	C	A	chr1_1019383_1019826	0	2	0
+chr1	1019636	A	G	chr1_1019383_1019826	0	1	0
+chr1	1060101	T	G	chr1_1060008_1060158	0	0	0
+chr1	1068249	C	T	chr1_1068130_1068280	0	0	0
+chr1	1407232	G	C	chr1_1407182_1407478	0	2	0
