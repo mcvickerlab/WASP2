@@ -12,5 +12,8 @@ dependencies:
   - pysam
   - pybedtools
   - bedtools
+  - bcftools
+  - samtools
   - typer
+  - typing_extensions
   - anndata
