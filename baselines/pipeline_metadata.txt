@@ -1,6 +1,6 @@
 WASP2 Full Pipeline Baseline
 =============================
-Date: Sun Nov 16 22:33:37 UTC 2025
+Date: Sun Nov 16 22:42:43 UTC 2025
 Host: runsc
 User: root
 
@@ -25,12 +25,12 @@ Step 1: WASP Mapping
 Original reads: 126061
 WASP filtered reads: 125387 (99% kept)
 Output: baselines/mapping/wasp_filtered.bam
-Time: 9s
-Peak Memory: 490 MB (502312 KB)
+Time: 8s
+Peak Memory: 489 MB (501708 KB)
 
-  1a. Make reads - Memory: 490 MB
+  1a. Make reads - Memory: 489 MB
   1b. BWA remap - Memory: 241 MB, Time: 0s
-  1c. Filter - Memory: 302 MB
+  1c. Filter - Memory: 301 MB
 
 Step 2: Counting
 ----------------
@@ -42,7 +42,7 @@ Total allele counts: 2388
   Other alleles: 3
 MD5: 127a81810a43db3cc6924a26f591cc7a
 Time: 9s
-Peak Memory: 641 MB (656740 KB)
+Peak Memory: 639 MB (655212 KB)
 
 Step 3: Analysis
 ----------------
@@ -50,11 +50,11 @@ Output: baselines/analysis/ai_results.tsv
 Rows: 40 (header + 39 regions tested)
 Significant regions (FDR < 0.05): 0
 MD5: 394e1a7dbf14220079c3142c5b15bad8
-Time: 2s
-Peak Memory: 341 MB (349208 KB)
+Time: 3s
+Peak Memory: 341 MB (349284 KB)
 
 Performance Summary:
 --------------------
 Total Pipeline Time: 20s
-Peak Memory Usage: 641 MB
-Memory Efficiency: 32.05 MB/s
+Peak Memory Usage: 639 MB
+Memory Efficiency: 31.95 MB/s
