@@ -71,7 +71,9 @@ echo " Step 1: Counting Alleles"
 echo "======================================"
 START_COUNT=$(date +%s)
 
-python -m src.counting count-variants \
+# Run with memory profiling
+/usr/bin/time -v -o baselines/counting/memory_profile.txt \
+    python -m src.counting count-variants \
     test_data/CD4_ATACseq_Day1_merged_filtered.sort.bam \
     test_data/filter_chr10.vcf \
     --samples NA12878 \
@@ -82,11 +84,15 @@ python -m src.counting count-variants \
 END_COUNT=$(date +%s)
 COUNT_TIME=$((END_COUNT - START_COUNT))
 
+# Extract peak memory usage
+COUNT_MEM=$(grep "Maximum resident set size" baselines/counting/memory_profile.txt | awk '{print $6}')
+COUNT_MEM_MB=$((COUNT_MEM / 1024))
+
 if [ -f "baselines/counting/counts.tsv" ]; then
     COUNT_ROWS=$(wc -l < baselines/counting/counts.tsv)
     COUNT_MD5=$(md5sum baselines/counting/counts.tsv | awk '{print $1}')
     echo "✓ Counting complete: $COUNT_ROWS rows, MD5: $COUNT_MD5"
-    echo "  Time: ${COUNT_TIME}s"
+    echo "  Time: ${COUNT_TIME}s, Peak Memory: ${COUNT_MEM_MB} MB"
 else
     echo "✗ Counting failed - output file not created!"
     exit 1
@@ -99,7 +105,9 @@ echo " Step 2: Analyzing Allelic Imbalance"
 echo "======================================"
 START_ANALYSIS=$(date +%s)
 
-python -m src.analysis find-imbalance \
+# Run with memory profiling
+/usr/bin/time -v -o baselines/analysis/memory_profile.txt \
+    python -m src.analysis find-imbalance \
     baselines/counting/counts.tsv \
     --out baselines/analysis/ai_results.tsv \
     --min 10 \
@@ -108,11 +116,15 @@ python -m src.analysis find-imbalance \
 END_ANALYSIS=$(date +%s)
 ANALYSIS_TIME=$((END_ANALYSIS - START_ANALYSIS))
 
+# Extract peak memory usage
+ANALYSIS_MEM=$(grep "Maximum resident set size" baselines/analysis/memory_profile.txt | awk '{print $6}')
+ANALYSIS_MEM_MB=$((ANALYSIS_MEM / 1024))
+
 if [ -f "baselines/analysis/ai_results.tsv" ]; then
     ANALYSIS_ROWS=$(wc -l < baselines/analysis/ai_results.tsv)
     ANALYSIS_MD5=$(md5sum baselines/analysis/ai_results.tsv | awk '{print $1}')
     echo "✓ Analysis complete: $ANALYSIS_ROWS rows, MD5: $ANALYSIS_MD5"
-    echo "  Time: ${ANALYSIS_TIME}s"
+    echo "  Time: ${ANALYSIS_TIME}s, Peak Memory: ${ANALYSIS_MEM_MB} MB"
 else
     echo "✗ Analysis failed - output file not created!"
     exit 1
@@ -150,13 +162,18 @@ Counting: baselines/counting/counts.tsv
   Rows: $COUNT_ROWS
   MD5: $COUNT_MD5
   Time: ${COUNT_TIME}s
+  Peak Memory: ${COUNT_MEM_MB} MB (${COUNT_MEM} KB)
 
 Analysis: baselines/analysis/ai_results.tsv
   Rows: $ANALYSIS_ROWS
   MD5: $ANALYSIS_MD5
   Time: ${ANALYSIS_TIME}s
+  Peak Memory: ${ANALYSIS_MEM_MB} MB (${ANALYSIS_MEM} KB)
 
+Performance Summary:
+--------------------
 Total Time: $((COUNT_TIME + ANALYSIS_TIME))s
+Peak Memory: $((COUNT_MEM > ANALYSIS_MEM ? COUNT_MEM / 1024 : ANALYSIS_MEM / 1024)) MB
 EOF
 
 echo "✓ Metadata saved to baselines/baseline_metadata.txt"
@@ -176,9 +193,10 @@ echo "======================================"
 echo "Finished: $(date)"
 echo ""
 echo "Results Summary:"
-echo "  Counting: $COUNT_ROWS rows (${COUNT_TIME}s)"
-echo "  Analysis: $ANALYSIS_ROWS rows (${ANALYSIS_TIME}s)"
+echo "  Counting: $COUNT_ROWS rows (${COUNT_TIME}s, ${COUNT_MEM_MB} MB)"
+echo "  Analysis: $ANALYSIS_ROWS rows (${ANALYSIS_TIME}s, ${ANALYSIS_MEM_MB} MB)"
 echo "  Total time: $((COUNT_TIME + ANALYSIS_TIME))s"
 echo ""
 echo "Baseline files saved in: baselines/"
+echo "Memory profiles: baselines/{counting,analysis}/memory_profile.txt"
 echo "To validate future runs: ./scripts/validate_against_baseline.sh"
