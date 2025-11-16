@@ -1,0 +1,51 @@
+WASP2 Full Pipeline Baseline
+=============================
+Date: Sun Nov 16 01:30:31 UTC 2025
+Host: runsc
+User: root
+
+Dependencies:
+-------------
+bcftools: bcftools 1.19
+bedtools: bedtools v2.31.1
+samtools: samtools 1.19.2
+python: Python 3.11.14
+
+Input Data:
+-----------
+BAM: test_data/CD4_ATACseq_Day1_merged_filtered.sort.bam (7950857 bytes)
+VCF: test_data/filter_chr10.vcf (12005084 bytes)
+BED: test_data/NA12878_snps_chr10.bed (2705038 bytes)
+Sample: NA12878
+
+Step 1: WASP Mapping
+--------------------
+Status: SKIPPED (no genome reference)
+Using original BAM: test_data/CD4_ATACseq_Day1_merged_filtered.sort.bam
+
+Step 2: Counting
+----------------
+Output: baselines/counting/counts.tsv
+Rows: 111455 (header + 111454 SNPs)
+Total allele counts: 3041
+  Ref alleles: 1971
+  Alt alleles: 1061
+  Other alleles: 9
+MD5: 612330f6ce767e5d014d1acb82159564
+Time: 11s
+Peak Memory: 639 MB (654768 KB)
+
+Step 3: Analysis
+----------------
+Output: baselines/analysis/ai_results.tsv
+Rows: 44 (header + 43 regions tested)
+Significant regions (FDR < 0.05): 0
+MD5: febc7046e96deb0f5aa14de8135b439d
+Time: 4s
+Peak Memory: 341 MB (349784 KB)
+
+Performance Summary:
+--------------------
+Total Pipeline Time: 15s
+Peak Memory Usage: 639 MB
+Memory Efficiency: 42.60 MB/s
