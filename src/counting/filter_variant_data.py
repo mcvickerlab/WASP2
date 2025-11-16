@@ -207,10 +207,8 @@ def parse_intersect_region(intersect_file, use_region_names=False, region_col=No
         use_coords = True
 
     else:
-        # CHANGE TO RAISE ERROR
-        print("COULD NOT RECOGNIZE FORMAT OR WRONG NUMBER OF COLS")
-        return
-    
+        raise ValueError(f"Could not recognize BED format. Expected 3-6 columns, got {n_cols} columns")
+
     # Parse dataframe columns
     rename_cols = {old_col: new_col for old_col, new_col in zip(subset_cols, new_cols)}
     df = df.select(subset_cols).rename(

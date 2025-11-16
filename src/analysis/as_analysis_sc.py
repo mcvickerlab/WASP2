@@ -83,11 +83,9 @@ def get_imbalance_sc(adata,
     opt_disp = lambda rho, ref_data, n_data: -np.sum(
         betabinom.logpmf(ref_data, n_data, (0.5 * (1 - rho) / rho), (0.5 * (1 - rho) / rho))
     )
-    
+
     disp = minimize_scalar(opt_disp, args=(ref_counts, n_counts), method="bounded", bounds=(0,1))["x"]
-    
-    print(disp) # DEEBUG BY SHOWING DISP
-    
+
     df_dict = {}
     
     # Loop through groups

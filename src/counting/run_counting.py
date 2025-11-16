@@ -89,8 +89,7 @@ class WaspCountFiles:
                 self.gtf_bed = str(Path(self.temp_loc) / f"{gtf_prefix}.bed")
                 self.use_region_names = True # Use feature attributes as region names
             else:
-                self.region_file = None
-                print("invalid ftype") # Make this raise an error later
+                raise ValueError(f"Invalid region file type. Expected .bed, .gtf, or .gff3, got: {self.region_file}")
 
         else:
             self.intersect_file = self.vcf_bed

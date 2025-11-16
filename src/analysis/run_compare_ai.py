@@ -32,13 +32,9 @@ def run_ai_comparison(count_file,
                               out_file=out_file,
                               z_cutoff=z_cutoff
                               )
-    
+
     adata_inputs = process_adata_inputs(ad.read_h5ad(ai_files.adata_file), ai_files=ai_files)
-    
-    
-    print(*vars(ai_files).items(), sep="\n") # For debugging
-    print(adata_inputs) # For debugging
-    
+
     # Update class attributes
     ai_files.update_data(adata_inputs)
     

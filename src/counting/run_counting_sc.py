@@ -102,8 +102,7 @@ class WaspCountSC:
                 self.gtf_bed = str(Path(self.temp_loc) / f"{gtf_prefix}.bed")
                 self.use_feature_names = True # Use feature attributes as feature names
             else:
-                self.feature_file = None
-                print("invalid ftype") # Make this raise an error later
+                raise ValueError(f"Invalid feature file type. Expected .bed, .gtf, or .gff3, got: {self.feature_file}")
 
         else:
             self.intersect_file = self.vcf_bed
@@ -136,9 +135,7 @@ def run_count_variants_sc(bam_file, vcf_file,
                               out_file=out_file,
                               temp_loc=temp_loc
                              )
-    
-    print(*vars(count_files).items(), sep="\n") # For debugging
-    
+
     # Create intermediary files
     # Maybe change include_gt based on preparse?
     vcf_to_bed(vcf_file=count_files.vcf_file,
