@@ -135,12 +135,16 @@ def swap_chrom_alleles(bam_file, out_dir, df, chrom, read_stats):
     
     # Why is og order not maintained? Figure out and could skip sort step
     chrom_df = df.filter(pl.col("chrom") == chrom).sort("start")
-    
-    r1_het_dict = chrom_df.filter(pl.col("mate") == 1).partition_by(
+
+    # Polars 1.x: partition_by(as_dict=True) returns dict with tuple keys
+    # Need to extract first element of tuple for single-column partition
+    r1_partition = chrom_df.filter(pl.col("mate") == 1).partition_by(
         "read", as_dict=True, maintain_order=True)
-    
-    r2_het_dict = chrom_df.filter(pl.col("mate") == 2).partition_by(
+    r1_het_dict = {k[0] if isinstance(k, tuple) else k: v for k, v in r1_partition.items()}
+
+    r2_partition = chrom_df.filter(pl.col("mate") == 2).partition_by(
         "read", as_dict=True, maintain_order=True)
+    r2_het_dict = {k[0] if isinstance(k, tuple) else k: v for k, v in r2_partition.items()}
     
     # create chrom file
     out_bam = str(Path(out_dir) / f"swapped_alleles_{chrom}.bam")
@@ -253,12 +257,15 @@ def swap_chrom_alleles_multi(bam_file, out_dir, df, chrom, read_stats):
     
     # Create chrom df
     chrom_df = df.filter(pl.col("chrom") == chrom).sort("start")
-    
-    r1_het_dict = chrom_df.filter(pl.col("mate") == 1).partition_by(
+
+    # Polars 1.x: partition_by(as_dict=True) returns dict with tuple keys
+    r1_partition = chrom_df.filter(pl.col("mate") == 1).partition_by(
         "read", as_dict=True, maintain_order=True)
-    
-    r2_het_dict = chrom_df.filter(pl.col("mate") == 2).partition_by(
+    r1_het_dict = {k[0] if isinstance(k, tuple) else k: v for k, v in r1_partition.items()}
+
+    r2_partition = chrom_df.filter(pl.col("mate") == 2).partition_by(
         "read", as_dict=True, maintain_order=True)
+    r2_het_dict = {k[0] if isinstance(k, tuple) else k: v for k, v in r2_partition.items()}
     
     
     # create chrom file
