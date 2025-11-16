@@ -275,7 +275,7 @@ def single_model(df, region_col, phased=False):
 
     # Optimize Alt
     alt_test = group_df.apply(lambda x: parse_opt(x, disp, phased=phased))
-    alt_df = pd.DataFrame(alt_test.to_list(), columns=["alt_ll", "mu"], index=alt_test.index)
+    alt_df = pd.DataFrame(alt_test.tolist(), columns=["alt_ll", "mu"], index=alt_test.index)
 
     print(f"Optimized imbalance likelihood in {timeit.default_timer() - ll_start:.2f} seconds")
 
@@ -324,7 +324,7 @@ def linear_model(df, region_col, phased=False):
 
     # Optimize Alt
     alt_test = group_df.apply(lambda x: parse_opt(x))
-    alt_df = pd.DataFrame(alt_test.to_list(), columns=["alt_ll", "mu"], index=alt_test.index)
+    alt_df = pd.DataFrame(alt_test.tolist(), columns=["alt_ll", "mu"], index=alt_test.index)
     
     print(f"Optimized imbalance likelihood in {time.time() - ll_start} seconds")
     

@@ -142,7 +142,12 @@ else
         $GENOME_REF \
         $MAP_DIR/CD4_ATACseq_Day1_merged_filtered.sort_swapped_alleles_r1.fq \
         $MAP_DIR/CD4_ATACseq_Day1_merged_filtered.sort_swapped_alleles_r2.fq \
-        | samtools view -b -o $MAP_DIR/remapped.bam -
+        | samtools view -b -o $MAP_DIR/remapped.unsorted.bam -
+
+    # Sort and index remapped BAM
+    samtools sort -o $MAP_DIR/remapped.bam $MAP_DIR/remapped.unsorted.bam
+    samtools index $MAP_DIR/remapped.bam
+    rm $MAP_DIR/remapped.unsorted.bam
 
     END_REMAP=$(date +%s)
     REMAP_TIME=$((END_REMAP - START_REMAP))
