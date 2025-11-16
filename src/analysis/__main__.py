@@ -212,12 +212,12 @@ def find_imbalance_sc(
             )
         ] = None,
 ):
-    
-    if len(groups) > 0:
+
+    if groups is not None and len(groups) > 0:
         groups=groups[0]
     else:
         groups=None
-    
+
     # Run single cell analysis
     run_ai_analysis_sc(count_file=counts,
                        bc_map=bc_map,
@@ -327,12 +327,12 @@ def compare_imbalance(
             )
         ] = None,
 ):
-    
-    if len(groups) > 0:
+
+    if groups is not None and len(groups) > 0:
         groups=groups[0]
     else:
         groups=None
-    
+
     # Run comparison
     run_ai_comparison(count_file=counts,
                       bc_map=bc_map,

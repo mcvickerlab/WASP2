@@ -115,7 +115,7 @@ def count_variants(
     
     # Parse sample string
     # print(samples)
-    if len(samples) > 0:
+    if samples is not None and len(samples) > 0:
         samples=samples[0]
     else:
         samples=None
@@ -200,7 +200,7 @@ def count_variants_sc(
 ):
     
     # Parse sample string
-    if len(samples) > 0:
+    if samples is not None and len(samples) > 0:
         samples=samples[0]
     else:
         samples=None

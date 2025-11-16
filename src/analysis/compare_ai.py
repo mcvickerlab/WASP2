@@ -8,16 +8,12 @@ from itertools import combinations
 import numpy as np
 import pandas as pd
 
-# import polars as pl
-# import anndata as ad
-
 from scipy.stats import betabinom, chi2, false_discovery_control
 from scipy.optimize import minimize_scalar
 
 
 # Local imports
 from as_analysis import opt_prob, opt_unphased_dp, opt_phased_new, bh_correction
-# from run_analysis_sc import WaspAnalysisSC, process_adata_inputs
 
 
 # Use these functions to figure out how to optimize per group
