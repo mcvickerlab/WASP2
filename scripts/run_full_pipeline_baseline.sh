@@ -116,7 +116,7 @@ else
     # Step 1a: Generate swapped allele reads
     echo "1a. Generating swapped allele reads..."
     /usr/bin/time -v -o $MAP_DIR/make_reads_memory.txt \
-        python -m src.mapping make-reads \
+        python src/mapping/__main__.py make-reads \
         $TEST_BAM \
         $TEST_VCF \
         --samples $SAMPLE \
@@ -153,7 +153,7 @@ else
     # Step 1c: Filter remapped reads
     echo "1c. Filtering remapped reads..."
     /usr/bin/time -v -o $MAP_DIR/filter_memory.txt \
-        python -m src.mapping filter-remapped \
+        python src/mapping/__main__.py filter-remapped \
         $MAP_DIR/remapped.bam \
         --json $MAP_DIR/wasp_data.json \
         --out_bam $MAP_DIR/wasp_filtered.bam
@@ -197,7 +197,7 @@ echo "=========================================="
 START_COUNT=$(date +%s)
 
 /usr/bin/time -v -o $COUNT_DIR/memory_profile.txt \
-    python -m src.counting count-variants \
+    python src/counting/__main__.py count-variants \
     $WASP_BAM \
     $TEST_VCF \
     --samples $SAMPLE \
@@ -243,7 +243,7 @@ echo "=========================================="
 START_ANALYSIS=$(date +%s)
 
 /usr/bin/time -v -o $ANALYSIS_DIR/memory_profile.txt \
-    python -m src.analysis find-imbalance \
+    python src/analysis/__main__.py find-imbalance \
     $COUNT_DIR/counts.tsv \
     --out $ANALYSIS_DIR/ai_results.tsv \
     --min 10 \

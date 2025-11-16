@@ -225,7 +225,7 @@ def run_count_variants(bam_file, vcf_file,
                              df=df)
     
     # Write counts
-    count_df.write_csv(count_files.out_file, has_header=True, separator="\t")
+    count_df.write_csv(count_files.out_file, include_header=True, separator="\t")
     
     # Should i return for use in analysis pipeline?
     # return count_df
