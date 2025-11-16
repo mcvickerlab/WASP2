@@ -1,6 +1,6 @@
 WASP2 Full Pipeline Baseline
 =============================
-Date: Sun Nov 16 01:30:31 UTC 2025
+Date: Sun Nov 16 02:18:06 UTC 2025
 Host: runsc
 User: root
 
@@ -10,6 +10,7 @@ bcftools: bcftools 1.19
 bedtools: bedtools v2.31.1
 samtools: samtools 1.19.2
 python: Python 3.11.14
+bwa: Version: 0.7.17-r1188
 
 Input Data:
 -----------
@@ -17,35 +18,43 @@ BAM: test_data/CD4_ATACseq_Day1_merged_filtered.sort.bam (7950857 bytes)
 VCF: test_data/filter_chr10.vcf (12005084 bytes)
 BED: test_data/NA12878_snps_chr10.bed (2705038 bytes)
 Sample: NA12878
+Genome: test_data/genome.fa
 
 Step 1: WASP Mapping
 --------------------
-Status: SKIPPED (no genome reference)
-Using original BAM: test_data/CD4_ATACseq_Day1_merged_filtered.sort.bam
+Original reads: 126061
+WASP filtered reads: 125387 (99% kept)
+Output: baselines/mapping/wasp_filtered.bam
+Time: 8s
+Peak Memory: 488 MB (499848 KB)
+
+  1a. Make reads - Memory: 488 MB
+  1b. BWA remap - Memory: 241 MB, Time: 0s
+  1c. Filter - Memory: 303 MB
 
 Step 2: Counting
 ----------------
 Output: baselines/counting/counts.tsv
 Rows: 111455 (header + 111454 SNPs)
-Total allele counts: 3041
-  Ref alleles: 1971
-  Alt alleles: 1061
-  Other alleles: 9
-MD5: 612330f6ce767e5d014d1acb82159564
-Time: 11s
-Peak Memory: 639 MB (654768 KB)
+Total allele counts: 2388
+  Ref alleles: 1539
+  Alt alleles: 846
+  Other alleles: 3
+MD5: 127a81810a43db3cc6924a26f591cc7a
+Time: 9s
+Peak Memory: 639 MB (654524 KB)
 
 Step 3: Analysis
 ----------------
 Output: baselines/analysis/ai_results.tsv
-Rows: 44 (header + 43 regions tested)
+Rows: 40 (header + 39 regions tested)
 Significant regions (FDR < 0.05): 0
-MD5: febc7046e96deb0f5aa14de8135b439d
-Time: 4s
-Peak Memory: 341 MB (349784 KB)
+MD5: 394e1a7dbf14220079c3142c5b15bad8
+Time: 3s
+Peak Memory: 340 MB (348880 KB)
 
 Performance Summary:
 --------------------
-Total Pipeline Time: 15s
+Total Pipeline Time: 20s
 Peak Memory Usage: 639 MB
-Memory Efficiency: 42.60 MB/s
+Memory Efficiency: 31.95 MB/s

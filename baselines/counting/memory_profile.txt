@@ -1,17 +1,17 @@
-	Command being timed: "python src/counting/__main__.py count-variants test_data/CD4_ATACseq_Day1_merged_filtered.sort.bam test_data/filter_chr10.vcf --samples NA12878 --region test_data/NA12878_snps_chr10.bed --out baselines/counting/counts.tsv --temp baselines/counting/temp"
-	User time (seconds): 12.13
-	System time (seconds): 1.22
-	Percent of CPU this job got: 116%
-	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:11.45
+	Command being timed: "python src/counting/__main__.py count-variants baselines/mapping/wasp_filtered.bam test_data/filter_chr10.vcf --samples NA12878 --region test_data/NA12878_snps_chr10.bed --out baselines/counting/counts.tsv --temp baselines/counting/temp"
+	User time (seconds): 9.90
+	System time (seconds): 0.77
+	Percent of CPU this job got: 115%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:09.26
 	Average shared text size (kbytes): 0
 	Average unshared data size (kbytes): 0
 	Average stack size (kbytes): 0
 	Average total size (kbytes): 0
-	Maximum resident set size (kbytes): 654768
+	Maximum resident set size (kbytes): 654524
 	Average resident set size (kbytes): 0
 	Major (requiring I/O) page faults: 0
 	Minor (reclaiming a frame) page faults: 0
-	Voluntary context switches: 16225
+	Voluntary context switches: 15595
 	Involuntary context switches: 0
 	Swaps: 0
 	File system inputs: 0
