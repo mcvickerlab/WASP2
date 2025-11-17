@@ -178,17 +178,25 @@ open htmlcov/index.html
    - Uploaded as artifacts
    - Track coverage trends
 
+5. **Package Validation** ✅ NEW!
+   - Test pip installation
+   - Verify CLI commands work
+   - Build distribution packages
+   - Validate with twine
+
+6. **Documentation Build** ✅ NEW!
+   - Build Sphinx documentation
+   - Check for warnings/errors
+   - Validate API autodoc
+   - ReadTheDocs configuration
+
 ### 📋 Future Enhancements
 
 1. **Automated Versioning**
    - Auto-bump versions on release
    - Semantic versioning
 
-2. **Documentation Build**
-   - Auto-build docs on ReadTheDocs
-   - API documentation generation
-
-3. **Release Automation**
+2. **Release Automation**
    - Auto-publish to PyPI
    - GitHub releases with changelogs
 
@@ -205,13 +213,17 @@ open htmlcov/index.html
 1. Checkout code
 2. Set up Python (3.10 & 3.11)
 3. Install system deps (bcftools, bedtools, samtools)
-4. Install Python deps
+4. Install Python deps (including Sphinx, build tools)
 5. Verify installations
 6. Run mypy type checking ← Validates all type hints!
 7. Run regression tests ← Uses our test suite!
 8. Run full pipeline ← Real genomic data!
 9. Generate coverage report
 10. Upload artifacts
+11. Test pip installation ← NEW!
+12. Build distribution packages ← NEW!
+13. Build Sphinx documentation ← NEW!
+14. Check docs for warnings ← NEW!
 ```
 
 ### On Every Commit (Pre-commit)

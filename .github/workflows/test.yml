@@ -42,6 +42,8 @@ jobs:
         pip install numpy pandas polars scipy
         pip install pysam pybedtools anndata scanpy
         pip install typer rich
+        pip install sphinx sphinx-rtd-theme sphinx-autodoc-typehints
+        pip install build twine
 
     - name: Verify installations
       run: |
@@ -83,3 +85,46 @@ jobs:
         name: coverage-${{ matrix.python-version }}
         path: coverage.xml
         retention-days: 7
+
+    - name: Test package installation
+      run: |
+        echo "Testing pip installation..."
+        pip install -e .
+        wasp2-count --version
+        wasp2-map --version
+        wasp2-analyze --version
+        echo "✅ Package installation successful!"
+
+    - name: Build package
+      run: |
+        echo "Building distribution packages..."
+        python -m build
+        twine check dist/*
+        echo "✅ Package build successful!"
+
+    - name: Build documentation
+      run: |
+        echo "Building Sphinx documentation..."
+        cd docs
+        make clean html
+        echo "✅ Documentation build successful!"
+
+    - name: Check docs for warnings
+      run: |
+        echo "Checking documentation for warnings..."
+        cd docs
+        make clean html 2>&1 | tee build.log
+        # Count warnings (excluding network-related intersphinx warnings)
+        warning_count=$(grep -i "WARNING" build.log | grep -v "intersphinx" | wc -l)
+        error_count=$(grep -i "ERROR" build.log | wc -l)
+        if [ "$error_count" -gt 0 ]; then
+          echo "❌ Documentation has $error_count errors!"
+          exit 1
+        fi
+        if [ "$warning_count" -gt 0 ]; then
+          echo "⚠️  Documentation has $warning_count warnings (excluding intersphinx)"
+          echo "Warnings:"
+          grep -i "WARNING" build.log | grep -v "intersphinx"
+        else
+          echo "✅ Documentation has no warnings!"
+        fi
