@@ -11,7 +11,7 @@ import timeit
 # External package imports
 import pandas as pd
 import numpy as np
-from scipy.stats import betabinom, chi2, binom, rankdata, false_discovery_control
+from scipy.stats import betabinom, chi2, binom, false_discovery_control
 from scipy.optimize import minimize_scalar, minimize
 from scipy.special import expit
 
@@ -278,48 +278,6 @@ def linear_model(df, region_col, phased=False):
     return ll_df
 
 
-def bh_correction(df):
-    if "pval" in df.columns:
-        pcol = "pval"
-    elif "pval" in df.columns[-1]:
-        pcol = str(df.columns[-1])
-    else:
-        print("Pvalues not found! Returning Original Data")
-        return df
-    
-    num_test = df.shape[0]
-
-    if num_test == 1:
-        df["fdr_pval"] = df[pcol]
-        return df
-    
-    df["rank"] = rankdata(df[pcol], method="max").astype(int)
-    df["adj_pval"] = df[pcol] * (num_test / df["rank"])
-    
-    rank_df = df[["rank", "adj_pval"]].drop_duplicates()
-    rank_df = rank_df.sort_values(by=["rank"], ascending=False)
-
-    rank_p = rank_df.set_index("rank").squeeze()
-    rank_p = rank_p.rename("fdr_pval")
-    rank_p[rank_p > 1] = 1
-    
-    # test_adj
-    prev = None
-    for index, value in rank_p.items():
-        if prev is None:
-            prev = value
-        elif value > prev:
-            rank_p.at[index] = prev
-        else:
-            prev = value
-
-    # Combine back into df
-    return_df = pd.merge(df, rank_p, left_on="rank", right_index=True).sort_index()
-    return_df = return_df.drop(columns=["rank", "adj_pval"])
-
-    return return_df
-
-
 def get_imbalance(in_data, min_count=10, pseudocount=1, method="single", phased=False, region_col=None, groupby=None):
 
     model_dict = {"single": single_model, "linear": linear_model}
@@ -455,12 +413,12 @@ def get_imbalance_sc(in_data, min_count=10, method="single", out_dir=None, is_ge
     
     for key, cell_df in df_dict.items():
         print(f"Analyzing imbalance for {key}")
-        
+
         cell_df = cell_df.loc[cell_df["N"] >= min_count] # Filter by N
-        
+
         if not cell_df.empty:
             p_df = model_dict[method](cell_df)
-            p_df = bh_correction(p_df)
+            p_df["fdr_pval"] = false_discovery_control(p_df["pval"], method="bh")
 
             return_df = pd.merge(return_df, p_df[["peak", "pval"]], on="peak", how="left")
             return_df = return_df.rename(columns={"pval": f"{key}_pval"})

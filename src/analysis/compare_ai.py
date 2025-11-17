@@ -13,7 +13,7 @@ from scipy.optimize import minimize_scalar
 
 
 # Local imports
-from as_analysis import opt_prob, opt_unphased_dp, opt_phased_new, bh_correction
+from as_analysis import opt_prob, opt_unphased_dp, opt_phased_new
 
 
 # Use these functions to figure out how to optimize per group
@@ -504,9 +504,9 @@ def compare_imbalance_between_groups_diff_snps(disp,
                                "combined_mu", "mu1", "mu2",
                                "null_ll", "alt_ll", "pval"]
                      )
-    
+
     # fdr correction
-    df = bh_correction(df)
-    
+    df["fdr_pval"] = false_discovery_control(df["pval"], method="bh")
+
     return df
 
