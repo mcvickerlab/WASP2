@@ -82,25 +82,30 @@ def run_make_remap_reads(
     # Create Checks for not integrated options
     if not wasp_files.is_paired:
         raise ValueError("Single-End not Implemented")
-    
+
     if not wasp_files.is_phased:
         raise ValueError("Unphased not Implemented")
-    
+
     if wasp_files.samples is None:
         raise ValueError("Zero samples not supported yet")
-    
-    
+
+    # Type narrowing: help mypy understand the types after the above checks
+    # - is_paired is True, so remap_fq2 is str (not None)
+    # - samples is List[str] (normalized in WaspDataFiles, not None)
+    assert isinstance(wasp_files.samples, list), "samples should be normalized to list"
+    assert wasp_files.remap_fq2 is not None, "remap_fq2 should be set when is_paired is True"
+
     # Should I create cache that checks for premade files??
-    Path(wasp_files.out_dir).mkdir(parents=True, exist_ok=True)
-    
-    
+    Path(str(wasp_files.out_dir)).mkdir(parents=True, exist_ok=True)
+
+
     # Create Intermediary Files
-    vcf_to_bed(vcf_file=wasp_files.vcf_file,
+    vcf_to_bed(vcf_file=str(wasp_files.vcf_file),
                out_bed=wasp_files.vcf_bed,
                samples=wasp_files.samples)
 
 
-    process_bam(bam_file=wasp_files.bam_file,
+    process_bam(bam_file=str(wasp_files.bam_file),
                 vcf_bed=wasp_files.vcf_bed,
                 remap_bam=wasp_files.to_remap_bam,
                 remap_reads=wasp_files.remap_reads,

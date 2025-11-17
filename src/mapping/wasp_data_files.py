@@ -2,7 +2,7 @@ from pathlib import Path
 import tempfile
 import re
 import json
-from typing import Optional, Union, List
+from typing import Optional, Union, List, cast
 
 import pysam
 from pysam import VariantFile
@@ -44,25 +44,27 @@ class WaspDataFiles:
         if self.samples is None:
             self.is_phased = False # No phasing w/o sample
         elif isinstance(self.samples, str):
-            
+
             # Check if sample file or comma delim string
             if Path(self.samples).is_file():
-                
+
                 with open(self.samples) as sample_file:
                     self.samples = [l.strip() for l in sample_file]
-            
+
             else:
                 self.samples = [s.strip() for s in self.samples.split(",")]
                 # self.samples = self.samples.split(",") # should i strip spaces?
-        
+
+        # At this point, self.samples is normalized to Optional[List[str]]
+
         # Check if VCF is phased
-        if self.is_phased is None:
+        if self.is_phased is None and self.samples is not None:
             # TODO GOTTA FIX THIS TO CHECK IF PHASED
-            
+
             with VariantFile(self.vcf_file, "r") as vcf:
                 vcf_samps = next(vcf.fetch()).samples
                 samps_phased = [vcf_samps[s].phased for s in self.samples]
-                
+
                 if all(samps_phased):
                     self.is_phased = True
                 else:
@@ -97,7 +99,7 @@ class WaspDataFiles:
         # Relevant output reads
         if self.is_paired:
             self.remap_fq1 = str(Path(self.out_dir) / f"{bam_prefix}_swapped_alleles_r1.fq")
-            self.remap_fq2 = str(Path(self.out_dir) / f"{bam_prefix}_swapped_alleles_r2.fq")
+            self.remap_fq2: Optional[str] = str(Path(self.out_dir) / f"{bam_prefix}_swapped_alleles_r2.fq")
         else:
             self.remap_fq1 = str(Path(self.out_dir) / f"{bam_prefix}_swapped_alleles.fq")
             self.remap_fq2 = None
@@ -111,7 +113,7 @@ class WaspDataFiles:
         """
         
         if out_file is None:
-            out_file = str(Path(self.out_dir) / f"{self.bam_prefix}_wasp_data_files.json")
+            out_file = str(Path(str(self.out_dir)) / f"{self.bam_prefix}_wasp_data_files.json")
         
         with open(out_file, "w") as json_out:
             json.dump(self.__dict__, json_out)

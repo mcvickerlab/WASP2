@@ -84,15 +84,16 @@ def make_reads(
     """Generate reads with swapped alleles for remapping."""
 
     # Parse sample string
-    if len(samples) > 0:
-        samples=samples[0]
+    sample_str: Optional[str]
+    if samples is not None and len(samples) > 0:
+        sample_str = samples[0]
     else:
-        samples=None
+        sample_str = None
 
     run_make_remap_reads(
         bam_file=bam,
         vcf_file=vcf,
-        samples=samples,
+        samples=sample_str,
         out_dir=out_dir,
         temp_loc=temp_loc,
         out_json=out_json,

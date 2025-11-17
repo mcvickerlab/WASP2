@@ -110,23 +110,24 @@ def count_variants(
                 "Parent attribute in gtf/gff3 for feature used in counting"
                 "Defaults to 'transcript_id' in gtf and 'Parent' in gff3")
             )] = None,
-    
-):
-    
+
+) -> None:
+
     # Parse sample string
     # print(samples)
+    sample_str: Optional[str]
     if samples is not None and len(samples) > 0:
-        samples=samples[0]
+        sample_str = samples[0]
     else:
-        samples=None
-    
-    # print(samples)
-    
+        sample_str = None
+
+    # print(sample_str)
+
     # run
     run_count_variants(bam_file=bam,
                        vcf_file=vcf,
                        region_file=region_file,
-                       samples=samples,
+                       samples=sample_str,
                        use_region_names=use_region_names,
                        out_file=out_file,
                        temp_loc=temp_loc,
@@ -197,20 +198,21 @@ def count_variants_sc(
                 "Directory for keeping intermediary files. "
                 "Defaults to removing intermediary files using temp directory")
             )] = None
-):
-    
+) -> None:
+
     # Parse sample string
+    sample_str: Optional[str]
     if samples is not None and len(samples) > 0:
-        samples=samples[0]
+        sample_str = samples[0]
     else:
-        samples=None
+        sample_str = None
 
     # run
     run_count_variants_sc(bam_file=bam,
                           vcf_file=vcf,
                           barcode_file=barcodes,
                           feature_file=feature_file,
-                          samples=samples,
+                          samples=sample_str,
                           out_file=out_file,
                           temp_loc=temp_loc
                           )

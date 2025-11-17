@@ -207,7 +207,7 @@ def parse_intersect_region(intersect_file, use_region_names=False, region_col=No
         use_coords = True
 
     else:
-        raise ValueError(f"Could not recognize BED format. Expected 3-6 columns, got {n_cols} columns")
+        raise ValueError(f"Could not recognize BED format. Expected 3-6 columns, got {len(df.columns)} columns")
 
     # Parse dataframe columns
     rename_cols = {old_col: new_col for old_col, new_col in zip(subset_cols, new_cols)}
