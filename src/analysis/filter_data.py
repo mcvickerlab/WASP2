@@ -5,6 +5,7 @@ Python Version: 3.8
 
 # Default Python package Imports
 from pathlib import Path
+from typing import Optional, List
 
 # External package imports
 import pysam
@@ -13,7 +14,7 @@ from pysam import VariantFile
 from pybedtools import BedTool
 
 
-def write_sample_snp(in_file, in_sample, out_dir):
+def write_sample_snp(in_file: str, in_sample: str, out_dir: str) -> None:
     """
     Filters heterozygous SNP's by sample and writes to new VCF
 
@@ -38,7 +39,7 @@ def write_sample_snp(in_file, in_sample, out_dir):
     print("Created Filtered VCF")
 
 
-def write_filter_gtf(gtf_file, feature, out_dir):
+def write_filter_gtf(gtf_file: str, feature: Optional[List[str]], out_dir: Optional[str]) -> None:
     df = pd.read_csv(gtf_file, sep="\t", header=None,
      names=["seqname", "source", "feature", "start", "end", "score", "strand", "frame", "attribute"],
       dtype=object)
@@ -51,7 +52,7 @@ def write_filter_gtf(gtf_file, feature, out_dir):
         print(f"GTF filtered by feature")
 
 
-def intersect_snp(vcf_file, region_file, out_dir):
+def intersect_snp(vcf_file: str, region_file: str, out_dir: str) -> None:
     """
     Retrieves SNP's that intersect regions
 
@@ -67,7 +68,7 @@ def intersect_snp(vcf_file, region_file, out_dir):
     print("Created Intersection File")
 
 
-def parse_intersect_df(intersect_file):
+def parse_intersect_df(intersect_file: str) -> pd.DataFrame:
     """
     Parses intersection file and creates Dataframe
 
@@ -84,7 +85,7 @@ def parse_intersect_df(intersect_file):
     return return_df
 
 
-def parse_gene_df(intersect_file):
+def parse_gene_df(intersect_file: str) -> pd.DataFrame:
     """
     Parses intersection file and creates Dataframe
     Returns gene names
@@ -104,7 +105,7 @@ def parse_gene_df(intersect_file):
     return return_df
 
 
-def process_bam(bam_file, region_file, out_dir):
+def process_bam(bam_file: str, region_file: str, out_dir: str) -> None:
     """
     Filter bam file to remove reads not overlapping regions of interest
 

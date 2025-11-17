@@ -7,19 +7,30 @@ Python Version: 3.9
 from pathlib import Path
 import time
 import timeit
+from typing import Tuple, Optional, Union, Literal, Callable, Any, cast
 
 # External package imports
 import pandas as pd
 import numpy as np
+from numpy.typing import NDArray
 from scipy.stats import betabinom, chi2, binom, false_discovery_control
-from scipy.optimize import minimize_scalar, minimize
+from scipy.optimize import minimize_scalar, minimize, OptimizeResult
 from scipy.special import expit
 
 
-def opt_linear(disp_params, ref_counts, n_array):
+def opt_linear(
+    disp_params: NDArray[np.float64],
+    ref_counts: NDArray[np.integer[Any]],
+    n_array: NDArray[np.integer[Any]]
+) -> float:
     """
     Optimize dispersion parameter weighted by N
     (Function called by optimizer)
+
+    :param disp_params: Array of dispersion parameters [disp1, disp2]
+    :param ref_counts: Array of reference allele counts
+    :param n_array: Array of total counts (N)
+    :return: Negative log-likelihood value
     """
     disp1, disp2 = disp_params
 
@@ -29,80 +40,147 @@ def opt_linear(disp_params, ref_counts, n_array):
     rho = expit(exp_in)
 
     ll = -np.sum(betabinom.logpmf(ref_counts, n_array, (0.5 * (1 - rho) / rho), (0.5 * (1 - rho) / rho))) # If alpha is beta
-    
-    return ll
+
+    return float(ll)
 
 
-def opt_prob(in_prob, in_rho, k, n, log=True):
+def opt_prob(
+    in_prob: Union[float, NDArray[np.float64]],
+    in_rho: Union[float, NDArray[np.float64]],
+    k: Union[int, NDArray[np.integer[Any]]],
+    n: Union[int, NDArray[np.integer[Any]]],
+    log: bool = True
+) -> Union[float, NDArray[np.float64]]:
     """
     Optimize Probability value that maximizes imbalance likelihood.
     (Function called by optimizer)
+
+    **CRITICAL FUNCTION** - Used by as_analysis_sc.py and compare_ai.py
+
+    :param in_prob: Probability parameter (scalar or array)
+    :param in_rho: Dispersion parameter (scalar or array)
+    :param k: Reference allele count(s)
+    :param n: Total count(s)
+    :param log: If True, return negative log-likelihood; if False, return pmf
+    :return: Negative log-likelihood (if log=True) or probability mass (if log=False)
     """
     prob = in_prob
 
     alpha = (prob * (1 - in_rho) / in_rho)
     beta = ((1 - prob) * (1 - in_rho) / in_rho)
-     
+
     if log is True:
         ll = -1 * betabinom.logpmf(k, n, alpha, beta)
     else:
         ll = betabinom.pmf(k, n, alpha, beta)
 
-    return ll
+    return cast(Union[float, NDArray[np.float64]], ll)
 
 
 # Handle optimization if phased
-def opt_phased(prob, first_data, phase_data):
+def opt_phased(
+    prob: float,
+    first_data: Tuple[Union[float, NDArray[np.float64]], int, int],
+    phase_data: Tuple[NDArray[np.float64], NDArray[np.integer[Any]], NDArray[np.integer[Any]]]
+) -> float:
     """
     Optimize likelihood while taking phase into account
     (Function called by optimizer)
+
+    :param prob: Probability parameter to optimize
+    :param first_data: Tuple of (dispersion, ref_count, total_count) for first position
+    :param phase_data: Tuple of (dispersion_array, ref_counts, total_counts) for phased positions
+    :return: Negative log-likelihood value
     """
-    
+
     first_ll = opt_prob(prob, first_data[0], first_data[1], first_data[2])
-    
+
     # Sum opts given prob
     phase1_lls = opt_prob(prob, phase_data[0], phase_data[1], phase_data[2], log=False)
     phase2_lls = opt_prob(1 - prob, phase_data[0], phase_data[1], phase_data[2], log=False)
 
 
     combined_lls = (0.5 * phase1_lls) + (0.5 * phase2_lls)
-    return first_ll + -np.sum(np.log(combined_lls))
+    return float(first_ll + -np.sum(np.log(combined_lls)))
 
 
 # updated phasing optimizer: currently used in single-cell analysis
 # This version modifies prob arr outside of func
 # GT phase should be with respect to first snp on first chrom
-def opt_phased_new(prob, disp, ref_data, n_data, gt_data):
-    
+def opt_phased_new(
+    prob: float,
+    disp: Union[float, NDArray[np.float64]],
+    ref_data: NDArray[np.integer[Any]],
+    n_data: NDArray[np.integer[Any]],
+    gt_data: NDArray[np.integer[Any]]
+) -> float:
+    """
+    Optimize likelihood for phased data (updated version for single-cell analysis).
+
+    **CRITICAL FUNCTION** - Used by as_analysis_sc.py and compare_ai.py
+
+    :param prob: Probability parameter to optimize
+    :param disp: Dispersion parameter (scalar or array)
+    :param ref_data: Array of reference allele counts
+    :param n_data: Array of total counts
+    :param gt_data: Array of genotype phase information
+    :return: Negative log-likelihood value
+    """
+
     # phase and prob with respect to snp1 as ref
     phased_ll = opt_prob(np.abs(prob - gt_data), disp, ref_data, n_data)
 
-    return np.sum(phased_ll)
+    return float(np.sum(phased_ll))
 
 
 # Previous version not knowing phasing: OLD
-def opt_unphased(prob, first_data, phase_data):
+def opt_unphased(
+    prob: float,
+    first_data: Tuple[Union[float, NDArray[np.float64]], int, int],
+    phase_data: Tuple[NDArray[np.float64], NDArray[np.integer[Any]], NDArray[np.integer[Any]]]
+) -> float:
     """
-    Optimize likelihood while taking phase into account
+    Optimize likelihood while taking phase into account (old version)
     (Function called by optimizer)
+
+    :param prob: Probability parameter to optimize
+    :param first_data: Tuple of (dispersion, ref_count, total_count) for first position
+    :param phase_data: Tuple of (dispersion_array, ref_counts, total_counts) for phased positions
+    :return: Negative log-likelihood value
     """
-    
+
     first_ll = opt_prob(prob, first_data[0], first_data[1], first_data[2])
-    
+
     # Sum opts given prob
     phase1_lls = opt_prob(prob, phase_data[0], phase_data[1], phase_data[2], log=False)
     phase2_lls = opt_prob(1 - prob, phase_data[0], phase_data[1], phase_data[2], log=False)
 
 
     combined_lls = (0.5 * phase1_lls) + (0.5 * phase2_lls)
-    return first_ll + -np.sum(np.log(combined_lls))
+    return float(first_ll + -np.sum(np.log(combined_lls)))
 
 
 # Updated unphasing optimizer using DP
-def opt_unphased_dp(prob, disp, first_ref, first_n, phase_ref, phase_n):
+def opt_unphased_dp(
+    prob: float,
+    disp: Union[float, NDArray[np.float64]],
+    first_ref: NDArray[np.integer[Any]],
+    first_n: NDArray[np.integer[Any]],
+    phase_ref: NDArray[np.integer[Any]],
+    phase_n: NDArray[np.integer[Any]]
+) -> float:
     """
-    Optimize likelihood while taking phase into account
-    (Function called by optimizer)
+    Optimize likelihood while taking phase into account using dynamic programming.
+
+    **CRITICAL FUNCTION** - Used by as_analysis_sc.py and compare_ai.py
+
+    :param prob: Probability parameter to optimize
+    :param disp: Dispersion parameter (scalar or array)
+    :param first_ref: Reference count for first position (length 1 array)
+    :param first_n: Total count for first position (length 1 array)
+    :param phase_ref: Array of reference counts for subsequent positions
+    :param phase_n: Array of total counts for subsequent positions
+    :return: Negative log-likelihood value
     """
 
     # Get likelihood of first pos
@@ -111,26 +189,31 @@ def opt_unphased_dp(prob, disp, first_ref, first_n, phase_ref, phase_n):
     # Get likelihood witth regard to phasing of first pos
     phase1_like = opt_prob(prob, disp, phase_ref, phase_n, log=False)
     phase2_like = opt_prob(1-prob, disp, phase_ref, phase_n, log=False)
-    
-    prev_like = 1
-    for p1, p2 in zip(phase1_like, phase2_like):
+
+    prev_like: float = 1.0
+    # phase1_like and phase2_like are arrays when phase_ref/phase_n are arrays
+    phase1_arr = cast(NDArray[np.float64], phase1_like)
+    phase2_arr = cast(NDArray[np.float64], phase2_like)
+    for p1, p2 in zip(phase1_arr, phase2_arr):
         p1_combined_like = prev_like * p1
         p2_combined_like = prev_like * p2
-        prev_like = (0.5 * p1_combined_like) + (0.5 * p2_combined_like)
+        prev_like = float((0.5 * p1_combined_like) + (0.5 * p2_combined_like))
 
-    return first_ll + -np.log(prev_like)
+    return float(first_ll + -np.log(prev_like))
 
 
-def parse_opt(df, disp=None, phased=False):
+def parse_opt(
+    df: pd.DataFrame,
+    disp: Optional[Union[float, NDArray[np.float64]]] = None,
+    phased: bool = False
+) -> Tuple[float, float]:
     """
     Optimize necessary data when running model
 
     :param df: Dataframe with allele counts
-    :type df: DataFrame
-    :param in_disp: pre-computed dispersion parameter, defaults to None
-    :type in_disp: float, optional
-    :return: Liklihood of alternate model, and imbalance proportion
-    :rtype: array, array
+    :param disp: pre-computed dispersion parameter, defaults to None
+    :param phased: Whether data is phased
+    :return: Tuple of (alt_ll, mu) - likelihood of alternate model and imbalance proportion
     """
 
     snp_count = df.shape[0]
@@ -143,12 +226,13 @@ def parse_opt(df, disp=None, phased=False):
     if disp is None:
         disp = df["disp"].to_numpy()
 
+    res: OptimizeResult
     if snp_count > 1:
 
         # If data is phased
         if phased:
 
-            # Use known phasing info 
+            # Use known phasing info
             gt_array = df["GT"].to_numpy()
 
             # First pos with respect to ref
@@ -177,32 +261,36 @@ def parse_opt(df, disp=None, phased=False):
                               method="bounded", bounds=(0, 1))
 
     # Get res data
-    mu = res["x"]
-    alt_ll = -1 * res["fun"]
+    mu: float = res["x"]
+    alt_ll: float = -1 * res["fun"]
 
     return alt_ll, mu
 
 
-def single_model(df, region_col, phased=False):
+def single_model(
+    df: pd.DataFrame,
+    region_col: str,
+    phased: bool = False
+) -> pd.DataFrame:
     """
     Find allelic imbalance using normal beta-binomial model
 
     :param df: Dataframe with allele counts
-    :type df: DataFrame
+    :param region_col: Name of column to group by
+    :param phased: Whether data is phased
     :return: Dataframe with imbalance likelihood
-    :rtype: DataFrame
     """
 
     print("Running analysis with single dispersion model")
-    opt_disp = lambda rho, ref_data, n_data: -np.sum(
+    opt_disp: Callable[..., float] = lambda rho, ref_data, n_data: -np.sum(
         betabinom.logpmf(ref_data, n_data, (0.5 * (1 - rho) / rho), (0.5 * (1 - rho) / rho)))
-    
+
     ref_array = df["ref_count"].to_numpy()
     n_array = df["N"].to_numpy()
 
     disp_start = timeit.default_timer()
-    
-    disp = minimize_scalar(opt_disp, args=(ref_array, n_array),
+
+    disp: float = minimize_scalar(opt_disp, args=(ref_array, n_array),
                            method="bounded", bounds=(0,1))["x"]
 
     print(f"Optimized dispersion parameter in {timeit.default_timer() - disp_start:.2f} seconds")
@@ -229,24 +317,30 @@ def single_model(df, region_col, phased=False):
     return ll_df
 
 
-def linear_model(df, region_col, phased=False):
+def linear_model(
+    df: pd.DataFrame,
+    region_col: str,
+    phased: bool = False
+) -> pd.DataFrame:
     """
     Find allelic imbalance using linear allelic imbalance model,
     weighting imbalance linear with N counts
 
     :param df: Dataframe with allele counts
-    :type df: DataFrame
+    :param region_col: Name of column to group by
+    :param phased: Whether data is phased
     :return: Dataframe with imbalance likelihood
-    :rtype: DataFrame
     """
 
     print("Running analysis with linear dispersion model")
     in_data = df[["ref_count", "N"]].to_numpy().T
-    
+
     print("Optimizing dispersion parameters...")
     disp_start = time.time()
 
-    res = minimize(opt_linear, x0=(0, 0), method="Nelder-Mead", args=(in_data[0], in_data[1]))
+    res: OptimizeResult = minimize(opt_linear, x0=(0, 0), method="Nelder-Mead", args=(in_data[0], in_data[1]))
+    disp1: float
+    disp2: float
     disp1, disp2 = res["x"]
     df["disp"] = expit((disp1 + (in_data[1] * disp2)))
 
@@ -266,9 +360,9 @@ def linear_model(df, region_col, phased=False):
     # Optimize Alt
     alt_test = group_df.apply(lambda x: parse_opt(x))
     alt_df = pd.DataFrame(alt_test.tolist(), columns=["alt_ll", "mu"], index=alt_test.index)
-    
+
     print(f"Optimized imbalance likelihood in {time.time() - ll_start} seconds")
-    
+
     ll_df = pd.concat([null_test, alt_df], axis=1).reset_index()
     ll_df.columns = [region_col, "null_ll", "alt_ll", "mu"]
 
@@ -278,10 +372,35 @@ def linear_model(df, region_col, phased=False):
     return ll_df
 
 
-def get_imbalance(in_data, min_count=10, pseudocount=1, method="single", phased=False, region_col=None, groupby=None):
+def get_imbalance(
+    in_data: Union[pd.DataFrame, str, Path],
+    min_count: int = 10,
+    pseudocount: int = 1,
+    method: Literal["single", "linear"] = "single",
+    phased: bool = False,
+    region_col: Optional[str] = None,
+    groupby: Optional[str] = None
+) -> pd.DataFrame:
+    """
+    Process input data and method for finding allelic imbalance.
 
-    model_dict = {"single": single_model, "linear": linear_model}
-    
+    **CRITICAL FUNCTION** - Main analysis entry point used by run_analysis.py
+
+    :param in_data: Dataframe with allele counts or filepath to TSV file
+    :param min_count: minimum allele count for analysis
+    :param pseudocount: pseudocount to add to allele counts
+    :param method: analysis method ("single" or "linear")
+    :param phased: whether to use phased genotype information
+    :param region_col: column name to group variants by (e.g., gene, peak)
+    :param groupby: alternative grouping column (overrides region_col if provided)
+    :return: DataFrame with imbalance statistics per region
+    """
+
+    model_dict: dict[str, Callable[[pd.DataFrame, str, bool], pd.DataFrame]] = {
+        "single": single_model,
+        "linear": linear_model
+    }
+
 
     # If preparsed dataframe or filepath
     if isinstance(in_data, pd.DataFrame):
@@ -306,22 +425,22 @@ def get_imbalance(in_data, min_count=10, pseudocount=1, method="single", phased=
 
         df[region_col] = (df["chrom"].astype("string")
                           + "_" + df["pos"].astype("string"))
-    
+
     # Process pseudocount values and filter data by min
     df[["ref_count", "alt_count"]] += pseudocount
     df["N"] = df["ref_count"] + df["alt_count"]
     df = df.loc[df["N"].ge(min_count + (2*pseudocount)), :]
 
-    
+
     # Get unique values based on group
     if groupby is not None:
         region_col = groupby
 
     keep_cols = ["chrom", "pos", "ref_count", "alt_count", "N", region_col]
-    
+
     # Check validity of phasing info
     if phased:
-        
+
         # Check if GT are actually phased
         if "GT" not in df.columns:
             print("Genotypes not found: Switching to unphased model")
@@ -340,19 +459,19 @@ def get_imbalance(in_data, min_count=10, pseudocount=1, method="single", phased=
 
     df = df[keep_cols].drop_duplicates()
 
-    p_df = model_dict[method](df, region_col, phased=phased) # Perform analysis
-    
+    p_df = model_dict[method](df, region_col, phased) # Perform analysis
+
     # remove pseudocount
     df[["ref_count", "alt_count"]] -= pseudocount
     df["N"] -= pseudocount * 2
-    
+
     snp_counts = pd.DataFrame(df[region_col].value_counts(sort=False)).reset_index()
     snp_counts.columns = [region_col, "snp_count"]
-    
+
     count_alleles = df[[region_col, "ref_count", "alt_count", "N"]].groupby(region_col, sort=False).sum()
-    
+
     merge_df = pd.merge(snp_counts, p_df, how="left", on=region_col)
-    
+
     as_df = pd.merge(count_alleles, merge_df, how="left", on=region_col)
     as_df["fdr_pval"] = false_discovery_control(as_df["pval"], method="bh")
 
@@ -360,23 +479,30 @@ def get_imbalance(in_data, min_count=10, pseudocount=1, method="single", phased=
 
 
 # LEGACY, NOT REALLY USED
-def get_imbalance_sc(in_data, min_count=10, method="single", out_dir=None, is_gene=False, feature=None):
+def get_imbalance_sc(
+    in_data: Union[pd.DataFrame, str, Path],
+    min_count: int = 10,
+    method: str = "single",
+    out_dir: Optional[Union[str, Path]] = None,
+    is_gene: bool = False,
+    feature: Optional[str] = None
+) -> Union[pd.DataFrame, int]:
     """
     Process input data and method for finding single-cell allelic imbalance
 
-    :param in_data: Dataframe with allele counts
-    :type in_data: DataFrame
+    :param in_data: Dataframe with allele counts or filepath to TSV file
     :param min_count: minimum allele count for analysis, defaults to 10
-    :type min_count: int, optional
     :param method: analysis method, defaults to "single"
-    :type method: str, optional
-    :param out: output directory, defaults to None
-    :type out: str, optional
-    :return: DataFrame with imbalance Pvals per region and per cell type
-    :rtype: DataFrame
+    :param out_dir: output directory, defaults to None
+    :param is_gene: whether analyzing genes (vs peaks), defaults to False
+    :param feature: feature name for output files, defaults to None
+    :return: DataFrame with imbalance Pvals per region and per cell type, or -1 on error
     """
 
-    model_dict = {"single": single_model, "linear": linear_model}
+    model_dict: dict[str, Callable[[pd.DataFrame, str, bool], pd.DataFrame]] = {
+        "single": single_model,
+        "linear": linear_model
+    }
     # model_dict = {"single": single_model, "linear": linear_model, "binomial": binom_model}
 
     if method not in model_dict:
@@ -387,37 +513,37 @@ def get_imbalance_sc(in_data, min_count=10, method="single", out_dir=None, is_ge
         df = in_data
     else:
         df = pd.read_csv(in_data, sep="\t")
-    
+
     # Change label for gene to peak temporarily
     if is_gene is True:
         df = df.rename(columns={"genes": "peak"})
 
     default_df = df.iloc[:, :5]
-    
-    df_dict = {}
+
+    df_dict: dict[str, pd.DataFrame] = {}
 
     start_index = min([df.columns.get_loc(c) for c in df.columns if "_ref" in c])
     for i in range(start_index, len(df.columns), 2):
         df_key = df.columns[i].split("_ref")[0]
         cell_df = pd.merge(default_df, df.iloc[:, [i, i+1]], left_index=True, right_index=True)
-        
+
         cell_df.columns = ["chrom", "pos", "ref", "alt", "peak", "ref_count", "alt_count"]
         cell_df["N"] = cell_df["ref_count"] + cell_df["alt_count"]
-        
+
         df_dict[df_key] = cell_df
-    
-    as_dict = {}
+
+    as_dict: dict[str, pd.DataFrame] = {}
 
     return_df = df["peak"].drop_duplicates().reset_index(drop=True)
     fdr_df = df["peak"].drop_duplicates().reset_index(drop=True)
-    
+
     for key, cell_df in df_dict.items():
         print(f"Analyzing imbalance for {key}")
 
         cell_df = cell_df.loc[cell_df["N"] >= min_count] # Filter by N
 
         if not cell_df.empty:
-            p_df = model_dict[method](cell_df)
+            p_df = model_dict[method](cell_df, "peak", False)
             p_df["fdr_pval"] = false_discovery_control(p_df["pval"], method="bh")
 
             return_df = pd.merge(return_df, p_df[["peak", "pval"]], on="peak", how="left")
@@ -425,13 +551,13 @@ def get_imbalance_sc(in_data, min_count=10, method="single", out_dir=None, is_ge
 
             fdr_df = pd.merge(fdr_df, p_df[["peak", "fdr_pval"]], on="peak", how="left")
             fdr_df = fdr_df.rename(columns={"fdr_pval": f"{key}_fdr"})
-            
+
             snp_counts = pd.DataFrame(cell_df["peak"].value_counts(sort=False)).reset_index() # get individual counts
             snp_counts.columns = ["peak", "snp_count"]
-            
+
             count_alleles = cell_df[["peak", "ref_count", "alt_count", "N"]].groupby("peak", sort=False).sum()
             merge_df = pd.merge(snp_counts, p_df, how="left", on="peak")
-            
+
             as_df = pd.merge(count_alleles, merge_df, how="left", on="peak")
             as_dict[key] = as_df
 
@@ -465,12 +591,12 @@ def get_imbalance_sc(in_data, min_count=10, method="single", out_dir=None, is_ge
         feat_dir.mkdir(parents=True, exist_ok=True)
 
         for key, as_df in as_dict.items():
-            
+
             if is_gene is True:
                 as_df = as_df.rename(columns={"peak": "genes"})
 
             as_df.to_csv(str(feat_dir / f"{key}_results_{feature}_{method}.tsv"), sep="\t", index=False)
-        
+
         print(f"Results written to {out_file}")
 
     return return_df

@@ -6,6 +6,7 @@ Python Version: 3.9
 # Default Python package Imports
 from pathlib import Path
 from csv import DictReader, reader
+from typing import Optional, Union, Literal
 
 # External package imports
 import pandas as pd
@@ -19,46 +20,48 @@ from as_analysis import get_imbalance
 
 class WaspAnalysisData:
 
-    def __init__(self, count_file,
-                 min_count=None,
-                 pseudocount=None,
-                 phased=None,
-                 model=None,
-                 out_file=None,
-                 region_col=None,
-                 groupby=None,
-                ):
-        
+    def __init__(
+        self,
+        count_file: Union[str, Path],
+        min_count: Optional[int] = None,
+        pseudocount: Optional[int] = None,
+        phased: Optional[bool] = None,
+        model: Optional[str] = None,
+        out_file: Optional[str] = None,
+        region_col: Optional[str] = None,
+        groupby: Optional[str] = None,
+    ) -> None:
+
         # User input data
         self.count_file = count_file
-        self.min_count = min_count
-        self.pseudocount = pseudocount
-        self.phased = phased
-        self.model = model
-        self.out_file = out_file
-
-        # Group by feature by default
         self.region_col = region_col
         self.groupby = groupby # group by region or parent?
-        
-        # TODO parse vcf for phased instead of default unphased
-        if not self.phased:
-            self.phased = False
+        self.out_file = out_file
 
+        # TODO parse vcf for phased instead of default unphased
+        if not phased:
+            self.phased: bool = False
+        else:
+            self.phased = phased
 
         # Default to single dispersion model
-        if ((self.model is None) or 
-            (self.model not in {"single", "linear"})):
-            
-            self.model = "single"
-        
-        # Default min count of 10 
-        if self.min_count is None:
-            self.min_count = 10
+        if ((model is None) or
+            (model not in {"single", "linear"})):
+            self.model: Literal["single", "linear"] = "single"
+        else:
+            self.model = model  # type: ignore[assignment]
 
-        if self.pseudocount is None:
+        # Default min count of 10
+        if min_count is None:
+            self.min_count: int = 10
+        else:
+            self.min_count = min_count
+
+        if pseudocount is None:
             # self.pseudocount = 0 # either 0 or 1 for default
-            self.pseudocount = 1
+            self.pseudocount: int = 1
+        else:
+            self.pseudocount = pseudocount
         
         # Read header only for validation
         with open(self.count_file) as f:
@@ -106,14 +109,16 @@ class WaspAnalysisData:
             self.out_file = str(Path.cwd() / "ai_results.tsv") # do this after
 
 
-def run_ai_analysis(count_file,
-                    min_count=None,
-                    pseudocount=None,
-                    phased=None,
-                    model=None,
-                    out_file=None,
-                    region_col=None,
-                    groupby=None):
+def run_ai_analysis(
+    count_file: Union[str, Path],
+    min_count: Optional[int] = None,
+    pseudocount: Optional[int] = None,
+    phased: Optional[bool] = None,
+    model: Optional[str] = None,
+    out_file: Optional[str] = None,
+    region_col: Optional[str] = None,
+    groupby: Optional[str] = None,
+) -> None:
     
     # Store analysis data and params
     ai_files = WaspAnalysisData(count_file,

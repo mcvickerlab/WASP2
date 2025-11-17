@@ -7,6 +7,7 @@ Python Version: 3.8
 # Default Python package Imports
 import time
 from collections import Counter
+from typing import Optional, List, Tuple, Dict, Any
 
 # External package imports
 import numpy as np
@@ -16,7 +17,7 @@ from pysam import VariantFile
 from pysam.libcalignmentfile import AlignmentFile
 
 
-def parse_barcode(bc_series, read):
+def parse_barcode(bc_series: pd.Series, read: Any) -> Optional[str]:
     """
     Retrieve barcode from read and return grouping
 
@@ -26,13 +27,14 @@ def parse_barcode(bc_series, read):
     """
     try:
         barcode = read.alignment.get_tag("CB")
-        return bc_series.get(barcode)
+        result: Optional[str] = bc_series.get(barcode)
+        return result
 
     except KeyError:
         return None
 
 
-def pileup_pos(bam, bc_series, chrom, snp_pos):
+def pileup_pos(bam: AlignmentFile, bc_series: pd.Series, chrom: str, snp_pos: int) -> Optional[Tuple[List[str], List[str], List[Optional[str]]]]:
     """
     Create pileup column of reads at snp position
 
@@ -53,7 +55,7 @@ def pileup_pos(bam, bc_series, chrom, snp_pos):
         return None
 
 
-def count_snp_alleles(bam_file, bc_series, chrom, snp_list, ref_indices, alt_indices):
+def count_snp_alleles(bam_file: str, bc_series: pd.Series, chrom: str, snp_list: List[Tuple[int, str, str]], ref_indices: Dict[Optional[str], int], alt_indices: Dict[Optional[str], int]) -> List[np.ndarray]:
     """
     Get ref and alt counts of snp's in list
 
@@ -113,7 +115,7 @@ def count_snp_alleles(bam_file, bc_series, chrom, snp_list, ref_indices, alt_ind
     return allele_counts
 
 
-def make_col_data(cell_groups):
+def make_col_data(cell_groups: pd.Series) -> Tuple[List[str], Dict[Optional[str], int], Dict[Optional[str], int]]:
     """
     Make column data dynamically from barcode mappings
 
@@ -121,8 +123,8 @@ def make_col_data(cell_groups):
     :return : list containing list of column names, dict of ref column indices, and dict of alt column indices
     :rtype: Tuple of (list, dict, dict)
     """
-    ref_indices = {None: 1}
-    alt_indices = {None: 2}
+    ref_indices: Dict[Optional[str], int] = {None: 1}
+    alt_indices: Dict[Optional[str], int] = {None: 2}
     cols = ["other_count", "noPred_ref", "noPred_alt"]
     
     cell_cols = []
@@ -140,7 +142,7 @@ def make_col_data(cell_groups):
     return cols, ref_indices, alt_indices
 
 
-def make_count_df_sc(bam_file, df, bc_series):
+def make_count_df_sc(bam_file: str, df: pd.DataFrame, bc_series: pd.Series) -> pd.DataFrame:
     """
     Make DF containing all intersections and allele counts
 

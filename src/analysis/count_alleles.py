@@ -7,12 +7,14 @@ Python Version: 3.8
 # Default Python package Imports
 import time
 from collections import Counter
+from typing import Optional, List, Tuple
 
 # External package imports
+import pandas as pd
 from pysam.libcalignmentfile import AlignmentFile
 
 
-def pileup_pos(bam, chrom, snp_pos):
+def pileup_pos(bam: AlignmentFile, chrom: str, snp_pos: int) -> Optional[Tuple[List[str], List[str]]]:
     """
     Create pileup column of reads at snp position
 
@@ -32,7 +34,7 @@ def pileup_pos(bam, chrom, snp_pos):
         return None
 
 
-def count_snp_alleles(bam_file, chrom, snp_list):
+def count_snp_alleles(bam_file: str, chrom: str, snp_list: List[Tuple[int, str, str]]) -> List[Tuple[int, int, int]]:
     """
     Get ref and alt counts of snp's in list
 
@@ -80,7 +82,7 @@ def count_snp_alleles(bam_file, chrom, snp_list):
     return allele_counts
 
 
-def make_count_df(bam_file, df):
+def make_count_df(bam_file: str, df: pd.DataFrame) -> pd.DataFrame:
     """
     Make DF containing all intersections and allele counts
 
