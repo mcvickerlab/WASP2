@@ -4,16 +4,30 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - python=3.9.*
+  # Core Python
+  - python=3.11.*
+
+  # Data processing
   - numpy
   - pandas
   - polars
   - scipy
+
+  # Bioinformatics
   - pysam
   - pybedtools
   - bedtools
   - bcftools
   - samtools
+  - anndata
+
+  # CLI
   - typer
   - typing_extensions
-  - anndata
+
+  # Testing
+  - pytest>=7.0
+  - pytest-cov
+
+  # Type checking
+  - mypy
