@@ -120,7 +120,7 @@ def make_col_data(cell_groups: pd.Series) -> Tuple[List[str], Dict[Optional[str]
     Make column data dynamically from barcode mappings
 
     :param Series cell_groups: Series containing barcodes as indices, and groupings as items
-    :return : list containing list of column names, dict of ref column indices, and dict of alt column indices
+    :return: list containing list of column names, dict of ref column indices, and dict of alt column indices
     :rtype: Tuple of (list, dict, dict)
     """
     ref_indices: Dict[Optional[str], int] = {None: 1}

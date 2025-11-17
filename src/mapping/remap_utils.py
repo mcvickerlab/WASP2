@@ -3,7 +3,7 @@ from typing import Optional, Generator, Tuple, Dict, List, Any
 import polars as pl
 
 import pysam
-from pysam.libcalignmentfile import AlignmentFile, AlignedSegment
+from pysam import AlignmentFile, AlignedSegment
 
 # Generator for iterating through bam
 def paired_read_gen(
