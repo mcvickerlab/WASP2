@@ -1,0 +1,113 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wasp2"
+version = "1.0.0"
+description = "Allele-specific analysis of next-generation sequencing data"
+readme = "README.md"
+authors = [
+    {name = "Aaron Ho"},
+    {name = "Jeff Jaureguy", email = "jeffpjaureguy@gmail.com"},
+    {name = "McVicker Lab"},
+]
+license = {text = "MIT"}
+requires-python = ">=3.10"
+keywords = [
+    "bioinformatics",
+    "genomics",
+    "allele-specific",
+    "ngs",
+    "sequencing",
+    "wasp",
+    "allelic-imbalance",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Typing :: Typed",
+]
+
+dependencies = [
+    "numpy>=1.21.0",
+    "pandas>=2.0.0",
+    "polars>=0.19.0",
+    "scipy>=1.10.0",
+    "pysam>=0.21.0",
+    "pybedtools>=0.9.0",
+    "anndata>=0.8.0",
+    "scanpy>=1.9.0",
+    "typer>=0.9.0",
+    "rich>=13.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "mypy>=1.0",
+    "black>=23.0",
+    "flake8>=6.0",
+    "pre-commit>=3.0",
+    "build>=0.10",
+    "twine>=4.0",
+]
+docs = [
+    "sphinx>=5.0",
+    "sphinx-rtd-theme>=1.0",
+    "sphinx-autodoc-typehints>=1.0",
+]
+
+[project.scripts]
+wasp2-count = "counting.__main__:app"
+wasp2-map = "mapping.__main__:app"
+wasp2-analyze = "analysis.__main__:app"
+
+[project.urls]
+Homepage = "https://github.com/Jaureguy760/WASP2-exp"
+Documentation = "https://wasp2.readthedocs.io"
+Repository = "https://github.com/Jaureguy760/WASP2-exp"
+Issues = "https://github.com/Jaureguy760/WASP2-exp/issues"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["counting*", "mapping*", "analysis*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = "-v --strict-markers --tb=short"
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+files = ["src"]
+
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311"]
+include = '\.pyi?$'
+
+[tool.coverage.run]
+source = ["src"]
+omit = ["*/tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true

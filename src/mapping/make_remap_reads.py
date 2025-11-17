@@ -14,8 +14,8 @@ import pysam
 from pysam.libcalignmentfile import AlignmentFile
 
 # local imports
-from intersect_variant_data import make_intersect_df
-from remap_utils import paired_read_gen, paired_read_gen_stat, get_read_het_data, make_phased_seqs, make_multi_seqs, write_read
+from .intersect_variant_data import make_intersect_df
+from .remap_utils import paired_read_gen, paired_read_gen_stat, get_read_het_data, make_phased_seqs, make_multi_seqs, write_read
 
 
 # TRY subprocess

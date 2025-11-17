@@ -17,7 +17,7 @@ from scipy.optimize import minimize_scalar, OptimizeResult
 from anndata import AnnData
 
 # Local imports
-from as_analysis import opt_prob, opt_unphased_dp, opt_phased_new
+from .as_analysis import opt_prob, opt_unphased_dp, opt_phased_new
 
 
 # Use these functions to figure out how to optimize per group

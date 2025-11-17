@@ -12,7 +12,7 @@ from typing import Optional, Union, Literal
 import pandas as pd
 
 # Local script imports
-from as_analysis import get_imbalance
+from .as_analysis import get_imbalance
 
 
 

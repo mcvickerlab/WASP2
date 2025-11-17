@@ -8,9 +8,9 @@ import warnings
 from pathlib import Path
 
 # local imports
-from filter_variant_data import vcf_to_bed, intersect_vcf_region, parse_intersect_region, parse_intersect_region_new
-from parse_gene_data import make_gene_data, parse_intersect_genes, parse_intersect_genes_new
-from count_alleles import make_count_df
+from .filter_variant_data import vcf_to_bed, intersect_vcf_region, parse_intersect_region, parse_intersect_region_new
+from .parse_gene_data import make_gene_data, parse_intersect_genes, parse_intersect_genes_new
+from .count_alleles import make_count_df
 
 # Should I put this in separate file?
 class WaspCountFiles:

@@ -11,7 +11,7 @@ import anndata as ad
 from anndata import AnnData
 
 # local imports
-from as_analysis_sc import get_imbalance_sc, adata_count_qc
+from .as_analysis_sc import get_imbalance_sc, adata_count_qc
 
 # Class that stores relevant data
 class WaspAnalysisSC:

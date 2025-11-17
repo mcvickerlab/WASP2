@@ -6,7 +6,7 @@ from typing import Optional
 import pysam
 from pysam.libcalignmentfile import AlignmentFile
 
-from remap_utils import paired_read_gen
+from .remap_utils import paired_read_gen
 
 def filt_remapped_reads(
     to_remap_bam: str,

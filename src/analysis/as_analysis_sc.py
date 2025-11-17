@@ -14,7 +14,7 @@ from scipy.stats import betabinom, chi2, zscore, false_discovery_control
 from scipy.optimize import minimize_scalar, OptimizeResult
 
 # Local imports
-from as_analysis import opt_prob, opt_phased_new, opt_unphased_dp
+from .as_analysis import opt_prob, opt_phased_new, opt_unphased_dp
 
 
 # Performs qc and prefilters anndata count data

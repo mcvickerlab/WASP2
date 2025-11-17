@@ -5,9 +5,9 @@ import anndata as ad
 from anndata import AnnData
 import pandas as pd
 
-from as_analysis_sc import adata_count_qc
-from run_analysis_sc import WaspAnalysisSC, process_adata_inputs, AdataInputs
-from compare_ai import get_compared_imbalance
+from .as_analysis_sc import adata_count_qc
+from .run_analysis_sc import WaspAnalysisSC, process_adata_inputs, AdataInputs
+from .compare_ai import get_compared_imbalance
 
 def run_ai_comparison(
     count_file: Union[str, Path],

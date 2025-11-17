@@ -11,9 +11,9 @@ import anndata as ad
 
 
 # local imports
-from filter_variant_data import vcf_to_bed, intersect_vcf_region, parse_intersect_region_new
-from run_counting import tempdir_decorator
-from count_alleles_sc import make_count_matrix
+from .filter_variant_data import vcf_to_bed, intersect_vcf_region, parse_intersect_region_new
+from .run_counting import tempdir_decorator
+from .count_alleles_sc import make_count_matrix
 
 
 class WaspCountSC:

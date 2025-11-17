@@ -1,0 +1,41 @@
+# Include documentation
+include README.md
+include LICENSE
+include CITATION.cff
+include PRODUCTION_RELEASE_PLAN.md
+include TH2_COMPLETION_SUMMARY.md
+include MYPY_ERRORS_ANALYSIS.md
+include DEVELOPMENT.md
+
+# Include configuration files
+include pyproject.toml
+include pytest.ini
+include mypy.ini
+include environment.yml
+include requirements.txt
+include .pre-commit-config.yaml
+
+# Include CI/CD
+recursive-include .github *.yml *.yaml *.md
+
+# Include test data (but not too large)
+recursive-include test_data *.txt *.md
+include test_data/as_counts.txt
+include test_data/README.md
+
+# Include scripts
+recursive-include scripts *.sh *.py
+
+# Include baselines
+recursive-include baselines *.txt *.md
+
+# Include tests
+recursive-include tests *.py
+
+# Exclude compiled files
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude __pycache__
+global-exclude .DS_Store
+global-exclude *.so
+global-exclude *.egg-info

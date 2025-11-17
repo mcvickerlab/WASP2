@@ -6,8 +6,8 @@ import typer
 import sys
 
 # Local Imports
-from run_counting import run_count_variants
-from run_counting_sc import run_count_variants_sc
+from .run_counting import run_count_variants
+from .run_counting_sc import run_count_variants_sc
 
 # app = typer.Typer()
 # app = typer.Typer(pretty_exceptions_show_locals=False)

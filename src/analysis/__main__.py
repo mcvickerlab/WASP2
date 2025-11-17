@@ -6,9 +6,9 @@ import typer
 import sys
 
 # Local Imports
-from run_analysis import run_ai_analysis
-from run_analysis_sc import run_ai_analysis_sc
-from run_compare_ai import run_ai_comparison
+from .run_analysis import run_ai_analysis
+from .run_analysis_sc import run_ai_analysis_sc
+from .run_compare_ai import run_ai_comparison
 
 # app = typer.Typer()
 # app = typer.Typer(pretty_exceptions_show_locals=False)

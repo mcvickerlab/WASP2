@@ -6,7 +6,7 @@ import typer
 import sys
 
 # Local Imports
-from run_mapping import run_make_remap_reads, run_wasp_filt
+from .run_mapping import run_make_remap_reads, run_wasp_filt
 
 
 app = typer.Typer()

@@ -7,11 +7,11 @@ from pathlib import Path
 from typing import Optional, Union, List, Callable, Any
 
 # Import from local scripts
-from wasp_data_files import WaspDataFiles
-from intersect_variant_data import vcf_to_bed, process_bam, intersect_reads
+from .wasp_data_files import WaspDataFiles
+from .intersect_variant_data import vcf_to_bed, process_bam, intersect_reads
 
-from make_remap_reads import write_remap_bam
-from filter_remap_reads import filt_remapped_reads, merge_filt_bam
+from .make_remap_reads import write_remap_bam
+from .filter_remap_reads import filt_remapped_reads, merge_filt_bam
 
 
 # Decorator and Parser for read generation step
