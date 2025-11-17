@@ -2,6 +2,7 @@ from pathlib import Path
 import tempfile
 import re
 import json
+from typing import Optional, Union, List
 
 import pysam
 from pysam import VariantFile
@@ -10,10 +11,18 @@ from pysam.libcalignmentfile import AlignmentFile
 
 # TODO, GOTTA INCLUDE ALL POSSIBLE DATA COMBOS
 class WaspDataFiles:
+    """Manage file paths and auto-detection for WASP mapping pipeline."""
 
-    def __init__(self, bam_file, vcf_file, is_paired=None,
-                 samples=None, is_phased=None,
-                 out_dir=None, temp_loc=None):
+    def __init__(
+        self,
+        bam_file: Union[str, Path],
+        vcf_file: Union[str, Path],
+        is_paired: Optional[bool] = None,
+        samples: Optional[Union[str, List[str]]] = None,
+        is_phased: Optional[bool] = None,
+        out_dir: Optional[Union[str, Path]] = None,
+        temp_loc: Optional[Union[str, Path]] = None
+    ) -> None:
         
         # User input files
         self.bam_file = bam_file
@@ -93,7 +102,7 @@ class WaspDataFiles:
             self.remap_fq1 = str(Path(self.out_dir) / f"{bam_prefix}_swapped_alleles.fq")
             self.remap_fq2 = None
     
-    def write_data(self, out_file=None):
+    def write_data(self, out_file: Optional[Union[str, Path]] = None) -> None:
         """Export Relevant Files to JSON
         Used for parsing post remapping step easily
 

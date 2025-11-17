@@ -1,6 +1,7 @@
 import timeit
 import subprocess
 from pathlib import Path
+from typing import Optional, List
 
 import numpy as np
 import polars as pl
@@ -10,7 +11,7 @@ from pysam.libcalignmentfile import AlignmentFile
 
 from pybedtools import BedTool
 
-def vcf_to_bed(vcf_file, out_bed, samples=None):
+def vcf_to_bed(vcf_file: str, out_bed: str, samples: Optional[List[str]] = None) -> str:
     
     # Maybe change this later?
     # out_bed = f"{out_dir}/filt_variants.bed"
@@ -67,7 +68,14 @@ def vcf_to_bed(vcf_file, out_bed, samples=None):
 
 # TODO FIX ALL OF THESE TO USE A CLASS
 # Process single and pe bam
-def process_bam(bam_file, vcf_bed, remap_bam, remap_reads, keep_bam, is_paired=True):
+def process_bam(
+    bam_file: str,
+    vcf_bed: str,
+    remap_bam: str,
+    remap_reads: str,
+    keep_bam: str,
+    is_paired: bool = True
+) -> str:
 
     # TODO set is_paired to None, and auto check paired vs single
     # print("Filtering reads that overlap regions of interest")
@@ -133,7 +141,7 @@ def process_bam(bam_file, vcf_bed, remap_bam, remap_reads, keep_bam, is_paired=T
 #     return out_bam
 
 
-def intersect_reads(remap_bam, vcf_bed, out_bed):
+def intersect_reads(remap_bam: str, vcf_bed: str, out_bed: str) -> str:
     # Create Intersections
     a = BedTool(remap_bam)
     b = BedTool(vcf_bed)
@@ -236,8 +244,8 @@ def intersect_reads(remap_bam, vcf_bed, out_bed):
 #     return df
 
 
-def make_intersect_df(intersect_file, samples, is_paired=True):
-    
+def make_intersect_df(intersect_file: str, samples: List[str], is_paired: bool = True) -> pl.DataFrame:
+
     # Create Dataframe
     df = pl.scan_csv(intersect_file,
                      separator="\t",

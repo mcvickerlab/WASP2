@@ -1,10 +1,10 @@
-
 import timeit
 
 import shutil
 import tempfile
 
 from pathlib import Path
+from typing import List
 
 # from collections import defaultdict
 
@@ -25,7 +25,7 @@ import subprocess
 class ReadStats(object):
     """Track information about reads and SNPs that they overlap"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         # number of read matches to reference allele
         # self.ref_count = 0
         # number of read matches to alternative allele
@@ -74,7 +74,14 @@ class ReadStats(object):
         self.write_pair = 0
 
 
-def write_remap_bam(bam_file, intersect_file, r1_out, r2_out, samples, max_seqs=64):
+def write_remap_bam(
+    bam_file: str,
+    intersect_file: str,
+    r1_out: str,
+    r2_out: str,
+    samples: List[str],
+    max_seqs: int = 64
+) -> None:
     intersect_df = make_intersect_df(intersect_file, samples)
     
     # TRY USING A CLASS OBJ
@@ -125,8 +132,14 @@ def write_remap_bam(bam_file, intersect_file, r1_out, r2_out, samples, max_seqs=
     print(f"Reads to remapped written to \n{r1_out}\n{r2_out}")
 
 
-def swap_chrom_alleles(bam_file, out_dir, df, chrom, read_stats):
-    
+def swap_chrom_alleles(
+    bam_file: str,
+    out_dir: str,
+    df: pl.DataFrame,
+    chrom: str,
+    read_stats: ReadStats
+) -> None:
+
     # Get hap columns
     hap_cols = list(df.columns[-2:])
     # hap1_col, hap2_col = df.columns[-2:]
@@ -249,8 +262,14 @@ def swap_chrom_alleles(bam_file, out_dir, df, chrom, read_stats):
     fastq_process = subprocess.run(fastq_cmd, input=collate_process.stdout, check=True)
 
 
-def swap_chrom_alleles_multi(bam_file, out_dir, df, chrom, read_stats):
-    
+def swap_chrom_alleles_multi(
+    bam_file: str,
+    out_dir: str,
+    df: pl.DataFrame,
+    chrom: str,
+    read_stats: ReadStats
+) -> None:
+
     # column data
     df_cols = df.columns[:5]
     hap_cols = df.columns[5:]

@@ -1,11 +1,15 @@
+from typing import Optional, Generator, Tuple, Dict, List, Any
 
 import polars as pl
 
 import pysam
-from pysam.libcalignmentfile import AlignmentFile
+from pysam.libcalignmentfile import AlignmentFile, AlignedSegment
 
 # Generator for iterating through bam
-def paired_read_gen(bam, chrom=None):
+def paired_read_gen(
+    bam: AlignmentFile,
+    chrom: Optional[str] = None
+) -> Generator[Tuple[AlignedSegment, AlignedSegment], None, None]:
 
     read_dict = {}
     for read in bam.fetch(chrom):
@@ -23,7 +27,11 @@ def paired_read_gen(bam, chrom=None):
             yield read_dict.pop(read.query_name), read
 
 
-def paired_read_gen_stat(bam, read_stats, chrom=None):
+def paired_read_gen_stat(
+    bam: AlignmentFile,
+    read_stats: Any,
+    chrom: Optional[str] = None
+) -> Generator[Tuple[AlignedSegment, AlignedSegment], None, None]:
 
     read_dict = {}
     discard_set = set()
@@ -57,7 +65,11 @@ def paired_read_gen_stat(bam, read_stats, chrom=None):
     read_stats.discard_missing_pair += len(set(read_dict.keys()) - discard_set)
 
 
-def align_pos_gen(read, align_dict, pos_list):
+def align_pos_gen(
+    read: AlignedSegment,
+    align_dict: Dict[int, int],
+    pos_list: List[Tuple[int, int]]
+) -> Generator[int, None, None]:
 
     yield 0 # yield initial index
 
@@ -73,7 +85,12 @@ def align_pos_gen(read, align_dict, pos_list):
     yield len(read.query_sequence)
 
 
-def get_read_het_data(read_df, read, col_list, max_seqs=None):
+def get_read_het_data(
+    read_df: pl.DataFrame,
+    read: AlignedSegment,
+    col_list: List[str],
+    max_seqs: Optional[int] = None
+) -> Optional[Tuple[List[str], List[pl.Series]]]:
 
     # TODO MULTISAMP AND MAX SEQS
     align_dict = {ref_i: read_i for read_i, ref_i in read.get_aligned_pairs(matches_only=True)}
@@ -105,7 +122,7 @@ def get_read_het_data(read_df, read, col_list, max_seqs=None):
 #         return None
 
 
-def make_phased_seqs(split_seq, hap1_alleles, hap2_alleles):
+def make_phased_seqs(split_seq: List[str], hap1_alleles: Any, hap2_alleles: Any) -> Tuple[str, str]:
     
     hap1_split = split_seq.copy()
     hap2_split = split_seq.copy()
@@ -116,7 +133,7 @@ def make_phased_seqs(split_seq, hap1_alleles, hap2_alleles):
     return "".join(hap1_split), "".join(hap2_split)
 
 
-def make_multi_seqs(split_seq, allele_combos):
+def make_multi_seqs(split_seq: List[str], allele_combos: Any) -> List[str]:
     
     seq_list = []
     for phased_alleles in allele_combos:
@@ -128,7 +145,7 @@ def make_multi_seqs(split_seq, allele_combos):
     return seq_list
 
 
-def write_read(out_bam, read, new_seq, new_name):
+def write_read(out_bam: AlignmentFile, read: AlignedSegment, new_seq: str, new_name: str) -> None:
     og_qual = read.query_qualities
     read.query_sequence = new_seq
     read.query_name = new_name

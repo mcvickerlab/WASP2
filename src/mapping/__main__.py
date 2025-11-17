@@ -80,8 +80,9 @@ def make_reads(
                          "(PHASED STRONGLY RECOMMENDED-SINGLE END NOT SUPPORTED YET)"
                          )
                      )] = None,
-    ):
-    
+) -> None:
+    """Generate reads with swapped alleles for remapping."""
+
     # Parse sample string
     if len(samples) > 0:
         samples=samples[0]
@@ -150,8 +151,9 @@ def filter_remapped(
                 "Also output txt file with kept read names"
                 )
             )] = None
-    ):
-    
+) -> None:
+    """Filter remapped reads using WASP algorithm."""
+
     # Checks
     # print(remapped_bam)
     # print(to_remap_bam)

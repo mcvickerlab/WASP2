@@ -4,6 +4,7 @@ import tempfile
 import json
 import warnings
 from pathlib import Path
+from typing import Optional, Union, List, Callable, Any
 
 # Import from local scripts
 from wasp_data_files import WaspDataFiles
@@ -14,28 +15,35 @@ from filter_remap_reads import filt_remapped_reads, merge_filt_bam
 
 
 # Decorator and Parser for read generation step
-def tempdir_decorator(func):
-    """Checks and makes tempdir for 
+def tempdir_decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+    """Checks and makes tempdir for
     run_make_remap_reads()
     """
-    
+
     @functools.wraps(func)
-    def tempdir_wrapper(*args, **kwargs):
-        
+    def tempdir_wrapper(*args: Any, **kwargs: Any) -> Any:
+
         if kwargs.get("temp_loc", None) is not None:
             return func(*args, **kwargs)
         else:
             with tempfile.TemporaryDirectory() as tmpdir:
                 kwargs["temp_loc"] = tmpdir
                 return func(*args, **kwargs)
-            
+
     return tempdir_wrapper
 
 
 @tempdir_decorator
-def run_make_remap_reads(bam_file, vcf_file, is_paired=None, samples=None,
-                         is_phased=None, out_dir=None, temp_loc=None,
-                         out_json=None):
+def run_make_remap_reads(
+    bam_file: str,
+    vcf_file: str,
+    is_paired: Optional[bool] = None,
+    samples: Optional[Union[str, List[str]]] = None,
+    is_phased: Optional[bool] = None,
+    out_dir: Optional[str] = None,
+    temp_loc: Optional[str] = None,
+    out_json: Optional[str] = None
+) -> None:
     """
     Parser that parses initial input.
     Finds intersecting variants and generates
@@ -125,7 +133,7 @@ def run_make_remap_reads(bam_file, vcf_file, is_paired=None, samples=None,
 
 
 # Decorator and Parser for post remap filtering
-def check_filt_input(func):
+def check_filt_input(func: Callable[..., Any]) -> Callable[..., Any]:
     """Decorator that parses valid input types
     for run_wasp_filt()
 
@@ -135,9 +143,9 @@ def check_filt_input(func):
     :return: _description_
     :rtype: _type_
     """
-    
+
     @functools.wraps(func)
-    def filt_wrapper(*args, **kwargs):
+    def filt_wrapper(*args: Any, **kwargs: Any) -> Any:
 
         # Check if to_remap and keep bam given
         bam_input = all(
@@ -194,8 +202,14 @@ def check_filt_input(func):
 
 
 @check_filt_input
-def run_wasp_filt(remapped_bam, to_remap_bam, keep_bam, wasp_out_bam,
-                  remap_keep_bam=None, remap_keep_file=None):
+def run_wasp_filt(
+    remapped_bam: str,
+    to_remap_bam: str,
+    keep_bam: str,
+    wasp_out_bam: str,
+    remap_keep_bam: Optional[str] = None,
+    remap_keep_file: Optional[str] = None
+) -> None:
     """
     Filter reads that remap to the same loc
     and merges with non-remapped reads to create

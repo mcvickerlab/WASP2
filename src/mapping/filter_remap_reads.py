@@ -1,13 +1,19 @@
 import tempfile
 from pathlib import Path
 import timeit
+from typing import Optional
 
 import pysam
 from pysam.libcalignmentfile import AlignmentFile
 
 from remap_utils import paired_read_gen
 
-def filt_remapped_reads(to_remap_bam, remapped_bam, filt_out_bam, keep_read_file=None):
+def filt_remapped_reads(
+    to_remap_bam: str,
+    remapped_bam: str,
+    filt_out_bam: str,
+    keep_read_file: Optional[str] = None
+) -> None:
     
     pos_dict = {}
     total_dict = {}
@@ -80,7 +86,7 @@ def filt_remapped_reads(to_remap_bam, remapped_bam, filt_out_bam, keep_read_file
     # print(f"Wrote bam with filtered reads to {filt_out_bam}")
 
 
-def merge_filt_bam(keep_bam, remapped_filt_bam, out_bam):
+def merge_filt_bam(keep_bam: str, remapped_filt_bam: str, out_bam: str) -> None:
     
     start_time = timeit.default_timer()
     
