@@ -106,21 +106,6 @@ def get_read_het_data(
         return None
 
 
-# def get_read_het_data(read_df, read, hap1_col, hap2_col, max_seqs=None):
-
-#     # TODO MULTISAMP AND MAX SEQS
-#     align_dict = {ref_i: read_i for read_i, ref_i in read.get_aligned_pairs(matches_only=True)}
-#     pos_list = read_df.select(["start", "stop"]).rows()
-    
-#     try:
-#         split_pos = [i for i in align_pos_gen(read, align_dict, pos_list)]
-#         split_seq = [read.query_sequence[start:stop] for start, stop in zip(split_pos[:-1:], split_pos[1:])]
-#         return split_seq, read_df.get_column(hap1_col), read_df.get_column(hap2_col)
-    
-#     except KeyError:
-#         # remove reads overlap unmapped/gap
-#         return None
-
 
 def make_phased_seqs(split_seq: List[str], hap1_alleles: Any, hap2_alleles: Any) -> Tuple[str, str]:
     
