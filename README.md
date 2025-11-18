@@ -18,6 +18,16 @@
 
 
 ## Installation
+
+### Quick Start: GitHub Codespaces ☁️
+Get started in seconds with a fully configured cloud development environment:
+1. Click **"Code"** → **"Codespaces"** → **"Create codespace"**
+2. Wait 2-3 minutes for setup
+3. Start using WASP2 - all dependencies pre-installed!
+
+See [`.devcontainer/README.md`](.devcontainer/README.md) for details.
+
+### Local Installation
 Recommended installation through conda, and given environment
 ```shell script
 conda env create -f environment.yml
