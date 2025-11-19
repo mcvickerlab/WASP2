@@ -161,3 +161,4 @@ baselines/baseline_metadata.txt
 # Test artifacts
 test_rust_counts.tsv
 test_python_counts.tsv
+test_rust_debug.tsv
