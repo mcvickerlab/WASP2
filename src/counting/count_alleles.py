@@ -42,7 +42,8 @@ def count_snp_alleles_rust(bam_file, chrom, snp_list):
     counter = RustBamCounter(bam_file)
 
     # Count alleles (returns list of (ref_count, alt_count, other_count))
-    counts = counter.count_alleles(regions, min_qual=20)
+    # min_qual=0 matches WASP2 behavior (no quality filtering)
+    counts = counter.count_alleles(regions, min_qual=0)
 
     # Combine with chromosome and position info
     allele_counts = [

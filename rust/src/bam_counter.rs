@@ -4,18 +4,26 @@ use rust_htslib::{bam, bam::Read as BamRead, bam::ext::BamRecordExtensions};
 use std::collections::HashSet;
 use std::path::Path;
 
-/// BAM allele counter using rust-htslib (same backend as pysam)
+/// BAM allele counter using rust-htslib with batched fetching
 #[pyclass]
 pub struct BamCounter {
     bam_path: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Region {
     chrom: String,
     pos: u32,  // 1-based position from Python
     ref_base: char,
     alt_base: char,
+}
+
+/// Genomic window containing multiple SNPs
+struct GenomicWindow {
+    chrom: String,
+    start: i64,
+    end: i64,
+    snps: Vec<(usize, Region)>,  // (original_index, region)
 }
 
 #[pymethods]
@@ -32,15 +40,15 @@ impl BamCounter {
         Ok(BamCounter { bam_path })
     }
 
-    /// Count alleles at SNP positions
+    /// Count alleles at SNP positions using batched fetching
     ///
     /// Args:
     ///     regions: List of (chrom, pos, ref, alt) tuples
-    ///     min_qual: Minimum base quality (default: 20)
+    ///     min_qual: Minimum base quality (default: 0 for WASP2 compatibility)
     ///
     /// Returns:
     ///     List of (ref_count, alt_count, other_count) tuples
-    #[pyo3(signature = (regions, min_qual=20))]
+    #[pyo3(signature = (regions, min_qual=0))]
     fn count_alleles(
         &self,
         py: Python,
@@ -83,32 +91,24 @@ impl BamCounter {
                 format!("Failed to open BAM: {}", e)
             ))?;
 
-        // Read header (needed for fetch to work properly)
-        let _header = bam::Header::from_template(bam.header());
-
         // Initialize results
         let mut results = vec![(0u32, 0u32, 0u32); regions.len()];
 
-        // Track which reads we've seen (deduplication across ALL regions)
-        // Important: Python keeps one set for all SNPs, so same read only counted once
+        // Group regions into genomic windows
+        let windows = self.group_into_windows(regions);
+
+        // Track which reads we've seen (deduplication across ALL windows)
         let mut seen_reads: HashSet<Vec<u8>> = HashSet::new();
 
-        // Process each region
-        for (idx, region) in regions.iter().enumerate() {
-            // DO NOT clear seen_reads - must persist across all SNPs!
-
-            // Fetch reads overlapping this position (0-based for pysam compatibility)
-            // Python uses 1-based positions, BAM uses 0-based
-            let start = region.pos.saturating_sub(1) as i64;
-            let end = region.pos as i64;
-
-            // Fetch using region name (rust-htslib accepts string region)
-            if let Err(_) = bam.fetch((&region.chrom as &str, start, end)) {
+        // Process each window with ONE fetch per window
+        for window in windows {
+            // Fetch all reads in this window at once
+            if let Err(_) = bam.fetch((&window.chrom as &str, window.start, window.end)) {
                 // Skip if fetch fails (e.g., chromosome not in BAM)
                 continue;
             }
 
-            // Iterate through overlapping reads
+            // Process all reads in this window
             for result in bam.records() {
                 let record = match result {
                     Ok(r) => r,
@@ -125,27 +125,106 @@ impl BamCounter {
                 if seen_reads.contains(&qname) {
                     continue;
                 }
-                seen_reads.insert(qname);
 
-                // Find the base at our SNP position using aligned_pairs
-                if let Some(base) = get_base_at_position(&record, region.pos - 1, min_qual) {
-                    // Count the allele
-                    if base == region.ref_base {
-                        results[idx].0 += 1;
-                    } else if base == region.alt_base {
-                        results[idx].1 += 1;
-                    } else {
-                        results[idx].2 += 1;
+                // Check this read against ALL SNPs in the window
+                let mut counted_any = false;
+                for (idx, region) in &window.snps {
+                    // Check if read overlaps this SNP position
+                    if let Some(base) = get_base_at_position(&record, region.pos - 1, min_qual) {
+                        counted_any = true;
+                        // Count the allele
+                        if base == region.ref_base {
+                            results[*idx].0 += 1;
+                        } else if base == region.alt_base {
+                            results[*idx].1 += 1;
+                        } else {
+                            results[*idx].2 += 1;
+                        }
                     }
+                }
+
+                // Only add to seen_reads if we actually counted this read at least once
+                // This prevents marking reads as "seen" if they don't overlap any SNPs in this window
+                if counted_any {
+                    seen_reads.insert(qname);
                 }
             }
         }
 
         Ok(results)
     }
+
+    /// Group regions into genomic windows to reduce fetch() calls
+    fn group_into_windows(&self, regions: &[Region]) -> Vec<GenomicWindow> {
+        const WINDOW_SIZE: i64 = 100_000; // 100Kb windows
+
+        let mut windows: Vec<GenomicWindow> = Vec::new();
+        let mut indexed_regions: Vec<(usize, Region)> = regions
+            .iter()
+            .enumerate()
+            .map(|(i, r)| (i, r.clone()))
+            .collect();
+
+        // Sort by chromosome and position
+        indexed_regions.sort_by(|a, b| {
+            a.1.chrom.cmp(&b.1.chrom)
+                .then(a.1.pos.cmp(&b.1.pos))
+        });
+
+        let mut current_window: Option<GenomicWindow> = None;
+
+        for (idx, region) in indexed_regions {
+            let pos_i64 = region.pos as i64;
+
+            match &mut current_window {
+                Some(window) if window.chrom == region.chrom && pos_i64 < window.end => {
+                    // Add to current window
+                    window.snps.push((idx, region.clone()));
+                    // Extend window if needed
+                    if pos_i64 > window.end {
+                        window.end = pos_i64 + 1;
+                    }
+                }
+                Some(window) => {
+                    // Different chromosome or too far away, finalize current window
+                    windows.push(GenomicWindow {
+                        chrom: window.chrom.clone(),
+                        start: window.start,
+                        end: window.end,
+                        snps: window.snps.clone(),
+                    });
+
+                    // Start new window
+                    current_window = Some(GenomicWindow {
+                        chrom: region.chrom.clone(),
+                        start: (pos_i64 - 1).max(0),
+                        end: pos_i64 + WINDOW_SIZE,
+                        snps: vec![(idx, region)],
+                    });
+                }
+                None => {
+                    // First window
+                    current_window = Some(GenomicWindow {
+                        chrom: region.chrom.clone(),
+                        start: (pos_i64 - 1).max(0),
+                        end: pos_i64 + WINDOW_SIZE,
+                        snps: vec![(idx, region)],
+                    });
+                }
+            }
+        }
+
+        // Add last window
+        if let Some(window) = current_window {
+            windows.push(window);
+        }
+
+        windows
+    }
 }
 
 /// Get base at genomic position, accounting for CIGAR operations
+/// Matches WASP2 behavior: NO quality filtering by default
 fn get_base_at_position(
     record: &bam::Record,
     target_pos: u32,  // 0-based genomic position
@@ -165,8 +244,8 @@ fn get_base_at_position(
 
         // Check if this is a valid match (not a deletion/insertion)
         if qpos >= 0 && rpos >= 0 && rpos == target_pos as i64 {
-            // Found the alignment - check quality
-            if qual[qpos as usize] < min_qual {
+            // Optional quality filtering (min_qual=0 means no filtering like WASP2)
+            if min_qual > 0 && qual[qpos as usize] < min_qual {
                 return None;
             }
 
