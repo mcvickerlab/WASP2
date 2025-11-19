@@ -129,7 +129,8 @@ def run_count_variants(bam_file, vcf_file,
                        temp_loc=None,
                        gene_feature=None,
                        gene_attribute=None,
-                       gene_parent=None
+                       gene_parent=None,
+                       use_rust=True
                        ):
     
     
@@ -221,7 +222,8 @@ def run_count_variants(bam_file, vcf_file,
     
     # Count
     count_df = make_count_df(bam_file=count_files.bam_file,
-                             df=df)
+                             df=df,
+                             use_rust=use_rust)
     
     # Write counts
     count_df.write_csv(count_files.out_file, include_header=True, separator="\t")

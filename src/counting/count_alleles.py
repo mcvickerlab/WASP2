@@ -6,6 +6,13 @@ import polars as pl
 
 from pysam.libcalignmentfile import AlignmentFile
 
+# Try to import Rust acceleration
+try:
+    from wasp2_rust import BamCounter as RustBamCounter
+    RUST_AVAILABLE = True
+except ImportError:
+    RUST_AVAILABLE = False
+
 # Helper that does binary search
 def find_read_aln_pos(read, pos):
     
@@ -19,13 +26,41 @@ def find_read_aln_pos(read, pos):
         return None
 
 
-def make_count_df(bam_file, df):
+def count_snp_alleles_rust(bam_file, chrom, snp_list):
+    """
+    Rust-accelerated version of count_snp_alleles
+
+    :param str bam_file: Path to BAM file
+    :param str chrom: Chromosome name
+    :param snp_list: Iterator of (pos, ref, alt) tuples
+    :return list: List of (chrom, pos, ref_count, alt_count, other_count) tuples
+    """
+    # Convert snp_list to list of regions for Rust
+    regions = [(chrom, pos, ref, alt) for pos, ref, alt in snp_list]
+
+    # Create Rust BAM counter
+    counter = RustBamCounter(bam_file)
+
+    # Count alleles (returns list of (ref_count, alt_count, other_count))
+    counts = counter.count_alleles(regions, min_qual=20)
+
+    # Combine with chromosome and position info
+    allele_counts = [
+        (chrom, pos, ref_count, alt_count, other_count)
+        for (_, pos, _, _), (ref_count, alt_count, other_count) in zip(regions, counts)
+    ]
+
+    return allele_counts
+
+
+def make_count_df(bam_file, df, use_rust=True):
     """
     Make DF containing all intersections and allele counts
 
     :param str bam_file: Path to BAM file
     :param DataFrame df: Dataframe of intersections, output from
         parse_(intersect/gene)_df()
+    :param bool use_rust: Use Rust acceleration if available (default: True)
     :return DataFrame: DataFrame of counts
     """
     count_list = []
@@ -33,50 +68,79 @@ def make_count_df(bam_file, df):
     chrom_list = df.get_column("chrom").unique(
         maintain_order=True)
 
+    # Decide which implementation to use
+    use_rust_impl = use_rust and RUST_AVAILABLE
+
+    if use_rust_impl:
+        print(f"Using Rust acceleration for BAM counting 🦀")
+    else:
+        if use_rust and not RUST_AVAILABLE:
+            print("Rust acceleration requested but not available, falling back to Python")
+        print("Using Python implementation for BAM counting")
+
     total_start = timeit.default_timer()
-    
-    with AlignmentFile(bam_file, "rb") as bam:
-        
+
+    # Rust path: process outside AlignmentFile context
+    if use_rust_impl:
         for chrom in chrom_list:
             chrom_df = df.filter(pl.col("chrom") == chrom)
-            
+
             snp_list = chrom_df.select(
                 ["pos", "ref", "alt"]).unique(
                 subset=["pos"], maintain_order=True).iter_rows()
-            
+
             start = timeit.default_timer()
 
             try:
-                count_list.extend(count_snp_alleles(bam, chrom, snp_list))
-            except ValueError:
-                print(f"Skipping {chrom}: Contig not found\n")
+                count_list.extend(count_snp_alleles_rust(bam_file, chrom, snp_list))
+            except Exception as e:
+                print(f"Skipping {chrom}: {e}\n")
             else:
                 print(f"{chrom}: Counted {chrom_df.height} SNP's in {timeit.default_timer() - start:.2f} seconds!")
-                
 
-        total_end = timeit.default_timer()
-        print(f"Counted all SNP's in {total_end - total_start:.2f} seconds!")
-        
-        # Previously used str as chrom instead of cat
-        chrom_enum = pl.Enum(df.get_column("chrom").cat.get_categories())
-        
-        count_df = pl.DataFrame(
-            count_list,
-            schema={"chrom": chrom_enum,
-                    "pos": pl.UInt32,
-                    "ref_count": pl.UInt16,
-                    "alt_count": pl.UInt16,
-                    "other_count": pl.UInt16
-                   },
-            orient="row"
-        )
-        
-        # possibly find better solution
-        df = df.with_columns([pl.col("chrom").cast(chrom_enum)]
-                             ).join(count_df, on=["chrom", "pos"], how="left")
-        
-        # df = df.join(count_df, on=["chrom", "pos"], how="left")
-    
+    # Python path: use AlignmentFile context manager
+    else:
+        with AlignmentFile(bam_file, "rb") as bam:
+
+            for chrom in chrom_list:
+                chrom_df = df.filter(pl.col("chrom") == chrom)
+
+                snp_list = chrom_df.select(
+                    ["pos", "ref", "alt"]).unique(
+                    subset=["pos"], maintain_order=True).iter_rows()
+
+                start = timeit.default_timer()
+
+                try:
+                    count_list.extend(count_snp_alleles(bam, chrom, snp_list))
+                except ValueError:
+                    print(f"Skipping {chrom}: Contig not found\n")
+                else:
+                    print(f"{chrom}: Counted {chrom_df.height} SNP's in {timeit.default_timer() - start:.2f} seconds!")
+
+    total_end = timeit.default_timer()
+    print(f"Counted all SNP's in {total_end - total_start:.2f} seconds!")
+
+    # Previously used str as chrom instead of cat
+    chrom_enum = pl.Enum(df.get_column("chrom").cat.get_categories())
+
+    count_df = pl.DataFrame(
+        count_list,
+        schema={"chrom": chrom_enum,
+                "pos": pl.UInt32,
+                "ref_count": pl.UInt16,
+                "alt_count": pl.UInt16,
+                "other_count": pl.UInt16
+               },
+        orient="row"
+    )
+
+    # possibly find better solution
+    df = df.with_columns([pl.col("chrom").cast(chrom_enum)]
+                         ).join(count_df, on=["chrom", "pos"], how="left")
+
+    # df = df.join(count_df, on=["chrom", "pos"], how="left")
+
     return df
 
 

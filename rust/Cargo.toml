@@ -1,0 +1,17 @@
+[package]
+name = "wasp2_rust"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "wasp2_rust"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.20", features = ["extension-module"] }
+noodles = { version = "0.76", features = ["bam", "sam", "core"] }
+rayon = "1.8"
+anyhow = "1.0"
+
+[dev-dependencies]
+criterion = "0.5"

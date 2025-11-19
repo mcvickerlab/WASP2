@@ -109,6 +109,14 @@ def count_variants(
                 "Parent attribute in gtf/gff3 for feature used in counting"
                 "Defaults to 'transcript_id' in gtf and 'Parent' in gff3")
             )] = None,
+    use_rust: Annotated[
+        bool,
+        typer.Option(
+            "--use-rust/--no-rust",
+            help=(
+                "Use Rust acceleration for BAM counting (requires wasp2_rust extension). "
+                "Defaults to True if extension is available.")
+            )] = True,
 
 ) -> None:
 
@@ -132,7 +140,8 @@ def count_variants(
                        temp_loc=temp_loc,
                        gene_feature=gene_feature,
                        gene_attribute=gene_attribute,
-                       gene_parent=gene_parent
+                       gene_parent=gene_parent,
+                       use_rust=use_rust
                        )
     
     # TODO TEST CASES FOR TYPER
