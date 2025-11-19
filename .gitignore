@@ -157,3 +157,7 @@ baselines/mapping/*
 baselines/test_run_*
 baselines/*.md5
 baselines/baseline_metadata.txt
+
+# Test artifacts
+test_rust_counts.tsv
+test_python_counts.tsv
