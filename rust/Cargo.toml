@@ -9,7 +9,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 pyo3 = { version = "0.20", features = ["extension-module"] }
-noodles = { version = "0.76", features = ["bam", "sam", "core"] }
+rust-htslib = "0.47"
 rayon = "1.8"
 anyhow = "1.0"
 
