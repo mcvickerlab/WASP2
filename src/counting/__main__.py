@@ -25,7 +25,6 @@ def count_variants(
             "--samples",
             "--sample",
             "--samps",
-            "--samps",
             "-s",
             help=(
                 "One or more samples to use in VCF. "
@@ -151,7 +150,6 @@ def count_variants_sc(
         typer.Option(
             "--samples",
             "--sample",
-            "--samps",
             "--samps",
             "-s",
             help=(

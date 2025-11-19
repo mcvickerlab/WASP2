@@ -246,10 +246,11 @@ def single_model(
     print("Optimizing imbalance likelihood")
     ll_start = timeit.default_timer()
     null_test = group_df.apply(lambda x: np.sum(betabinom.logpmf(x["ref_count"].to_numpy(), x["N"].to_numpy(),
-                                                                 (0.5 * (1 - disp) / disp), (0.5 * (1 - disp) / disp))))
+                                                                 (0.5 * (1 - disp) / disp), (0.5 * (1 - disp) / disp))),
+                               include_groups=False)
 
     # Optimize Alt
-    alt_test = group_df.apply(lambda x: parse_opt(x, disp, phased=phased))
+    alt_test = group_df.apply(lambda x: parse_opt(x, disp, phased=phased), include_groups=False)
     alt_df = pd.DataFrame(alt_test.tolist(), columns=["alt_ll", "mu"], index=alt_test.index)
 
     print(f"Optimized imbalance likelihood in {timeit.default_timer() - ll_start:.2f} seconds")

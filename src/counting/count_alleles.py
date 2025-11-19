@@ -67,7 +67,8 @@ def make_count_df(bam_file, df):
                     "ref_count": pl.UInt16,
                     "alt_count": pl.UInt16,
                     "other_count": pl.UInt16
-                   }
+                   },
+            orient="row"
         )
         
         # possibly find better solution

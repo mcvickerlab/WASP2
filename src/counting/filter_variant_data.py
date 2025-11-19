@@ -148,7 +148,8 @@ def parse_intersect_region_new(intersect_file, samples=None, use_region_names=Fa
 
     # Check how many region columns
     subset_cols = [vcf_cols[0], *vcf_cols[2:]] # skip pos0
-    intersect_ncols = len(df.columns)
+    schema = df.collect_schema()
+    intersect_ncols = len(schema.names())
 
 
     # Intersected with peak, check if region col needs to be made
@@ -165,7 +166,7 @@ def parse_intersect_region_new(intersect_file, samples=None, use_region_names=Fa
             df = df.with_columns(
                 pl.concat_str(
                     [
-                        pl.col(i) for i in df.columns[vcf_ncols:vcf_ncols+3]
+                        pl.col(i) for i in schema.names()[vcf_ncols:vcf_ncols+3]
                     ],
                     separator="_"
                 ).alias(region_col)
