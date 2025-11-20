@@ -267,3 +267,36 @@ fn get_base_at_position(
 
     None
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{BamCounter, Region};
+
+    #[test]
+    fn groups_regions_into_chrom_sorted_windows() {
+        let counter = BamCounter { bam_path: "dummy.bam".to_string() };
+        let regions = vec![
+            Region { chrom: "chr1".into(), pos: 10, ref_base: 'A', alt_base: 'G' },
+            Region { chrom: "chr1".into(), pos: 20, ref_base: 'C', alt_base: 'T' },
+            // This one is >100kb away, should start a new window
+            Region { chrom: "chr1".into(), pos: 150_500, ref_base: 'G', alt_base: 'A' },
+            // Different chromosome, always new window
+            Region { chrom: "chr2".into(), pos: 5, ref_base: 'T', alt_base: 'C' },
+        ];
+
+        let windows = counter.group_into_windows(&regions);
+        assert_eq!(windows.len(), 3, "expected three windows (two on chr1, one on chr2)");
+
+        // Windows should be sorted by chrom then pos
+        assert_eq!(windows[0].chrom, "chr1");
+        assert_eq!(windows[1].chrom, "chr1");
+        assert_eq!(windows[2].chrom, "chr2");
+
+        // First window has the two close chr1 SNPs
+        assert_eq!(windows[0].snps.len(), 2);
+        // Second window has the distant chr1 SNP
+        assert_eq!(windows[1].snps.len(), 1);
+        // Third window has the chr2 SNP
+        assert_eq!(windows[2].snps.len(), 1);
+    }
+}
