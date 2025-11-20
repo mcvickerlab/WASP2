@@ -201,13 +201,13 @@ echo " Step 2: Counting Alleles"
 echo "=========================================="
 START_COUNT=$(date +%s)
 
-/usr/bin/time -v -o $COUNT_DIR/memory_profile.txt \
-    python src/counting/__main__.py count-variants \
-    $WASP_BAM \
-    $TEST_VCF \
-    --samples $SAMPLE \
-    --region $TEST_BED \
-    --out $COUNT_DIR/counts.tsv \
+    /usr/bin/time -v -o $COUNT_DIR/memory_profile.txt \
+        python -m src.counting count-variants \
+        $WASP_BAM \
+        $TEST_VCF \
+        --samples $SAMPLE \
+        --region $TEST_BED \
+        --out $COUNT_DIR/counts.tsv \
     --temp $COUNT_DIR/temp
 
 END_COUNT=$(date +%s)
@@ -248,7 +248,7 @@ echo "=========================================="
 START_ANALYSIS=$(date +%s)
 
 /usr/bin/time -v -o $ANALYSIS_DIR/memory_profile.txt \
-    python src/analysis/__main__.py find-imbalance \
+    python -m src.analysis find-imbalance \
     $COUNT_DIR/counts.tsv \
     --out $ANALYSIS_DIR/ai_results.tsv \
     --min 10 \
