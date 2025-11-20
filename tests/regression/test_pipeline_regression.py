@@ -335,6 +335,10 @@ class TestFullPipelineIntegration:
         if missing:
             pytest.skip(f"Pipeline prerequisites missing: {', '.join(missing)}")
 
+        env = dict(subprocess.os.environ)
+        env["PYTHONPATH"] = str(ROOT / "src")
+        env["PATH"] = f"{Path(env.get('CONDA_PREFIX', ''))/ 'bin'}:{env.get('PATH','')}"
+
         # Ensure test data exists
         required_files = [
             ROOT / "test_data" / "CD4_ATACseq_Day1_merged_filtered.sort.bam",
@@ -348,7 +352,7 @@ class TestFullPipelineIntegration:
         # Run with temp output
         result = subprocess.run(
             [str(script)],
-            env={**dict(subprocess.os.environ), "BASELINE_DIR": str(temp_baseline)},
+            env={**env, "BASELINE_DIR": str(temp_baseline)},
             capture_output=True,
             text=True
         )
