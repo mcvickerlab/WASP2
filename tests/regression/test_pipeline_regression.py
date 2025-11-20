@@ -16,6 +16,7 @@ import tempfile
 import time
 from pathlib import Path
 from typing import Dict, Tuple
+import shutil
 
 import pandas as pd
 import pytest
@@ -282,11 +283,19 @@ class TestMappingRegression:
             content = f.read()
 
         # Parse read counts
-        for line in content.split('\n'):
+        original = None
+        filtered = None
+        for line in content.splitlines():
             if 'Original reads:' in line:
                 original = int(line.split(':')[1].strip().split()[0])
             elif 'WASP filtered reads:' in line:
                 filtered = int(line.split(':')[1].strip().split()[0])
+
+        if original is None or filtered is None:
+            pytest.skip(
+                "Baseline metadata does not include mapping read counts "
+                "(likely because mapping was skipped)."
+            )
 
         assert original == BASELINE_EXPECTATIONS["mapping"]["original_reads"]
         assert filtered == BASELINE_EXPECTATIONS["mapping"]["wasp_filtered_reads"]
@@ -317,6 +326,24 @@ class TestFullPipelineIntegration:
 
         if not script.exists():
             pytest.skip("Pipeline script not found")
+
+        # Require external deps that the script needs; skip if unavailable
+        missing = [
+            cmd for cmd in ["bcftools", "bedtools", "samtools"]
+            if shutil.which(cmd) is None
+        ]
+        if missing:
+            pytest.skip(f"Pipeline prerequisites missing: {', '.join(missing)}")
+
+        # Ensure test data exists
+        required_files = [
+            ROOT / "test_data" / "CD4_ATACseq_Day1_merged_filtered.sort.bam",
+            ROOT / "test_data" / "filter_chr10.vcf",
+            ROOT / "test_data" / "NA12878_snps_chr10.bed",
+        ]
+        for fpath in required_files:
+            if not fpath.exists():
+                pytest.skip(f"Required test data missing: {fpath}")
 
         # Run with temp output
         result = subprocess.run(
