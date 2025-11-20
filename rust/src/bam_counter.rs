@@ -20,6 +20,11 @@ struct Region {
 
 /// Genomic window containing multiple SNPs
 struct GenomicWindow {
+    chrom: String,
+    start: i64,
+    end: i64,
+    snps: Vec<(usize, Region)>,  // (original_index, region) in encounter order
+}
 
 // PyO3 expands #[pymethods] into impl blocks that trigger non_local_definitions warnings;
 // suppress the noise until we restructure.
@@ -92,27 +97,23 @@ impl BamCounter {
         // Initialize results
         let mut results = vec![(0u32, 0u32, 0u32); regions.len()];
 
-        // Process per chromosome with per-chrom dedup (matches Python baseline)
-        let mut chrom_regions: Vec<&Region> = regions.iter().collect();
-        chrom_regions.sort_by(|a, b| a.chrom.cmp(&b.chrom));
+        // Group regions into windows while preserving encounter order
+        let windows = self.group_into_windows_preserve_order(regions);
 
         let mut current_chrom: Option<String> = None;
-        let mut seen: HashSet<Vec<u8>> = HashSet::new();
+        let mut seen_reads: HashSet<Vec<u8>> = HashSet::new();
 
-        for (idx, region) in regions.iter().enumerate() {
-            // Reset seen set when chromosome changes
-            if current_chrom.as_ref() != Some(&region.chrom) {
-                current_chrom = Some(region.chrom.clone());
-                seen.clear();
+        for window in windows {
+            if current_chrom.as_ref() != Some(&window.chrom) {
+                current_chrom = Some(window.chrom.clone());
+                seen_reads.clear();
             }
 
-            // Fetch reads overlapping this SNP (htslib uses 0-based, half-open)
-            let start = (region.pos - 1) as i64;
-            let end = region.pos as i64; // exclusive
-            if bam.fetch((&region.chrom as &str, start, end)).is_err() {
+            if bam.fetch((&window.chrom as &str, window.start, window.end)).is_err() {
                 continue;
             }
 
+            // Process all reads in this window
             for result in bam.records() {
                 let record = match result {
                     Ok(r) => r,
@@ -124,24 +125,77 @@ impl BamCounter {
                 }
 
                 let qname = record.qname().to_vec();
-                if seen.contains(&qname) {
+                if seen_reads.contains(&qname) {
                     continue;
                 }
 
-                if let Some(base) = get_base_at_position(&record, region.pos - 1, min_qual) {
-                    seen.insert(qname);
-                    if base == region.ref_base {
-                        results[idx].0 += 1;
-                    } else if base == region.alt_base {
-                        results[idx].1 += 1;
-                    } else {
-                        results[idx].2 += 1;
+                // Find first overlapping SNP in encounter order
+                for (idx, region) in &window.snps {
+                    if let Some(base) = get_base_at_position(&record, region.pos - 1, min_qual) {
+                        seen_reads.insert(qname);
+                        if base == region.ref_base {
+                            results[*idx].0 += 1;
+                        } else if base == region.alt_base {
+                            results[*idx].1 += 1;
+                        } else {
+                            results[*idx].2 += 1;
+                        }
+                        break; // count once per read, matching Python loop order
                     }
                 }
             }
         }
 
         Ok(results)
+    }
+
+    /// Group regions into genomic windows while preserving input order
+    fn group_into_windows_preserve_order(&self, regions: &[Region]) -> Vec<GenomicWindow> {
+        const WINDOW_SIZE: i64 = 100_000; // 100Kb windows
+
+        let mut windows: Vec<GenomicWindow> = Vec::new();
+        let mut current_window: Option<GenomicWindow> = None;
+
+        for (idx, region) in regions.iter().enumerate() {
+            let pos_i64 = region.pos as i64;
+
+            match &mut current_window {
+                Some(w) if w.chrom == region.chrom && pos_i64 < w.end => {
+                    w.snps.push((idx, region.clone()));
+                    if pos_i64 + 1 > w.end {
+                        w.end = pos_i64 + 1;
+                    }
+                }
+                Some(w) => {
+                    windows.push(GenomicWindow {
+                        chrom: w.chrom.clone(),
+                        start: w.start,
+                        end: w.end,
+                        snps: w.snps.clone(),
+                    });
+                    current_window = Some(GenomicWindow {
+                        chrom: region.chrom.clone(),
+                        start: (pos_i64 - 1).max(0),
+                        end: pos_i64 + WINDOW_SIZE,
+                        snps: vec![(idx, region.clone())],
+                    });
+                }
+                None => {
+                    current_window = Some(GenomicWindow {
+                        chrom: region.chrom.clone(),
+                        start: (pos_i64 - 1).max(0),
+                        end: pos_i64 + WINDOW_SIZE,
+                        snps: vec![(idx, region.clone())],
+                    });
+                }
+            }
+        }
+
+        if let Some(w) = current_window {
+            windows.push(w);
+        }
+
+        windows
     }
 }
 
