@@ -21,6 +21,25 @@ Rust target: 0.5-2s (conservative estimate)
 
 ## Installation
 
+### Quick build inside the WASP2 conda env
+
+Prereqs (once per env):
+```bash
+mamba install -n WASP2 -y clang libclang llvmdev llvm-openmp gcc_linux-64 gxx_linux-64
+```
+
+Build/test:
+```bash
+conda run -n WASP2 bash -lc '
+  export LIBCLANG_PATH="$CONDA_PREFIX_2/lib"
+  export CC="$CONDA_PREFIX_2/bin/clang"
+  export CFLAGS=""    # clear inherited flags that can break hts-sys
+  export AR="$CONDA_PREFIX_2/bin/llvm-ar"
+  export CPATH="$CONDA_PREFIX_2/lib/clang/21/include:$CONDA_PREFIX_2/include:$CONDA_PREFIX_2/x86_64-conda-linux-gnu/sysroot/usr/include"
+  cargo test -q       # or cargo test --tests
+'
+```
+
 ### Prerequisites
 
 ```bash
