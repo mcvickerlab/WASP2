@@ -353,6 +353,7 @@ class TestFullPipelineIntegration:
         result = subprocess.run(
             [str(script)],
             env={**env, "BASELINE_DIR": str(temp_baseline)},
+            cwd=str(ROOT),
             capture_output=True,
             text=True
         )
