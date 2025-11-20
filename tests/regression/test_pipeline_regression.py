@@ -336,8 +336,10 @@ class TestFullPipelineIntegration:
             pytest.skip(f"Pipeline prerequisites missing: {', '.join(missing)}")
 
         env = dict(subprocess.os.environ)
+        env_prefix = env.get("CONDA_PREFIX_2", env.get("CONDA_PREFIX", ""))
         env["PYTHONPATH"] = str(ROOT / "src")
-        env["PATH"] = f"{Path(env.get('CONDA_PREFIX', ''))/ 'bin'}:{env.get('PATH','')}"
+        env["PATH"] = f"{Path(env_prefix)/ 'bin'}:{env.get('PATH','')}"
+        env["LD_LIBRARY_PATH"] = f"{Path(env_prefix)/ 'lib'}:{env.get('LD_LIBRARY_PATH','')}"
 
         # Ensure test data exists
         required_files = [
