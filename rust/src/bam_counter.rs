@@ -26,6 +26,9 @@ struct GenomicWindow {
     snps: Vec<(usize, Region)>,  // (original_index, region)
 }
 
+// PyO3 expands #[pymethods] into impl blocks that trigger non_local_definitions warnings;
+// suppress the noise until we restructure.
+#[allow(non_local_definitions)]
 #[pymethods]
 impl BamCounter {
     #[new]
