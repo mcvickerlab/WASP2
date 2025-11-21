@@ -255,4 +255,3 @@ def run_wasp_filt(
     
     # Finished
     print(f"\nWASP filtered Bam written to...\n{wasp_out_bam}\n")
-

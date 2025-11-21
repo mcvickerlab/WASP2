@@ -1,8 +1,9 @@
 use pyo3::prelude::*;
 use pyo3::types::PyList;
 use rust_htslib::{bam, bam::Read as BamRead, bam::ext::BamRecordExtensions};
-use std::collections::HashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::path::Path;
+// rayon is available but threading is currently disabled
 
 /// BAM allele counter using rust-htslib with batched fetching
 #[pyclass]
@@ -16,14 +17,6 @@ struct Region {
     pos: u32,  // 1-based position from Python
     ref_base: char,
     alt_base: char,
-}
-
-/// Genomic window containing multiple SNPs
-struct GenomicWindow {
-    chrom: String,
-    start: i64,
-    end: i64,
-    snps: Vec<(usize, Region)>,  // (original_index, region) in encounter order
 }
 
 // PyO3 expands #[pymethods] into impl blocks that trigger non_local_definitions warnings;
@@ -48,15 +41,17 @@ impl BamCounter {
     /// Args:
     ///     regions: List of (chrom, pos, ref, alt) tuples
     ///     min_qual: Minimum base quality (default: 0 for WASP2 compatibility)
+    ///     threads: Number of worker threads (default: 1). Use >1 to enable Rayon parallelism per chromosome.
     ///
     /// Returns:
     ///     List of (ref_count, alt_count, other_count) tuples
-    #[pyo3(signature = (regions, min_qual=0))]
+    #[pyo3(signature = (regions, min_qual=0, threads=1))]
     fn count_alleles(
         &self,
         py: Python,
         regions: &PyList,
         min_qual: u8,
+        threads: usize,
     ) -> PyResult<Vec<(u32, u32, u32)>> {
         // Parse Python regions
         let mut rust_regions = Vec::new();
@@ -77,7 +72,7 @@ impl BamCounter {
 
         // Release GIL for parallel processing
         py.allow_threads(|| {
-            self.count_alleles_impl(&rust_regions, min_qual)
+            self.count_alleles_impl(&rust_regions, min_qual, threads)
         })
     }
 }
@@ -87,115 +82,177 @@ impl BamCounter {
         &self,
         regions: &[Region],
         min_qual: u8,
+        threads: usize,
     ) -> PyResult<Vec<(u32, u32, u32)>> {
-        // Open indexed BAM reader
-        let mut bam = bam::IndexedReader::from_path(&self.bam_path)
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyIOError, _>(
-                format!("Failed to open BAM: {}", e)
-            ))?;
-
+        let _ = threads; // threading currently disabled
         // Initialize results
         let mut results = vec![(0u32, 0u32, 0u32); regions.len()];
 
-        // Group regions into windows while preserving encounter order
-        let windows = self.group_into_windows_preserve_order(regions);
+        // Group regions by chromosome while preserving encounter order
+        let grouped = self.group_regions_by_chrom(regions);
+        let debug_sites = parse_debug_sites();
 
-        let mut current_chrom: Option<String> = None;
-        let mut seen_reads: HashSet<Vec<u8>> = HashSet::new();
-
-        for window in windows {
-            if current_chrom.as_ref() != Some(&window.chrom) {
-                current_chrom = Some(window.chrom.clone());
-                seen_reads.clear();
-            }
-
-            if bam.fetch((&window.chrom as &str, window.start, window.end)).is_err() {
-                continue;
-            }
-
-            // Process all reads in this window
-            for result in bam.records() {
-                let record = match result {
-                    Ok(r) => r,
-                    Err(_) => continue,
-                };
-
-                if record.is_unmapped() {
-                    continue;
-                }
-
-                let qname = record.qname().to_vec();
-                if seen_reads.contains(&qname) {
-                    continue;
-                }
-
-                // Find first overlapping SNP in encounter order
-                for (idx, region) in &window.snps {
-                    if let Some(base) = get_base_at_position(&record, region.pos - 1, min_qual) {
-                        seen_reads.insert(qname);
-                        if base == region.ref_base {
-                            results[*idx].0 += 1;
-                        } else if base == region.alt_base {
-                            results[*idx].1 += 1;
-                        } else {
-                            results[*idx].2 += 1;
-                        }
-                        break; // count once per read, matching Python loop order
-                    }
-                }
+        for (chrom, chrom_regions) in grouped {
+            let partial = self.process_chromosome_reads(&chrom, &chrom_regions, min_qual, &debug_sites)?;
+            for (idx, (r, a, o)) in partial {
+                let entry = &mut results[idx];
+                entry.0 += r;
+                entry.1 += a;
+                entry.2 += o;
             }
         }
 
         Ok(results)
     }
 
-    /// Group regions into genomic windows while preserving input order
-    fn group_into_windows_preserve_order(&self, regions: &[Region]) -> Vec<GenomicWindow> {
-        const WINDOW_SIZE: i64 = 100_000; // 100Kb windows
+    /// Process a single chromosome by scanning reads once, honoring encounter order per read
+    fn process_chromosome_reads(
+        &self,
+        chrom: &str,
+        regions: &[(usize, Region)],
+        min_qual: u8,
+        debug_sites: &FxHashMap<(String, u32), usize>,
+    ) -> PyResult<FxHashMap<usize, (u32, u32, u32)>> {
+        let mut bam = bam::IndexedReader::from_path(&self.bam_path)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyIOError, _>(
+                format!("Failed to open BAM: {}", e)
+            ))?;
 
-        let mut windows: Vec<GenomicWindow> = Vec::new();
-        let mut current_window: Option<GenomicWindow> = None;
+        let mut seen_reads: FxHashSet<Vec<u8>> = FxHashSet::default();
+        let total_snps: usize = regions.len();
+        let mut counts: FxHashMap<usize, (u32, u32, u32)> = FxHashMap::default();
+        counts.reserve(total_snps);
 
-        for (idx, region) in regions.iter().enumerate() {
-            let pos_i64 = region.pos as i64;
+        // Build position -> SNP list, preserving encounter order
+        let mut pos_map: FxHashMap<u32, Vec<(usize, Region)>> = FxHashMap::default();
+        let mut min_pos: u32 = u32::MAX;
+        let mut max_pos: u32 = 0;
+        for (idx, region) in regions.iter() {
+            pos_map.entry(region.pos)
+                .or_insert_with(Vec::new)
+                .push((*idx, region.clone()));
+            if region.pos < min_pos { min_pos = region.pos; }
+            if region.pos > max_pos { max_pos = region.pos; }
+        }
 
-            match &mut current_window {
-                Some(w) if w.chrom == region.chrom && pos_i64 < w.end => {
-                    w.snps.push((idx, region.clone()));
-                    if pos_i64 + 1 > w.end {
-                        w.end = pos_i64 + 1;
+        if pos_map.is_empty() {
+            return Ok(counts);
+        }
+
+        // Fetch the span covering all SNPs on this chromosome
+        let start = if min_pos == 0 { 0 } else { (min_pos - 1) as i64 };
+        let end = max_pos.saturating_add(1) as i64;
+        if bam.fetch((chrom, start, end)).is_err() {
+            return Ok(counts);
+        }
+
+        // For each read, assign to the earliest SNP in encounter order that it overlaps
+        let mut read_iter = bam.records();
+        while let Some(res) = read_iter.next() {
+            let record = match res {
+                Ok(r) => r,
+                Err(_) => continue,
+            };
+            if record.is_unmapped() || record.is_secondary() || record.is_supplementary() || record.is_duplicate() {
+                continue;
+            }
+            let qname = record.qname().to_vec();
+            if seen_reads.contains(&qname) {
+                continue;
+            }
+
+            // Find earliest-overlap SNP by encounter index
+            let mut best: Option<(usize, &Region, usize, u32)> = None; // (encounter_idx, region, qpos, pos1)
+            for pair in record.aligned_pairs() {
+                let qpos = pair[0];
+                let rpos = pair[1];
+                if qpos < 0 || rpos < 0 {
+                    continue;
+                }
+                let pos1 = (rpos as u32).saturating_add(1);
+                if let Some(list) = pos_map.get(&pos1) {
+                    for (enc_idx, region) in list {
+                        if let Some((best_idx, _, _, _)) = best {
+                            if *enc_idx >= best_idx {
+                                continue;
+                            }
+                        }
+                        best = Some((*enc_idx, region, qpos as usize, pos1));
                     }
                 }
-                Some(w) => {
-                    windows.push(GenomicWindow {
-                        chrom: w.chrom.clone(),
-                        start: w.start,
-                        end: w.end,
-                        snps: w.snps.clone(),
-                    });
-                    current_window = Some(GenomicWindow {
-                        chrom: region.chrom.clone(),
-                        start: (pos_i64 - 1).max(0),
-                        end: pos_i64 + WINDOW_SIZE,
-                        snps: vec![(idx, region.clone())],
-                    });
+            }
+
+            if let Some((enc_idx, region, qpos, pos1)) = best {
+                let quals = record.qual();
+                if min_qual > 0 {
+                    if qpos >= quals.len() || quals[qpos] < min_qual {
+                        continue;
+                    }
                 }
-                None => {
-                    current_window = Some(GenomicWindow {
-                        chrom: region.chrom.clone(),
-                        start: (pos_i64 - 1).max(0),
-                        end: pos_i64 + WINDOW_SIZE,
-                        snps: vec![(idx, region.clone())],
-                    });
+                let base = match record.seq()[qpos] {
+                    b'A' => 'A',
+                    b'C' => 'C',
+                    b'G' => 'G',
+                    b'T' => 'T',
+                    b'N' => 'N',
+                    _ => continue,
+                };
+                let entry_counts = counts.entry(enc_idx).or_insert((0, 0, 0));
+                if base == region.ref_base {
+                    entry_counts.0 += 1;
+                } else if base == region.alt_base {
+                    entry_counts.1 += 1;
+                } else {
+                    entry_counts.2 += 1;
+                }
+                seen_reads.insert(qname.clone());
+
+                if let Some(limit) = debug_sites.get(&(chrom.to_string(), pos1)) {
+                    if *limit > 0 && entry_counts.0 + entry_counts.1 + entry_counts.2 <= *limit as u32 {
+                        eprintln!(
+                            "[DEBUG SNP] {}:{} read={} flags(unmap/sec/supp/dup)={}/{}/{}/{} qpos={} base={} -> idx={} ref={} alt={}",
+                            chrom,
+                            pos1,
+                            String::from_utf8_lossy(&qname),
+                            record.is_unmapped(),
+                            record.is_secondary(),
+                            record.is_supplementary(),
+                            record.is_duplicate(),
+                            qpos,
+                            base,
+                            enc_idx,
+                            region.ref_base,
+                            region.alt_base
+                        );
+                    }
                 }
             }
         }
 
-        if let Some(w) = current_window {
-            windows.push(w);
+        Ok(counts)
+    }
+
+    /// Group regions by chromosome while preserving encounter order
+    fn group_regions_by_chrom(
+        &self,
+        regions: &[Region]
+    ) -> Vec<(String, Vec<(usize, Region)>)> {
+        let mut grouped: Vec<Vec<(usize, Region)>> = Vec::new();
+        let mut chrom_order: Vec<String> = Vec::new();
+        let mut chrom_index: FxHashMap<String, usize> = FxHashMap::default();
+
+        for (idx, region) in regions.iter().enumerate() {
+            if let Some(&i) = chrom_index.get(&region.chrom) {
+                grouped[i].push((idx, region.clone()));
+            } else {
+                let i = grouped.len();
+                chrom_index.insert(region.chrom.clone(), i);
+                chrom_order.push(region.chrom.clone());
+                grouped.push(vec![(idx, region.clone())]);
+            }
         }
 
-        windows
+        chrom_order.into_iter().zip(grouped).collect()
     }
 }
 
@@ -241,35 +298,53 @@ fn get_base_at_position(
     None
 }
 
+/// Parse optional debug sites from env var WASP2_DEBUG_SNP (format: chr:pos or chr:pos:limit, comma-separated)
+fn parse_debug_sites() -> FxHashMap<(String, u32), usize> {
+    let mut map = FxHashMap::default();
+    if let Ok(val) = std::env::var("WASP2_DEBUG_SNP") {
+        for tok in val.split(',') {
+            let tok = tok.trim();
+            if tok.is_empty() {
+                continue;
+            }
+            let parts: Vec<&str> = tok.split(':').collect();
+            if parts.len() < 2 {
+                continue;
+            }
+            let chrom = parts[0].to_string();
+            if let Ok(pos) = parts[1].parse::<u32>() {
+                let limit = if parts.len() >= 3 {
+                    parts[2].parse::<usize>().unwrap_or(10)
+                } else {
+                    10
+                };
+                map.insert((chrom, pos), limit);
+            }
+        }
+    }
+    map
+}
 #[cfg(test)]
 mod tests {
     use super::{BamCounter, Region};
 
     #[test]
-    fn groups_regions_into_chrom_sorted_windows() {
+    fn groups_regions_by_chrom_preserving_order() {
         let counter = BamCounter { bam_path: "dummy.bam".to_string() };
         let regions = vec![
             Region { chrom: "chr1".into(), pos: 10, ref_base: 'A', alt_base: 'G' },
             Region { chrom: "chr1".into(), pos: 20, ref_base: 'C', alt_base: 'T' },
-            // This one is >100kb away, should start a new window
-            Region { chrom: "chr1".into(), pos: 150_500, ref_base: 'G', alt_base: 'A' },
-            // Different chromosome, always new window
             Region { chrom: "chr2".into(), pos: 5, ref_base: 'T', alt_base: 'C' },
         ];
 
-        let windows = counter.group_into_windows(&regions);
-        assert_eq!(windows.len(), 3, "expected three windows (two on chr1, one on chr2)");
-
-        // Windows should be sorted by chrom then pos
-        assert_eq!(windows[0].chrom, "chr1");
-        assert_eq!(windows[1].chrom, "chr1");
-        assert_eq!(windows[2].chrom, "chr2");
-
-        // First window has the two close chr1 SNPs
-        assert_eq!(windows[0].snps.len(), 2);
-        // Second window has the distant chr1 SNP
-        assert_eq!(windows[1].snps.len(), 1);
-        // Third window has the chr2 SNP
-        assert_eq!(windows[2].snps.len(), 1);
+        let grouped = counter.group_regions_by_chrom(&regions);
+        assert_eq!(grouped.len(), 2, "expected two chromosome groups");
+        assert_eq!(grouped[0].0, "chr1");
+        assert_eq!(grouped[1].0, "chr2");
+        assert_eq!(grouped[0].1.len(), 2);
+        assert_eq!(grouped[1].1.len(), 1);
+        // Order preserved
+        assert_eq!(grouped[0].1[0].1.pos, 10);
+        assert_eq!(grouped[0].1[1].1.pos, 20);
     }
 }

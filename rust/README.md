@@ -1,13 +1,24 @@
 # WASP2 Rust Acceleration
 
-High-performance BAM allele counting using Rust + PyO3.
+High-performance implementations of WASP2 bottlenecks using Rust + PyO3.
 
 ## Overview
 
-This Rust extension provides 4-15x speedup for BAM I/O operations in WASP2's counting pipeline by:
-- Using `noodles` pure-Rust BAM parser (no htslib dependency)
-- Releasing Python GIL for parallel processing
-- Zero-copy data transfer via PyO3 bindings
+This Rust extension provides significant speedups for compute-intensive WASP2 operations:
+
+| Module | Status | Speedup | Python Replacement |
+|--------|--------|---------|-------------------|
+| `bam_counter` | ✅ **DONE** | 4-15x | `count_alleles.py` |
+| `bam_remapper` | 🚧 **SKELETON** | 7-20x | `make_remap_reads.py` (allele swapping) |
+| `read_pairer` | 🚧 **SKELETON** | 2-3x | `remap_utils.py` (read pairing) |
+
+### Key Optimizations
+
+- **BAM I/O:** Using `rust-htslib` for fast BAM parsing
+- **Zero-copy:** Direct memory access via PyO3 bindings
+- **Hash maps:** FxHashMap for 2-3x faster lookups
+- **Byte operations:** In-place sequence modification (no Python string overhead)
+- **Parallelism:** rayon for multi-core chromosome processing
 
 ## Performance
 
@@ -68,6 +79,8 @@ pip install target/wheels/wasp2_rust-*.whl
 
 ### Python API
 
+#### Counting (✅ Implemented)
+
 ```python
 from wasp2_rust import BamCounter
 
@@ -81,6 +94,32 @@ counts = counter.count_alleles(regions, min_qual=20)
 
 # Returns: [(ref_count, alt_count, other_count), ...]
 # Example: [(15, 8, 1), (22, 18, 0)]
+```
+
+#### Remapping (🚧 Skeleton - Not Yet Implemented)
+
+```python
+import wasp2_rust
+
+# Single chromosome remapping
+pairs, haps = wasp2_rust.remap_chromosome(
+    bam_path="input.bam",
+    intersect_bed="intersect.bed",
+    chrom="chr10",
+    out_r1="remap_r1.fq",
+    out_r2="remap_r2.fq",
+    max_seqs=64
+)
+print(f"Processed {pairs} pairs, generated {haps} haplotypes")
+
+# All chromosomes in parallel (fastest)
+pairs, haps = wasp2_rust.remap_all_chromosomes(
+    bam_path="input.bam",
+    intersect_bed="intersect.bed",
+    out_r1="remap_r1.fq",
+    out_r2="remap_r2.fq",
+    max_seqs=64
+)
 ```
 
 ### CLI Integration

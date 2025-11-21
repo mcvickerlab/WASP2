@@ -12,6 +12,8 @@ pyo3 = { version = "0.20", features = ["extension-module"] }
 rust-htslib = "0.47"
 rayon = "1.8"
 anyhow = "1.0"
+rustc-hash = "1.1"
 
 [dev-dependencies]
 criterion = "0.5"
+tempfile = "3.8"

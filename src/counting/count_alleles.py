@@ -1,6 +1,8 @@
+import os
 import timeit
 from pathlib import Path
 from bisect import bisect_left
+from typing import Optional
 
 import polars as pl
 
@@ -26,15 +28,23 @@ def find_read_aln_pos(read, pos):
         return None
 
 
-def count_snp_alleles_rust(bam_file, chrom, snp_list):
+def count_snp_alleles_rust(bam_file, chrom, snp_list, threads: Optional[int] = None):
     """
     Rust-accelerated version of count_snp_alleles
 
     :param str bam_file: Path to BAM file
     :param str chrom: Chromosome name
     :param snp_list: Iterator of (pos, ref, alt) tuples
+    :param int threads: Optional number of threads (default 1 or WASP2_RUST_THREADS env)
     :return list: List of (chrom, pos, ref_count, alt_count, other_count) tuples
     """
+    rust_threads_env = os.environ.get("WASP2_RUST_THREADS") if threads is None else None
+    try:
+        rust_threads = threads if threads is not None else (int(rust_threads_env) if rust_threads_env else 1)
+    except ValueError:
+        rust_threads = 1
+    rust_threads = max(1, rust_threads)
+
     # Convert snp_list to list of regions for Rust
     regions = [(chrom, pos, ref, alt) for pos, ref, alt in snp_list]
 
@@ -43,7 +53,7 @@ def count_snp_alleles_rust(bam_file, chrom, snp_list):
 
     # Count alleles (returns list of (ref_count, alt_count, other_count))
     # min_qual=0 matches WASP2 behavior (no quality filtering)
-    counts = counter.count_alleles(regions, min_qual=0)
+    counts = counter.count_alleles(regions, min_qual=0, threads=rust_threads)
 
     # Combine with chromosome and position info
     allele_counts = [
@@ -71,9 +81,15 @@ def make_count_df(bam_file, df, use_rust=True):
 
     # Decide which implementation to use
     use_rust_impl = use_rust and RUST_AVAILABLE
+    rust_threads_env = os.environ.get("WASP2_RUST_THREADS")
+    try:
+        rust_threads = int(rust_threads_env) if rust_threads_env else 1
+    except ValueError:
+        rust_threads = 1
+    rust_threads = max(1, rust_threads)
 
     if use_rust_impl:
-        print(f"Using Rust acceleration for BAM counting 🦀")
+        print(f"Using Rust acceleration for BAM counting 🦀 (threads={rust_threads})")
     else:
         if use_rust and not RUST_AVAILABLE:
             print("Rust acceleration requested but not available, falling back to Python")
@@ -93,7 +109,7 @@ def make_count_df(bam_file, df, use_rust=True):
             start = timeit.default_timer()
 
             try:
-                count_list.extend(count_snp_alleles_rust(bam_file, chrom, snp_list))
+                count_list.extend(count_snp_alleles_rust(bam_file, chrom, snp_list, threads=rust_threads))
             except Exception as e:
                 print(f"Skipping {chrom}: {e}\n")
             else:

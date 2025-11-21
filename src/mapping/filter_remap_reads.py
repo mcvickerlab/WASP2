@@ -14,7 +14,6 @@ def filt_remapped_reads(
     filt_out_bam: str,
     keep_read_file: Optional[str] = None
 ) -> None:
-    
     pos_dict = {}
     total_dict = {}
     keep_set = set()

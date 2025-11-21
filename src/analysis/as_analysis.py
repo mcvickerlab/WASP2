@@ -7,6 +7,7 @@ Python Version: 3.9
 from pathlib import Path
 import time
 import timeit
+import inspect
 from typing import Tuple, Optional, Union, Literal, Callable, Any, cast
 
 # External package imports
@@ -242,15 +243,17 @@ def single_model(
     print(f"Optimized dispersion parameter in {timeit.default_timer() - disp_start:.2f} seconds")
 
     group_df = df.groupby(region_col, sort=False)
+    include_groups_supported = "include_groups" in inspect.signature(group_df.apply).parameters
+    apply_kwargs = {"include_groups": False} if include_groups_supported else {}
 
     print("Optimizing imbalance likelihood")
     ll_start = timeit.default_timer()
     null_test = group_df.apply(lambda x: np.sum(betabinom.logpmf(x["ref_count"].to_numpy(), x["N"].to_numpy(),
                                                                  (0.5 * (1 - disp) / disp), (0.5 * (1 - disp) / disp))),
-                               include_groups=False)
+                               **apply_kwargs)
 
     # Optimize Alt
-    alt_test = group_df.apply(lambda x: parse_opt(x, disp, phased=phased), include_groups=False)
+    alt_test = group_df.apply(lambda x: parse_opt(x, disp, phased=phased), **apply_kwargs)
     alt_df = pd.DataFrame(alt_test.tolist(), columns=["alt_ll", "mu"], index=alt_test.index)
 
     print(f"Optimized imbalance likelihood in {timeit.default_timer() - ll_start:.2f} seconds")
@@ -423,5 +426,4 @@ def get_imbalance(
     as_df["fdr_pval"] = false_discovery_control(as_df["pval"], method="bh")
 
     return as_df
-
 

@@ -1,15 +1,15 @@
 WASP2 Full Pipeline Baseline
 =============================
-Date: Mon Nov 17 08:20:31 UTC 2025
-Host: runsc
-User: root
+Date: Thu Nov 20 11:37:57 AM PST 2025
+Host: iblm-cluster-2.salk.edu
+User: jjaureguy
 
 Dependencies:
 -------------
-bcftools: bcftools 1.19
+bcftools: bcftools 1.22
 bedtools: bedtools v2.31.1
-samtools: samtools 1.19.2
-python: Python 3.11.14
+samtools: samtools 1.22.1
+python: Python 3.9.23
 
 Input Data:
 -----------
@@ -32,20 +32,20 @@ Total allele counts: 3041
   Alt alleles: 1061
   Other alleles: 9
 MD5: 612330f6ce767e5d014d1acb82159564
-Time: 11s
-Peak Memory: 641 MB (657340 KB)
+Time: 4s
+Peak Memory: 696 MB (713516 KB)
 
 Step 3: Analysis
 ----------------
 Output: baselines/analysis/ai_results.tsv
 Rows: 44 (header + 43 regions tested)
 Significant regions (FDR < 0.05): 0
-MD5: febc7046e96deb0f5aa14de8135b439d
-Time: 2s
-Peak Memory: 341 MB (349488 KB)
+MD5: fcba7e57c583d91a6909d41035e8a694
+Time: 3s
+Peak Memory: 183 MB (187812 KB)
 
 Performance Summary:
 --------------------
-Total Pipeline Time: 13s
-Peak Memory Usage: 641 MB
-Memory Efficiency: 49.31 MB/s
+Total Pipeline Time: 7s
+Peak Memory Usage: 696 MB
+Memory Efficiency: 99.43 MB/s

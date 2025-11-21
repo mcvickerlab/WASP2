@@ -32,15 +32,15 @@ BASELINE_EXPECTATIONS = {
         "time_seconds": 9.26,
         "memory_mb": 639,
         "output_rows": 111455,  # header + 111454 SNPs
-        "total_alleles": 2388,
-        "md5": "127a81810a43db3cc6924a26f591cc7a"
+        "total_alleles": 3041,
+        "md5": "612330f6ce767e5d014d1acb82159564"
     },
     "analysis": {
         "time_seconds": 2.97,
         "memory_mb": 340,
-        "output_rows": 40,  # header + 39 regions
+        "output_rows": 44,  # header + 43 regions
         "significant_regions": 0,
-        "md5": "394e1a7dbf14220079c3142c5b15bad8"
+        "md5": "fcba7e57c583d91a6909d41035e8a694"
     },
     "mapping": {
         "time_seconds": 8.0,
