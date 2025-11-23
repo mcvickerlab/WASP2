@@ -213,7 +213,9 @@ def run_wasp_filt(
     keep_bam: str,
     wasp_out_bam: str,
     remap_keep_bam: Optional[str] = None,
-    remap_keep_file: Optional[str] = None
+    remap_keep_file: Optional[str] = None,
+    threads: int = 1,
+    use_rust: bool = True,
 ) -> None:
     """
     Filter reads that remap to the same loc
@@ -241,13 +243,14 @@ def run_wasp_filt(
             remap_keep_bam = f"{tmpdir}/wasp_remap_filt.bam"
             
             filt_remapped_reads(to_remap_bam, remapped_bam,
-                                remap_keep_bam, keep_read_file=remap_keep_file)
+                                remap_keep_bam, keep_read_file=remap_keep_file,
+                                use_rust=use_rust, threads=threads)
             
             merge_filt_bam(keep_bam, remap_keep_bam, wasp_out_bam)
     else:
         
         filt_remapped_reads(to_remap_bam, remapped_bam, remap_keep_bam,
-                            keep_read_file=remap_keep_file)
+                            keep_read_file=remap_keep_file, use_rust=use_rust, threads=threads)
         
         print(f"\nWrote remapped bam with filtered reads to...\n{remap_keep_bam}\n")
         

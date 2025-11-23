@@ -7,8 +7,11 @@ use pyo3::exceptions::PyRuntimeError;
 mod bam_counter;
 mod bam_remapper;
 mod read_pairer;
+mod analysis;
+mod mapping_filter;
 
 use bam_counter::BamCounter;
+use mapping_filter::filter_bam_wasp;
 
 // ============================================================================
 // PyO3 Bindings for BAM Remapping
@@ -164,6 +167,129 @@ fn remap_all_chromosomes(
 }
 
 // ============================================================================
+// PyO3 Bindings for Analysis
+// ============================================================================
+
+/// Analyze allelic imbalance (Rust implementation)
+///
+/// Replaces Python's `get_imbalance()` function from as_analysis.py.
+///
+/// # Arguments
+/// * `tsv_path` - Path to TSV file with allele counts
+/// * `min_count` - Minimum total count threshold
+/// * `pseudocount` - Pseudocount to add to allele counts
+/// * `method` - Analysis method ("single" or "linear")
+///
+/// # Returns
+/// List of dictionaries with imbalance results
+///
+/// # Example (Python)
+/// ```python
+/// import wasp2_rust
+/// results = wasp2_rust.analyze_imbalance(
+///     "counts.tsv",
+///     min_count=10,
+///     pseudocount=1,
+///     method="single"
+/// )
+/// for r in results:
+///     print(f"{r['region']}: pval={r['pval']:.4f}")
+/// ```
+#[pyfunction]
+#[pyo3(signature = (tsv_path, min_count=10, pseudocount=1, method="single"))]
+fn analyze_imbalance(
+    py: Python,
+    tsv_path: &str,
+    min_count: u32,
+    pseudocount: u32,
+    method: &str,
+) -> PyResult<PyObject> {
+    use pyo3::types::{PyDict, PyList};
+    use std::fs::File;
+    use std::io::{BufRead, BufReader};
+
+    // Parse method
+    let analysis_method = match method {
+        "single" => analysis::AnalysisMethod::Single,
+        "linear" => analysis::AnalysisMethod::Linear,
+        _ => return Err(PyRuntimeError::new_err(format!("Unknown method: {}", method))),
+    };
+
+    let config = analysis::AnalysisConfig {
+        min_count,
+        pseudocount,
+        method: analysis_method,
+    };
+
+    // Read TSV file
+    let file = File::open(tsv_path)
+        .map_err(|e| PyRuntimeError::new_err(format!("Failed to open TSV: {}", e)))?;
+    let reader = BufReader::new(file);
+
+    let mut variants = Vec::new();
+    let mut header_seen = false;
+
+    for line in reader.lines() {
+        let line = line.map_err(|e| PyRuntimeError::new_err(format!("Failed to read line: {}", e)))?;
+
+        if !header_seen {
+            header_seen = true;
+            continue; // Skip header
+        }
+
+        let fields: Vec<&str> = line.split('\t').collect();
+        if fields.len() < 7 {
+            continue;
+        }
+
+        // Parse fields: chrom, pos, ref, alt, region, ref_count, alt_count, other_count
+        let chrom = fields[0].to_string();
+        let pos = fields[1].parse::<u32>()
+            .map_err(|e| PyRuntimeError::new_err(format!("Invalid pos: {}", e)))?;
+        let ref_count = fields[5].parse::<u32>()
+            .map_err(|e| PyRuntimeError::new_err(format!("Invalid ref_count: {}", e)))?;
+        let alt_count = fields[6].parse::<u32>()
+            .map_err(|e| PyRuntimeError::new_err(format!("Invalid alt_count: {}", e)))?;
+
+        // Create region identifier (chrom_pos_pos+1 format to match Python)
+        let region = format!("{}_{}_{}",  chrom, pos, pos + 1);
+
+        variants.push(analysis::VariantCounts {
+            chrom,
+            pos,
+            ref_count,
+            alt_count,
+            region,
+        });
+    }
+
+    // Run analysis
+    let results = analysis::analyze_imbalance(variants, &config)
+        .map_err(|e| PyRuntimeError::new_err(format!("Analysis failed: {}", e)))?;
+
+    // Convert to Python list of dicts
+    let py_list = PyList::empty(py);
+
+    for result in results {
+        let py_dict = PyDict::new(py);
+        py_dict.set_item("region", result.region)?;
+        py_dict.set_item("ref_count", result.ref_count)?;
+        py_dict.set_item("alt_count", result.alt_count)?;
+        py_dict.set_item("N", result.n)?;
+        py_dict.set_item("snp_count", result.snp_count)?;
+        py_dict.set_item("null_ll", result.null_ll)?;
+        py_dict.set_item("alt_ll", result.alt_ll)?;
+        py_dict.set_item("mu", result.mu)?;
+        py_dict.set_item("lrt", result.lrt)?;
+        py_dict.set_item("pval", result.pval)?;
+        py_dict.set_item("fdr_pval", result.fdr_pval)?;
+        py_list.append(py_dict)?;
+    }
+
+    Ok(py_list.into())
+}
+
+// ============================================================================
 // Legacy Functions (keep for compatibility)
 // ============================================================================
 
@@ -180,23 +306,30 @@ fn sum_as_string(a: usize, b: usize) -> PyResult<String> {
 /// WASP2 Rust acceleration module
 ///
 /// Provides high-performance implementations of bottleneck functions:
-/// - BamCounter: Fast allele counting (already implemented)
-/// - remap_chromosome: Fast allele swapping for mapping stage (NEW)
-/// - remap_all_chromosomes: Parallel processing of all chromosomes (NEW)
+/// - BamCounter: Fast allele counting (IMPLEMENTED)
+/// - remap_chromosome: Fast allele swapping for mapping stage (IMPLEMENTED)
+/// - remap_all_chromosomes: Parallel processing of all chromosomes (skeleton)
+/// - analyze_imbalance: Fast beta-binomial analysis for AI detection (NEW)
 #[pymodule]
 fn wasp2_rust(_py: Python, m: &PyModule) -> PyResult<()> {
     // Legacy test function
     m.add_function(wrap_pyfunction!(sum_as_string, m)?)?;
 
-    // Counting module (existing)
+    // Counting module (IMPLEMENTED)
     m.add_class::<BamCounter>()?;
 
     // Remapping module - parser (IMPLEMENTED)
     m.add_function(wrap_pyfunction!(parse_intersect_bed, m)?)?;
 
-    // Remapping module - full pipeline (skeleton)
+    // Remapping module - full pipeline (IMPLEMENTED)
     m.add_function(wrap_pyfunction!(remap_chromosome, m)?)?;
     m.add_function(wrap_pyfunction!(remap_all_chromosomes, m)?)?;
+
+    // Mapping filter (WASP remap filter)
+    m.add_function(wrap_pyfunction!(filter_bam_wasp, m)?)?;
+
+    // Analysis module (beta-binomial allelic imbalance detection)
+    m.add_function(wrap_pyfunction!(analyze_imbalance, m)?)?;
 
     Ok(())
 }

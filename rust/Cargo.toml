@@ -13,6 +13,10 @@ rust-htslib = "0.47"
 rayon = "1.8"
 anyhow = "1.0"
 rustc-hash = "1.1"
+statrs = "0.17"
+rv = "0.19"
+argmin = "0.10"
+argmin-math = "0.4"
 
 [dev-dependencies]
 criterion = "0.5"

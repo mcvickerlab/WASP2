@@ -117,6 +117,20 @@ def count_variants(
                 "Use Rust acceleration for BAM counting (requires wasp2_rust extension). "
                 "Defaults to True if extension is available.")
             )] = True,
+    vcf_bed: Annotated[
+        Optional[str],
+        typer.Option(
+            "--vcf-bed",
+            help="Optional precomputed VCF bed file to skip vcf_to_bed."
+        )
+    ] = None,
+    intersect_bed: Annotated[
+        Optional[str],
+        typer.Option(
+            "--intersect-bed",
+            help="Optional precomputed intersect bed file to skip bedtools intersect."
+        )
+    ] = None,
 
 ) -> None:
 
@@ -141,7 +155,9 @@ def count_variants(
                        gene_feature=gene_feature,
                        gene_attribute=gene_attribute,
                        gene_parent=gene_parent,
-                       use_rust=use_rust
+                       use_rust=use_rust,
+                       precomputed_vcf_bed=vcf_bed,
+                       precomputed_intersect=intersect_bed
                        )
     
     # TODO TEST CASES FOR TYPER

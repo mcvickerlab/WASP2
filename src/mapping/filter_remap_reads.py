@@ -1,3 +1,4 @@
+import os
 import tempfile
 from pathlib import Path
 import timeit
@@ -8,12 +9,37 @@ from pysam.libcalignmentfile import AlignmentFile
 
 from .remap_utils import paired_read_gen
 
+try:
+    from wasp2_rust import filter_bam_wasp
+except ImportError:
+    filter_bam_wasp = None
+
 def filt_remapped_reads(
     to_remap_bam: str,
     remapped_bam: str,
     filt_out_bam: str,
-    keep_read_file: Optional[str] = None
+    keep_read_file: Optional[str] = None,
+    use_rust: bool = True,
+    threads: int = 1,
 ) -> None:
+    rust_allowed = (
+        use_rust
+        and filter_bam_wasp is not None
+        and os.environ.get("WASP2_DISABLE_RUST") != "1"
+    )
+
+    if rust_allowed:
+        try:
+            filter_bam_wasp(
+                to_remap_bam,
+                remapped_bam,
+                filt_out_bam,
+                keep_read_file=keep_read_file,
+                threads=threads,
+            )
+            return
+        except Exception as exc:  # noqa: BLE001
+            print(f"[warn] Rust WASP filter failed ({exc}); falling back to Python path.")
     pos_dict = {}
     total_dict = {}
     keep_set = set()

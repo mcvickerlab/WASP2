@@ -1,9 +1,9 @@
 use pyo3::prelude::*;
 use pyo3::types::PyList;
+use rayon::prelude::*;
 use rust_htslib::{bam, bam::Read as BamRead, bam::ext::BamRecordExtensions};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::path::Path;
-// rayon is available but threading is currently disabled
 
 /// BAM allele counter using rust-htslib with batched fetching
 #[pyclass]
@@ -84,7 +84,6 @@ impl BamCounter {
         min_qual: u8,
         threads: usize,
     ) -> PyResult<Vec<(u32, u32, u32)>> {
-        let _ = threads; // threading currently disabled
         // Initialize results
         let mut results = vec![(0u32, 0u32, 0u32); regions.len()];
 
@@ -92,13 +91,45 @@ impl BamCounter {
         let grouped = self.group_regions_by_chrom(regions);
         let debug_sites = parse_debug_sites();
 
-        for (chrom, chrom_regions) in grouped {
-            let partial = self.process_chromosome_reads(&chrom, &chrom_regions, min_qual, &debug_sites)?;
-            for (idx, (r, a, o)) in partial {
-                let entry = &mut results[idx];
-                entry.0 += r;
-                entry.1 += a;
-                entry.2 += o;
+        // Process chromosomes in parallel if threads > 1
+        if threads > 1 {
+            // Set thread pool size
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(threads)
+                .build()
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                    format!("Failed to create thread pool: {}", e)
+                ))?
+                .install(|| {
+                    // Process chromosomes in parallel
+                    let partial_results: Result<Vec<_>, _> = grouped
+                        .par_iter()
+                        .map(|(chrom, chrom_regions)| {
+                            self.process_chromosome_reads(chrom, chrom_regions, min_qual, &debug_sites)
+                        })
+                        .collect();
+
+                    // Merge results
+                    for partial in partial_results? {
+                        for (idx, (r, a, o)) in partial {
+                            let entry = &mut results[idx];
+                            entry.0 += r;
+                            entry.1 += a;
+                            entry.2 += o;
+                        }
+                    }
+                    Ok::<(), PyErr>(())
+                })?;
+        } else {
+            // Single-threaded path
+            for (chrom, chrom_regions) in grouped {
+                let partial = self.process_chromosome_reads(&chrom, &chrom_regions, min_qual, &debug_sites)?;
+                for (idx, (r, a, o)) in partial {
+                    let entry = &mut results[idx];
+                    entry.0 += r;
+                    entry.1 += a;
+                    entry.2 += o;
+                }
             }
         }
 

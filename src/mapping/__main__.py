@@ -151,7 +151,22 @@ def filter_remapped(
             help=(
                 "Also output txt file with kept read names"
                 )
-            )] = None
+            )] = None,
+    threads: Annotated[
+        int,
+        typer.Option(
+            "--threads",
+            help="Threads for BAM I/O (Rust filter supports >1)",
+            min=1
+        )
+    ] = 1,
+    use_rust: Annotated[
+        bool,
+        typer.Option(
+            "--use-rust/--no-rust",
+            help="Use Rust acceleration if available (respects WASP2_DISABLE_RUST)",
+        )
+    ] = True,
 ) -> None:
     """Filter remapped reads using WASP algorithm."""
 
@@ -172,7 +187,9 @@ def filter_remapped(
         wasp_out_bam=out_bam,
         remap_keep_bam=remap_keep_bam,
         remap_keep_file=remap_keep_file,
-        wasp_data_json=wasp_data_json
+        wasp_data_json=wasp_data_json,
+        threads=threads,
+        use_rust=use_rust,
         )
     
 

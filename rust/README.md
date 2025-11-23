@@ -2,54 +2,29 @@
 
 High-performance implementations of WASP2 bottlenecks using Rust + PyO3.
 
-## Overview
+## Performance Summary
 
-This Rust extension provides significant speedups for compute-intensive WASP2 operations:
+| Module | Implementation | Speedup | Notes |
+|--------|---------------|---------|-------|
+| **Counting** | ✅ Complete | **2.5×** single-thread<br>**2.5×** multi-thread* | *Chr10 test has 1 chromosome |
+| **Mapping Filter** | ✅ Complete | **5×** (16 threads) | BGZF parallel decompression |
+| **Analysis** | ✅ Complete | **3.4×** (parallel regions) | Beta-binomial model |
 
-| Module | Status | Speedup | Python Replacement |
-|--------|--------|---------|-------------------|
-| `bam_counter` | ✅ **DONE** | 4-15x | `count_alleles.py` |
-| `bam_remapper` | 🚧 **SKELETON** | 7-20x | `make_remap_reads.py` (allele swapping) |
-| `read_pairer` | 🚧 **SKELETON** | 2-3x | `remap_utils.py` (read pairing) |
+### Benchmarks (chr10 test dataset)
 
-### Key Optimizations
+**Counting** (111K SNPs, with precomputed intermediates):
+- Python: 6.86s → Rust: 2.70s (**2.5× faster**)
+- Core counting loop: Python ~3.9s → Rust ~0.2s (**18× faster**)
 
-- **BAM I/O:** Using `rust-htslib` for fast BAM parsing
-- **Zero-copy:** Direct memory access via PyO3 bindings
-- **Hash maps:** FxHashMap for 2-3x faster lookups
-- **Byte operations:** In-place sequence modification (no Python string overhead)
-- **Parallelism:** rayon for multi-core chromosome processing
+**Mapping Filter** (20K read pairs):
+- Python (1 thread): 0.44s → Rust (16 threads): 0.09s (**4.9× faster**)
 
-## Performance
+**Analysis** (43 regions, beta-binomial AI detection):
+- Python: 0.28s → Rust: 0.08s (**3.4× faster**)
 
-**Target:** 7.84s → 0.5-2s for 111K SNP counting (4-15x speedup)
-
-Benchmark from OPTIMIZATION_ANALYSIS.md:
-```
-Python baseline: 7.84s BAM I/O (98% of 8.03s total)
-Rust target: 0.5-2s (conservative estimate)
-```
+All implementations produce **identical outputs** to Python (zero mismatches verified).
 
 ## Installation
-
-### Quick build inside the WASP2 conda env
-
-Prereqs (once per env):
-```bash
-mamba install -n WASP2 -y clang libclang llvmdev llvm-openmp gcc_linux-64 gxx_linux-64
-```
-
-Build/test:
-```bash
-conda run -n WASP2 bash -lc '
-  export LIBCLANG_PATH="$CONDA_PREFIX_2/lib"
-  export CC="$CONDA_PREFIX_2/bin/clang"
-  export CFLAGS=""    # clear inherited flags that can break hts-sys
-  export AR="$CONDA_PREFIX_2/bin/llvm-ar"
-  export CPATH="$CONDA_PREFIX_2/lib/clang/21/include:$CONDA_PREFIX_2/include:$CONDA_PREFIX_2/x86_64-conda-linux-gnu/sysroot/usr/include"
-  cargo test -q       # or cargo test --tests
-'
-```
 
 ### Prerequisites
 
@@ -57,29 +32,52 @@ conda run -n WASP2 bash -lc '
 # Install Rust toolchain
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-# Install Python build dependencies
+# Install maturin for building Python extensions
 pip install maturin>=1.0
 ```
 
 ### Build & Install
 
 ```bash
-# From project root
+# From rust/ directory
 cd rust/
 
 # Development build (fast compilation)
 maturin develop
 
 # Release build (optimized for performance)
-maturin build --release
-pip install target/wheels/wasp2_rust-*.whl
+maturin develop --release
 ```
+
+The extension will be automatically available to Python as `wasp2_rust`.
 
 ## Usage
 
+### Automatic Integration
+
+WASP2 automatically uses Rust acceleration when available. No code changes needed:
+
+```bash
+# Rust is used automatically if extension is built
+python -m src.counting count-variants sample.bam variants.vcf
+
+# Force Python implementation
+python -m src.counting count-variants sample.bam variants.vcf --no-rust
+```
+
+### Threading
+
+Enable multi-threading via environment variable:
+
+```bash
+# Use 16 threads for parallel processing
+export WASP2_RUST_THREADS=16
+python -m src.counting count-variants sample.bam variants.vcf
+```
+
 ### Python API
 
-#### Counting (✅ Implemented)
+#### Counting
 
 ```python
 from wasp2_rust import BamCounter
@@ -88,182 +86,146 @@ from wasp2_rust import BamCounter
 counter = BamCounter("/path/to/file.bam")
 
 # Count alleles at SNP positions
-# regions: [(chrom, pos, ref, alt), ...]
 regions = [("chr1", 12345, "A", "G"), ("chr1", 67890, "C", "T")]
-counts = counter.count_alleles(regions, min_qual=20)
+counts = counter.count_alleles(regions, min_qual=0, threads=1)
 
 # Returns: [(ref_count, alt_count, other_count), ...]
-# Example: [(15, 8, 1), (22, 18, 0)]
 ```
 
-#### Remapping (🚧 Skeleton - Not Yet Implemented)
+#### Mapping Filter
 
 ```python
-import wasp2_rust
+from wasp2_rust import filter_bam_wasp
 
-# Single chromosome remapping
-pairs, haps = wasp2_rust.remap_chromosome(
-    bam_path="input.bam",
-    intersect_bed="intersect.bed",
-    chrom="chr10",
-    out_r1="remap_r1.fq",
-    out_r2="remap_r2.fq",
-    max_seqs=64
-)
-print(f"Processed {pairs} pairs, generated {haps} haplotypes")
-
-# All chromosomes in parallel (fastest)
-pairs, haps = wasp2_rust.remap_all_chromosomes(
-    bam_path="input.bam",
-    intersect_bed="intersect.bed",
-    out_r1="remap_r1.fq",
-    out_r2="remap_r2.fq",
-    max_seqs=64
+# Filter remapped BAM to remove reads that moved
+kept, removed_moved, removed_missing = filter_bam_wasp(
+    to_remap_bam="original.bam",
+    remapped_bam="remapped.bam",
+    remap_keep_bam="filtered.bam",
+    threads=16
 )
 ```
 
-### CLI Integration
+#### Analysis
 
-The `wasp2-count` command automatically uses Rust acceleration when available:
+```python
+from wasp2_rust import analyze_imbalance
 
-```bash
-# Use Rust (default if extension installed)
-wasp2-count sample.bam variants.vcf --regions peaks.bed
+# Run beta-binomial allelic imbalance analysis
+results = analyze_imbalance(
+    tsv_path="counts.tsv",
+    min_count=10,
+    pseudocount=1,
+    method="single"
+)
 
-# Force Python implementation
-wasp2-count sample.bam variants.vcf --no-rust
-
-# Check if Rust is available
-python3 -c "from counting.count_alleles import RUST_AVAILABLE; print(f'Rust: {RUST_AVAILABLE}')"
+# Results is a list of dicts with: region, pval, fdr_pval, mu, etc.
 ```
 
 ## Architecture
 
-### Components
+### Key Technologies
 
-**`rust/src/bam_counter.rs`**
-Core BAM counting logic:
-- BAM file opening via noodles
-- Region-based read iteration
-- Base extraction with quality filtering
-- Allele classification (ref/alt/other)
+- **rust-htslib**: Fast BAM/CRAM I/O (bindings to htslib C library)
+- **PyO3**: Zero-copy Python ↔ Rust bindings
+- **Rayon**: Work-stealing parallelism for multi-threading
+- **rv**: Statistical distributions (BetaBinomial for analysis)
+- **FxHash**: Fast hash maps for read deduplication
 
-**`rust/src/lib.rs`**
-PyO3 module definition:
-- Exposes `BamCounter` class to Python
-- Handles Python ↔ Rust type conversions
+### Modules
 
-**Python integration (`src/counting/count_alleles.py`)**
-- `count_snp_alleles_rust()` wrapper
-- Automatic fallback to Python if Rust unavailable
-- `make_count_df(use_rust=True)` parameter
+**`bam_counter.rs`** - Allele counting from BAM files
+- Per-chromosome parallel processing with Rayon
+- Read deduplication via FxHashSet
+- Encounter-order SNP assignment (matches Python behavior exactly)
 
-### Dependencies
+**`mapping_filter.rs`** - WASP remap filter
+- Parallel BGZF block decompression (htslib threading)
+- Keeps reads that return to original position with all haplotype copies
+
+**`analysis.rs`** - Beta-binomial allelic imbalance detection
+- Parallel per-region likelihood optimization
+- Uses rv crate for BetaBinomial distribution
+- Golden section search for parameter optimization
+- Benjamini-Hochberg FDR correction
+
+**`bam_remapper.rs`** - Allele swapping for WASP remapping
+- Parse bedtools intersect output
+- Generate haplotype FASTQs for realignment
+- Support for phased/unphased variants
+
+## Development
+
+### Running Benchmarks
+
+```bash
+# Counting benchmark (requires precomputed intermediates)
+python analysis/run_counting_bench.py \
+  --vcf-bed /tmp/counting_precomputed/filter_chr10.bed \
+  --intersect-bed /tmp/counting_precomputed/filter_chr10_intersect.bed
+
+# Mapping filter benchmark
+python analysis/run_mapping_filter_bench.py
+
+# Analysis benchmark
+python analysis/run_analysis_bench.py
+```
+
+### Testing
+
+```bash
+# Run Rust unit tests
+cd rust/
+cargo test
+
+# Run Python integration tests with Rust
+cd ..
+pytest tests/ -v
+```
+
+## Dependencies
 
 ```toml
 [dependencies]
 pyo3 = { version = "0.20", features = ["extension-module"] }
-noodles = { version = "0.76", features = ["bam", "sam", "core"] }
-rayon = "1.8"
-anyhow = "1.0"
+rust-htslib = "0.47"  # BAM/CRAM I/O
+rayon = "1.8"          # Parallelism
+rv = "0.19"            # Beta-binomial distribution
+statrs = "0.17"        # Chi-squared distribution
+rustc-hash = "1.1"     # Fast FxHash
+anyhow = "1.0"         # Error handling
 ```
-
-## Development
-
-### Build for Testing
-
-```bash
-# Fast debug build
-maturin develop
-
-# Run Python tests with Rust
-pytest tests/counting/ -v
-```
-
-### Benchmarking
-
-```bash
-# Compare Rust vs Python
-python3 -c "
-from counting.run_counting import run_count_variants
-
-# Rust
-run_count_variants('test.bam', 'test.vcf', use_rust=True)
-
-# Python baseline
-run_count_variants('test.bam', 'test.vcf', use_rust=False)
-"
-```
-
-### Debugging
-
-```bash
-# Check compilation warnings
-maturin build --release
-
-# Test Rust imports
-python3 -c "import wasp2_rust; print(dir(wasp2_rust))"
-
-# Enable Rust backtraces
-RUST_BACKTRACE=1 python3 script.py
-```
-
-## Limitations
-
-1. **No indexed queries yet** - Current implementation iterates all reads
-   - Future: Add BAI/CSI index support for chromosome filtering
-
-2. **Chromosome filtering disabled** - All reads processed regardless of chromosome
-   - Requires header lookup to map ref_id → chromosome name
-
-3. **No parallelization** - Single-threaded BAM reading
-   - Future: Parallel chromosome processing with rayon
-
-## Future Optimizations
-
-From OPTIMIZATION_MASTER_PLAN.md Phase 2:
-
-1. **Indexed BAM queries** (2-3x additional speedup)
-   ```rust
-   let index = bam::bai::read("file.bam.bai")?;
-   let query = reader.query(&header, &index, &region)?;
-   ```
-
-2. **Parallel chromosome processing** (2-4x on 8+ cores)
-   ```rust
-   use rayon::prelude::*;
-   chrom_list.par_iter().map(|chrom| count_chromosome(chrom))
-   ```
-
-3. **SIMD vectorization** for base quality checks
-
-4. **Memory-mapped BAM** for large files
 
 ## Troubleshooting
 
 **Import Error: "No module named 'wasp2_rust'"**
 ```bash
-# Rebuild and install
-cd rust/ && maturin develop
+cd rust/ && maturin develop --release
 ```
 
-**Compilation Error: "linker 'cc' not found"**
+**Build Error: "stddef.h not found"**
 ```bash
-# Install build tools
-sudo apt-get install build-essential  # Debian/Ubuntu
-sudo yum groupinstall "Development Tools"  # RHEL/CentOS
+# Set C include path
+export C_INCLUDE_PATH=/usr/lib/gcc/x86_64-redhat-linux/11/include
+export LIBCLANG_PATH=/path/to/conda/envs/WASP2/lib
+maturin develop --release
 ```
 
-**Runtime Error: "BAM file not found"**
-```python
-# Check path exists
-from pathlib import Path
-assert Path("file.bam").exists()
+**Performance Not Improving**
+- Ensure release build: `maturin develop --release`
+- Enable threading: `export WASP2_RUST_THREADS=16`
+- Check CPU count: `nproc` (use 8-16 threads typically)
+
+## Citation
+
+If you use this Rust acceleration in your research, please cite:
+
+```
+van de Geijn B, McVicker G, Gilad Y, Pritchard JK (2015)
+WASP: allele-specific software for robust molecular quantitative trait locus discovery.
+Nature Methods 12(11):1061-1063
 ```
 
-## References
+## License
 
-- **PyO3 Book**: https://pyo3.rs/
-- **noodles docs**: https://docs.rs/noodles/
-- **OPTIMIZATION_MASTER_PLAN.md**: Full implementation strategy
-- **OPTIMIZATION_ANALYSIS.md**: Performance profiling results
+Same as WASP2 main project (see LICENSE in root directory).
