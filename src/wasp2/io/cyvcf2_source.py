@@ -93,6 +93,9 @@ if CYVCF2_AVAILABLE:
             # Lazy-computed variant count
             self._variant_count: Optional[int] = None
 
+            # Track if iterator has been used (cyvcf2 doesn't support seek)
+            self._iterator_used = False
+
         @property
         def samples(self) -> List[str]:
             """Get list of sample IDs from VCF header.
@@ -119,9 +122,11 @@ if CYVCF2_AVAILABLE:
                     count += 1
                 self._variant_count = count
 
-                # Reopen file for future use (cyvcf2 doesn't support rewind)
+                # Mark iterator as used and reopen for future use
+                self._iterator_used = True
                 self.vcf.close()
                 self.vcf = cyvcf2.VCF(str(self.path))
+                self._iterator_used = False
 
             return self._variant_count
 
@@ -172,6 +177,15 @@ if CYVCF2_AVAILABLE:
             # Currently support single sample iteration
             sample_id = target_samples[0]
             sample_idx = self._samples.index(sample_id)
+
+            # cyvcf2 doesn't support rewind/seek, so reopen if iterator was used
+            if self._iterator_used:
+                self.vcf.close()
+                self.vcf = cyvcf2.VCF(str(self.path))
+                self._iterator_used = False
+
+            # Mark iterator as used
+            self._iterator_used = True
 
             # Iterate through VCF records
             for variant in self.vcf:
