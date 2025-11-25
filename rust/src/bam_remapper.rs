@@ -45,6 +45,7 @@ pub struct VariantSpan {
 
 /// Configuration for remapping
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct RemapConfig {
     /// Maximum number of sequence combinations to generate
     pub max_seqs: usize,
@@ -63,6 +64,7 @@ impl Default for RemapConfig {
 
 /// A generated haplotype read to be remapped
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct HaplotypeRead {
     /// Read name with WASP identifier
     pub name: Vec<u8>,
@@ -547,6 +549,7 @@ pub fn write_fastq_pair<P: AsRef<Path>>(
 ///
 /// # Performance
 /// With 8 cores: Additional 2-3x speedup over sequential
+#[allow(dead_code)]
 pub fn process_all_chromosomes_parallel(
     _bam_path: &str,
     _variants: &FxHashMap<Vec<u8>, Vec<VariantSpan>>,

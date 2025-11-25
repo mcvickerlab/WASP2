@@ -11,8 +11,11 @@ from typing import Optional, Union, Literal
 # External package imports
 import pandas as pd
 
-# Local script imports
-from .as_analysis import get_imbalance
+# Rust analysis (required; no Python fallback)
+try:
+    from wasp2_rust import analyze_imbalance as rust_analyze_imbalance
+except ImportError:
+    rust_analyze_imbalance = None
 
 
 
@@ -131,18 +134,24 @@ def run_ai_analysis(
                                 groupby=groupby
                                 )
     
-    # Run analysis pipeline
-    ai_df = get_imbalance(ai_files.count_file,
-                          min_count=ai_files.min_count,
-                          pseudocount=ai_files.pseudocount,
-                          method=ai_files.model,
-                          phased=ai_files.phased,
-                          region_col=ai_files.region_col,
-                          groupby=ai_files.groupby
-                          )
+    # Run analysis pipeline (Rust only)
+    if rust_analyze_imbalance is None:
+        raise RuntimeError(
+            "Rust analysis extension not available. Build it with "
+            "`maturin develop --release` in the WASP2 env."
+        )
+
+    results = rust_analyze_imbalance(
+        str(ai_files.count_file),
+        min_count=ai_files.min_count,
+        pseudocount=ai_files.pseudocount,
+        method=ai_files.model,
+    )
+    ai_df = pd.DataFrame(results)
     
     # Maybe give option to sort or not sort by pval
-    ai_df = ai_df.sort_values(by="fdr_pval", ascending=True)
+    if "fdr_pval" in ai_df.columns:
+        ai_df = ai_df.sort_values(by="fdr_pval", ascending=True)
     
     # Write results
     ai_df.to_csv(ai_files.out_file, sep="\t", header=True, index=False)

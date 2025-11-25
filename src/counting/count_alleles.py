@@ -1,32 +1,16 @@
 import os
 import timeit
 from pathlib import Path
-from bisect import bisect_left
 from typing import Optional
 
 import polars as pl
 
-from pysam.libcalignmentfile import AlignmentFile
-
-# Try to import Rust acceleration
+# Try to import Rust acceleration (required; no Python fallback)
 try:
     from wasp2_rust import BamCounter as RustBamCounter
     RUST_AVAILABLE = True
 except ImportError:
     RUST_AVAILABLE = False
-
-# Helper that does binary search
-def find_read_aln_pos(read, pos):
-    
-    aln_list = read.get_aligned_pairs(True)
-
-    i = bisect_left(aln_list, pos, key=lambda x: x[1])
-    
-    if i != len(aln_list) and aln_list[i][1] == pos:
-        return aln_list[i][0]
-    else:
-        return None
-
 
 def count_snp_alleles_rust(bam_file, chrom, snp_list, threads: Optional[int] = None):
     """
@@ -79,61 +63,38 @@ def make_count_df(bam_file, df, use_rust=True):
     chrom_list = df.get_column("chrom").unique(
         maintain_order=True)
 
-    # Decide which implementation to use
-    use_rust_impl = use_rust and RUST_AVAILABLE
+    # Require Rust path (no Python fallback)
+    if not (use_rust and RUST_AVAILABLE):
+        raise RuntimeError(
+            "Rust BAM counter not available. Build the extension with "
+            "`maturin develop --release` in the WASP2 env."
+        )
+
     rust_threads_env = os.environ.get("WASP2_RUST_THREADS")
     try:
         rust_threads = int(rust_threads_env) if rust_threads_env else 1
     except ValueError:
         rust_threads = 1
     rust_threads = max(1, rust_threads)
-
-    if use_rust_impl:
-        print(f"Using Rust acceleration for BAM counting 🦀 (threads={rust_threads})")
-    else:
-        if use_rust and not RUST_AVAILABLE:
-            print("Rust acceleration requested but not available, falling back to Python")
-        print("Using Python implementation for BAM counting")
+    print(f"Using Rust acceleration for BAM counting 🦀 (threads={rust_threads})")
 
     total_start = timeit.default_timer()
 
-    # Rust path: process outside AlignmentFile context
-    if use_rust_impl:
-        for chrom in chrom_list:
-            chrom_df = df.filter(pl.col("chrom") == chrom)
+    for chrom in chrom_list:
+        chrom_df = df.filter(pl.col("chrom") == chrom)
 
-            snp_list = chrom_df.select(
-                ["pos", "ref", "alt"]).unique(
-                subset=["pos"], maintain_order=True).iter_rows()
+        snp_list = chrom_df.select(
+            ["pos", "ref", "alt"]).unique(
+            subset=["pos"], maintain_order=True).iter_rows()
 
-            start = timeit.default_timer()
+        start = timeit.default_timer()
 
-            try:
-                count_list.extend(count_snp_alleles_rust(bam_file, chrom, snp_list, threads=rust_threads))
-            except Exception as e:
-                print(f"Skipping {chrom}: {e}\n")
-            else:
-                print(f"{chrom}: Counted {chrom_df.height} SNP's in {timeit.default_timer() - start:.2f} seconds!")
-
-    # Python path: use AlignmentFile context manager
-    else:
-        with AlignmentFile(bam_file, "rb") as bam:
-
-            for chrom in chrom_list:
-                chrom_df = df.filter(pl.col("chrom") == chrom)
-
-                snp_list = chrom_df.select(
-                    ["pos", "ref", "alt"]).unique(
-                    subset=["pos"], maintain_order=True).iter_rows()
-
-                start = timeit.default_timer()
-
-                try:
-                    count_list.extend(count_snp_alleles(bam, chrom, snp_list))
-                except ValueError:
-                    print(f"Skipping {chrom}: Contig not found\n")
-                else:
-                    print(f"{chrom}: Counted {chrom_df.height} SNP's in {timeit.default_timer() - start:.2f} seconds!")
+        try:
+            count_list.extend(count_snp_alleles_rust(bam_file, chrom, snp_list, threads=rust_threads))
+        except Exception as e:
+            print(f"Skipping {chrom}: {e}\n")
+        else:
+            print(f"{chrom}: Counted {chrom_df.height} SNP's in {timeit.default_timer() - start:.2f} seconds!")
 
     total_end = timeit.default_timer()
     print(f"Counted all SNP's in {total_end - total_start:.2f} seconds!")
@@ -160,47 +121,20 @@ def make_count_df(bam_file, df, use_rust=True):
 
     return df
 
-
-def count_snp_alleles(bam, chrom, snp_list):
+# Legacy helper retained for imports in counting/count_alleles_sc.py
+def find_read_aln_pos(read, pos):
     """
-    Helper function called by...
-    make_count_df()
+    Binary search over aligned pairs to find query position for a given reference pos.
     """
-    
-    read_set = set()
-    allele_counts = []
-
-    for pos, ref, alt in snp_list:
-
-        # read_set = set()
-        ref_count, alt_count, other_count = 0, 0, 0
-
-        # Got make sure read is not double counted
-        for read in bam.fetch(chrom, pos-1, pos):
-            
-            # If already counted allele
-            if read.query_name in read_set:
-                continue
-            
-            read_set.add(read.query_name)
-            
-            seq = read.query_sequence
-            
-            for qpos, refpos in read.get_aligned_pairs(True):
-                
-                # TODO Update with binary search
-                if refpos == pos-1:
-                    
-                    if seq[qpos] == ref:
-                        ref_count+=1
-                    elif seq[qpos] == alt:
-                        alt_count+=1
-                    else:
-                        other_count+=1
-                    
-                    # Found no longer need to loop
-                    break
-        
-        allele_counts.append((chrom, pos, ref_count, alt_count, other_count))
-                
-    return allele_counts
+    aln_list = read.get_aligned_pairs(True)
+    # bisect_left using manual loop to avoid Python <3.10 key support
+    lo, hi = 0, len(aln_list)
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if aln_list[mid][1] < pos:
+            lo = mid + 1
+        else:
+            hi = mid
+    if lo != len(aln_list) and aln_list[lo][1] == pos:
+        return aln_list[lo][0]
+    return None

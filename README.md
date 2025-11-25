@@ -15,6 +15,14 @@
 - pybedtools
 - typer
 - anndata
+- Rust extension (PyO3) built locally; the Python CLI now routes counting, mapping, and analysis through Rust. Build it after creating the conda env:
+  ```bash
+  conda activate WASP2
+  export LIBCLANG_PATH=$CONDA_PREFIX/lib
+  export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH
+  export BINDGEN_EXTRA_CLANG_ARGS="-I/usr/include"
+  (cd rust && maturin develop --release)
+  ```
 
 
 ## Installation
@@ -31,6 +39,57 @@ See [`.devcontainer/README.md`](.devcontainer/README.md) for details.
 Recommended installation through conda, and given environment
 ```shell script
 conda env create -f environment.yml
+```
+
+## Build the Rust extension (required)
+```bash
+conda activate WASP2
+export LIBCLANG_PATH=$CONDA_PREFIX/lib
+export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH
+export BINDGEN_EXTRA_CLANG_ARGS="-I/usr/include"
+maturin develop --release -m rust/Cargo.toml
+```
+
+## Quick CLI usage
+- Count: `python -m src.counting count-variants BAM VCF --regions BED --out_file counts.tsv`
+- Map filter: `python -m src.mapping filter-remapped ORIGINAL.bam REMAPPED.bam OUT.bam`
+- Analyze: `python -m src.analysis analyze --count_file counts.tsv --out_file ai_results.tsv`
+
+## Minimal API (Rust-backed)
+```python
+from counting.run_counting import run_count_variants
+from mapping.filter_remap_reads import filt_remapped_reads
+from analysis.run_analysis import run_ai_analysis
+
+run_count_variants(bam_file="sample.bam", vcf_file="variants.vcf", region_file="regions.bed")
+filt_remapped_reads("orig.bam", "remap.bam", "keep.bam", threads=4)
+run_ai_analysis("counts.tsv", out_file="ai_results.tsv")
+```
+
+## Validation
+Baselines are generated on-demand. With the extension built:
+```bash
+export PYTHONPATH=$PWD
+python validation/generate_baselines.py
+python validation/compare_to_baseline.py
+```
+This runs counting, mapping, and analysis on the small chr10 test bundle and checks parity.
+
+## Publish to private index (example)
+```bash
+maturin build --release -m rust/Cargo.toml
+pip install twine
+twine upload --repository-url https://<private-index>/simple dist/*.whl
+# Install:
+pip install --index-url https://<private-index>/simple wasp2
+```
+
+## API Documentation
+Build Sphinx docs locally:
+```bash
+pip install sphinx sphinx-rtd-theme sphinx-autodoc-typehints
+cd docs && make html
+# Open docs/build/html/index.html in a browser
 ```
 
 &nbsp;

@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["maturin>=1.4,<2.0"]
+build-backend = "maturin"
 
 [project]
 name = "wasp2"
-version = "1.0.0"
+version = "1.1.0"
 description = "Allele-specific analysis of next-generation sequencing data"
 readme = "README.md"
 authors = [
@@ -59,6 +59,7 @@ dev = [
     "pre-commit>=3.0",
     "build>=0.10",
     "twine>=4.0",
+    "maturin>=1.4",
 ]
 docs = [
     "sphinx>=5.0",
@@ -79,7 +80,7 @@ wasp2-analyze = "analysis.__main__:app"
 
 [project.urls]
 Homepage = "https://github.com/Jaureguy760/WASP2-exp"
-Documentation = "https://wasp2.readthedocs.io"
+Documentation = "https://Jaureguy760.github.io/WASP2-exp/"
 Repository = "https://github.com/Jaureguy760/WASP2-exp"
 Issues = "https://github.com/Jaureguy760/WASP2-exp/issues"
 
@@ -89,6 +90,13 @@ package-dir = {"" = "src"}
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["counting*", "mapping*", "analysis*"]
+
+[tool.maturin]
+manifest-path = "rust/Cargo.toml"
+python-source = "src"
+features = ["python"]
+bindings = "pyo3"
+strip = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

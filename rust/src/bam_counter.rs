@@ -289,6 +289,7 @@ impl BamCounter {
 
 /// Get base at genomic position, accounting for CIGAR operations
 /// Matches WASP2 behavior: NO quality filtering by default
+#[allow(dead_code)]
 fn get_base_at_position(
     record: &bam::Record,
     target_pos: u32,  // 0-based genomic position

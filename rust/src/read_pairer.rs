@@ -8,7 +8,7 @@
 //! - Byte slices instead of String for read names (zero UTF-8 validation)
 //! - Single-pass filtering (vs multiple if statements in Python)
 
-use rust_htslib::{bam, bam::Read};
+use rust_htslib::bam;
 use rustc_hash::FxHashMap;
 
 // ============================================================================
@@ -17,6 +17,7 @@ use rustc_hash::FxHashMap;
 
 /// Statistics for read pairing (matches Python's ReadStats)
 #[derive(Debug, Default, Clone)]
+#[allow(dead_code)]
 pub struct PairingStats {
     /// Reads discarded because unmapped
     pub discard_unmapped: usize,
@@ -44,6 +45,7 @@ pub struct PairingStats {
 /// - Python: dict with String keys, multiple function calls
 /// - Rust: FxHashMap with byte slice keys, inlined checks
 /// - Expected speedup: 2-3x
+#[allow(dead_code)]
 pub struct ReadPairer {
     /// Internal reader
     reader: bam::Reader,
@@ -60,6 +62,7 @@ pub struct ReadPairer {
     chrom: Option<String>,
 }
 
+#[allow(dead_code)]
 impl ReadPairer {
     /// Create a new ReadPairer for the entire BAM file
     pub fn new(bam_path: &str) -> Result<Self, Box<dyn std::error::Error>> {
@@ -209,6 +212,7 @@ impl Iterator for ReadPairer {
 ///     // Process pair
 /// }
 /// ```
+#[allow(dead_code)]
 pub fn pair_reads_from_bam(
     bam_path: &str,
 ) -> Result<impl Iterator<Item = (bam::Record, bam::Record)>, Box<dyn std::error::Error>> {
@@ -226,6 +230,7 @@ pub fn pair_reads_from_bam(
 /// pairer.finalize();
 /// println!("Pairs yielded: {}", pairer.stats().pairs_yielded);
 /// ```
+#[allow(dead_code)]
 pub fn pair_reads_from_chromosome(
     bam_path: &str,
     chrom: &str,

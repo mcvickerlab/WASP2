@@ -33,36 +33,6 @@ compare_ai
    :undoc-members:
    :show-inheritance:
 
-Allele Counting
----------------
-
-count_alleles
-~~~~~~~~~~~~~
-
-.. automodule:: analysis.count_alleles
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-count_alleles_sc
-~~~~~~~~~~~~~~~~
-
-.. automodule:: analysis.count_alleles_sc
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-Data Filtering
---------------
-
-filter_data
-~~~~~~~~~~~
-
-.. automodule:: analysis.filter_data
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 Analysis Runners
 ----------------
 

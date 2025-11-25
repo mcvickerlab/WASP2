@@ -8,7 +8,7 @@
 use anyhow::{Context, Result};
 use rayon::prelude::*;
 use rv::dist::BetaBinomial;
-use rv::traits::{Rv, HasDensity};
+use rv::traits::HasDensity;
 use statrs::distribution::{ChiSquared, ContinuousCDF};
 use std::collections::HashMap;
 
@@ -18,6 +18,7 @@ use std::collections::HashMap;
 
 /// Allele count data for a single variant
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct VariantCounts {
     pub chrom: String,
     pub pos: u32,
@@ -111,12 +112,6 @@ pub fn betabinom_logpmf_sum(ref_counts: &[u32], n_array: &[u32], alpha: f64, bet
     Ok(sum)
 }
 
-/// Sigmoid function (expit)
-#[inline]
-fn expit(x: f64) -> f64 {
-    1.0 / (1.0 + (-x).exp())
-}
-
 // ============================================================================
 // Optimization Functions
 // ============================================================================
@@ -180,7 +175,8 @@ fn optimize_prob(ref_counts: &[u32], n_array: &[u32], disp: f64) -> Result<(f64,
 ///
 /// Simple but robust method for bounded scalar optimization.
 /// Equivalent to scipy's minimize_scalar with method='bounded'
-fn golden_section_search<F>(f: F, a: f64, b: f64, tol: f64) -> Result<f64>
+#[allow(unused_assignments)]
+fn golden_section_search<F>(f: F, a: f64, mut b: f64, tol: f64) -> Result<f64>
 where
     F: Fn(f64) -> f64,
 {
@@ -189,7 +185,6 @@ where
     let inv_phi2 = 1.0 / (PHI * PHI);
 
     let mut a = a;
-    let mut b = b;
     let mut h = b - a;
 
     // Initial points
@@ -350,7 +345,7 @@ pub fn analyze_imbalance(
     config: &AnalysisConfig,
 ) -> Result<Vec<ImbalanceResult>> {
     // Apply filters and pseudocounts
-    let mut filtered: Vec<VariantCounts> = variants
+    let filtered: Vec<VariantCounts> = variants
         .into_iter()
         .map(|mut v| {
             v.ref_count += config.pseudocount;
