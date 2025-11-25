@@ -4,8 +4,8 @@ build-backend = "maturin"
 
 [project]
 name = "wasp2"
-version = "1.1.1"
-description = "Allele-specific analysis of next-generation sequencing data"
+version = "1.2.0"
+description = "Allele-specific analysis of next-generation sequencing data with PLINK2 PGEN support"
 readme = "README.md"
 authors = [
     {name = "Aaron Ho"},
@@ -22,6 +22,9 @@ keywords = [
     "sequencing",
     "wasp",
     "allelic-imbalance",
+    "plink2",
+    "pgen",
+    "vcf",
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
