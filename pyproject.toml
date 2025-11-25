@@ -89,12 +89,12 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["counting*", "mapping*", "analysis*"]
+include = ["counting*", "mapping*", "analysis*", "wasp2*"]
 
 [tool.maturin]
 manifest-path = "rust/Cargo.toml"
 python-source = "src"
-python-packages = ["counting", "mapping", "analysis"]
+python-packages = ["counting", "mapping", "analysis", "wasp2"]
 bindings = "pyo3"
 strip = true
 

@@ -180,7 +180,7 @@ class TestVariantSourceFactory:
         """Test that unsupported format raises ValueError."""
         bad_file = tmp_path / "data.xyz"
         bad_file.touch()
-        with pytest.raises(ValueError, match="Unsupported format"):
+        with pytest.raises(ValueError, match="Unsupported.*format"):
             VariantSource.open(bad_file)
 
     def test_open_nonexistent_file_raises(self, tmp_path):
