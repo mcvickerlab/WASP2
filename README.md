@@ -31,6 +31,7 @@
 - pybedtools
 - typer
 - anndata
+- **Optional**: cyvcf2 (for high-performance VCF parsing - ~7x faster)
 - **Optional**: Pgenlib (for PLINK2 PGEN format support - ~25x faster variant I/O)
 - Rust extension (PyO3) built locally; the Python CLI now routes counting, mapping, and analysis through Rust. Build it after creating the conda env:
   ```bash
@@ -73,7 +74,8 @@ WASP2 supports multiple variant file formats through a unified interface:
 
 | Format | Extensions | Notes | Performance |
 |--------|------------|-------|-------------|
-| VCF | `.vcf`, `.vcf.gz`, `.vcf.bgz` | Standard text format | Baseline |
+| VCF (pysam) | `.vcf`, `.vcf.gz`, `.vcf.bgz` | Standard text format | Baseline |
+| **VCF (cyvcf2)** | `.vcf`, `.vcf.gz`, `.vcf.bgz` | High-performance parser | **~7x faster** |
 | **BCF** | `.bcf`, `.bcf.gz` | Binary VCF format | **5-8x faster** |
 | **PGEN** | `.pgen` | PLINK2 binary format | **~25x faster** |
 
@@ -81,9 +83,33 @@ WASP2 supports multiple variant file formats through a unified interface:
 
 Choose your variant format based on your workflow:
 
-1. **PGEN (Fastest)** - Best for large variant datasets, genotype-only workflows
-2. **BCF (Fast)** - Good balance of speed and compatibility, preserves all VCF fields
-3. **VCF.gz** - Most compatible, use when sharing data or using other tools
+1. **PGEN (Fastest - ~25x)** - Best for large variant datasets, genotype-only workflows
+2. **cyvcf2 (Fast - ~7x)** - High-performance VCF parsing, drop-in replacement for pysam
+3. **BCF (Fast - 5-8x)** - Good balance of speed and compatibility, preserves all VCF fields
+4. **VCF.gz (pysam)** - Most compatible, use when sharing data or using other tools
+
+### cyvcf2 Support (High-Performance VCF Parsing)
+
+For faster VCF parsing without changing file formats:
+
+```bash
+# Install cyvcf2 (optional dependency)
+pip install wasp2[cyvcf2]
+# or: pip install cyvcf2
+
+# Use same VCF files - automatically uses cyvcf2 if installed
+wasp2-count count-variants reads.bam variants.vcf.gz -s sample1 -r regions.bed
+
+# Explicit usage in Python
+from wasp2.io.cyvcf2_source import CyVCF2Source
+with CyVCF2Source("variants.vcf.gz") as source:
+    for variant in source.iter_variants(het_only=True):
+        ...  # ~7x faster than pysam!
+```
+
+Benchmark results show **~7x speedup** for VCF parsing with cyvcf2 vs pysam on large files.
+
+**📖 See [docs/VCF_PERFORMANCE.md](docs/VCF_PERFORMANCE.md) for detailed benchmarks and usage guide.**
 
 ### BCF Support (Recommended for Standard Workflows)
 
