@@ -2,7 +2,7 @@ name: Build and Deploy Docs
 
 on:
   push:
-    branches: [master, main]
+    branches: [master, main, rust-optimization]
   workflow_dispatch:
 
 permissions:
