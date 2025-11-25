@@ -71,11 +71,32 @@ maturin develop --release -m rust/Cargo.toml
 
 WASP2 supports multiple variant file formats through a unified interface:
 
-| Format | Extensions | Notes |
-|--------|------------|-------|
-| VCF | `.vcf`, `.vcf.gz`, `.vcf.bgz` | Standard text format |
-| BCF | `.bcf`, `.bcf.gz` | Binary VCF format |
-| **PGEN** | `.pgen` | PLINK2 binary format (~25x faster) |
+| Format | Extensions | Notes | Performance |
+|--------|------------|-------|-------------|
+| VCF | `.vcf`, `.vcf.gz`, `.vcf.bgz` | Standard text format | Baseline |
+| **BCF** | `.bcf`, `.bcf.gz` | Binary VCF format | **5-8x faster** |
+| **PGEN** | `.pgen` | PLINK2 binary format | **~25x faster** |
+
+### Performance Recommendations
+
+Choose your variant format based on your workflow:
+
+1. **PGEN (Fastest)** - Best for large variant datasets, genotype-only workflows
+2. **BCF (Fast)** - Good balance of speed and compatibility, preserves all VCF fields
+3. **VCF.gz** - Most compatible, use when sharing data or using other tools
+
+### BCF Support (Recommended for Standard Workflows)
+
+BCF (binary VCF) provides 5-8x faster parsing than compressed VCF with no loss of information:
+
+```bash
+# Convert VCF to BCF using bcftools
+bcftools view variants.vcf.gz -Ob -o variants.bcf
+bcftools index variants.bcf
+
+# Use BCF directly in WASP2
+wasp2-count count-variants reads.bam variants.bcf -s sample1 -r regions.bed
+```
 
 ### PGEN Support (Recommended for Large Datasets)
 
