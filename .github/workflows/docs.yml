@@ -28,7 +28,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install sphinx sphinx-rtd-theme sphinx-autodoc-typehints
-          pip install numpy pandas scipy pysam typer
+          pip install numpy pandas polars scipy typer rich
 
       - name: Build docs
         run: |

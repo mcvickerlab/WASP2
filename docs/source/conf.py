@@ -5,6 +5,15 @@ import os
 import sys
 sys.path.insert(0, os.path.abspath('../../src'))
 
+# Mock imports for modules that require compiled extensions
+autodoc_mock_imports = [
+    'wasp2_rust',
+    'pysam',
+    'pybedtools',
+    'anndata',
+    'scanpy',
+]
+
 # -- Project information -----------------------------------------------------
 project = 'WASP2'
 copyright = '2025, Aaron Ho, Jeff Jaureguy, McVicker Lab'
