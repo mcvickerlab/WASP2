@@ -1,0 +1,2 @@
+[env]
+LIBCLANG_PATH = "/iblm/netapp/home/jjaureguy/mambaforge/envs/wasp2-dev/lib"
