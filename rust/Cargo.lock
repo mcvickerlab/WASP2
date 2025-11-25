@@ -1767,8 +1767,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "wasp2_rust"
-version = "1.1.0"
+name = "wasp2"
+version = "1.1.1"
 dependencies = [
  "anyhow",
  "argmin",

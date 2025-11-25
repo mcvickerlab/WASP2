@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "wasp2"
-version = "1.1.0"
+version = "1.1.1"
 description = "Allele-specific analysis of next-generation sequencing data"
 readme = "README.md"
 authors = [
@@ -94,7 +94,7 @@ include = ["counting*", "mapping*", "analysis*"]
 [tool.maturin]
 manifest-path = "rust/Cargo.toml"
 python-source = "src"
-features = ["python"]
+python-packages = ["counting", "mapping", "analysis"]
 bindings = "pyo3"
 strip = true
 

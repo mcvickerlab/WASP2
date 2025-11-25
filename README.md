@@ -1,7 +1,23 @@
 <h1 align="center">
 <img src="doc/wasp2_hex_logo_v1.png" width="300">
 </h1>
-&nbsp;
+
+<p align="center">
+  <a href="https://github.com/Jaureguy760/WASP2-exp/actions/workflows/docs.yml">
+    <img src="https://github.com/Jaureguy760/WASP2-exp/actions/workflows/docs.yml/badge.svg" alt="Docs">
+  </a>
+  <a href="https://jaureguy760.github.io/WASP2-exp/">
+    <img src="https://img.shields.io/badge/docs-GitHub%20Pages-blue" alt="Documentation">
+  </a>
+  <a href="https://test.pypi.org/project/wasp2-rust/">
+    <img src="https://img.shields.io/badge/PyPI-v1.1.0-orange" alt="PyPI">
+  </a>
+  <a href="https://github.com/Jaureguy760/WASP2-exp/blob/master/LICENSE">
+    <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
+  </a>
+  <img src="https://img.shields.io/badge/python-3.9+-blue" alt="Python">
+  <img src="https://img.shields.io/badge/rust-1.70+-orange" alt="Rust">
+</p>
 
 # WASP2: Allele-specific pipeline for unbiased read mapping and allelic-imbalance analysis
 
