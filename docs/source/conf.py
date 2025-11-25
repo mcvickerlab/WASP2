@@ -88,6 +88,10 @@ html_context = {
     'doc_path': 'docs/source',
 }
 
+# Logo configuration
+html_logo = '_static/logo.png'
+html_favicon = '_static/logo.png'
+
 # Add any paths that contain custom static files (such as style sheets)
 html_static_path = ['_static']
 
