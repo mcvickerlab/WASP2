@@ -17,8 +17,8 @@ app = typer.Typer(pretty_exceptions_short=False)
 
 @app.command()
 def count_variants(
-    bam: Annotated[str, typer.Argument(help="Bam File")],
-    vcf: Annotated[str, typer.Argument(help="VCF File")],
+    bam: Annotated[str, typer.Argument(help="BAM file")],
+    variants: Annotated[str, typer.Argument(help="Variant file (VCF, VCF.GZ, BCF, or PGEN)")],
     samples: Annotated[
         Optional[List[str]],
         typer.Option(
@@ -27,7 +27,7 @@ def count_variants(
             "--samps",
             "-s",
             help=(
-                "One or more samples to use in VCF. "
+                "One or more samples to use in variant file. "
                 "Accepts comma delimited string "
                 "or file with one sample per line"
             )
@@ -146,7 +146,7 @@ def count_variants(
 
     # run
     run_count_variants(bam_file=bam,
-                       vcf_file=vcf,
+                       variant_file=variants,
                        region_file=region_file,
                        samples=sample_str,
                        use_region_names=use_region_names,
@@ -166,8 +166,8 @@ def count_variants(
 
 @app.command()
 def count_variants_sc(
-    bam: Annotated[str, typer.Argument(help="Bam File")],
-    vcf: Annotated[str, typer.Argument(help="VCF File")],
+    bam: Annotated[str, typer.Argument(help="BAM file")],
+    variants: Annotated[str, typer.Argument(help="Variant file (VCF, VCF.GZ, BCF, or PGEN)")],
     barcodes: Annotated[str, typer.Argument(
         help="File with one barcode per line. Used as index")],
     samples: Annotated[
@@ -178,7 +178,7 @@ def count_variants_sc(
             "--samps",
             "-s",
             help=(
-                "One or more samples to use in VCF. "
+                "One or more samples to use in variant file. "
                 "Accepts comma delimited string "
                 "or file with one sample per line. "
                 "RECOMMENDED TO USE ONE SAMPLE AT A TIME."
@@ -232,7 +232,7 @@ def count_variants_sc(
 
     # run
     run_count_variants_sc(bam_file=bam,
-                          vcf_file=vcf,
+                          variant_file=variants,
                           barcode_file=barcodes,
                           feature_file=feature_file,
                           samples=sample_str,

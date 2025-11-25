@@ -20,9 +20,14 @@ try:
 except ImportError:
     pass  # pgenlib not available - PGEN support disabled
 
+# Import compatibility functions for legacy code
+from .compat import variants_to_bed, vcf_to_bed
+
 __all__ = [
     "Genotype",
     "Variant",
     "VariantGenotype",
     "VariantSource",
+    "variants_to_bed",
+    "vcf_to_bed",
 ]

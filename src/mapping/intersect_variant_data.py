@@ -1,7 +1,7 @@
 import timeit
 import subprocess
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Union
 
 import numpy as np
 import polars as pl
@@ -11,60 +11,40 @@ from pysam.libcalignmentfile import AlignmentFile
 
 from pybedtools import BedTool
 
-def vcf_to_bed(vcf_file: str, out_bed: str, samples: Optional[List[str]] = None) -> str:
-    
-    # Maybe change this later?
-    # out_bed = f"{out_dir}/filt_variants.bed"
-    
-    # Base commands
-    view_cmd = ["bcftools", "view", str(vcf_file),
-                "-m2", "-M2", "-v", "snps", "-Ou"
-               ]
+# Import from new wasp2.io module for multi-format support
+from wasp2.io import variants_to_bed as _variants_to_bed
 
-    query_cmd = ["bcftools", "query",
-                 "-o", str(out_bed),
-                 "-f"]
-    
-    # Parse based on num samps
-    if samples is None:
-        
-        # 0 samps, no GTs
-        view_cmd.append("--drop-genotypes")
-        query_cmd.append("%CHROM\t%POS0\t%END\t%REF\t%ALT\n")
-        
-        view_process = subprocess.run(view_cmd, stdout=subprocess.PIPE, check=True)
-        
-    else:
-        
-        # Samples
-        samples_arg = ",".join(samples)
-        num_samples = len(samples)
-        
-        if num_samples > 1:
-            # Multisamp
-            view_cmd.extend(["-s", samples_arg,
-                             "--min-ac", "1",
-                             "--max-ac", str((num_samples * 2) - 1)])
-            
-            view_process = subprocess.run(view_cmd, stdout=subprocess.PIPE, check=True)
-                    
-        else:
 
-            # Single Samp subset
-            view_cmd.extend(["-s", samples_arg])
-            subset_process = subprocess.run(view_cmd, stdout=subprocess.PIPE, check=True)
-            
-            # Get het genotypes
-            new_view_cmd = ["bcftools", "view", "--genotype", "het", "-Ou"]
-            view_process = subprocess.run(new_view_cmd, input=subset_process.stdout,
-                                          stdout=subprocess.PIPE, check=True)
-        
-        query_cmd.append("%CHROM\t%POS0\t%END\t%REF\t%ALT[\t%TGT]\n")
-    
-    # Run Subprocess
-    query_process = subprocess.run(query_cmd, input=view_process.stdout, check=True)
-    
-    return out_bed
+def vcf_to_bed(
+    vcf_file: Union[str, Path],
+    out_bed: Union[str, Path],
+    samples: Optional[List[str]] = None
+) -> str:
+    """Convert variant file to BED format.
+
+    Supports VCF, VCF.GZ, BCF, and PGEN formats via the VariantSource API.
+
+    Note: Parameter name 'vcf_file' is kept for backward compatibility,
+    but accepts any supported variant format (VCF, BCF, PGEN).
+
+    Args:
+        vcf_file: Path to variant file (VCF, VCF.GZ, BCF, or PGEN)
+        out_bed: Output BED file path
+        samples: Optional list of sample IDs. If provided, filters to het sites.
+
+    Returns:
+        Path to output BED file as string
+    """
+    # Use new unified interface
+    # include_gt=True for mapping (needs genotypes for allele assignment)
+    result = _variants_to_bed(
+        variant_file=vcf_file,
+        out_bed=out_bed,
+        samples=samples,
+        include_gt=True,
+        het_only=True if samples else False,
+    )
+    return str(result)
 
 # TODO FIX ALL OF THESE TO USE A CLASS
 # Process single and pe bam

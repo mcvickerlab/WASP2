@@ -16,17 +16,17 @@ class WaspDataFiles:
     def __init__(
         self,
         bam_file: Union[str, Path],
-        vcf_file: Union[str, Path],
+        variant_file: Union[str, Path],
         is_paired: Optional[bool] = None,
         samples: Optional[Union[str, List[str]]] = None,
         is_phased: Optional[bool] = None,
         out_dir: Optional[Union[str, Path]] = None,
         temp_loc: Optional[Union[str, Path]] = None
     ) -> None:
-        
+
         # User input files
         self.bam_file = bam_file
-        self.vcf_file = vcf_file
+        self.variant_file = variant_file
         self.is_paired = is_paired
         self.samples = samples
         self.is_phased = is_phased
@@ -57,41 +57,54 @@ class WaspDataFiles:
 
         # At this point, self.samples is normalized to Optional[List[str]]
 
-        # Check if VCF is phased
+        # Check if variant file is phased (only works for VCF/BCF, not PGEN)
         if self.is_phased is None and self.samples is not None:
             # TODO GOTTA FIX THIS TO CHECK IF PHASED
+            # Note: This only works for VCF/BCF files, PGEN doesn't store phase in the same way
+            variant_path = Path(self.variant_file)
+            suffix = variant_path.suffix.lower()
+            if suffix in ('.vcf', '.bcf') or str(variant_path).lower().endswith('.vcf.gz'):
+                with VariantFile(self.variant_file, "r") as vcf:
+                    vcf_samps = next(vcf.fetch()).samples
+                    samps_phased = [vcf_samps[s].phased for s in self.samples]
 
-            with VariantFile(self.vcf_file, "r") as vcf:
-                vcf_samps = next(vcf.fetch()).samples
-                samps_phased = [vcf_samps[s].phased for s in self.samples]
+                    if all(samps_phased):
+                        self.is_phased = True
+                    else:
+                        # TODO GOTTA WARN UNPHASED BAD
+                        # TODO WARN SOME UNPHASED WHILE OTHERS PHASED
+                        self.is_phased = False
+            else:
+                # PGEN format - assume phased (user should specify if not)
+                self.is_phased = True
 
-                if all(samps_phased):
-                    self.is_phased = True
-                else:
-                    # TODO GOTTA WARN UNPHASED BAD
-                    # TODO WARN SOME UNPHASED WHILE OTHERS PHASED
-                    self.is_phased = False
-        
         if self.out_dir is None:
             self.out_dir = Path(bam_file).parent # change to cwd?
-        
+
         # TODO handle temp loc, maybe make default if temp not made?
         # Temporary workaround until figure out temp dir options
         if self.temp_loc is None:
             self.temp_loc = self.out_dir
-        
+
         # Generate intermediate files
         # Maybe use easy defalt names if temp loc in use
-        
-        vcf_prefix = re.split(r'.vcf|.bcf', Path(self.vcf_file).name)[0]
+
+        # Handle different variant file extensions for prefix extraction
+        variant_name = Path(self.variant_file).name
+        if variant_name.endswith('.vcf.gz'):
+            variant_prefix = variant_name[:-7]  # Remove .vcf.gz
+        elif variant_name.endswith('.pgen'):
+            variant_prefix = variant_name[:-5]  # Remove .pgen
+        else:
+            variant_prefix = re.split(r'\.vcf|\.bcf', variant_name)[0]
         bam_prefix = Path(self.bam_file).name.rsplit(".bam")[0]
-        
-        self.vcf_prefix = vcf_prefix
+
+        self.variant_prefix = variant_prefix
         self.bam_prefix = bam_prefix
         
-        self.vcf_bed = str(Path(self.temp_loc) / f"{vcf_prefix}.bed")
+        self.vcf_bed = str(Path(self.temp_loc) / f"{variant_prefix}.bed")
         self.remap_reads = str(Path(self.temp_loc) / f"{bam_prefix}_remap_reads.txt")
-        self.intersect_file = str(Path(self.temp_loc) / f"{bam_prefix}_{vcf_prefix}_intersect.bed")
+        self.intersect_file = str(Path(self.temp_loc) / f"{bam_prefix}_{variant_prefix}_intersect.bed")
         
         self.to_remap_bam = str(Path(self.out_dir) / f"{bam_prefix}_to_remap.bam")
         self.keep_bam = str(Path(self.out_dir) / f"{bam_prefix}_keep.bam")

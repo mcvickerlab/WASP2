@@ -19,7 +19,7 @@ from .count_alleles_sc import make_count_matrix
 class WaspCountSC:
 
     def __init__(self, bam_file,
-                 vcf_file,
+                 variant_file,
                  barcode_file,
                  feature_file,
                  samples=None,
@@ -27,12 +27,12 @@ class WaspCountSC:
                  out_file=None,
                  temp_loc=None
                  ):
-        
+
         # TODO: ALSO ACCEPT .h5
-        
+
         # User input files
         self.bam_file = bam_file
-        self.vcf_file = vcf_file
+        self.variant_file = variant_file
         self.barcode_file = barcode_file # Maybe could be optional?
         
         self.feature_file = feature_file
@@ -69,12 +69,18 @@ class WaspCountSC:
             self.temp_loc = str(Path.cwd())
         
         
-        # Parse vcf and intersect
-        vcf_prefix = re.split(r'.vcf|.bcf', Path(self.vcf_file).name)[0]
-        self.vcf_prefix = vcf_prefix
-        
-        # Filtered vcf output
-        self.vcf_bed = str(Path(self.temp_loc) / f"{vcf_prefix}.bed")
+        # Parse variant file prefix (handle VCF, BCF, PGEN)
+        variant_name = Path(self.variant_file).name
+        if variant_name.endswith('.vcf.gz'):
+            variant_prefix = variant_name[:-7]  # Remove .vcf.gz
+        elif variant_name.endswith('.pgen'):
+            variant_prefix = variant_name[:-5]  # Remove .pgen
+        else:
+            variant_prefix = re.split(r'\.vcf|\.bcf', variant_name)[0]
+        self.variant_prefix = variant_prefix
+
+        # Filtered variant output
+        self.vcf_bed = str(Path(self.temp_loc) / f"{variant_prefix}.bed")
         
         # Parse feature file
         self.feature_type = None # maybe use a boolean flag instead
@@ -85,18 +91,18 @@ class WaspCountSC:
             
             if re.search(r'\.(.*Peak|bed)(?:\.gz)?$', f_ext, re.I):
                 self.feature_type = "regions"
-                self.intersect_file = str(Path(self.temp_loc) / f"{vcf_prefix}_intersect_regions.bed")
+                self.intersect_file = str(Path(self.temp_loc) / f"{variant_prefix}_intersect_regions.bed")
                 self.is_gene_file = False
             elif re.search(r'\.g[tf]f(?:\.gz)?$', f_ext, re.I):
                 self.feature_type = "genes"
-                self.intersect_file = str(Path(self.temp_loc) / f"{vcf_prefix}_intersect_genes.bed")
+                self.intersect_file = str(Path(self.temp_loc) / f"{variant_prefix}_intersect_genes.bed")
                 self.is_gene_file = True
                 gtf_prefix = re.split(r'.g[tf]f', Path(self.feature_file).name)[0]
                 self.gtf_bed = str(Path(self.temp_loc) / f"{gtf_prefix}.bed")
                 self.use_feature_names = True # Use feature attributes as region names
             elif re.search(r'\.gff3(?:\.gz)?$', f_ext, re.I):
                 self.feature_type = "genes"
-                self.intersect_file = str(Path(self.temp_loc) / f"{vcf_prefix}_intersect_genes.bed")
+                self.intersect_file = str(Path(self.temp_loc) / f"{variant_prefix}_intersect_genes.bed")
                 self.is_gene_file = True
                 gtf_prefix = re.split(r'.gff3', Path(self.feature_file).name)[0]
                 self.gtf_bed = str(Path(self.temp_loc) / f"{gtf_prefix}.bed")
@@ -117,7 +123,7 @@ class WaspCountSC:
 
 
 @tempdir_decorator
-def run_count_variants_sc(bam_file, vcf_file,
+def run_count_variants_sc(bam_file, variant_file,
                           barcode_file,
                           feature_file=None,
                           samples=None,
@@ -127,7 +133,7 @@ def run_count_variants_sc(bam_file, vcf_file,
                          ):
 
     # Stores file names
-    count_files = WaspCountSC(bam_file, vcf_file,
+    count_files = WaspCountSC(bam_file, variant_file,
                               barcode_file=barcode_file,
                               feature_file=feature_file,
                               samples=samples,
@@ -138,7 +144,7 @@ def run_count_variants_sc(bam_file, vcf_file,
 
     # Create intermediary files
     # Maybe change include_gt based on preparse?
-    vcf_to_bed(vcf_file=count_files.vcf_file,
+    vcf_to_bed(vcf_file=count_files.variant_file,
                out_bed=count_files.vcf_bed,
                samples=count_files.samples,
                include_gt=True

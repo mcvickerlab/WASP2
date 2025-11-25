@@ -61,24 +61,47 @@ def sample_vcf(test_data_dir, sample_vcf_content) -> Path:
 
 
 @pytest.fixture(scope="session")
-def sample_vcf_gz(test_data_dir, sample_vcf_content) -> Path:
-    """Create a bgzipped and indexed VCF file for testing."""
-    vcf_path = test_data_dir / "sample.vcf.gz"
+def sample_vcf_gz(test_data_dir, sample_vcf) -> Path:
+    """Create a bgzipped and indexed VCF file for testing.
 
-    # Write gzipped content
-    with gzip.open(vcf_path, 'wt') as f:
-        f.write(sample_vcf_content)
+    Uses bcftools to properly bgzip the file (required for pysam/tabix).
+    """
+    vcf_gz_path = test_data_dir / "sample.vcf.gz"
 
-    # Try to create tabix index (skip if bcftools not available)
+    # Remove old file if exists (might be wrong format)
+    if vcf_gz_path.exists():
+        vcf_gz_path.unlink()
+    tbi_path = Path(str(vcf_gz_path) + ".tbi")
+    if tbi_path.exists():
+        tbi_path.unlink()
+
+    # Use bcftools to properly bgzip (required for pysam)
     try:
         subprocess.run(
-            ["bcftools", "index", "-t", str(vcf_path)],
+            ["bcftools", "view", "-Oz", "-o", str(vcf_gz_path), str(sample_vcf)],
             check=True, capture_output=True
         )
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        pass  # Index not required for basic tests
+        # Create tabix index
+        subprocess.run(
+            ["bcftools", "index", "-t", str(vcf_gz_path)],
+            check=True, capture_output=True
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        # Fall back to bgzip if bcftools fails
+        try:
+            subprocess.run(
+                ["bgzip", "-c", str(sample_vcf)],
+                stdout=open(vcf_gz_path, 'wb'),
+                check=True
+            )
+            subprocess.run(
+                ["tabix", "-p", "vcf", str(vcf_gz_path)],
+                check=True, capture_output=True
+            )
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            pytest.skip(f"bcftools/bgzip not available for bgzip compression")
 
-    return vcf_path
+    return vcf_gz_path
 
 
 @pytest.fixture(scope="session")

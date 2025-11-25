@@ -20,7 +20,7 @@ from .variant_source import (
 )
 
 
-@VariantSource.register('vcf', 'vcf.gz', 'bcf')
+@VariantSource.register('vcf', 'vcf.gz', 'vcf.bgz', 'bcf', 'bcf.gz')
 class VCFSource(VariantSource):
     """VariantSource implementation for VCF/BCF files.
 

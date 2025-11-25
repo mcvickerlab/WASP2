@@ -178,3 +178,19 @@ baselines/baseline_metadata.txt
 test_rust_counts.tsv
 test_python_counts.tsv
 test_rust_debug.tsv
+
+# Benchmark results (regenerated from scripts)
+benchmarks/test_results/
+benchmarks/nature_style_results/
+benchmarks/*.bed
+
+# Cache directories
+cache/
+
+# PGEN test data (generated from VCF)
+tests/data/*.pgen
+tests/data/*.pvar
+tests/data/*.psam
+
+# Large test data (download separately)
+test_data/

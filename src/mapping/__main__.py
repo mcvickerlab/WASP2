@@ -15,18 +15,17 @@ app = typer.Typer()
 
 @app.command()
 def make_reads(
-    bam: Annotated[str, typer.Argument(help="Bam File")],
-    vcf: Annotated[str, typer.Argument(help="VCF File")],
+    bam: Annotated[str, typer.Argument(help="BAM file")],
+    variants: Annotated[str, typer.Argument(help="Variant file (VCF, VCF.GZ, BCF, or PGEN)")],
     samples: Annotated[
         Optional[List[str]],
         typer.Option(
             "--samples",
             "--sample",
             "--samps",
-            "--samps",
             "-s",
             help=(
-                "One or more samples to use in VCF"
+                "One or more samples to use in variant file. "
                 "Accepts comma delimited string, "
                 "or file with one sample per line"
             )
@@ -75,7 +74,7 @@ def make_reads(
         Optional[bool],
         typer.Option("--phased/--unphased",
                      help=(
-                         "If VCF is phased/unphased"
+                         "If variant file is phased/unphased. "
                          "Will autoparse by default "
                          "(PHASED STRONGLY RECOMMENDED-SINGLE END NOT SUPPORTED YET)"
                          )
@@ -92,7 +91,7 @@ def make_reads(
 
     run_make_remap_reads(
         bam_file=bam,
-        vcf_file=vcf,
+        variant_file=variants,
         samples=sample_str,
         out_dir=out_dir,
         temp_loc=temp_loc,

@@ -173,7 +173,29 @@ class PGENSource(VariantSource):
                 dtype={'CHROM': str, 'POS': int, 'ID': str, 'REF': str, 'ALT': str}
             )
 
+        # Normalize chromosome names to include 'chr' prefix for consistency
+        # plink2 strips 'chr' prefix by default, but we want consistent output
+        df['CHROM'] = df['CHROM'].apply(self._normalize_chrom_name)
+
         return df
+
+    def _normalize_chrom_name(self, chrom: str) -> str:
+        """Normalize chromosome name to include 'chr' prefix.
+
+        Args:
+            chrom: Chromosome name (e.g., '1', 'chr1', 'X')
+
+        Returns:
+            Normalized chromosome name with 'chr' prefix
+        """
+        chrom = str(chrom)
+        # Already has chr prefix
+        if chrom.lower().startswith('chr'):
+            return chrom
+        # Add chr prefix for numeric chromosomes
+        if chrom.isdigit() or chrom in ('X', 'Y', 'M', 'MT'):
+            return f'chr{chrom}'
+        return chrom
 
     def _open_pgen_reader(self):
         """Open pgenlib reader with multiallelic support.
@@ -442,31 +464,19 @@ class PGENSource(VariantSource):
 
         return output_path
 
-    def _normalize_chrom(self, chrom: str):
-        """Normalize chromosome value to match PVAR DataFrame type.
+    def _normalize_chrom(self, chrom: str) -> str:
+        """Normalize chromosome value for queries.
+
+        Since we normalize PVAR chromosomes to have 'chr' prefix,
+        we need to normalize query chromosomes the same way.
 
         Args:
             chrom: Chromosome name (str or int-like)
 
         Returns:
-            Normalized chromosome value matching PVAR dtype
+            Normalized chromosome value with 'chr' prefix
         """
-        # Check the dtype of CHROM column in PVAR
-        chrom_dtype = self._pvar_df['CHROM'].dtype
-
-        # If PVAR uses int, convert chrom to int
-        if pd.api.types.is_integer_dtype(chrom_dtype):
-            try:
-                # Strip 'chr' prefix if present
-                chrom_str = str(chrom).replace('chr', '').replace('Chr', '').replace('CHR', '')
-                return int(chrom_str)
-            except ValueError:
-                # Can't convert to int (e.g., 'X', 'Y', 'MT')
-                # Return as is and let pandas handle the comparison
-                return chrom
-        else:
-            # PVAR uses string, return as string
-            return str(chrom)
+        return self._normalize_chrom_name(str(chrom))
 
     def _parse_alleles(self, allele_buf: np.ndarray, variant_row) -> tuple:
         """Convert allele buffer to Genotype and allele sequences.

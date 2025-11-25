@@ -36,7 +36,7 @@ def tempdir_decorator(func: Callable[..., Any]) -> Callable[..., Any]:
 @tempdir_decorator
 def run_make_remap_reads(
     bam_file: str,
-    vcf_file: str,
+    variant_file: str,
     is_paired: Optional[bool] = None,
     samples: Optional[Union[str, List[str]]] = None,
     is_phased: Optional[bool] = None,
@@ -48,29 +48,29 @@ def run_make_remap_reads(
     Parser that parses initial input.
     Finds intersecting variants and generates
     swapped allele reads to be remapped.
-    
 
-    :param bam_file: _description_
-    :type bam_file: _type_
-    :param vcf_file: _description_
-    :type vcf_file: _type_
-    :param is_paired: _description_, defaults to None
-    :type is_paired: _type_, optional
-    :param samples: _description_, defaults to None
-    :type samples: _type_, optional
-    :param is_phased: _description_, defaults to None
-    :type is_phased: _type_, optional
-    :param out_dir: _description_, defaults to None
-    :type out_dir: _type_, optional
-    :param temp_loc: _description_, defaults to None
-    :type temp_loc: _type_, optional
-    :param out_json: _description_, defaults to None
-    :type out_json: _type_, optional
+
+    :param bam_file: Path to BAM file
+    :type bam_file: str
+    :param variant_file: Path to variant file (VCF, VCF.GZ, BCF, or PGEN)
+    :type variant_file: str
+    :param is_paired: Whether reads are paired, defaults to None (auto-detect)
+    :type is_paired: bool, optional
+    :param samples: Sample(s) to use from variant file, defaults to None
+    :type samples: str or List[str], optional
+    :param is_phased: Whether variant file is phased, defaults to None (auto-detect)
+    :type is_phased: bool, optional
+    :param out_dir: Output directory, defaults to None
+    :type out_dir: str, optional
+    :param temp_loc: Temp directory for intermediary files, defaults to None
+    :type temp_loc: str, optional
+    :param out_json: Output JSON file path, defaults to None
+    :type out_json: str, optional
     """
-    
-    
+
+
     # Create Data Files
-    wasp_files = WaspDataFiles(bam_file, vcf_file,
+    wasp_files = WaspDataFiles(bam_file, variant_file,
                                is_paired=is_paired,
                                samples=samples,
                                is_phased=is_phased,
@@ -100,7 +100,7 @@ def run_make_remap_reads(
 
 
     # Create Intermediary Files
-    vcf_to_bed(vcf_file=str(wasp_files.vcf_file),
+    vcf_to_bed(vcf_file=str(wasp_files.variant_file),
                out_bed=wasp_files.vcf_bed,
                samples=wasp_files.samples)
 

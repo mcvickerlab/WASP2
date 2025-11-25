@@ -15,7 +15,7 @@ from .count_alleles import make_count_df
 # Should I put this in separate file?
 class WaspCountFiles:
 
-    def __init__(self, bam_file, vcf_file,
+    def __init__(self, bam_file, variant_file,
                  region_file=None, samples=None,
                  use_region_names=False,
                  out_file=None,
@@ -23,10 +23,10 @@ class WaspCountFiles:
                  precomputed_vcf_bed=None,
                  precomputed_intersect=None
                  ):
-        
+
         # User input files
         self.bam_file = bam_file
-        self.vcf_file = vcf_file
+        self.variant_file = variant_file
         self.region_file = region_file
         self.samples = samples
         self.use_region_names = use_region_names
@@ -59,12 +59,18 @@ class WaspCountFiles:
         if self.temp_loc is None:
             self.temp_loc = str(Path.cwd())
         
-        # Parse vcf and intersect
-        vcf_prefix = re.split(r'.vcf|.bcf', Path(self.vcf_file).name)[0]
-        self.vcf_prefix = vcf_prefix
-        
-        # Filtered vcf output (or precomputed)
-        self.vcf_bed = precomputed_vcf_bed if precomputed_vcf_bed is not None else str(Path(self.temp_loc) / f"{vcf_prefix}.bed")
+        # Parse variant file prefix (handle VCF, BCF, PGEN)
+        variant_name = Path(self.variant_file).name
+        if variant_name.endswith('.vcf.gz'):
+            variant_prefix = variant_name[:-7]  # Remove .vcf.gz
+        elif variant_name.endswith('.pgen'):
+            variant_prefix = variant_name[:-5]  # Remove .pgen
+        else:
+            variant_prefix = re.split(r'\.vcf|\.bcf', variant_name)[0]
+        self.variant_prefix = variant_prefix
+
+        # Filtered variant output (or precomputed)
+        self.vcf_bed = precomputed_vcf_bed if precomputed_vcf_bed is not None else str(Path(self.temp_loc) / f"{variant_prefix}.bed")
         self.skip_vcf_to_bed = precomputed_vcf_bed is not None
         
         # Parse region file
@@ -75,18 +81,18 @@ class WaspCountFiles:
             
             if re.search(r'\.(.*Peak|bed)(?:\.gz)?$', f_ext, re.I):
                 self.region_type = "regions"
-                self.intersect_file = precomputed_intersect if precomputed_intersect is not None else str(Path(self.temp_loc) / f"{vcf_prefix}_intersect_regions.bed")
+                self.intersect_file = precomputed_intersect if precomputed_intersect is not None else str(Path(self.temp_loc) / f"{variant_prefix}_intersect_regions.bed")
                 self.is_gene_file = False
             elif re.search(r'\.g[tf]f(?:\.gz)?$', f_ext, re.I):
                 self.region_type = "genes"
-                self.intersect_file = precomputed_intersect if precomputed_intersect is not None else str(Path(self.temp_loc) / f"{vcf_prefix}_intersect_genes.bed")
+                self.intersect_file = precomputed_intersect if precomputed_intersect is not None else str(Path(self.temp_loc) / f"{variant_prefix}_intersect_genes.bed")
                 self.is_gene_file = True
                 gtf_prefix = re.split(r'.g[tf]f', Path(self.region_file).name)[0]
                 self.gtf_bed = str(Path(self.temp_loc) / f"{gtf_prefix}.bed")
                 self.use_region_names = True # Use feature attributes as region names
             elif re.search(r'\.gff3(?:\.gz)?$', f_ext, re.I):
                 self.region_type = "genes"
-                self.intersect_file = precomputed_intersect if precomputed_intersect is not None else str(Path(self.temp_loc) / f"{vcf_prefix}_intersect_genes.bed")
+                self.intersect_file = precomputed_intersect if precomputed_intersect is not None else str(Path(self.temp_loc) / f"{variant_prefix}_intersect_genes.bed")
                 self.is_gene_file = True
                 gtf_prefix = re.split(r'.gff3', Path(self.region_file).name)[0]
                 self.gtf_bed = str(Path(self.temp_loc) / f"{gtf_prefix}.bed")
@@ -126,7 +132,7 @@ def tempdir_decorator(func):
 
 
 @tempdir_decorator
-def run_count_variants(bam_file, vcf_file,
+def run_count_variants(bam_file, variant_file,
                        region_file=None,
                        samples=None,
                        use_region_names=None,
@@ -139,10 +145,10 @@ def run_count_variants(bam_file, vcf_file,
                        precomputed_vcf_bed=None,
                        precomputed_intersect=None
                        ):
-    
-    
+
+
     # call the data class
-    count_files = WaspCountFiles(bam_file, vcf_file,
+    count_files = WaspCountFiles(bam_file, variant_file,
                                  region_file=region_file,
                                  samples=samples,
                                  use_region_names=use_region_names,
@@ -164,7 +170,7 @@ def run_count_variants(bam_file, vcf_file,
     
     # Create Intermediary Files
     if not count_files.skip_vcf_to_bed:
-        vcf_to_bed(vcf_file=count_files.vcf_file,
+        vcf_to_bed(vcf_file=count_files.variant_file,
                    out_bed=count_files.vcf_bed,
                    samples=count_files.samples,
                    include_gt=with_gt

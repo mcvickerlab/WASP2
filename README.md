@@ -22,7 +22,7 @@
 # WASP2: Allele-specific pipeline for unbiased read mapping and allelic-imbalance analysis
 
 ## Requirements
-- Python >= 3.7
+- Python >= 3.10
 - numpy
 - pandas
 - polars
@@ -31,6 +31,7 @@
 - pybedtools
 - typer
 - anndata
+- **Optional**: Pgenlib (for PLINK2 PGEN format support - ~25x faster variant I/O)
 - Rust extension (PyO3) built locally; the Python CLI now routes counting, mapping, and analysis through Rust. Build it after creating the conda env:
   ```bash
   conda activate WASP2
@@ -66,10 +67,38 @@ export BINDGEN_EXTRA_CLANG_ARGS="-I/usr/include"
 maturin develop --release -m rust/Cargo.toml
 ```
 
+## Supported Variant File Formats
+
+WASP2 supports multiple variant file formats through a unified interface:
+
+| Format | Extensions | Notes |
+|--------|------------|-------|
+| VCF | `.vcf`, `.vcf.gz`, `.vcf.bgz` | Standard text format |
+| BCF | `.bcf`, `.bcf.gz` | Binary VCF format |
+| **PGEN** | `.pgen` | PLINK2 binary format (~25x faster) |
+
+### PGEN Support (Recommended for Large Datasets)
+
+For optimal performance with large variant datasets, use PLINK2's PGEN format:
+
+```bash
+# Install pgenlib (optional dependency)
+pip install wasp2[plink]
+# or: pip install Pgenlib
+
+# Convert VCF to PGEN using plink2
+plink2 --vcf variants.vcf.gz --make-pgen --out variants
+
+# Use PGEN directly in WASP2
+wasp2-count count-variants reads.bam variants.pgen -s sample1 -r regions.bed
+```
+
+Benchmark results show **~25x speedup** for variant I/O operations with PGEN vs VCF.
+
 ## Quick CLI usage
-- Count: `python -m src.counting count-variants BAM VCF --regions BED --out_file counts.tsv`
-- Map filter: `python -m src.mapping filter-remapped ORIGINAL.bam REMAPPED.bam OUT.bam`
-- Analyze: `python -m src.analysis analyze --count_file counts.tsv --out_file ai_results.tsv`
+- Count: `wasp2-count count-variants BAM VARIANTS --regions BED --out_file counts.tsv`
+- Map filter: `wasp2-map filter-remapped ORIGINAL.bam REMAPPED.bam OUT.bam`
+- Analyze: `wasp2-analyze find-imbalance counts.tsv --out_file ai_results.tsv`
 
 ## Minimal API (Rust-backed)
 ```python
@@ -77,7 +106,8 @@ from counting.run_counting import run_count_variants
 from mapping.filter_remap_reads import filt_remapped_reads
 from analysis.run_analysis import run_ai_analysis
 
-run_count_variants(bam_file="sample.bam", vcf_file="variants.vcf", region_file="regions.bed")
+# Supports VCF, BCF, or PGEN variant files
+run_count_variants(bam_file="sample.bam", variant_file="variants.pgen", region_file="regions.bed")
 filt_remapped_reads("orig.bam", "remap.bam", "keep.bam", threads=4)
 run_ai_analysis("counts.tsv", out_file="ai_results.tsv")
 ```
@@ -121,12 +151,12 @@ Providing samples and regions is highly recommended for allelic-imbalance analys
 
 **Usage**
 ```shell script
-python WASP2/src/counting count-variants [BAM] [VCF] {OPTIONS}
+wasp2-count count-variants [BAM] [VARIANTS] {OPTIONS}
 ```
 
 **Required Arguments**
 - BAM file containing aligned reads.
-- VCF file containing SNP info
+- VARIANTS file containing SNP info (VCF, BCF, or PGEN format)
 
 
 **Optional Arguments**
@@ -149,7 +179,7 @@ Analyzes Allelic Imbalance per ATAC peak given allelic count data
 
 **Usage**
 ```shell script
-python WASP2/src/analysis find-imbalance [COUNTS] {OPTIONS}
+wasp2-analyze find-imbalance [COUNTS] {OPTIONS}
 ```
 **Required Arguments**
 - COUNTS: Output data from count tool
@@ -174,14 +204,13 @@ This step identifies reads that overlap snps and creates reads with swapped alle
 
 **Usage**
 ```shell script
-
-python WASP2/src/mapping make-reads [BAM] [VCF] {OPTIONS}
+wasp2-map make-reads [BAM] [VARIANTS] {OPTIONS}
 ```
 
 
 **Required Arguments**
 - BAM file containing aligned reads.
-- VCF file containing SNP info
+- VARIANTS file containing SNP info (VCF, BCF, or PGEN format)
 
 
 **Optional Arguments**
@@ -209,13 +238,13 @@ Identify and remove reads that failed to remap to the same position. Creates all
 
 **Usage**
 ```shell script
-python WASP2/src/mapping filter-remapped "${prefix}_remapped.bam" --json "${prefix}_wasp_data_files.json"
+wasp2-map filter-remapped "${prefix}_remapped.bam" --json "${prefix}_wasp_data_files.json"
 ```
 
 OR
 
 ```shell script
-python WASP2/src/mapping filter-remapped "${prefix}_remapped.bam" "${prefix}_to_remap.bam" "${prefix}_keep.bam"
+wasp2-map filter-remapped "${prefix}_remapped.bam" "${prefix}_to_remap.bam" "${prefix}_keep.bam"
 ```
 
 **Required Arguments**
@@ -240,12 +269,12 @@ Output counts as anndata containing cell x SNP count matrix.
 
 **Usage**
 ```shell script
-python WASP2/src/counting count-variants-sc [BAM] [VCF] [BARCODES] {OPTIONS}
+wasp2-count count-variants-sc [BAM] [VARIANTS] [BARCODES] {OPTIONS}
 ```
 
 **Required Arguments**
 - BAM file containing aligned reads.
-- VCF file containing SNP info
+- VARIANTS file containing SNP info (VCF, BCF, or PGEN format)
 - BARCODE file used as index, contains one cell barcode per line
 
 **Optional Arguments**
@@ -263,7 +292,7 @@ Allelic-Imbalance is estimated on a per-celltype basis.
 
 **Usage**
 ```shell script
-python WASP2/src/counting find-imbalance-sc [COUNTS] [BARCODE_MAP] {OPTIONS}
+wasp2-analyze find-imbalance-sc [COUNTS] [BARCODE_MAP] {OPTIONS}
 ```
 
 **Required Arguments**
@@ -288,7 +317,7 @@ Compare differential allelic-imbalance between celltypes/groups.
 
 **Usage**
 ```shell script
-python WASP2/src/counting compare-imbalance [COUNTS] [BARCODE_MAP] {OPTIONS}
+wasp2-analyze compare-imbalance [COUNTS] [BARCODE_MAP] {OPTIONS}
 ```
 
 **Required Arguments**
