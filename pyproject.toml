@@ -105,6 +105,7 @@ python-source = "src"
 python-packages = ["counting", "mapping", "analysis", "wasp2"]
 bindings = "pyo3"
 strip = true
+include = ["LICENSE", "README.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
