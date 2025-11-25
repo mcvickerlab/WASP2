@@ -57,15 +57,35 @@ language = 'en'
 # -- Options for HTML output -------------------------------------------------
 
 # The theme to use for HTML and HTML Help pages
-html_theme = 'sphinx_rtd_theme'
+html_theme = 'pydata_sphinx_theme'
 
 # Theme options are theme-specific and customize the look and feel of a theme
 html_theme_options = {
     'navigation_depth': 4,
-    'collapse_navigation': False,
-    'sticky_navigation': True,
-    'includehidden': True,
-    'titles_only': False,
+    'show_nav_level': 2,
+    'show_toc_level': 2,
+    'navbar_align': 'left',
+    'icon_links': [
+        {
+            'name': 'GitHub',
+            'url': 'https://github.com/Jaureguy760/WASP2-exp',
+            'icon': 'fa-brands fa-github',
+        },
+        {
+            'name': 'PyPI',
+            'url': 'https://test.pypi.org/project/wasp2-rust/',
+            'icon': 'fa-solid fa-box',
+        },
+    ],
+    'use_edit_page_button': True,
+    'announcement': 'WASP2 v1.1.0 with Rust acceleration is now available!',
+}
+
+html_context = {
+    'github_user': 'Jaureguy760',
+    'github_repo': 'WASP2-exp',
+    'github_version': 'rust-optimization',
+    'doc_path': 'docs/source',
 }
 
 # Add any paths that contain custom static files (such as style sheets)
