@@ -4,7 +4,7 @@
 # =============================================================================
 #
 # This script sets up the complete development environment for WASP2,
-# including all dependencies for multi-format variant support (VCF + PLINK2)
+# including all dependencies for multi-format variant support (VCF/cyvcf2 + PLINK2)
 #
 # Usage:
 #   ./scripts/setup_dev_env.sh [--full]
@@ -155,6 +155,15 @@ if ! python -c "import pgenlib" 2>/dev/null; then
     echo -e "  ✓ Installed pgenlib"
 else
     echo -e "  ✓ pgenlib already installed"
+fi
+
+# Install cyvcf2 for high-performance VCF parsing
+if ! python -c "import cyvcf2" 2>/dev/null; then
+    echo -e "  Installing cyvcf2 (high-performance VCF parsing)..."
+    pip install -q "cyvcf2>=0.31.0"
+    echo -e "  ✓ Installed cyvcf2"
+else
+    echo -e "  ✓ cyvcf2 already installed"
 fi
 
 # Install dev dependencies
