@@ -33,6 +33,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from wasp2.io import VariantSource, Genotype
 
+# Check for optional high-performance backends
+try:
+    from wasp2.io.cyvcf2_source import CyVCF2Source, CYVCF2_AVAILABLE
+except ImportError:
+    CYVCF2_AVAILABLE = False
+
 
 @dataclass
 class BenchmarkResult:
@@ -221,6 +227,44 @@ def run_benchmarks(
                 results.append(r4)
                 print(f"    to_bed: {r4.time_seconds:.4f}s ({r4.het_count} het sites)")
 
+    # Benchmark cyvcf2 if available and VCF provided
+    if vcf_path and vcf_path.exists() and CYVCF2_AVAILABLE:
+        print(f"\n{'='*60}")
+        print(f"Benchmarking cyvcf2 (high-performance): {vcf_path}")
+        print(f"{'='*60}")
+
+        vcf_size = get_file_size_mb(vcf_path)
+
+        for run in range(n_runs):
+            print(f"\n  Run {run + 1}/{n_runs}...")
+
+            with CyVCF2Source(vcf_path) as source:
+                # Check sample exists
+                if sample not in source.samples:
+                    print(f"  Warning: Sample '{sample}' not in VCF. Using first sample: {source.samples[0]}")
+                    sample = source.samples[0]
+
+                # Run benchmarks
+                r1 = benchmark_variant_count(source, "cyvcf2")
+                r1.file_size_mb = vcf_size
+                results.append(r1)
+                print(f"    variant_count: {r1.time_seconds:.4f}s")
+
+                r2 = benchmark_iter_all(source, "cyvcf2", sample)
+                r2.file_size_mb = vcf_size
+                results.append(r2)
+                print(f"    iter_all: {r2.time_seconds:.4f}s ({r2.variant_count} variants)")
+
+                r3 = benchmark_iter_het(source, "cyvcf2", sample)
+                r3.file_size_mb = vcf_size
+                results.append(r3)
+                print(f"    iter_het: {r3.time_seconds:.4f}s ({r3.het_count} het sites)")
+
+                r4 = benchmark_to_bed(source, "cyvcf2", sample, output_dir)
+                r4.file_size_mb = vcf_size
+                results.append(r4)
+                print(f"    to_bed: {r4.time_seconds:.4f}s ({r4.het_count} het sites)")
+
     # Benchmark PGEN if provided
     if pgen_path and pgen_path.exists():
         print(f"\n{'='*60}")
@@ -296,10 +340,11 @@ def create_benchmark_figure(df: pd.DataFrame, output_path: Path):
 
     # Okabe-Ito colorblind-friendly palette
     COLORS = {
-        'VCF': '#E69F00',    # Orange
-        'PGEN': '#56B4E9',   # Sky blue
-        'accent': '#009E73', # Bluish green
-        'gray': '#999999',   # Gray
+        'VCF': '#E69F00',      # Orange (baseline pysam)
+        'cyvcf2': '#009E73',   # Bluish green (cyvcf2)
+        'PGEN': '#56B4E9',     # Sky blue (PLINK2)
+        'accent': '#D55E00',   # Vermillion
+        'gray': '#999999',     # Gray
     }
 
     # Figure dimensions (Nature: max 180mm width, we use ~170mm for margins)
@@ -365,14 +410,18 @@ def create_benchmark_figure(df: pd.DataFrame, output_path: Path):
     op_labels = ['Iterate\nhet sites', 'Export\nto BED']
 
     x = np.arange(len(operations))
-    width = 0.35
+
+    # Determine which formats are available in the data
+    available_formats = summary['format'].unique()
+    n_formats = len(available_formats)
+    width = 0.8 / n_formats  # Adjust width based on number of formats
 
     # --------------------------------------------------------------------------
     # Panel a: Time comparison
     # --------------------------------------------------------------------------
     ax1 = axes[0]
 
-    for i, fmt in enumerate(['VCF', 'PGEN']):
+    for i, fmt in enumerate(available_formats):
         fmt_data = summary[summary['format'] == fmt]
         times = []
         stds = []
@@ -385,8 +434,9 @@ def create_benchmark_figure(df: pd.DataFrame, output_path: Path):
                 times.append(0)
                 stds.append(0)
 
-        bars = ax1.bar(x + (i - 0.5) * width, times, width,
-                       label=fmt, color=COLORS[fmt],
+        offset = (i - (n_formats - 1) / 2) * width
+        bars = ax1.bar(x + offset, times, width,
+                       label=fmt, color=COLORS.get(fmt, COLORS['gray']),
                        edgecolor='black', linewidth=0.5,
                        yerr=stds, capsize=2, error_kw={'linewidth': 0.5})
 
@@ -401,39 +451,52 @@ def create_benchmark_figure(df: pd.DataFrame, output_path: Path):
              fontsize=8, fontweight='bold', va='bottom')
 
     # --------------------------------------------------------------------------
-    # Panel b: Speedup factor
+    # Panel b: Speedup factor (relative to VCF baseline)
     # --------------------------------------------------------------------------
     ax2 = axes[1]
 
-    speedups = []
-    for op in operations:
-        vcf_time = summary[(summary['format'] == 'VCF') & (summary['operation'] == op)]['time_mean'].values
-        pgen_time = summary[(summary['format'] == 'PGEN') & (summary['operation'] == op)]['time_mean'].values
+    # Calculate speedups for each non-VCF format vs VCF baseline
+    comparison_formats = [fmt for fmt in available_formats if fmt != 'VCF']
+    n_comparisons = len(comparison_formats)
 
-        if len(vcf_time) > 0 and len(pgen_time) > 0 and pgen_time[0] > 0:
-            speedups.append(vcf_time[0] / pgen_time[0])
-        else:
-            speedups.append(1.0)
+    if n_comparisons > 0:
+        comp_width = 0.8 / n_comparisons
 
-    bars = ax2.bar(x, speedups, width * 1.5,
-                   color=COLORS['PGEN'], edgecolor='black', linewidth=0.5)
+        for i, fmt in enumerate(comparison_formats):
+            speedups = []
+            for op in operations:
+                vcf_time = summary[(summary['format'] == 'VCF') & (summary['operation'] == op)]['time_mean'].values
+                fmt_time = summary[(summary['format'] == fmt) & (summary['operation'] == op)]['time_mean'].values
 
-    # Reference line at 1x
-    ax2.axhline(y=1.0, color=COLORS['gray'], linestyle='--', linewidth=0.5, zorder=0)
+                if len(vcf_time) > 0 and len(fmt_time) > 0 and fmt_time[0] > 0:
+                    speedups.append(vcf_time[0] / fmt_time[0])
+                else:
+                    speedups.append(1.0)
 
-    ax2.set_ylabel('Fold change (VCF / PGEN)')
-    ax2.set_xticks(x)
-    ax2.set_xticklabels(op_labels)
-    ax2.set_ylim(bottom=0)
+            offset = (i - (n_comparisons - 1) / 2) * comp_width
+            bars = ax2.bar(x + offset, speedups, comp_width,
+                           label=f'{fmt} vs VCF',
+                           color=COLORS.get(fmt, COLORS['gray']),
+                           edgecolor='black', linewidth=0.5)
 
-    # Add fold-change labels on bars
-    for bar, speedup in zip(bars, speedups):
-        height = bar.get_height()
-        label = f'{speedup:.1f}×' if speedup >= 1 else f'{speedup:.2f}×'
-        ax2.annotate(label,
-                     xy=(bar.get_x() + bar.get_width() / 2, height),
-                     xytext=(0, 2), textcoords='offset points',
-                     ha='center', va='bottom', fontsize=6, fontweight='bold')
+            # Add fold-change labels on bars
+            for bar, speedup in zip(bars, speedups):
+                height = bar.get_height()
+                label = f'{speedup:.1f}×' if speedup >= 1 else f'{speedup:.2f}×'
+                ax2.annotate(label,
+                             xy=(bar.get_x() + bar.get_width() / 2, height),
+                             xytext=(0, 2), textcoords='offset points',
+                             ha='center', va='bottom', fontsize=6, fontweight='bold')
+
+        # Reference line at 1x
+        ax2.axhline(y=1.0, color=COLORS['gray'], linestyle='--', linewidth=0.5, zorder=0, label='Baseline (1×)')
+
+        ax2.set_ylabel('Fold change vs VCF')
+        ax2.set_xticks(x)
+        ax2.set_xticklabels(op_labels)
+        ax2.set_ylim(bottom=0)
+        if n_comparisons > 1:
+            ax2.legend(frameon=False, loc='upper left', fontsize=5)
 
     # Panel label
     ax2.text(-0.15, 1.05, 'b', transform=ax2.transAxes,
@@ -443,7 +506,9 @@ def create_benchmark_figure(df: pd.DataFrame, output_path: Path):
     # Add figure title
     # ==========================================================================
 
-    fig.suptitle('Variant I/O performance: VCF vs PGEN format',
+    # Build title based on available formats
+    format_list = ' vs '.join(available_formats) if len(available_formats) > 1 else str(available_formats[0])
+    fig.suptitle(f'Variant I/O performance: {format_list}',
                  fontsize=8, fontweight='bold', y=1.02)
 
     # ==========================================================================
