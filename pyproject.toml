@@ -75,6 +75,9 @@ rust = [
 plink = [
     "Pgenlib>=0.90",
 ]
+cyvcf2 = [
+    "cyvcf2>=0.31.0",
+]
 
 [project.scripts]
 wasp2-count = "counting.__main__:app"
