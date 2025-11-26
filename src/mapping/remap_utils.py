@@ -415,13 +415,20 @@ def write_read(out_bam: AlignmentFile, read: AlignedSegment, new_seq: str, new_n
         new_qual: Optional new quality scores (for indels)
     """
     if new_qual is None:
-        # SNP mode - preserve original qualities
+        # SNP mode - preserve original qualities (sequence length unchanged)
         og_qual = read.query_qualities
         read.query_sequence = new_seq
         read.query_name = new_name
         read.query_qualities = og_qual
     else:
         # Indel mode - use provided qualities
+        # CIGAR must match sequence length, update if length changed
+        old_len = read.query_length
+        new_len = len(new_seq)
+        if old_len != new_len:
+            # Sequence length changed due to indel, update CIGAR to simple match
+            # These reads will be realigned anyway during remapping
+            read.cigartuples = [(0, new_len)]  # 0 = MATCH operation
         read.query_sequence = new_seq
         read.query_name = new_name
         read.query_qualities = new_qual

@@ -18,8 +18,9 @@ dependencies:
   - pybedtools
   - bedtools
   - bcftools
-  - samtools
-  - htslib
+  - samtools>=1.10  # Required for collate -T option (indel processing)
+  - htslib>=1.10
+  - bwa  # Required for remapping step
   - anndata
   - plink2  # For PGEN file format support
 

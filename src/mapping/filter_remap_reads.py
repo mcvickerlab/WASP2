@@ -42,14 +42,25 @@ def filt_remapped_reads(
         )
 
     # Rust path only
-    filter_bam_wasp(
-        to_remap_bam,
-        remapped_bam,
-        filt_out_bam,
-        keep_read_file=keep_read_file,
-        threads=threads,
-        same_locus_slop=same_locus_slop,
-    )
+    try:
+        # Try with same_locus_slop (newer version)
+        filter_bam_wasp(
+            to_remap_bam,
+            remapped_bam,
+            filt_out_bam,
+            keep_read_file=keep_read_file,
+            threads=threads,
+            same_locus_slop=same_locus_slop,
+        )
+    except TypeError:
+        # Fall back to older version without same_locus_slop
+        filter_bam_wasp(
+            to_remap_bam,
+            remapped_bam,
+            filt_out_bam,
+            keep_read_file=keep_read_file,
+            threads=threads,
+        )
 
 
 def merge_filt_bam(keep_bam: str, remapped_filt_bam: str, out_bam: str) -> None:
