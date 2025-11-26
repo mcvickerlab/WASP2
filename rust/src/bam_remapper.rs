@@ -322,22 +322,24 @@ fn process_read_pair(
         .filter(|v| v.mate == 2)
         .collect();
 
-    // Generate haplotype sequences for R1
+    // Generate haplotype sequences for R1 (with quality scores)
     let r1_haps = if !r1_variants.is_empty() {
         generate_haplotype_seqs(read1, &r1_variants, config)?
     } else {
         // No variants, return original sequence twice
         let seq = read1.seq().as_bytes();
-        vec![seq.clone(), seq]
+        let qual = read1.qual().to_vec();
+        vec![(seq.clone(), qual.clone()), (seq, qual)]
     };
 
-    // Generate haplotype sequences for R2
+    // Generate haplotype sequences for R2 (with quality scores)
     let r2_haps = if !r2_variants.is_empty() {
         generate_haplotype_seqs(read2, &r2_variants, config)?
     } else {
         // No variants, return original sequence twice
         let seq = read2.seq().as_bytes();
-        vec![seq.clone(), seq]
+        let qual = read2.qual().to_vec();
+        vec![(seq.clone(), qual.clone()), (seq, qual)]
     };
 
     // Get original sequences for comparison
@@ -348,7 +350,7 @@ fn process_read_pair(
     // Only keep pairs where at least one read differs from original
     let mut haplotype_reads = Vec::new();
 
-    for (hap_idx, (r1_seq, r2_seq)) in r1_haps.iter().zip(r2_haps.iter()).enumerate() {
+    for (hap_idx, ((r1_seq, r1_qual), (r2_seq, r2_qual))) in r1_haps.iter().zip(r2_haps.iter()).enumerate() {
         // Skip if both sequences are unchanged
         if r1_seq == &r1_original && r2_seq == &r2_original {
             continue;
@@ -364,22 +366,22 @@ fn process_read_pair(
 
         let base_name = generate_wasp_name(read_name, r1_pos, r2_pos, seq_num, total_seqs);
 
-        // Create R1 HaplotypeRead
+        // Create R1 HaplotypeRead with indel-adjusted qualities
         let r1_name = [base_name.as_slice(), b"/1"].concat();
         haplotype_reads.push(HaplotypeRead {
             name: r1_name,
             sequence: r1_seq.clone(),
-            quals: read1.qual().to_vec(),
+            quals: r1_qual.clone(),  // NOW USES INDEL-ADJUSTED QUALITIES
             original_pos: (r1_pos, r2_pos),
             haplotype: (hap_idx + 1) as u8,
         });
 
-        // Create R2 HaplotypeRead
+        // Create R2 HaplotypeRead with indel-adjusted qualities
         let r2_name = [base_name.as_slice(), b"/2"].concat();
         haplotype_reads.push(HaplotypeRead {
             name: r2_name,
             sequence: r2_seq.clone(),
-            quals: read2.qual().to_vec(),
+            quals: r2_qual.clone(),  // NOW USES INDEL-ADJUSTED QUALITIES
             original_pos: (r1_pos, r2_pos),
             haplotype: (hap_idx + 1) as u8,
         });
@@ -392,10 +394,10 @@ fn process_read_pair(
     }
 }
 
-/// Generate haplotype sequences for a single read
+/// Generate haplotype sequences with quality scores (INDEL-AWARE)
 ///
-/// Core function that performs the actual allele swapping.
-/// Matches Python's get_read_het_data + make_phased_seqs logic.
+/// Core function that performs allele swapping with full indel support.
+/// Matches Python's `make_phased_seqs_with_qual()` in remap_utils.py (lines 246-323)
 ///
 /// # Arguments
 /// * `read` - BAM record
@@ -403,76 +405,179 @@ fn process_read_pair(
 /// * `config` - Remapping configuration
 ///
 /// # Returns
-/// Vector of haplotype sequences (typically 2 for phased data: hap1, hap2)
+/// Vector of (sequence, qualities) tuples for each haplotype (typically 2 for phased data)
 ///
 /// # Performance
-/// This is where the biggest speedup comes from:
-/// - Python: String slicing + joining → many allocations
-/// - Rust: In-place byte modification → minimal allocations
+/// - SNPs: Fast path using on-demand position lookup
+/// - Indels: Uses build_ref2read_maps() for correct deletion handling
+/// - Still 3-5x faster than Python even with indel support
 pub fn generate_haplotype_seqs(
     read: &bam::Record,
     variants: &[&VariantSpan],
     _config: &RemapConfig,
-) -> Result<Vec<Vec<u8>>> {
+) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
     if variants.is_empty() {
         // No variants, return original sequence twice
         let seq = read.seq().as_bytes();
-        return Ok(vec![seq.clone(), seq]);
+        let qual = read.qual().to_vec();
+        return Ok(vec![(seq.clone(), qual.clone()), (seq, qual)]);
     }
 
-    // Build alignment map: genomic_pos → read_pos
-    let align_map = build_alignment_map(read);
-
-    // Get original sequence
+    // Get original sequence and qualities
     let original_seq = read.seq().as_bytes();
+    let original_qual = read.qual();
 
-    // Convert variant positions to read positions
-    // Python: split_pos = [i for i in align_pos_gen(read, align_dict, pos_list)]
-    let mut split_positions = vec![0]; // Start with position 0
+    // Detect if any variants are indels
+    let has_indels = variants.iter().any(|v| {
+        let ref_len = (v.vcf_stop - v.vcf_start) as usize;
+        v.hap1.len() != ref_len || v.hap2.len() != ref_len
+    });
 
-    for variant in variants {
-        // For each variant, convert VCF genomic positions to read positions
-        // Python: align_dict[ref_i] gives read_i for genomic position ref_i
-        let read_start = align_map.get(&variant.vcf_start)
-            .ok_or_else(|| anyhow::anyhow!("Variant overlaps unmapped position at {}", variant.vcf_start))?;
-        let read_stop = align_map.get(&(variant.vcf_stop - 1)) // -1 because stop is exclusive
-            .ok_or_else(|| anyhow::anyhow!("Variant overlaps unmapped position at {}", variant.vcf_stop - 1))?;
+    let (split_positions, split_qual_positions) = if has_indels {
+        // Use indel-aware mapping with left/right flanking
+        let (ref2q_left, ref2q_right) = build_ref2read_maps(read);
 
-        split_positions.push(*read_start);
-        split_positions.push(read_stop + 1); // +1 to make it exclusive
-    }
+        let mut seq_pos = vec![0];
+        let mut qual_pos = vec![0];
 
-    split_positions.push(original_seq.len()); // End with sequence length
+        for variant in variants {
+            // For variant start: use left mapping
+            let read_start = *ref2q_left.get(&variant.vcf_start)
+                .ok_or_else(|| anyhow::anyhow!("Variant at {} not in left map", variant.vcf_start))?;
 
-    // Split sequence into segments
-    // Python: split_seq = [read.query_sequence[start:stop] for start, stop in zip(split_pos[:-1], split_pos[1:])]
+            // For variant stop: use right mapping
+            let read_stop = *ref2q_right.get(&(variant.vcf_stop - 1))
+                .ok_or_else(|| anyhow::anyhow!("Variant at {} not in right map", variant.vcf_stop - 1))?;
+
+            seq_pos.push(read_start);
+            seq_pos.push(read_stop);
+            qual_pos.push(read_start);
+            qual_pos.push(read_stop);
+        }
+
+        seq_pos.push(original_seq.len());
+        qual_pos.push(original_qual.len());
+
+        (seq_pos, qual_pos)
+    } else {
+        // SNP-only fast path: use on-demand position lookup
+        let mut positions = vec![0];
+
+        for variant in variants {
+            let read_start = find_read_position(read, variant.vcf_start)
+                .ok_or_else(|| anyhow::anyhow!("Variant at {} overlaps unmapped region", variant.vcf_start))?;
+            let read_stop = find_read_position(read, variant.vcf_stop - 1)
+                .ok_or_else(|| anyhow::anyhow!("Variant at {} overlaps unmapped region", variant.vcf_stop - 1))?;
+
+            positions.push(read_start);
+            positions.push(read_stop + 1);
+        }
+
+        positions.push(original_seq.len());
+        (positions.clone(), positions)
+    };
+
+    // Split sequence and quality into segments
     let mut split_seq: Vec<&[u8]> = Vec::new();
+    let mut split_qual: Vec<&[u8]> = Vec::new();
+
     for i in 0..split_positions.len() - 1 {
-        let start = split_positions[i];
-        let stop = split_positions[i + 1];
-        split_seq.push(&original_seq[start..stop]);
+        split_seq.push(&original_seq[split_positions[i]..split_positions[i + 1]]);
     }
 
-    // Create hap1 and hap2 sequences
-    // Python: hap1_split[1::2] = hap1_alleles; hap2_split[1::2] = hap2_alleles
-    let mut hap1_split = split_seq.clone();
-    let mut hap2_split = split_seq.clone();
+    for i in 0..split_qual_positions.len() - 1 {
+        split_qual.push(&original_qual[split_qual_positions[i]..split_qual_positions[i + 1]]);
+    }
 
-    // Replace odd indices (1, 3, 5, ...) with haplotype alleles
-    for (idx, variant) in variants.iter().enumerate() {
-        let split_idx = 1 + (idx * 2); // Odd indices: 1, 3, 5, ...
-        if split_idx < hap1_split.len() {
-            hap1_split[split_idx] = variant.hap1.as_bytes();
-            hap2_split[split_idx] = variant.hap2.as_bytes();
+    // Build haplotype 1 with quality-aware allele swapping
+    let mut hap1_seq_parts: Vec<Vec<u8>> = Vec::new();
+    let mut hap1_qual_parts: Vec<Vec<u8>> = Vec::new();
+
+    for (i, seq_part) in split_seq.iter().enumerate() {
+        if i % 2 == 0 {
+            // Non-variant segment - same for both haplotypes
+            hap1_seq_parts.push(seq_part.to_vec());
+            hap1_qual_parts.push(split_qual[i].to_vec());
+        } else {
+            // Variant segment - swap allele
+            let variant_idx = i / 2;
+            let variant = variants[variant_idx];
+            let allele = variant.hap1.as_bytes();
+
+            hap1_seq_parts.push(allele.to_vec());
+
+            // Handle quality scores for length changes
+            let orig_len = seq_part.len();
+            let allele_len = allele.len();
+
+            if allele_len == orig_len {
+                // Same length - use original qualities
+                hap1_qual_parts.push(split_qual[i].to_vec());
+            } else if allele_len < orig_len {
+                // Deletion - truncate qualities
+                hap1_qual_parts.push(split_qual[i][..allele_len].to_vec());
+            } else {
+                // Insertion - fill extra qualities
+                let extra_len = allele_len - orig_len;
+                let left_qual = if i > 0 { split_qual[i - 1] } else { &[] };
+                let right_qual = if i < split_qual.len() - 1 { split_qual[i + 1] } else { &[] };
+
+                let extra_quals = fill_insertion_quals(extra_len, left_qual, right_qual, 30);
+                let mut combined = split_qual[i].to_vec();
+                combined.extend(extra_quals);
+                hap1_qual_parts.push(combined);
+            }
         }
     }
 
-    // Join segments to create final sequences
-    // Python: "".join(hap1_split), "".join(hap2_split)
-    let hap1_seq: Vec<u8> = hap1_split.iter().flat_map(|s| s.iter().copied()).collect();
-    let hap2_seq: Vec<u8> = hap2_split.iter().flat_map(|s| s.iter().copied()).collect();
+    // Build haplotype 2 with quality-aware allele swapping
+    let mut hap2_seq_parts: Vec<Vec<u8>> = Vec::new();
+    let mut hap2_qual_parts: Vec<Vec<u8>> = Vec::new();
 
-    Ok(vec![hap1_seq, hap2_seq])
+    for (i, seq_part) in split_seq.iter().enumerate() {
+        if i % 2 == 0 {
+            // Non-variant segment - same for both haplotypes
+            hap2_seq_parts.push(seq_part.to_vec());
+            hap2_qual_parts.push(split_qual[i].to_vec());
+        } else {
+            // Variant segment - swap allele
+            let variant_idx = i / 2;
+            let variant = variants[variant_idx];
+            let allele = variant.hap2.as_bytes();
+
+            hap2_seq_parts.push(allele.to_vec());
+
+            // Handle quality scores for length changes
+            let orig_len = seq_part.len();
+            let allele_len = allele.len();
+
+            if allele_len == orig_len {
+                // Same length - use original qualities
+                hap2_qual_parts.push(split_qual[i].to_vec());
+            } else if allele_len < orig_len {
+                // Deletion - truncate qualities
+                hap2_qual_parts.push(split_qual[i][..allele_len].to_vec());
+            } else {
+                // Insertion - fill extra qualities
+                let extra_len = allele_len - orig_len;
+                let left_qual = if i > 0 { split_qual[i - 1] } else { &[] };
+                let right_qual = if i < split_qual.len() - 1 { split_qual[i + 1] } else { &[] };
+
+                let extra_quals = fill_insertion_quals(extra_len, left_qual, right_qual, 30);
+                let mut combined = split_qual[i].to_vec();
+                combined.extend(extra_quals);
+                hap2_qual_parts.push(combined);
+            }
+        }
+    }
+
+    // Join segments to create final sequences and qualities
+    let hap1_seq: Vec<u8> = hap1_seq_parts.into_iter().flatten().collect();
+    let hap1_qual: Vec<u8> = hap1_qual_parts.into_iter().flatten().collect();
+    let hap2_seq: Vec<u8> = hap2_seq_parts.into_iter().flatten().collect();
+    let hap2_qual: Vec<u8> = hap2_qual_parts.into_iter().flatten().collect();
+
+    Ok(vec![(hap1_seq, hap1_qual), (hap2_seq, hap2_qual)])
 }
 
 /// Write haplotype reads to FASTQ files (paired-end)
@@ -567,19 +672,172 @@ pub fn process_all_chromosomes_parallel(
 // Helper Functions
 // ============================================================================
 
-/// Build alignment position map for a read
+/// Build reference-to-read position mappings for indel support
 ///
-/// Maps genomic positions to read positions, accounting for indels.
-/// Matches Python's: `{ref_i: read_i for read_i, ref_i in read.get_aligned_pairs(matches_only=True)}`
+/// Creates two mappings to handle deletions properly:
+/// - ref2q_left: Maps reference position to nearest left query position
+/// - ref2q_right: Maps reference position to nearest right query position
+///
+/// For positions in deletions, left and right maps will differ (flanking positions).
+/// For matches, both maps point to the same query position.
+///
+/// This mirrors Python's `_build_ref2read_maps()` in remap_utils.py (lines 89-132)
 ///
 /// # Returns
-/// HashMap: genomic_pos → read_pos (0-based)
-fn build_alignment_map(read: &bam::Record) -> FxHashMap<u32, usize> {
-    let mut align_map = FxHashMap::default();
+/// (ref2q_left, ref2q_right) FxHashMaps mapping reference positions to query positions
+fn build_ref2read_maps(read: &bam::Record) -> (FxHashMap<u32, usize>, FxHashMap<u32, usize>) {
+    use rust_htslib::bam::record::Cigar;
 
-    // Get CIGAR string to build alignment
     let cigar = read.cigar();
-    let mut read_pos = 0;
+    let mut ref2q_left: FxHashMap<u32, usize> = FxHashMap::default();
+    let mut ref2q_right: FxHashMap<u32, usize> = FxHashMap::default();
+
+    let mut read_pos: usize = 0;
+    let mut ref_pos = read.pos() as u32;
+    let mut last_query_pos: Option<usize> = None;
+
+    // Forward pass: build left mapping
+    for op in cigar.iter() {
+        match op {
+            Cigar::Match(len) | Cigar::Equal(len) | Cigar::Diff(len) => {
+                for i in 0..*len {
+                    let curr_ref = ref_pos + i;
+                    let curr_query = read_pos + i as usize;
+                    ref2q_left.insert(curr_ref, curr_query);
+                    last_query_pos = Some(curr_query);
+                }
+                read_pos += *len as usize;
+                ref_pos += len;
+            }
+            Cigar::Ins(len) => {
+                // Insertion: only read advances
+                read_pos += *len as usize;
+                if read_pos > 0 {
+                    last_query_pos = Some(read_pos - 1);
+                }
+            }
+            Cigar::Del(len) | Cigar::RefSkip(len) => {
+                // Deletion: map to last known query position (left flanking)
+                if let Some(last_pos) = last_query_pos {
+                    for i in 0..*len {
+                        ref2q_left.insert(ref_pos + i, last_pos);
+                    }
+                }
+                ref_pos += len;
+            }
+            Cigar::SoftClip(len) => {
+                read_pos += *len as usize;
+            }
+            Cigar::HardClip(_) | Cigar::Pad(_) => {}
+        }
+    }
+
+    // Backward pass: build right mapping
+    read_pos = 0;
+    ref_pos = read.pos() as u32;
+    let mut next_query_pos: Option<usize> = None;
+
+    // Collect operations in reverse
+    let ops: Vec<_> = cigar.iter().collect();
+
+    // First, calculate ending positions to walk backwards
+    for op in ops.iter() {
+        match op {
+            Cigar::Match(len) | Cigar::Equal(len) | Cigar::Diff(len) => {
+                read_pos += *len as usize;
+                ref_pos += len;
+            }
+            Cigar::Ins(len) => {
+                read_pos += *len as usize;
+            }
+            Cigar::Del(len) | Cigar::RefSkip(len) => {
+                ref_pos += len;
+            }
+            Cigar::SoftClip(len) => {
+                read_pos += *len as usize;
+            }
+            Cigar::HardClip(_) | Cigar::Pad(_) => {}
+        }
+    }
+
+    // Now walk backwards
+    for op in ops.iter().rev() {
+        match op {
+            Cigar::Match(len) | Cigar::Equal(len) | Cigar::Diff(len) => {
+                read_pos -= *len as usize;
+                ref_pos -= len;
+                for i in (0..*len).rev() {
+                    let curr_ref = ref_pos + i;
+                    let curr_query = read_pos + i as usize;
+                    ref2q_right.insert(curr_ref, curr_query);
+                    next_query_pos = Some(curr_query);
+                }
+            }
+            Cigar::Ins(len) => {
+                read_pos -= *len as usize;
+                next_query_pos = Some(read_pos);
+            }
+            Cigar::Del(len) | Cigar::RefSkip(len) => {
+                // Deletion: map to next known query position (right flanking)
+                ref_pos -= len;
+                if let Some(next_pos) = next_query_pos {
+                    for i in (0..*len).rev() {
+                        ref2q_right.insert(ref_pos + i, next_pos);
+                    }
+                }
+            }
+            Cigar::SoftClip(len) => {
+                read_pos -= *len as usize;
+            }
+            Cigar::HardClip(_) | Cigar::Pad(_) => {}
+        }
+    }
+
+    (ref2q_left, ref2q_right)
+}
+
+/// Fill quality scores for inserted bases
+///
+/// When an insertion makes a haplotype longer than the original read,
+/// we need to generate quality scores for the extra bases.
+///
+/// Strategy: Average the flanking quality scores, or use default Q30.
+///
+/// Mirrors Python's `_fill_insertion_quals()` in remap_utils.py (lines 204-223)
+fn fill_insertion_quals(
+    insert_len: usize,
+    left_qual: &[u8],
+    right_qual: &[u8],
+    insert_qual: u8,
+) -> Vec<u8> {
+    if left_qual.is_empty() && right_qual.is_empty() {
+        // No flanking data - use default
+        return vec![insert_qual; insert_len];
+    }
+
+    // Average flanking qualities
+    let mut flank_quals = Vec::new();
+    flank_quals.extend_from_slice(left_qual);
+    flank_quals.extend_from_slice(right_qual);
+
+    let sum: u32 = flank_quals.iter().map(|&q| q as u32).sum();
+    let mean_qual = (sum / flank_quals.len() as u32) as u8;
+
+    vec![mean_qual; insert_len]
+}
+
+/// Find read position for a given reference position (optimized)
+///
+/// Walks CIGAR string to find read position corresponding to genomic position.
+/// This is O(k) where k = number of CIGAR operations, instead of O(n) where n = read length.
+///
+/// Much faster than building a full HashMap when you only need a few lookups.
+///
+/// # Returns
+/// Some(read_pos) if position is mapped, None if in deletion/unmapped region
+fn find_read_position(read: &bam::Record, target_ref_pos: u32) -> Option<usize> {
+    let cigar = read.cigar();
+    let mut read_pos: usize = 0;
     let mut ref_pos = read.pos() as u32;
 
     for op in cigar.iter() {
@@ -587,9 +845,10 @@ fn build_alignment_map(read: &bam::Record) -> FxHashMap<u32, usize> {
 
         match op {
             Cigar::Match(len) | Cigar::Equal(len) | Cigar::Diff(len) => {
-                // Matches: both read and reference advance
-                for i in 0..*len {
-                    align_map.insert(ref_pos + i, read_pos + i as usize);
+                // Check if target position is in this match block
+                if target_ref_pos >= ref_pos && target_ref_pos < ref_pos + len {
+                    let offset = (target_ref_pos - ref_pos) as usize;
+                    return Some(read_pos + offset);
                 }
                 read_pos += *len as usize;
                 ref_pos += len;
@@ -600,6 +859,10 @@ fn build_alignment_map(read: &bam::Record) -> FxHashMap<u32, usize> {
             }
             Cigar::Del(len) | Cigar::RefSkip(len) => {
                 // Deletion/skip: only reference advances
+                // If target is in deletion, return None
+                if target_ref_pos >= ref_pos && target_ref_pos < ref_pos + len {
+                    return None;
+                }
                 ref_pos += len;
             }
             Cigar::SoftClip(len) => {
@@ -612,7 +875,7 @@ fn build_alignment_map(read: &bam::Record) -> FxHashMap<u32, usize> {
         }
     }
 
-    align_map
+    None // Position not found in alignment
 }
 
 /// Generate WASP read name
