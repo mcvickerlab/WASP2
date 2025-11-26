@@ -384,7 +384,7 @@ def run_wasp2_pipeline(
     # Step 1: Find intersecting SNPs/indels (make_reads)
     print("\nStep 1: Finding intersecting variants...")
     cmd = [
-        'python', '-m', 'mapping', 'make-reads',
+        sys.executable, '-m', 'mapping', 'make-reads',
         bam_file_abs,
         vcf_file_abs,
         '--out_dir', output_dir_abs,
@@ -436,7 +436,7 @@ def run_wasp2_pipeline(
 
     final_bam = output_dir / 'keep.merged.bam'
     cmd = [
-        'python', '-m', 'mapping', 'filter-remapped',
+        sys.executable, '-m', 'mapping', 'filter-remapped',
         str(Path(remapped_bam).resolve()),
         str(to_remap_bam.resolve()),
         str(keep_bam.resolve()),
