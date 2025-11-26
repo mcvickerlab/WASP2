@@ -309,25 +309,32 @@ def run_wasp2_pipeline(
     print("RUNNING WASP2 PIPELINE")
     print(f"{'='*80}")
 
-    wasp2_dir = Path(__file__).parent
+    wasp2_dir = Path(__file__).parent.resolve()
 
-    # Step 1: Find intersecting SNPs/indels
+    # Convert to absolute paths (needed because we run from src/ directory)
+    bam_file_abs = str(Path(bam_file).resolve())
+    vcf_file_abs = str(Path(vcf_file).resolve())
+    output_dir_abs = str(output_dir.resolve())
+
+    # Step 1: Find intersecting SNPs/indels (make_reads)
     print("\nStep 1: Finding intersecting variants...")
     cmd = [
-        'python', str(wasp2_dir / 'find_intersecting_snps.py'),
-        '--bam', bam_file,
-        '--vcf', vcf_file,
-        '--ref', ref_fasta,
-        '--out_dir', str(output_dir),
-        '--include_indels',  # ← KEY FLAG!
-        '--is_paired_end'
+        'python', '-m', 'mapping', 'make-reads',
+        bam_file_abs,
+        vcf_file_abs,
+        '--out_dir', output_dir_abs,
+        '--sample', 'sample1',  # Match sample name in VCF
+        '--indels',   # Enable indel support
+        '--paired',   # Paired-end reads
+        '--phased',   # VCF has phased genotypes (0|1)
     ]
 
     try:
-        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-        print("  ✅ find_intersecting_snps.py complete")
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True,
+                               cwd=str(wasp2_dir / 'src'))
+        print("  ✅ make-reads complete")
     except subprocess.CalledProcessError as e:
-        print(f"  ❌ find_intersecting_snps.py failed:")
+        print(f"  ❌ make-reads failed:")
         print(f"  STDOUT: {e.stdout}")
         print(f"  STDERR: {e.stderr}")
         raise
@@ -360,29 +367,26 @@ def run_wasp2_pipeline(
     # Step 3: Filter remapped reads
     print("\nStep 3: Filtering remapped reads...")
 
-    # Check if filter script exists
-    filter_script = wasp2_dir / 'filter_remapped_reads.py'
-    if not filter_script.exists():
-        print(f"  ⚠️  filter_remapped_reads.py not found")
-        print(f"  Using remapped BAM directly (no filtering)")
-        final_bam = remapped_bam
-    else:
-        final_bam = output_dir / 'keep.merged.bam'
-        cmd = [
-            'python', str(filter_script),
-            '--remap_bam', remapped_bam,
-            '--to_remap_bam', str(to_remap_bam),
-            '--keep_bam', str(keep_bam),
-            '--out', str(final_bam)
-        ]
+    final_bam = output_dir / 'keep.merged.bam'
+    cmd = [
+        'python', '-m', 'mapping', 'filter-remapped',
+        str(Path(remapped_bam).resolve()),
+        str(to_remap_bam.resolve()),
+        str(keep_bam.resolve()),
+        '--out_bam', str(final_bam.resolve()),
+        '--same-locus-slop', '2',  # Allow micro-homology shifts for indels
+    ]
 
-        try:
-            subprocess.run(cmd, check=True, capture_output=True, text=True)
-            print("  ✅ filter_remapped_reads.py complete")
-        except subprocess.CalledProcessError as e:
-            print(f"  ❌ Filtering failed: {e}")
-            # Fall back to keep.bam
-            final_bam = keep_bam
+    try:
+        subprocess.run(cmd, check=True, capture_output=True, text=True,
+                      cwd=str(wasp2_dir / 'src'))
+        print("  ✅ filter-remapped complete")
+    except subprocess.CalledProcessError as e:
+        print(f"  ❌ filter-remapped failed:")
+        print(f"  STDOUT: {e.stdout}")
+        print(f"  STDERR: {e.stderr}")
+        # Fall back to keep.bam
+        final_bam = keep_bam
 
     print(f"\n✅ WASP2 pipeline complete")
     print(f"  Final BAM: {final_bam}")

@@ -3,6 +3,10 @@
 
 set -e
 
+# Activate wasp2-dev conda environment (requires Python 3.10+ for dataclass slots)
+eval "$(conda shell.bash hook)"
+conda activate wasp2-dev
+
 echo "=========================================="
 echo "WASP2 Indel Validation Simulation"
 echo "=========================================="

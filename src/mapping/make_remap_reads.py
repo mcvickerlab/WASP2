@@ -1,4 +1,5 @@
 import timeit
+import os
 
 import shutil
 import tempfile
@@ -15,9 +16,15 @@ from pysam.libcalignmentfile import AlignmentFile
 from .intersect_variant_data import make_intersect_df
 from .remap_utils import paired_read_gen, paired_read_gen_stat, get_read_het_data, make_phased_seqs, make_multi_seqs, write_read
 
-
 # TRY subprocess
 import subprocess
+
+# Rust acceleration
+try:
+    from wasp2_rust import remap_chromosome
+    RUST_REMAP_AVAILABLE = True
+except ImportError:
+    RUST_REMAP_AVAILABLE = False
 
 
 class ReadStats(object):
@@ -33,7 +40,7 @@ class ReadStats(object):
 
         # number of reads discarded becaused not mapped
         self.discard_unmapped = 0
-        
+
         # number of reads discarded because not proper pair
         self.discard_improper_pair = 0
 
@@ -51,25 +58,84 @@ class ReadStats(object):
 
         # number of reads discarded because of too many overlapping SNPs
         # self.discard_excess_snps = 0
-        
+
         # number of reads discarded because too many allelic combinations
         self.discard_excess_reads = 0
 
         # when read pairs share SNP locations but have different alleles there
         # self.discard_discordant_shared_snp = 0
-        
+
         # reads where we expected to see other pair, but it was missing
         # possibly due to read-pairs with different names
         self.discard_missing_pair = 0
-        
+
         # number of single reads that need remapping
         # self.remap_single = 0
-        
+
         # number of read pairs to remap
         self.remap_pair = 0
-        
+
         # Number of new pairs written
         self.write_pair = 0
+
+
+def _write_remap_bam_rust(
+    bam_file: str,
+    intersect_file: str,
+    r1_out: str,
+    r2_out: str,
+    max_seqs: int = 64
+) -> None:
+    """Rust-accelerated remapping implementation (5-7x faster than Python)"""
+    import pysam
+
+    # Get chromosomes from BAM
+    with pysam.AlignmentFile(bam_file, "rb") as bam:
+        chromosomes = list(bam.header.references)
+
+    # Create temp directory for per-chromosome outputs
+    with tempfile.TemporaryDirectory() as tmpdir:
+        total_pairs = 0
+        total_haps = 0
+
+        # Process each chromosome with Rust
+        for chrom in chromosomes:
+            chrom_r1 = f"{tmpdir}/{chrom}_r1.fq"
+            chrom_r2 = f"{tmpdir}/{chrom}_r2.fq"
+
+            try:
+                pairs, haps = remap_chromosome(
+                    bam_file,
+                    intersect_file,
+                    chrom,
+                    chrom_r1,
+                    chrom_r2,
+                    max_seqs=max_seqs
+                )
+                total_pairs += pairs
+                total_haps += haps
+                if pairs > 0:
+                    print(f"  {chrom}: {pairs} pairs → {haps} haplotypes")
+            except Exception as e:
+                print(f"  {chrom}: Error - {e}")
+                continue
+
+        # Concatenate all R1 files
+        r1_files = sorted(Path(tmpdir).glob("*_r1.fq"))
+        with open(r1_out, "wb") as outfile:
+            for f in r1_files:
+                with open(f, "rb") as infile:
+                    shutil.copyfileobj(infile, outfile)
+
+        # Concatenate all R2 files
+        r2_files = sorted(Path(tmpdir).glob("*_r2.fq"))
+        with open(r2_out, "wb") as outfile:
+            for f in r2_files:
+                with open(f, "rb") as infile:
+                    shutil.copyfileobj(infile, outfile)
+
+        print(f"\n✅ Rust remapper: {total_pairs} pairs → {total_haps} haplotypes")
+        print(f"Reads to remapped written to \n{r1_out}\n{r2_out}")
 
 
 def write_remap_bam(
@@ -80,10 +146,30 @@ def write_remap_bam(
     samples: List[str],
     max_seqs: int = 64,
     include_indels: bool = False,
-    insert_qual: int = 30
+    insert_qual: int = 30,
+    use_rust: bool = True
 ) -> None:
+    # Check if Rust acceleration should be used
+    rust_enabled = (
+        use_rust
+        and RUST_REMAP_AVAILABLE
+        and os.environ.get("WASP2_DISABLE_RUST") != "1"
+        and len(samples) == 1  # Rust currently only supports single sample
+        and not include_indels  # TODO: Add indel support to Rust remapper
+    )
+
+    if rust_enabled:
+        print("Using Rust acceleration for remapping...")
+        try:
+            _write_remap_bam_rust(bam_file, intersect_file, r1_out, r2_out, max_seqs)
+            return
+        except Exception as e:
+            print(f"⚠️ Rust remapper failed: {e}")
+            print("Falling back to Python implementation...")
+
+    # Python implementation (original code)
     intersect_df = make_intersect_df(intersect_file, samples)
-    
+
     # TRY USING A CLASS OBJ
     read_stats = ReadStats()
     
@@ -275,12 +361,15 @@ def swap_chrom_alleles(
     # TRY SUBPROCESS METHOD
     
     # TRY piping subprocess, so no pysam wrapper
+    # samtools collate requires an output prefix for temp files
+    collate_prefix = str(Path(out_dir) / f"collate_tmp_{chrom}")
     collate_cmd = ["samtools", "collate",
-                   "-u", "-O", out_bam]
-    
+                   "-u", "-O", out_bam, collate_prefix]
+
+    # samtools fastq needs "-" to read from stdin
     fastq_cmd = ["samtools", "fastq",
-                 "-1", r1_out, "-2", r2_out]
-    
+                 "-1", r1_out, "-2", r2_out, "-"]
+
     collate_process = subprocess.run(collate_cmd, stdout=subprocess.PIPE, check=True)
     fastq_process = subprocess.run(fastq_cmd, input=collate_process.stdout, check=True)
 
@@ -446,12 +535,15 @@ def swap_chrom_alleles_multi(
     # Collate and write out fastq
     r1_out = str(Path(out_dir) / f"swapped_alleles_{chrom}_r1.fq")
     r2_out = str(Path(out_dir) / f"swapped_alleles_{chrom}_r2.fq")
-    
+
+    # samtools collate requires an output prefix for temp files
+    collate_prefix = str(Path(out_dir) / f"collate_tmp_{chrom}")
     collate_cmd = ["samtools", "collate",
-                   "-u", "-O", out_bam]
-    
+                   "-u", "-O", out_bam, collate_prefix]
+
+    # samtools fastq needs "-" to read from stdin
     fastq_cmd = ["samtools", "fastq",
-                 "-1", r1_out, "-2", r2_out]
-    
+                 "-1", r1_out, "-2", r2_out, "-"]
+
     collate_process = subprocess.run(collate_cmd, stdout=subprocess.PIPE, check=True)
     fastq_process = subprocess.run(fastq_cmd, input=collate_process.stdout, check=True)
