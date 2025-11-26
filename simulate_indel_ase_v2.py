@@ -202,14 +202,18 @@ def align_with_bwa(
     ref_fasta: str,
     fastq_file: str,
     output_bam: str,
-    threads: int = 4
+    threads: int = None
 ):
     """
     Align FASTQ with BWA to generate realistic CIGAR strings.
 
     This is THE KEY STEP - creates real indel CIGARs that WASP2 must handle!
     """
-    print(f"\nAligning reads with BWA...")
+    # Use all available CPUs, capped at 16 for optimal performance
+    if threads is None:
+        threads = min(multiprocessing.cpu_count(), 16)
+
+    print(f"\nAligning reads with BWA (using {threads} threads)...")
 
     # Check if BWA index exists
     if not Path(f"{ref_fasta}.bwt").exists():
