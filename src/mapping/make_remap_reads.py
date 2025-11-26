@@ -78,7 +78,9 @@ def write_remap_bam(
     r1_out: str,
     r2_out: str,
     samples: List[str],
-    max_seqs: int = 64
+    max_seqs: int = 64,
+    include_indels: bool = False,
+    insert_qual: int = 30
 ) -> None:
     intersect_df = make_intersect_df(intersect_file, samples)
     
@@ -99,17 +101,21 @@ def write_remap_bam(
             for chrom in remap_chroms:
                 swap_chrom_alleles_multi(bam_file=bam_file, out_dir=tmpdir,
                                          df=intersect_df, chrom=chrom,
-                                         read_stats=read_stats)
+                                         read_stats=read_stats,
+                                         include_indels=include_indels,
+                                         insert_qual=insert_qual)
 
         else:
             # tmpdir="/iblm/netapp/home/aho/projects/wasp/testing/mapping_v2/outputs/test_remap_v1/samp_cli_v1/chrom_files"
 
             # Change from loop to multiprocess later
             for chrom in remap_chroms:
-                
+
                 swap_chrom_alleles(bam_file=bam_file, out_dir=tmpdir,
                                    df=intersect_df, chrom=chrom,
-                                   read_stats=read_stats)
+                                   read_stats=read_stats,
+                                   include_indels=include_indels,
+                                   insert_qual=insert_qual)
         
         # Get r1 files
         r1_files = list(Path(tmpdir).glob("*_r1.fq"))
@@ -135,7 +141,9 @@ def swap_chrom_alleles(
     out_dir: str,
     df: pl.DataFrame,
     chrom: str,
-    read_stats: ReadStats
+    read_stats: ReadStats,
+    include_indels: bool = False,
+    insert_qual: int = 30
 ) -> None:
 
     # Get hap columns
@@ -190,46 +198,63 @@ def swap_chrom_alleles(
             r2_df = r2_het_dict.get(og_name)
             
             
-            # Og version using a func
+            # Get heterozygous variant data for both reads
             if r1_df is not None:
-                r1_het_data = get_read_het_data(r1_df, read1, hap_cols)
-                
+                r1_het_data = get_read_het_data(r1_df, read1, hap_cols,
+                                                  include_indels=include_indels,
+                                                  insert_qual=insert_qual)
+
                 if r1_het_data is None:
                     read_stats.discard_unmapped += 1
                     # SNP overlaps unmapped pos
                     continue
-                r1_hap_list = [*make_phased_seqs(r1_het_data[0], *r1_het_data[1])]
-            
-            else:
-                r1_hap_list = [r1_og_seq, r1_og_seq]
 
-            
+                if include_indels:
+                    # Indel mode: returns (split_seq, split_qual, allele_series)
+                    from .remap_utils import make_phased_seqs_with_qual
+                    (r1_hap1_seq, r1_hap1_qual), (r1_hap2_seq, r1_hap2_qual) = make_phased_seqs_with_qual(
+                        r1_het_data[0], r1_het_data[1], r1_het_data[2][0], r1_het_data[2][1], insert_qual)
+                    r1_hap_list = [(r1_hap1_seq, r1_hap1_qual), (r1_hap2_seq, r1_hap2_qual)]
+                else:
+                    # SNP mode: returns (split_seq, split_qual, allele_series) but use old logic
+                    r1_hap_list = [(seq, None) for seq in make_phased_seqs(r1_het_data[0], *r1_het_data[2])]
+            else:
+                r1_hap_list = [(r1_og_seq, None), (r1_og_seq, None)]
+
+
             if r2_df is not None:
-                r2_het_data = get_read_het_data(r2_df, read2, hap_cols)
-                
+                r2_het_data = get_read_het_data(r2_df, read2, hap_cols,
+                                                  include_indels=include_indels,
+                                                  insert_qual=insert_qual)
+
                 if r2_het_data is None:
                     read_stats.discard_unmapped += 1
                     # SNP overlaps unmapped pos
                     continue
-                
-                r2_hap_list = [*make_phased_seqs(r2_het_data[0], *r2_het_data[1])]
 
+                if include_indels:
+                    from .remap_utils import make_phased_seqs_with_qual
+                    (r2_hap1_seq, r2_hap1_qual), (r2_hap2_seq, r2_hap2_qual) = make_phased_seqs_with_qual(
+                        r2_het_data[0], r2_het_data[1], r2_het_data[2][0], r2_het_data[2][1], insert_qual)
+                    r2_hap_list = [(r2_hap1_seq, r2_hap1_qual), (r2_hap2_seq, r2_hap2_qual)]
+                else:
+                    r2_hap_list = [(seq, None) for seq in make_phased_seqs(r2_het_data[0], *r2_het_data[2])]
             else:
-                r2_hap_list = [r2_og_seq, r2_og_seq]
-            
-            # Create pairs to write
-            write_pair_list = [(r1_hap_seq, r2_hap_seq)
-                               for r1_hap_seq, r2_hap_seq in zip(r1_hap_list, r2_hap_list)
-                               if (r1_hap_seq != r1_og_seq) or (r2_hap_seq != r2_og_seq)]
-            
+                r2_hap_list = [(r2_og_seq, None), (r2_og_seq, None)]
+
+            # Create pairs to write (now includes quality scores)
+            write_pair_list = [(r1_hap_data, r2_hap_data)
+                               for r1_hap_data, r2_hap_data in zip(r1_hap_list, r2_hap_list)
+                               if (r1_hap_data[0] != r1_og_seq) or (r2_hap_data[0] != r2_og_seq)]
+
             write_total = len(write_pair_list)
-            
+
             # Get read pairs
-            for r1_hap_seq, r2_hap_seq in write_pair_list:
+            for (r1_hap_seq, r1_hap_qual), (r2_hap_seq, r2_hap_qual) in write_pair_list:
                 write_num += 1
                 new_read_name = f"{og_name}_WASP_{r1_align_pos}_{r2_align_pos}_{write_num}_{write_total}"
-                write_read(out_file, read1, r1_hap_seq, new_read_name)
-                write_read(out_file, read2, r2_hap_seq, new_read_name)
+                write_read(out_file, read1, r1_hap_seq, new_read_name, r1_hap_qual)
+                write_read(out_file, read2, r2_hap_seq, new_read_name, r2_hap_qual)
                 read_stats.write_pair += 1
                 # chrom_write_count += 1
 
@@ -265,7 +290,9 @@ def swap_chrom_alleles_multi(
     out_dir: str,
     df: pl.DataFrame,
     chrom: str,
-    read_stats: ReadStats
+    read_stats: ReadStats,
+    include_indels: bool = False,
+    insert_qual: int = 30
 ) -> None:
 
     # column data
@@ -353,48 +380,64 @@ def swap_chrom_alleles_multi(
             if r1_df is not None:
                 r1_df = r1_df.select(pl.col(use_cols))
 
-                r1_het_data = get_read_het_data(r1_df, read1, unique_cols)
+                r1_het_data = get_read_het_data(r1_df, read1, unique_cols,
+                                                  include_indels=include_indels,
+                                                  insert_qual=insert_qual)
 
                 if r1_het_data is None:
                     read_stats.discard_unmapped += 1
                     # SNP overlaps unmapped pos
                     continue
 
-                r1_hap_list = make_multi_seqs(*r1_het_data)
+                if include_indels:
+                    # Indel mode: use quality-aware multi-seq function
+                    from .remap_utils import make_multi_seqs_with_qual
+                    r1_hap_list = make_multi_seqs_with_qual(
+                        r1_het_data[0], r1_het_data[1], r1_het_data[2], insert_qual)
+                else:
+                    # SNP mode: use original function, add None for quality
+                    r1_hap_list = [(seq, None) for seq in make_multi_seqs(r1_het_data[0], r1_het_data[2])]
             else:
-                r1_hap_list = [r1_og_seq] * num_haps
+                r1_hap_list = [(r1_og_seq, None)] * num_haps
 
 
             if r2_df is not None:
                 r2_df = r2_df.select(pl.col(use_cols))
 
-                r2_het_data = get_read_het_data(r2_df, read2, unique_cols)
+                r2_het_data = get_read_het_data(r2_df, read2, unique_cols,
+                                                  include_indels=include_indels,
+                                                  insert_qual=insert_qual)
 
                 if r2_het_data is None:
                     read_stats.discard_unmapped += 1
                     # SNP overlaps unmapped pos
                     continue
 
-                r2_hap_list = make_multi_seqs(*r2_het_data)
+                if include_indels:
+                    from .remap_utils import make_multi_seqs_with_qual
+                    r2_hap_list = make_multi_seqs_with_qual(
+                        r2_het_data[0], r2_het_data[1], r2_het_data[2], insert_qual)
+                else:
+                    r2_hap_list = [(seq, None) for seq in make_multi_seqs(r2_het_data[0], r2_het_data[2])]
             else:
-                r2_hap_list = [r2_og_seq] * num_haps
+                r2_hap_list = [(r2_og_seq, None)] * num_haps
 
 
 
-            # Create Pairs to write
-            write_pair_list = [(r1_hap_seq, r2_hap_seq) 
-                               for r1_hap_seq, r2_hap_seq in zip(r1_hap_list, r2_hap_list) 
-                               if (r1_hap_seq != r1_og_seq) or (r2_hap_seq != r2_og_seq)]
+            # Create Pairs to write (now with quality scores)
+            write_pair_list = [(r1_hap_data, r2_hap_data)
+                               for r1_hap_data, r2_hap_data in zip(r1_hap_list, r2_hap_list)
+                               if (r1_hap_data[0] != r1_og_seq) or (r2_hap_data[0] != r2_og_seq)]
 
             write_total = len(write_pair_list)
 
             # Get read pairs
-            for r1_hap_seq, r2_hap_seq in write_pair_list:
+            for (r1_hap_seq, r1_hap_qual), (r2_hap_seq, r2_hap_qual) in write_pair_list:
                 write_num += 1
                 new_read_name = f"{og_name}_WASP_{r1_align_pos}_{r2_align_pos}_{write_num}_{write_total}"
-                
-                write_read(out_file, read1, r1_hap_seq, new_read_name)
-                write_read(out_file, read2, r2_hap_seq, new_read_name)
+
+                write_read(out_file, read1, r1_hap_seq, new_read_name, r1_hap_qual)
+                write_read(out_file, read2, r2_hap_seq, new_read_name, r2_hap_qual)
                 read_stats.write_pair += 1
         
         # Done

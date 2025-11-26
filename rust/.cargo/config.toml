@@ -1,2 +1,2 @@
 [env]
-LIBCLANG_PATH = "/iblm/netapp/home/jjaureguy/mambaforge/lib"
+LIBCLANG_PATH = "/iblm/netapp/home/jjaureguy/mambaforge/lib/python3.10/site-packages/clang/native"

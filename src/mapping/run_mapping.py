@@ -42,7 +42,11 @@ def run_make_remap_reads(
     is_phased: Optional[bool] = None,
     out_dir: Optional[str] = None,
     temp_loc: Optional[str] = None,
-    out_json: Optional[str] = None
+    out_json: Optional[str] = None,
+    include_indels: bool = False,
+    max_indel_len: int = 10,
+    insert_qual: int = 30,
+    max_seqs: int = 64
 ) -> None:
     """
     Parser that parses initial input.
@@ -66,6 +70,14 @@ def run_make_remap_reads(
     :type temp_loc: str, optional
     :param out_json: Output JSON file path, defaults to None
     :type out_json: str, optional
+    :param include_indels: Include indels in addition to SNPs, defaults to False
+    :type include_indels: bool, optional
+    :param max_indel_len: Maximum indel length (bp) to include, defaults to 10
+    :type max_indel_len: int, optional
+    :param insert_qual: Quality score for inserted bases (Phred), defaults to 30
+    :type insert_qual: int, optional
+    :param max_seqs: Maximum number of alternate sequences per read, defaults to 64
+    :type max_seqs: int, optional
     """
 
 
@@ -102,7 +114,9 @@ def run_make_remap_reads(
     # Create Intermediary Files
     vcf_to_bed(vcf_file=str(wasp_files.variant_file),
                out_bed=wasp_files.vcf_bed,
-               samples=wasp_files.samples)
+               samples=wasp_files.samples,
+               include_indels=include_indels,
+               max_indel_len=max_indel_len)
 
 
     process_bam(bam_file=str(wasp_files.bam_file),
@@ -116,10 +130,10 @@ def run_make_remap_reads(
     intersect_reads(remap_bam=wasp_files.to_remap_bam,
                     vcf_bed=wasp_files.vcf_bed,
                     out_bed=wasp_files.intersect_file)
-    
-    
+
+
     # print("INTERSECTION COMPLETE")
-    
+
     # If a tempdir already exists??
 
     # Create remap fq
@@ -127,7 +141,10 @@ def run_make_remap_reads(
                     wasp_files.intersect_file,
                     wasp_files.remap_fq1,
                     wasp_files.remap_fq2,
-                    wasp_files.samples)
+                    wasp_files.samples,
+                    include_indels=include_indels,
+                    insert_qual=insert_qual,
+                    max_seqs=max_seqs)
     
     
     # print("WROTE READS TO BE REMAPPED")
@@ -216,6 +233,7 @@ def run_wasp_filt(
     remap_keep_file: Optional[str] = None,
     threads: int = 1,
     use_rust: bool = True,
+    same_locus_slop: int = 0,
 ) -> None:
     """
     Filter reads that remap to the same loc
@@ -234,26 +252,34 @@ def run_wasp_filt(
     :type remap_keep_bam: _type_, optional
     :param remap_keep_file: _description_, defaults to None
     :type remap_keep_file: _type_, optional
+    :param threads: Number of threads for BAM I/O, defaults to 1
+    :type threads: int, optional
+    :param use_rust: Use Rust acceleration if available, defaults to True
+    :type use_rust: bool, optional
+    :param same_locus_slop: Tolerance (bp) for same locus test, defaults to 0
+    :type same_locus_slop: int, optional
     """
     
     # Handle temp
     if remap_keep_bam is None:
-        
+
         with tempfile.TemporaryDirectory() as tmpdir:
             remap_keep_bam = f"{tmpdir}/wasp_remap_filt.bam"
-            
+
             filt_remapped_reads(to_remap_bam, remapped_bam,
                                 remap_keep_bam, keep_read_file=remap_keep_file,
-                                use_rust=use_rust, threads=threads)
-            
+                                use_rust=use_rust, threads=threads,
+                                same_locus_slop=same_locus_slop)
+
             merge_filt_bam(keep_bam, remap_keep_bam, wasp_out_bam)
     else:
-        
+
         filt_remapped_reads(to_remap_bam, remapped_bam, remap_keep_bam,
-                            keep_read_file=remap_keep_file, use_rust=use_rust, threads=threads)
-        
+                            keep_read_file=remap_keep_file, use_rust=use_rust, threads=threads,
+                            same_locus_slop=same_locus_slop)
+
         print(f"\nWrote remapped bam with filtered reads to...\n{remap_keep_bam}\n")
-        
+
         merge_filt_bam(keep_bam, remap_keep_bam, wasp_out_bam)
     
     # Finished

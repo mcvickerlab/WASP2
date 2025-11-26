@@ -8,13 +8,14 @@ use rustc_hash::FxHashSet;
 /// - Writes a filtered BAM from the original `to_remap_bam` containing only kept read names
 /// Returns (kept_reads, removed_moved, removed_missing)
 #[pyfunction]
-#[pyo3(signature = (to_remap_bam, remapped_bam, remap_keep_bam, keep_read_file=None, threads=1))]
+#[pyo3(signature = (to_remap_bam, remapped_bam, remap_keep_bam, keep_read_file=None, threads=1, same_locus_slop=0))]
 pub fn filter_bam_wasp(
     to_remap_bam: String,
     remapped_bam: String,
     remap_keep_bam: String,
     keep_read_file: Option<String>,
     threads: usize,
+    same_locus_slop: i64,
 ) -> PyResult<(u64, u64, u64)> {
     // Track expected positions and remaining remapped copies
     let mut keep_set: FxHashSet<String> = FxHashSet::default();
@@ -87,11 +88,25 @@ pub fn filter_bam_wasp(
         }
 
         // Check if the remapped position matches original coordinates (mate order agnostic)
+        // For indels, allow slop tolerance to handle micro-homology shifts
         let rec_pos = rec.pos();
         let mate_pos = rec.mpos();
         if let Some((expect_pos, expect_mate)) = pos_map.get(&name) {
-            let matches = (rec_pos == *expect_pos && mate_pos == *expect_mate)
-                || (rec_pos == *expect_mate && mate_pos == *expect_pos);
+            let matches = if same_locus_slop == 0 {
+                // Strict matching for SNPs
+                (rec_pos == *expect_pos && mate_pos == *expect_mate)
+                    || (rec_pos == *expect_mate && mate_pos == *expect_pos)
+            } else {
+                // Allow slop tolerance for indels
+                let pos_diff1 = (rec_pos - *expect_pos).abs();
+                let mate_diff1 = (mate_pos - *expect_mate).abs();
+                let pos_diff2 = (rec_pos - *expect_mate).abs();
+                let mate_diff2 = (mate_pos - *expect_pos).abs();
+
+                (pos_diff1 <= same_locus_slop && mate_diff1 <= same_locus_slop)
+                    || (pos_diff2 <= same_locus_slop && mate_diff2 <= same_locus_slop)
+            };
+
             if !matches {
                 keep_set.remove(&name);
                 remaining.remove(&name);

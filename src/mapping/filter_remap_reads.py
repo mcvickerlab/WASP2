@@ -16,7 +16,19 @@ def filt_remapped_reads(
     keep_read_file: Optional[str] = None,
     use_rust: bool = True,
     threads: int = 1,
+    same_locus_slop: int = 0,
 ) -> None:
+    """Filter remapped reads using WASP algorithm.
+
+    Args:
+        to_remap_bam: Original BAM with reads to remap
+        remapped_bam: Remapped BAM with swapped alleles
+        filt_out_bam: Output filtered BAM
+        keep_read_file: Optional file to write kept read names
+        use_rust: Use Rust acceleration if available
+        threads: Number of threads for BAM I/O
+        same_locus_slop: Tolerance (bp) for same locus test (for indels)
+    """
     rust_allowed = (
         use_rust
         and filter_bam_wasp is not None
@@ -36,6 +48,7 @@ def filt_remapped_reads(
         filt_out_bam,
         keep_read_file=keep_read_file,
         threads=threads,
+        same_locus_slop=same_locus_slop,
     )
 
 

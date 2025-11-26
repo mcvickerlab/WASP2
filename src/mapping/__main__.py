@@ -79,6 +79,45 @@ def make_reads(
                          "(PHASED STRONGLY RECOMMENDED-SINGLE END NOT SUPPORTED YET)"
                          )
                      )] = None,
+    include_indels: Annotated[
+        bool,
+        typer.Option("--indels/--snps-only",
+                     help=(
+                         "Include indels in addition to SNPs. "
+                         "Default is SNPs only for backward compatibility. "
+                         "Indel support uses variable-length approach."
+                         )
+                     )] = False,
+    max_indel_len: Annotated[
+        int,
+        typer.Option("--max-indel-len",
+                     help=(
+                         "Maximum indel length to process (bp). "
+                         "Indels longer than this are skipped. "
+                         "Prevents excessive computational burden."
+                         ),
+                     min=1
+                     )] = 10,
+    insert_qual: Annotated[
+        int,
+        typer.Option("--insert-qual",
+                     help=(
+                         "Quality score for inserted bases (Phred scale). "
+                         "Used when creating alternate reads with insertions."
+                         ),
+                     min=0,
+                     max=60
+                     )] = 30,
+    max_seqs: Annotated[
+        int,
+        typer.Option("--max-seqs",
+                     help=(
+                         "Maximum number of alternate sequences per read. "
+                         "Reads with more variants are skipped. "
+                         "Prevents combinatorial explosion."
+                         ),
+                     min=1
+                     )] = 64,
 ) -> None:
     """Generate reads with swapped alleles for remapping."""
 
@@ -97,7 +136,11 @@ def make_reads(
         temp_loc=temp_loc,
         out_json=out_json,
         is_paired=is_paired,
-        is_phased=is_phased
+        is_phased=is_phased,
+        include_indels=include_indels,
+        max_indel_len=max_indel_len,
+        insert_qual=insert_qual,
+        max_seqs=max_seqs
         )
 
 
@@ -166,6 +209,19 @@ def filter_remapped(
             help="Use Rust acceleration if available (respects WASP2_DISABLE_RUST)",
         )
     ] = True,
+    same_locus_slop: Annotated[
+        int,
+        typer.Option(
+            "--same-locus-slop",
+            help=(
+                "Tolerance (bp) for 'same locus' test. "
+                "Allows remapped reads to differ by this many bp. "
+                "Use 2-3 for indels to handle micro-homology shifts. "
+                "Use 0 for strict SNP-only matching."
+            ),
+            min=0
+        )
+    ] = 0,
 ) -> None:
     """Filter remapped reads using WASP algorithm."""
 
@@ -189,6 +245,7 @@ def filter_remapped(
         wasp_data_json=wasp_data_json,
         threads=threads,
         use_rust=use_rust,
+        same_locus_slop=same_locus_slop,
         )
     
 

@@ -308,7 +308,9 @@ class VCFSource(VariantSource):
         output: Path,
         samples: Optional[List[str]] = None,
         het_only: bool = True,
-        include_genotypes: bool = True
+        include_genotypes: bool = True,
+        include_indels: bool = False,
+        max_indel_len: int = 10
     ) -> Path:
         """Export variants to BED format file.
 
@@ -324,6 +326,8 @@ class VCFSource(VariantSource):
             samples: Optional list of sample IDs to include
             het_only: If True, only export heterozygous variants
             include_genotypes: If True, include genotype column(s)
+            include_indels: If True, include indels in addition to SNPs
+            max_indel_len: Maximum indel length (bp) to include
 
         Returns:
             Path to the created BED file
@@ -341,13 +345,22 @@ class VCFSource(VariantSource):
         # Build bcftools commands based on parameters
         # This follows the pattern from intersect_variant_data.py
 
-        # Base view command: filter to biallelic SNPs
+        # Base view command: filter to biallelic variants
         view_cmd = [
             "bcftools", "view", str(self.path),
             "-m2", "-M2",  # min/max alleles
-            "-v", "snps",  # SNPs only
-            "-Ou"  # uncompressed BCF output
         ]
+
+        # Add variant type filter
+        if include_indels:
+            view_cmd.extend(["-v", "snps,indels"])  # Both SNPs and indels
+            # Add indel length filter (max absolute difference in allele lengths)
+            # This filters indels where |len(ALT) - len(REF)| > max_indel_len
+            view_cmd.extend(["-i", f'strlen(REF)-strlen(ALT)<={max_indel_len} && strlen(ALT)-strlen(REF)<={max_indel_len}'])
+        else:
+            view_cmd.extend(["-v", "snps"])  # SNPs only (backward compatible)
+
+        view_cmd.append("-Ou")  # uncompressed BCF output
 
         # Build query command
         query_cmd = [

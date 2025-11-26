@@ -23,6 +23,8 @@ def variants_to_bed(
     include_gt: bool = True,
     het_only: bool = True,
     use_legacy: bool = False,
+    include_indels: bool = False,
+    max_indel_len: int = 10,
 ) -> Path:
     """Convert variant file to BED format.
 
@@ -37,6 +39,8 @@ def variants_to_bed(
         include_gt: Include genotype column(s) in output
         het_only: Only include heterozygous sites (when samples specified)
         use_legacy: Force use of legacy bcftools approach (VCF only)
+        include_indels: Include indels in addition to SNPs
+        max_indel_len: Maximum indel length (bp) to include
 
     Returns:
         Path to the output BED file
@@ -64,6 +68,8 @@ def variants_to_bed(
             out_bed=out_bed,
             samples=samples,
             include_gt=include_gt,
+            include_indels=include_indels,
+            max_indel_len=max_indel_len,
         )
 
     # Use VariantSource for all formats
@@ -73,6 +79,8 @@ def variants_to_bed(
             samples=samples,
             het_only=het_only if samples else False,
             include_genotypes=include_gt,
+            include_indels=include_indels,
+            max_indel_len=max_indel_len,
         )
 
     return out_bed
@@ -83,6 +91,8 @@ def _vcf_to_bed_bcftools(
     out_bed: Union[str, Path],
     samples: Optional[List[str]] = None,
     include_gt: bool = True,
+    include_indels: bool = False,
+    max_indel_len: int = 10,
 ) -> Path:
     """Legacy vcf_to_bed using bcftools subprocess.
 
@@ -94,6 +104,8 @@ def _vcf_to_bed_bcftools(
         out_bed: Output BED file path
         samples: List of sample IDs to filter
         include_gt: Include genotype column in output
+        include_indels: Include indels in addition to SNPs
+        max_indel_len: Maximum indel length (bp) to include
 
     Returns:
         Path to output BED file
@@ -101,11 +113,21 @@ def _vcf_to_bed_bcftools(
     vcf_file = Path(vcf_file)
     out_bed = Path(out_bed)
 
-    # Base commands - filter to biallelic SNPs
+    # Base commands - filter to biallelic variants
     view_cmd = [
         "bcftools", "view", str(vcf_file),
-        "-m2", "-M2", "-v", "snps", "-Ou"
+        "-m2", "-M2"
     ]
+
+    # Add variant type filter
+    if include_indels:
+        view_cmd.extend(["-v", "snps,indels"])
+        # Add indel length filter
+        view_cmd.extend(["-i", f'strlen(REF)-strlen(ALT)<={max_indel_len} && strlen(ALT)-strlen(REF)<={max_indel_len}'])
+    else:
+        view_cmd.extend(["-v", "snps"])
+
+    view_cmd.append("-Ou")
 
     query_cmd = [
         "bcftools", "query",
