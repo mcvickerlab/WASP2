@@ -19,5 +19,12 @@ argmin = "0.10"
 argmin-math = "0.4"
 
 [dev-dependencies]
-criterion = "0.5"
+criterion = { version = "0.5", features = ["html_reports"] }
 tempfile = "3.8"
+
+[[bench]]
+name = "mapping_filter_bench"
+harness = false
+
+[profile.release]
+debug = true  # Enable debug symbols for profiling
