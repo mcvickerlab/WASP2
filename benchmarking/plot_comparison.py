@@ -141,8 +141,11 @@ def main():
     rust_df = load_rust_data(args.rust)
 
     # Load Python data
+    # Use the CORRECT files from aho's preprint (plot_performance_v1.ipynb):
+    # - WASP2: wasp2_perf_logs_7908428-Copy1.txt (multithreaded version)
+    # - WASP1: wasp1_perf_logs_snp2h5_7881649-Copy1.txt
     if args.compare_aho:
-        aho_python = '/iblm/netapp/home/aho/projects/wasp/testing/performance/outputs/test_logs_v1/wasp2_perf_logs_7881626.txt'
+        aho_python = '/iblm/netapp/home/aho/projects/wasp/testing/performance/outputs/test_logs_v1/wasp2_perf_logs_7908428-Copy1.txt'
         python_df = load_aho_python_data(aho_python)
     elif args.python:
         python_df = load_aho_python_data(args.python)
@@ -153,7 +156,7 @@ def main():
     # Load WASP1 data if requested
     wasp1_df = None
     if args.include_wasp1:
-        wasp1_path = '/iblm/netapp/home/aho/projects/wasp/testing/performance/outputs/test_logs_v1/wasp1_perf_logs_snp2h5_7881649.txt'
+        wasp1_path = '/iblm/netapp/home/aho/projects/wasp/testing/performance/outputs/test_logs_v1/wasp1_perf_logs_snp2h5_7881649-Copy1.txt'
         wasp1_df = load_wasp1_data(wasp1_path)
 
     # Generate plots

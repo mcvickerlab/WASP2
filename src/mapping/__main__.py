@@ -118,6 +118,14 @@ def make_reads(
                          ),
                      min=1
                      )] = 64,
+    threads: Annotated[
+        int,
+        typer.Option(
+            "--threads",
+            help="Threads for BAM I/O operations",
+            min=1
+        )
+    ] = 1,
 ) -> None:
     """Generate reads with swapped alleles for remapping."""
 
@@ -140,7 +148,8 @@ def make_reads(
         include_indels=include_indels,
         max_indel_len=max_indel_len,
         insert_qual=insert_qual,
-        max_seqs=max_seqs
+        max_seqs=max_seqs,
+        threads=threads
         )
 
 

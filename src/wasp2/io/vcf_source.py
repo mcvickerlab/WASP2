@@ -4,8 +4,12 @@ VCF/BCF reader implementation for WASP2.
 This module provides VCFSource, a VariantSource implementation for reading
 VCF and BCF files using pysam. Supports both plain and compressed formats,
 with optional indexing for region queries.
+
+When available, uses Rust acceleration (wasp2_rust) for VCF → BED conversion
+which is 5-6x faster than bcftools subprocess.
 """
 
+import os
 import subprocess
 from pathlib import Path
 from typing import Iterator, List, Optional, Tuple
@@ -18,6 +22,13 @@ from .variant_source import (
     VariantGenotype,
     VariantSource,
 )
+
+# Try to import Rust acceleration
+try:
+    from wasp2_rust import vcf_to_bed_py as rust_vcf_to_bed
+    RUST_VCF_AVAILABLE = True
+except ImportError:
+    RUST_VCF_AVAILABLE = False
 
 
 @VariantSource.register('vcf', 'vcf.gz', 'vcf.bgz', 'bcf', 'bcf.gz')
@@ -314,8 +325,8 @@ class VCFSource(VariantSource):
     ) -> Path:
         """Export variants to BED format file.
 
-        Uses bcftools for efficient filtering and export. BED format uses
-        0-based start, 1-based end coordinates.
+        Uses Rust acceleration when available (5-6x faster), falls back to
+        bcftools subprocess. BED format uses 0-based start, 1-based end coordinates.
 
         Format:
         - Without genotypes: chrom\\tstart\\tend\\tref\\talt
@@ -333,7 +344,7 @@ class VCFSource(VariantSource):
             Path to the created BED file
 
         Raises:
-            IOError: If bcftools fails or file cannot be written
+            IOError: If conversion fails or file cannot be written
             ValueError: If samples not found
         """
         # Validate samples if provided
@@ -342,6 +353,46 @@ class VCFSource(VariantSource):
                 if s not in self._samples:
                     raise ValueError(f"Sample '{s}' not found in VCF")
 
+        # Try Rust acceleration first (5-6x faster than bcftools)
+        use_rust = (
+            RUST_VCF_AVAILABLE
+            and os.environ.get("WASP2_DISABLE_RUST") != "1"
+        )
+
+        if use_rust:
+            try:
+                rust_vcf_to_bed(
+                    str(self.path),
+                    str(output),
+                    samples=samples,
+                    het_only=het_only,
+                    include_indels=include_indels,
+                    max_indel_len=max_indel_len,
+                    include_genotypes=include_genotypes,
+                )
+                return output
+            except Exception as e:
+                print(f"Rust vcf_to_bed failed: {e}, falling back to bcftools")
+
+        # Fallback to bcftools subprocess
+        return self._to_bed_bcftools(
+            output, samples, het_only, include_genotypes,
+            include_indels, max_indel_len
+        )
+
+    def _to_bed_bcftools(
+        self,
+        output: Path,
+        samples: Optional[List[str]],
+        het_only: bool,
+        include_genotypes: bool,
+        include_indels: bool,
+        max_indel_len: int
+    ) -> Path:
+        """Export variants to BED using bcftools subprocess (fallback).
+
+        This is the original implementation using bcftools.
+        """
         # Build bcftools commands based on parameters
         # This follows the pattern from intersect_variant_data.py
 

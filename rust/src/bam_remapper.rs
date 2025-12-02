@@ -8,6 +8,11 @@
 //! - Parallel chromosome processing
 //!
 //! Expected speedup: 7-20x over Python implementation
+//!
+//! # INDEL Support (v1.2+)
+//!
+//! Uses shared `cigar_utils` module for CIGAR-aware position mapping.
+//! This properly handles reads with insertions/deletions in their alignment.
 
 use anyhow::{Context, Result};
 use rust_htslib::{bam, bam::Read as BamRead};
@@ -15,6 +20,8 @@ use rustc_hash::FxHashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
+
+use crate::cigar_utils;
 
 // ============================================================================
 // Data Structures
@@ -681,117 +688,38 @@ pub fn process_all_chromosomes_parallel(
 /// For positions in deletions, left and right maps will differ (flanking positions).
 /// For matches, both maps point to the same query position.
 ///
-/// This mirrors Python's `_build_ref2read_maps()` in remap_utils.py (lines 89-132)
+/// This uses the shared `cigar_utils::build_ref2query_maps()` which leverages
+/// rust-htslib's `aligned_pairs_full()` API (equivalent to pysam's
+/// `get_aligned_pairs(matches_only=False)`).
 ///
 /// # Returns
 /// (ref2q_left, ref2q_right) FxHashMaps mapping reference positions to query positions
 fn build_ref2read_maps(read: &bam::Record) -> (FxHashMap<u32, usize>, FxHashMap<u32, usize>) {
-    use rust_htslib::bam::record::Cigar;
+    // Use the shared cigar_utils implementation which uses aligned_pairs_full()
+    let (left_i64, right_i64) = cigar_utils::build_ref2query_maps(read);
 
-    let cigar = read.cigar();
-    let mut ref2q_left: FxHashMap<u32, usize> = FxHashMap::default();
-    let mut ref2q_right: FxHashMap<u32, usize> = FxHashMap::default();
+    // Convert from i64 keys to u32 keys (for backwards compatibility with existing code)
+    let ref2q_left: FxHashMap<u32, usize> = left_i64
+        .into_iter()
+        .filter_map(|(k, v)| {
+            if k >= 0 && k <= u32::MAX as i64 {
+                Some((k as u32, v))
+            } else {
+                None
+            }
+        })
+        .collect();
 
-    let mut read_pos: usize = 0;
-    let mut ref_pos = read.pos() as u32;
-    let mut last_query_pos: Option<usize> = None;
-
-    // Forward pass: build left mapping
-    for op in cigar.iter() {
-        match op {
-            Cigar::Match(len) | Cigar::Equal(len) | Cigar::Diff(len) => {
-                for i in 0..*len {
-                    let curr_ref = ref_pos + i;
-                    let curr_query = read_pos + i as usize;
-                    ref2q_left.insert(curr_ref, curr_query);
-                    last_query_pos = Some(curr_query);
-                }
-                read_pos += *len as usize;
-                ref_pos += len;
+    let ref2q_right: FxHashMap<u32, usize> = right_i64
+        .into_iter()
+        .filter_map(|(k, v)| {
+            if k >= 0 && k <= u32::MAX as i64 {
+                Some((k as u32, v))
+            } else {
+                None
             }
-            Cigar::Ins(len) => {
-                // Insertion: only read advances
-                read_pos += *len as usize;
-                if read_pos > 0 {
-                    last_query_pos = Some(read_pos - 1);
-                }
-            }
-            Cigar::Del(len) | Cigar::RefSkip(len) => {
-                // Deletion: map to last known query position (left flanking)
-                if let Some(last_pos) = last_query_pos {
-                    for i in 0..*len {
-                        ref2q_left.insert(ref_pos + i, last_pos);
-                    }
-                }
-                ref_pos += len;
-            }
-            Cigar::SoftClip(len) => {
-                read_pos += *len as usize;
-            }
-            Cigar::HardClip(_) | Cigar::Pad(_) => {}
-        }
-    }
-
-    // Backward pass: build right mapping
-    read_pos = 0;
-    ref_pos = read.pos() as u32;
-    let mut next_query_pos: Option<usize> = None;
-
-    // Collect operations in reverse
-    let ops: Vec<_> = cigar.iter().collect();
-
-    // First, calculate ending positions to walk backwards
-    for op in ops.iter() {
-        match op {
-            Cigar::Match(len) | Cigar::Equal(len) | Cigar::Diff(len) => {
-                read_pos += *len as usize;
-                ref_pos += len;
-            }
-            Cigar::Ins(len) => {
-                read_pos += *len as usize;
-            }
-            Cigar::Del(len) | Cigar::RefSkip(len) => {
-                ref_pos += len;
-            }
-            Cigar::SoftClip(len) => {
-                read_pos += *len as usize;
-            }
-            Cigar::HardClip(_) | Cigar::Pad(_) => {}
-        }
-    }
-
-    // Now walk backwards
-    for op in ops.iter().rev() {
-        match op {
-            Cigar::Match(len) | Cigar::Equal(len) | Cigar::Diff(len) => {
-                read_pos -= *len as usize;
-                ref_pos -= len;
-                for i in (0..*len).rev() {
-                    let curr_ref = ref_pos + i;
-                    let curr_query = read_pos + i as usize;
-                    ref2q_right.insert(curr_ref, curr_query);
-                    next_query_pos = Some(curr_query);
-                }
-            }
-            Cigar::Ins(len) => {
-                read_pos -= *len as usize;
-                next_query_pos = Some(read_pos);
-            }
-            Cigar::Del(len) | Cigar::RefSkip(len) => {
-                // Deletion: map to next known query position (right flanking)
-                ref_pos -= len;
-                if let Some(next_pos) = next_query_pos {
-                    for i in (0..*len).rev() {
-                        ref2q_right.insert(ref_pos + i, next_pos);
-                    }
-                }
-            }
-            Cigar::SoftClip(len) => {
-                read_pos -= *len as usize;
-            }
-            Cigar::HardClip(_) | Cigar::Pad(_) => {}
-        }
-    }
+        })
+        .collect();
 
     (ref2q_left, ref2q_right)
 }

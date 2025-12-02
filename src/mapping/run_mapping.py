@@ -46,7 +46,8 @@ def run_make_remap_reads(
     include_indels: bool = False,
     max_indel_len: int = 10,
     insert_qual: int = 30,
-    max_seqs: int = 64
+    max_seqs: int = 64,
+    threads: int = 1
 ) -> None:
     """
     Parser that parses initial input.
@@ -78,6 +79,8 @@ def run_make_remap_reads(
     :type insert_qual: int, optional
     :param max_seqs: Maximum number of alternate sequences per read, defaults to 64
     :type max_seqs: int, optional
+    :param threads: Number of threads for BAM I/O, defaults to 1
+    :type threads: int, optional
     """
 
 
@@ -124,12 +127,14 @@ def run_make_remap_reads(
                 remap_bam=wasp_files.to_remap_bam,
                 remap_reads=wasp_files.remap_reads,
                 keep_bam=wasp_files.keep_bam,
-                is_paired=wasp_files.is_paired)
+                is_paired=wasp_files.is_paired,
+                threads=threads)
 
 
     intersect_reads(remap_bam=wasp_files.to_remap_bam,
                     vcf_bed=wasp_files.vcf_bed,
-                    out_bed=wasp_files.intersect_file)
+                    out_bed=wasp_files.intersect_file,
+                    num_samples=len(wasp_files.samples))
 
 
     # print("INTERSECTION COMPLETE")
@@ -271,7 +276,7 @@ def run_wasp_filt(
                                 use_rust=use_rust, threads=threads,
                                 same_locus_slop=same_locus_slop)
 
-            merge_filt_bam(keep_bam, remap_keep_bam, wasp_out_bam)
+            merge_filt_bam(keep_bam, remap_keep_bam, wasp_out_bam, threads=threads)
     else:
 
         filt_remapped_reads(to_remap_bam, remapped_bam, remap_keep_bam,
@@ -280,7 +285,7 @@ def run_wasp_filt(
 
         print(f"\nWrote remapped bam with filtered reads to...\n{remap_keep_bam}\n")
 
-        merge_filt_bam(keep_bam, remap_keep_bam, wasp_out_bam)
+        merge_filt_bam(keep_bam, remap_keep_bam, wasp_out_bam, threads=threads)
     
     # Finished
     print(f"\nWASP filtered Bam written to...\n{wasp_out_bam}\n")

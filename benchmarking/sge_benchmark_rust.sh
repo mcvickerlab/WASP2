@@ -51,7 +51,9 @@ samtools index ${subset_out}
 # Process WASP2 with Rust
 start=$(date +%s)
 
-python ${WASP2_DIR}/src/mapping make-reads ${subset_out} ${input_vcf} -t 8 -s ${sample} --out ${dir} --paired --phased --temp_loc ${dir}
+# IMPORTANT: Must use -m and PYTHONPATH for proper module import
+export PYTHONPATH="${WASP2_DIR}/src:${PYTHONPATH}"
+python -m mapping make-reads ${subset_out} ${input_vcf} -s ${sample} --out ${dir} --paired --phased --temp_loc ${dir} --threads 8
 
 intersect_end=$(date +%s)
 intersect_runtime=$(($intersect_end-$start))
@@ -61,7 +63,7 @@ r1_reads="${dir}/${prefix}_swapped_alleles_r1.fq"
 r2_reads="${dir}/${prefix}_swapped_alleles_r2.fq"
 remapped_bam="${dir}/${prefix}_remapped.bam"
 
-bwa mem -t 8 -M ${genome_index} ${r1_reads} ${r2_reads} | samtools view -S -b -h -F 4 - > ${remapped_bam}
+bwa mem -t 16 -M ${genome_index} ${r1_reads} ${r2_reads} | samtools view -S -b -h -F 4 - > ${remapped_bam}
 samtools sort -o ${remapped_bam} ${remapped_bam}
 samtools index ${remapped_bam}
 
@@ -70,7 +72,7 @@ remap_runtime=$(($remap_end-$intersect_end))
 
 # Filter remapped reads
 wasp_json="${dir}/${prefix}_wasp_data_files.json"
-python ${WASP2_DIR}/src/mapping filter-remapped ${remapped_bam} --json ${wasp_json} -t 8
+python -m mapping filter-remapped ${remapped_bam} --json ${wasp_json} --threads 8
 
 end=$(date +%s)
 filt_runtime=$(($end-$remap_end))

@@ -1,2 +1,23 @@
+# Cargo configuration for WASP2 Rust module
+#
+# IMPORTANT: Build target directory is set to local filesystem to avoid SIGBUS
+# errors when building on NFS. The NFS mmap issue causes SIGBUS when files
+# are replaced during compilation.
+#
+# See: https://github.com/rust-lang/cargo/issues/10359
+# See: https://rachelbythebay.com/w/2018/03/18/nfs/
+
+[build]
+# Use local /tmp for build artifacts to avoid NFS mmap issues
+target-dir = "/tmp/wasp2_rust_target"
+
 [env]
 LIBCLANG_PATH = "/iblm/netapp/home/jjaureguy/mambaforge/lib/python3.10/site-packages/clang/native"
+
+[net]
+# Use git CLI for fetching to avoid potential NFS issues with libgit2
+git-fetch-with-cli = true
+
+# Optimize for native CPU when building release
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "target-cpu=native"]

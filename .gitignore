@@ -184,6 +184,13 @@ benchmarks/test_results/
 benchmarks/nature_style_results/
 benchmarks/*.bed
 
+# Benchmarking outputs (generated plots, comparison data)
+benchmarking/plots/
+benchmarking/star_wasp_comparison/
+
+# Temporary build scripts
+build_rust_*.sh
+
 # Cache directories
 cache/
 

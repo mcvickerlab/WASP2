@@ -9,7 +9,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 pyo3 = { version = "0.20", features = ["extension-module"] }
-rust-htslib = "0.47"
+rust-htslib = { version = "0.44", default-features = false }
 rayon = "1.8"
 anyhow = "1.0"
 rustc-hash = "1.1"
@@ -17,6 +17,15 @@ statrs = "0.17"
 rv = "0.19"
 argmin = "0.10"
 argmin-math = "0.4"
+coitrees = "0.4"  # Fast interval tree for BAM-BED intersection (15-30x faster than pybedtools)
+
+# VCF/BCF parsing (noodles - pure Rust, no C dependencies)
+# Note: noodles-bcf depends on noodles-vcf, so we use compatible versions
+noodles-vcf = "0.72"   # Match version used by noodles-bcf
+noodles-bcf = "0.68"
+noodles-core = "0.15"
+noodles-bgzf = "0.33"  # For compressed VCF (.vcf.gz)
+flate2 = "1.0"         # For gzip decompression
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }

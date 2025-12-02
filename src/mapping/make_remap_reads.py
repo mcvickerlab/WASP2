@@ -26,6 +26,13 @@ try:
 except ImportError:
     RUST_REMAP_AVAILABLE = False
 
+# Multi-sample Rust support
+try:
+    from wasp2_rust import remap_chromosome_multi
+    RUST_MULTI_REMAP_AVAILABLE = True
+except ImportError:
+    RUST_MULTI_REMAP_AVAILABLE = False
+
 
 class ReadStats(object):
     """Track information about reads and SNPs that they overlap"""
@@ -89,9 +96,19 @@ def _write_remap_bam_rust(
     """Rust-accelerated remapping implementation (5-7x faster than Python)"""
     import pysam
 
-    # Get chromosomes from BAM
+    # Get chromosomes that have variants in the intersect file
+    # This avoids processing ~170 empty chromosomes (major speedup!)
+    intersect_chroms = set()
+    with open(intersect_file, 'r') as f:
+        for line in f:
+            chrom = line.split('\t')[0]
+            intersect_chroms.add(chrom)
+
+    # Filter BAM chromosomes to only those with variants
     with pysam.AlignmentFile(bam_file, "rb") as bam:
-        chromosomes = list(bam.header.references)
+        chromosomes = [c for c in bam.header.references if c in intersect_chroms]
+
+    print(f"Processing {len(chromosomes)} chromosomes with variants (filtered from {len(intersect_chroms)} in intersect)")
 
     # Create temp directory for per-chromosome outputs
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -138,6 +155,76 @@ def _write_remap_bam_rust(
         print(f"Reads to remapped written to \n{r1_out}\n{r2_out}")
 
 
+def _write_remap_bam_rust_multi(
+    bam_file: str,
+    intersect_file: str,
+    r1_out: str,
+    r2_out: str,
+    num_samples: int,
+    max_seqs: int = 64
+) -> None:
+    """Rust-accelerated multi-sample remapping implementation"""
+    import pysam
+
+    # Get chromosomes that have variants in the intersect file
+    intersect_chroms = set()
+    with open(intersect_file, 'r') as f:
+        for line in f:
+            chrom = line.split('\t')[0]
+            intersect_chroms.add(chrom)
+
+    # Filter BAM chromosomes to only those with variants
+    with pysam.AlignmentFile(bam_file, "rb") as bam:
+        chromosomes = [c for c in bam.header.references if c in intersect_chroms]
+
+    print(f"Processing {len(chromosomes)} chromosomes with variants ({num_samples} samples)")
+
+    # Create temp directory for per-chromosome outputs
+    with tempfile.TemporaryDirectory() as tmpdir:
+        total_pairs = 0
+        total_haps = 0
+
+        # Process each chromosome with Rust multi-sample
+        for chrom in chromosomes:
+            chrom_r1 = f"{tmpdir}/{chrom}_r1.fq"
+            chrom_r2 = f"{tmpdir}/{chrom}_r2.fq"
+
+            try:
+                pairs, haps = remap_chromosome_multi(
+                    bam_file,
+                    intersect_file,
+                    chrom,
+                    chrom_r1,
+                    chrom_r2,
+                    num_samples=num_samples,
+                    max_seqs=max_seqs
+                )
+                total_pairs += pairs
+                total_haps += haps
+                if pairs > 0:
+                    print(f"  {chrom}: {pairs} pairs → {haps} haplotypes")
+            except Exception as e:
+                print(f"  {chrom}: Error - {e}")
+                continue
+
+        # Concatenate all R1 files
+        r1_files = sorted(Path(tmpdir).glob("*_r1.fq"))
+        with open(r1_out, "wb") as outfile:
+            for f in r1_files:
+                with open(f, "rb") as infile:
+                    shutil.copyfileobj(infile, outfile)
+
+        # Concatenate all R2 files
+        r2_files = sorted(Path(tmpdir).glob("*_r2.fq"))
+        with open(r2_out, "wb") as outfile:
+            for f in r2_files:
+                with open(f, "rb") as infile:
+                    shutil.copyfileobj(infile, outfile)
+
+        print(f"\n✅ Rust multi-sample remapper: {total_pairs} pairs → {total_haps} haplotypes")
+        print(f"Reads to remapped written to \n{r1_out}\n{r2_out}")
+
+
 def write_remap_bam(
     bam_file: str,
     intersect_file: str,
@@ -149,22 +236,35 @@ def write_remap_bam(
     insert_qual: int = 30,
     use_rust: bool = True
 ) -> None:
-    # Check if Rust acceleration should be used
-    rust_enabled = (
+    # Determine Rust availability (5-7x faster than Python)
+    num_samples = len(samples)
+    rust_base_enabled = (
         use_rust
-        and RUST_REMAP_AVAILABLE
         and os.environ.get("WASP2_DISABLE_RUST") != "1"
-        and len(samples) == 1  # Rust currently only supports single sample
-        and not include_indels  # TODO: Add indel support to Rust remapper
     )
 
-    if rust_enabled:
-        print("Using Rust acceleration for remapping...")
+    # Check single-sample Rust availability
+    rust_single_enabled = rust_base_enabled and RUST_REMAP_AVAILABLE and num_samples == 1
+
+    # Check multi-sample Rust availability
+    rust_multi_enabled = rust_base_enabled and RUST_MULTI_REMAP_AVAILABLE and num_samples > 1
+
+    if rust_single_enabled:
+        print("Using Rust acceleration for remapping (single sample)...")
         try:
             _write_remap_bam_rust(bam_file, intersect_file, r1_out, r2_out, max_seqs)
             return
         except Exception as e:
             print(f"⚠️ Rust remapper failed: {e}")
+            print("Falling back to Python implementation...")
+
+    if rust_multi_enabled:
+        print(f"Using Rust acceleration for remapping ({num_samples} samples)...")
+        try:
+            _write_remap_bam_rust_multi(bam_file, intersect_file, r1_out, r2_out, num_samples, max_seqs)
+            return
+        except Exception as e:
+            print(f"⚠️ Rust multi-sample remapper failed: {e}")
             print("Falling back to Python implementation...")
 
     # Python implementation (original code)

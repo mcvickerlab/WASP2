@@ -1,4 +1,5 @@
 import os
+import subprocess
 import timeit
 from typing import Optional
 
@@ -190,18 +191,35 @@ def filt_remapped_reads(
         )
 
 
-def merge_filt_bam(keep_bam: str, remapped_filt_bam: str, out_bam: str) -> None:
-    
+def merge_filt_bam(
+    keep_bam: str,
+    remapped_filt_bam: str,
+    out_bam: str,
+    threads: int = 1
+) -> None:
+    """Merge filtered BAM files using samtools (faster than pysam).
+
+    Both input BAMs are already coordinate-sorted, so samtools merge
+    produces sorted output without needing an explicit sort step.
+
+    Args:
+        keep_bam: BAM with reads that didn't need remapping
+        remapped_filt_bam: BAM with filtered remapped reads
+        out_bam: Output merged BAM
+        threads: Number of threads for samtools
+    """
     start_time = timeit.default_timer()
-    
-    # Merge for for complete filt bam
-    pysam.merge("-f", "-o", out_bam, keep_bam, remapped_filt_bam, catch_stdout=False)
+
+    # Merge using samtools (faster than pysam, inputs are already sorted)
+    subprocess.run(
+        ["samtools", "merge", "-@", str(threads),
+         "-f", "-o", out_bam, keep_bam, remapped_filt_bam],
+        check=True)
     print(f"Merged BAM in {timeit.default_timer() - start_time:.2f} seconds")
-    
-    start_sort = timeit.default_timer()
-    pysam.sort(out_bam, "-o", out_bam, catch_stdout=False)
-    pysam.index(out_bam, catch_stdout=False)
-    
-    print(f"Sorted and Indexed BAM in {timeit.default_timer() - start_sort:.2f} seconds")
-    
-    # print(f"\nWrote merged WASP filtered BAM to...\n{out_bam}")
+
+    # Index the merged BAM (no sort needed - inputs were already sorted)
+    start_index = timeit.default_timer()
+    subprocess.run(
+        ["samtools", "index", "-@", str(threads), out_bam],
+        check=True)
+    print(f"Indexed BAM in {timeit.default_timer() - start_index:.2f} seconds")

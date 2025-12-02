@@ -1,3 +1,4 @@
+import os
 import timeit
 import subprocess
 from pathlib import Path
@@ -13,6 +14,14 @@ from pybedtools import BedTool
 
 # Import from new wasp2.io module for multi-format support
 from wasp2.io import variants_to_bed as _variants_to_bed
+
+# Check for Rust acceleration (coitrees-based intersect, 15-30x faster)
+try:
+    from wasp2_rust import intersect_bam_bed as _rust_intersect
+    from wasp2_rust import intersect_bam_bed_multi as _rust_intersect_multi
+    RUST_INTERSECT_AVAILABLE = True
+except ImportError:
+    RUST_INTERSECT_AVAILABLE = False
 
 
 def vcf_to_bed(
@@ -41,6 +50,10 @@ def vcf_to_bed(
     """
     # Use new unified interface
     # include_gt=True for mapping (needs genotypes for allele assignment)
+    # use_legacy=True for VCF files to use fast bcftools subprocess
+    variant_path = Path(vcf_file)
+    is_vcf = variant_path.suffix.lower() in ('.vcf', '.gz', '.bcf')
+
     result = _variants_to_bed(
         variant_file=vcf_file,
         out_bed=out_bed,
@@ -49,6 +62,7 @@ def vcf_to_bed(
         het_only=True if samples else False,
         include_indels=include_indels,
         max_indel_len=max_indel_len,
+        use_legacy=is_vcf,  # Use fast bcftools for VCF files
     )
     return str(result)
 
@@ -60,50 +74,99 @@ def process_bam(
     remap_bam: str,
     remap_reads: str,
     keep_bam: str,
-    is_paired: bool = True
+    is_paired: bool = True,
+    threads: int = 1
 ) -> str:
 
     # TODO set is_paired to None, and auto check paired vs single
-    # print("Filtering reads that overlap regions of interest")
-    pysam.view("-F", "4", "-L", str(vcf_bed), "-o",
-               remap_bam, str(bam_file), catch_stdout=False)
+    # Use subprocess calls to samtools (faster than pysam wrappers)
+    subprocess.run(
+        [
+            "samtools", "view", "-@", str(threads),
+            "-F", "4", "-L", str(vcf_bed),
+            "-o", str(remap_bam), str(bam_file)
+        ],
+        check=True)
 
     if is_paired:
         # Not needed...but suppresses warning
-        pysam.index(str(remap_bam), catch_stdout=False)
+        subprocess.run(
+            ["samtools", "index", "-@", str(threads), str(remap_bam)],
+            check=True)
 
-        # Extract reads names that overlap het snps
-
+        # Extract read names that overlap het snps
+        # Use set comprehension (faster than np.unique)
         with AlignmentFile(remap_bam, "rb") as bam, open(remap_reads, "w") as file:
-            unique_reads = np.unique(
-                [read.query_name for read in bam.fetch(until_eof=True)])
+            unique_reads = {read.query_name for read in bam.fetch(until_eof=True)}
             file.write("\n".join(unique_reads))
 
         # Extract all pairs using read names
-        pysam.view("-N", remap_reads, "-o", remap_bam, "-U", keep_bam,
-                   str(bam_file), catch_stdout=False)
-        
+        subprocess.run(
+            [
+                "samtools", "view", "-@", str(threads),
+                "-N", remap_reads, "-o", remap_bam, "-U", keep_bam,
+                str(bam_file)
+            ],
+            check=True)
 
-    pysam.sort(remap_bam, "-o", remap_bam, catch_stdout=False)
-    pysam.index(remap_bam, catch_stdout=False)
+    subprocess.run(
+        ["samtools", "sort", "-@", str(threads), "-o", remap_bam, remap_bam],
+        check=True)
+
+    subprocess.run(
+        ["samtools", "index", "-@", str(threads), str(remap_bam)],
+        check=True)
 
     # print("BAM file filtered!")
     return remap_bam
 
 
 
-def intersect_reads(remap_bam: str, vcf_bed: str, out_bed: str) -> str:
-    # Create Intersections
+def intersect_reads(
+    remap_bam: str,
+    vcf_bed: str,
+    out_bed: str,
+    num_samples: int = 1,
+    use_rust: bool = True
+) -> str:
+    """Intersect BAM reads with variant BED file.
+
+    Uses Rust/coitrees when available (15-30x faster than pybedtools).
+    Falls back to pybedtools if Rust unavailable or disabled.
+
+    Args:
+        remap_bam: Path to BAM file with reads overlapping variants
+        vcf_bed: Path to BED file with variant positions
+        out_bed: Output path for intersection results
+        num_samples: Number of sample genotype columns in BED file (default 1)
+        use_rust: Whether to use Rust acceleration (default True)
+
+    Returns:
+        Path to output BED file
+    """
+    rust_enabled = (
+        use_rust
+        and RUST_INTERSECT_AVAILABLE
+        and os.environ.get("WASP2_DISABLE_RUST") != "1"
+    )
+
+    if rust_enabled:
+        try:
+            if num_samples == 1:
+                print("Using Rust acceleration for intersection...")
+                count = _rust_intersect(remap_bam, vcf_bed, out_bed)
+            else:
+                print(f"Using Rust multi-sample intersection ({num_samples} samples)...")
+                count = _rust_intersect_multi(remap_bam, vcf_bed, out_bed, num_samples)
+            print(f"✅ Rust intersect: {count} overlaps found")
+            return out_bed
+        except Exception as e:
+            print(f"⚠️ Rust intersect failed: {e}, falling back to pybedtools")
+
+    # Fallback to pybedtools
     a = BedTool(remap_bam)
     b = BedTool(vcf_bed)
-
-    # out_bed = str(Path(out_dir) / "intersect.bed")
-
-    # Perform intersections
-    # a.intersect(b, wb=True, bed=True, sorted=True, output=str(out_bed))
     a.intersect(b, wb=True, bed=True, sorted=False, output=str(out_bed))
-
-    # print("Created Intersection File")
 
     return out_bed
 
