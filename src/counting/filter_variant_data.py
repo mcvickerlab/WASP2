@@ -18,7 +18,9 @@ def vcf_to_bed(
     vcf_file: Union[str, Path],
     out_bed: Union[str, Path],
     samples: Optional[List[str]] = None,
-    include_gt: bool = True
+    include_gt: bool = True,
+    include_indels: bool = False,
+    max_indel_len: int = 10
 ) -> str:
     """Convert variant file to BED format.
 
@@ -33,6 +35,8 @@ def vcf_to_bed(
         out_bed: Output BED file path
         samples: Optional list of sample IDs. If provided, filters to het sites.
         include_gt: Include genotype column in output (default True)
+        include_indels: Include indels in addition to SNPs (default False)
+        max_indel_len: Maximum indel length in bp (default 10)
 
     Returns:
         Path to output BED file as string
@@ -44,6 +48,8 @@ def vcf_to_bed(
         samples=samples,
         include_gt=include_gt,
         het_only=True if samples else False,
+        include_indels=include_indels,
+        max_indel_len=max_indel_len,
     )
     return str(result)
 

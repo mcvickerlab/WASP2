@@ -143,7 +143,8 @@ def run_count_variants(bam_file, variant_file,
                        gene_parent=None,
                        use_rust=True,
                        precomputed_vcf_bed=None,
-                       precomputed_intersect=None
+                       precomputed_intersect=None,
+                       include_indels=False
                        ):
 
 
@@ -173,7 +174,8 @@ def run_count_variants(bam_file, variant_file,
         vcf_to_bed(vcf_file=count_files.variant_file,
                    out_bed=count_files.vcf_bed,
                    samples=count_files.samples,
-                   include_gt=with_gt
+                   include_gt=with_gt,
+                   include_indels=include_indels
                   )
     
     

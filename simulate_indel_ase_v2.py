@@ -93,24 +93,11 @@ def create_read_sequence(
     ref_seq: str,
     var_pos: int,
     allele: str,
-    ref_allele_len: int,
     read_length: int = 150,
     error_rate: float = 0.01
 ) -> Tuple[str, np.ndarray]:
     """
     Create read sequence with specific allele at variant position.
-
-    IMPORTANT for indels:
-    - For insertions (ALT longer than REF): read has extra bases, shifts downstream seq
-    - For deletions (REF longer than ALT): read skips bases, pulls in upstream seq
-
-    Args:
-        ref_seq: Full reference sequence
-        var_pos: Variant position in reference coordinates
-        allele: The allele (REF or ALT) to put in the read
-        ref_allele_len: Length of the REF allele (for proper indel handling)
-        read_length: Target read length
-        error_rate: Sequencing error rate
 
     Returns:
         Tuple of (sequence, quality_scores)
@@ -119,28 +106,20 @@ def create_read_sequence(
     offset = random.randint(-30, 30)
     read_start = max(0, var_pos - read_length // 2 + offset)
 
-    # Build read sequence properly for indels
-    # Key insight: we always skip ref_allele_len bases from reference, then add the allele
+    # Build read sequence
+    # Left part + allele + right part
     left_seq = ref_seq[read_start:var_pos]
-
-    # For the right part, we skip ONLY the ref allele length (not the length of 'allele')
-    # This correctly handles insertions (allele > ref) and deletions (allele < ref)
-    right_start = var_pos + ref_allele_len
-    right_seq = ref_seq[right_start:right_start + read_length]  # Get enough for padding
+    right_seq = ref_seq[var_pos + len(allele):read_start + read_length]
 
     read_seq = left_seq + allele + right_seq
 
-    # Truncate to exact read length (important for insertions which make read longer)
+    # Truncate or pad to exact read length
     if len(read_seq) > read_length:
         read_seq = read_seq[:read_length]
     elif len(read_seq) < read_length:
-        # Pad with reference sequence if too short (can happen near boundaries)
-        end_pos = right_start + len(right_seq)
+        # Pad with reference sequence if too short
         pad_len = read_length - len(read_seq)
-        read_seq += ref_seq[end_pos:end_pos + pad_len]
-
-    # Final length check
-    read_seq = read_seq[:read_length]
+        read_seq += ref_seq[read_start + len(read_seq):read_start + len(read_seq) + pad_len]
 
     # Add sequencing errors
     read_seq = add_sequencing_errors(read_seq, error_rate)
@@ -160,36 +139,24 @@ def write_fastq_record(fq_handle, read_id: str, sequence: str, qualities: np.nda
     fq_handle.write(f"{qual_string}\n")
 
 
-def reverse_complement(seq: str) -> str:
-    """Return reverse complement of a DNA sequence."""
-    complement = {'A': 'T', 'T': 'A', 'G': 'C', 'C': 'G', 'N': 'N'}
-    return ''.join(complement.get(b, 'N') for b in reversed(seq))
-
-
 def create_synthetic_fastq(
     ref_seq: str,
     ground_truth: List[GroundTruth],
     output_fastq: str,
     read_length: int = 150,
-    error_rate: float = 0.01,
-    fragment_size: int = 300
+    error_rate: float = 0.01
 ):
     """
-    Generate paired-end FASTQ with reads containing known alleles.
+    Generate FASTQ with reads containing known alleles.
 
     Key improvement over v1: Generates FASTQ (not BAM) so we can align with BWA.
-    Returns tuple of (R1_fastq, R2_fastq) paths.
     """
     print(f"\nGenerating synthetic FASTQ with {len(ground_truth)} variants...")
-
-    # Output files for paired-end reads
-    fq1_path = output_fastq.replace('.fq', '_R1.fq').replace('.fastq', '_R1.fastq')
-    fq2_path = output_fastq.replace('.fq', '_R2.fq').replace('.fastq', '_R2.fastq')
 
     read_id = 0
     variant_stats = defaultdict(lambda: {'ref': 0, 'alt': 0})
 
-    with open(fq1_path, 'w') as fq1, open(fq2_path, 'w') as fq2:
+    with open(output_fastq, 'w') as fq:
         for gt in ground_truth:
             # Calculate read counts from true ratio
             total_reads = gt.coverage
@@ -203,48 +170,23 @@ def create_synthetic_fastq(
             random.seed(gt.seed)
             np.random.seed(gt.seed)
 
-            # Generate REF-supporting read pairs
+            # Generate REF-supporting reads
             for _ in range(ref_reads):
-                # R1 covers the variant
-                r1_seq, r1_qual = create_read_sequence(
-                    ref_seq, gt.pos, gt.ref_allele, len(gt.ref_allele), read_length, error_rate
+                read_seq, read_qual = create_read_sequence(
+                    ref_seq, gt.pos, gt.ref_allele, read_length, error_rate
                 )
-                # R2 is downstream, reverse complement
-                r2_start = gt.pos + fragment_size - read_length
-                if r2_start < 0:
-                    r2_start = 0
-                if r2_start + read_length > len(ref_seq):
-                    r2_start = len(ref_seq) - read_length
-                r2_seq_fwd = ref_seq[r2_start:r2_start + read_length]
-                r2_seq = add_sequencing_errors(reverse_complement(r2_seq_fwd), error_rate)
-                r2_qual = generate_quality_scores(read_length)
-
-                write_fastq_record(fq1, f"read_{read_id}/1", r1_seq, r1_qual)
-                write_fastq_record(fq2, f"read_{read_id}/2", r2_seq, r2_qual)
+                write_fastq_record(fq, f"read_{read_id}", read_seq, read_qual)
                 read_id += 1
 
-            # Generate ALT-supporting read pairs
+            # Generate ALT-supporting reads
             for _ in range(alt_reads):
-                # R1 covers the variant with ALT allele
-                # IMPORTANT: pass ref_allele_len (not alt_allele_len) for proper indel handling
-                r1_seq, r1_qual = create_read_sequence(
-                    ref_seq, gt.pos, gt.alt_allele, len(gt.ref_allele), read_length, error_rate
+                read_seq, read_qual = create_read_sequence(
+                    ref_seq, gt.pos, gt.alt_allele, read_length, error_rate
                 )
-                # R2 is downstream, reverse complement (from ref, no variant)
-                r2_start = gt.pos + fragment_size - read_length
-                if r2_start < 0:
-                    r2_start = 0
-                if r2_start + read_length > len(ref_seq):
-                    r2_start = len(ref_seq) - read_length
-                r2_seq_fwd = ref_seq[r2_start:r2_start + read_length]
-                r2_seq = add_sequencing_errors(reverse_complement(r2_seq_fwd), error_rate)
-                r2_qual = generate_quality_scores(read_length)
-
-                write_fastq_record(fq1, f"read_{read_id}/1", r1_seq, r1_qual)
-                write_fastq_record(fq2, f"read_{read_id}/2", r2_seq, r2_qual)
+                write_fastq_record(fq, f"read_{read_id}", read_seq, read_qual)
                 read_id += 1
 
-    print(f"  ✅ Generated {read_id} read pairs")
+    print(f"  ✅ Generated {read_id} reads")
 
     # Print sample statistics
     print(f"\n  Sample variant breakdown:")
@@ -253,31 +195,21 @@ def create_synthetic_fastq(
         ratio = stats['ref'] / stats['alt'] if stats['alt'] > 0 else float('inf')
         print(f"    Pos {pos}: {stats['ref']} REF, {stats['alt']} ALT (ratio: {ratio:.2f})")
 
-    return (fq1_path, fq2_path)
+    return output_fastq
 
 
 def align_with_bwa(
     ref_fasta: str,
-    fastq_files: tuple,
+    fastq_file: str,
     output_bam: str,
-    threads: int = None
+    threads: int = 4
 ):
     """
-    Align paired-end FASTQ with BWA to generate realistic CIGAR strings.
+    Align FASTQ with BWA to generate realistic CIGAR strings.
 
     This is THE KEY STEP - creates real indel CIGARs that WASP2 must handle!
-
-    Args:
-        ref_fasta: Reference FASTA file
-        fastq_files: Tuple of (R1_fastq, R2_fastq) for paired-end reads
-        output_bam: Output BAM path
-        threads: Number of threads (default: auto-detect)
     """
-    # Use all available CPUs, capped at 16 for optimal performance
-    if threads is None:
-        threads = min(multiprocessing.cpu_count(), 16)
-
-    print(f"\nAligning reads with BWA (using {threads} threads)...")
+    print(f"\nAligning reads with BWA...")
 
     # Check if BWA index exists
     if not Path(f"{ref_fasta}.bwt").exists():
@@ -285,15 +217,14 @@ def align_with_bwa(
         subprocess.run(['bwa', 'index', ref_fasta],
                       check=True, capture_output=True)
 
-    # Align with BWA MEM (paired-end)
-    fq1, fq2 = fastq_files
+    # Align with BWA MEM
     sam_file = output_bam.replace('.bam', '.sam')
     with open(sam_file, 'w') as sam:
         subprocess.run([
             'bwa', 'mem',
             '-t', str(threads),
             ref_fasta,
-            fq1, fq2  # Paired-end FASTQ files
+            fastq_file
         ], stdout=sam, stderr=subprocess.PIPE, check=True)
 
     print("  ✅ Alignment complete")
@@ -374,85 +305,80 @@ def run_wasp2_pipeline(
     print("RUNNING WASP2 PIPELINE")
     print(f"{'='*80}")
 
-    wasp2_dir = Path(__file__).parent.resolve()
+    wasp2_dir = Path(__file__).parent
 
-    # Convert to absolute paths (needed because we run from src/ directory)
-    bam_file_abs = str(Path(bam_file).resolve())
-    vcf_file_abs = str(Path(vcf_file).resolve())
-    output_dir_abs = str(output_dir.resolve())
-
-    # Step 1: Find intersecting SNPs/indels (make_reads)
+    # Step 1: Find intersecting SNPs/indels
     print("\nStep 1: Finding intersecting variants...")
     cmd = [
-        sys.executable, '-m', 'mapping', 'make-reads',
-        bam_file_abs,
-        vcf_file_abs,
-        '--out_dir', output_dir_abs,
-        '--sample', 'sample1',  # Match sample name in VCF
-        '--indels',   # Enable indel support
-        '--paired',   # Paired-end reads
-        '--phased',   # VCF has phased genotypes (0|1)
+        'python', str(wasp2_dir / 'find_intersecting_snps.py'),
+        '--bam', bam_file,
+        '--vcf', vcf_file,
+        '--ref', ref_fasta,
+        '--out_dir', str(output_dir),
+        '--include_indels',  # ← KEY FLAG!
+        '--is_paired_end'
     ]
 
     try:
-        result = subprocess.run(cmd, check=True, capture_output=True, text=True,
-                               cwd=str(wasp2_dir / 'src'))
-        print("  ✅ make-reads complete")
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        print("  ✅ find_intersecting_snps.py complete")
     except subprocess.CalledProcessError as e:
-        print(f"  ❌ make-reads failed:")
+        print(f"  ❌ find_intersecting_snps.py failed:")
         print(f"  STDOUT: {e.stdout}")
         print(f"  STDERR: {e.stderr}")
         raise
 
-    # Get BAM prefix to find the output files (WASP2 names files based on input BAM)
-    bam_prefix = Path(bam_file).stem  # e.g., "aligned.sorted"
+    # Check outputs
+    remap_fastq = output_dir / 'remap.fq.gz'
+    to_remap_bam = output_dir / 'to.remap.bam'
+    keep_bam = output_dir / 'keep.bam'
 
-    # Check outputs (WASP2 uses bam_prefix in file names)
-    remap_fq1 = output_dir / f'{bam_prefix}_swapped_alleles_r1.fq'
-    remap_fq2 = output_dir / f'{bam_prefix}_swapped_alleles_r2.fq'
-    to_remap_bam = output_dir / f'{bam_prefix}_to_remap.bam'
-    keep_bam = output_dir / f'{bam_prefix}_keep.bam'
-
-    # Check if remapping is needed (swapped alleles files exist and are non-empty)
-    needs_remapping = (remap_fq1.exists() and remap_fq1.stat().st_size > 0 and
-                       remap_fq2.exists() and remap_fq2.stat().st_size > 0)
-
-    if not needs_remapping:
+    if not remap_fastq.exists():
         print(f"  ⚠️  No remapping needed (all reads passed)")
         # Just use keep.bam
         return keep_bam
 
-    # Step 2: Realign remapped reads (paired-end)
+    # Step 2: Realign remapped reads
     print("\nStep 2: Realigning remapped reads...")
+
+    # Decompress FASTQ
+    remap_fq_uncompressed = output_dir / 'remap.fq'
+    with gzip.open(remap_fastq, 'rt') as f_in:
+        with open(remap_fq_uncompressed, 'w') as f_out:
+            f_out.write(f_in.read())
 
     remapped_bam = align_with_bwa(
         ref_fasta,
-        (str(remap_fq1), str(remap_fq2)),  # Paired-end FASTQ files
+        str(remap_fq_uncompressed),
         str(output_dir / 'remapped.bam')
     )
 
     # Step 3: Filter remapped reads
     print("\nStep 3: Filtering remapped reads...")
 
-    final_bam = output_dir / 'keep.merged.bam'
-    cmd = [
-        sys.executable, '-m', 'mapping', 'filter-remapped',
-        str(Path(remapped_bam).resolve()),
-        str(to_remap_bam.resolve()),
-        str(keep_bam.resolve()),
-        '--out_bam', str(final_bam.resolve()),
-    ]
+    # Check if filter script exists
+    filter_script = wasp2_dir / 'filter_remapped_reads.py'
+    if not filter_script.exists():
+        print(f"  ⚠️  filter_remapped_reads.py not found")
+        print(f"  Using remapped BAM directly (no filtering)")
+        final_bam = remapped_bam
+    else:
+        final_bam = output_dir / 'keep.merged.bam'
+        cmd = [
+            'python', str(filter_script),
+            '--remap_bam', remapped_bam,
+            '--to_remap_bam', str(to_remap_bam),
+            '--keep_bam', str(keep_bam),
+            '--out', str(final_bam)
+        ]
 
-    try:
-        subprocess.run(cmd, check=True, capture_output=True, text=True,
-                      cwd=str(wasp2_dir / 'src'))
-        print("  ✅ filter-remapped complete")
-    except subprocess.CalledProcessError as e:
-        print(f"  ❌ filter-remapped failed:")
-        print(f"  STDOUT: {e.stdout}")
-        print(f"  STDERR: {e.stderr}")
-        # Fall back to keep.bam
-        final_bam = keep_bam
+        try:
+            subprocess.run(cmd, check=True, capture_output=True, text=True)
+            print("  ✅ filter_remapped_reads.py complete")
+        except subprocess.CalledProcessError as e:
+            print(f"  ❌ Filtering failed: {e}")
+            # Fall back to keep.bam
+            final_bam = keep_bam
 
     print(f"\n✅ WASP2 pipeline complete")
     print(f"  Final BAM: {final_bam}")
@@ -469,8 +395,7 @@ def count_alleles_in_bam(
     """
     Count REF vs ALT alleles in final WASP2-filtered BAM.
 
-    Uses CIGAR-aware counting with proper indel size matching.
-    Each ground truth variant now has a unique position (no replicate pooling).
+    This measures what WASP2 actually recovered.
     """
     print(f"\nCounting alleles in WASP2 output...")
 
@@ -478,89 +403,57 @@ def count_alleles_in_bam(
         print(f"  ❌ BAM file not found: {bam_file}")
         return pd.DataFrame()
 
-    # Ensure BAM file is indexed for pileup
-    bam_index = f"{bam_file}.bai"
-    if not Path(bam_index).exists():
-        pysam.index(bam_file)
-
     bam = pysam.AlignmentFile(bam_file)
 
     results = []
 
-    # Process each ground truth variant individually (each has unique position now)
+    # Group ground truth by position
+    gt_by_pos = defaultdict(list)
     for gt in ground_truth:
+        gt_by_pos[gt.pos].append(gt)
+
+    for pos, gt_list in gt_by_pos.items():
+        # Use first instance for variant info (all replicates have same alleles)
+        gt = gt_list[0]
+
         ref_count = 0
         alt_count = 0
         total_reads = 0
 
-        # Calculate expected indel size
-        indel_size = abs(len(gt.alt_allele) - len(gt.ref_allele))
-
-        # Fetch reads overlapping variant position
+        # Fetch reads overlapping variant
         try:
-            for read in bam.fetch(gt.chrom, gt.pos, gt.pos + max(len(gt.ref_allele), len(gt.alt_allele)) + 1):
-                if read.mapping_quality < min_mapq:
+            for pileupcolumn in bam.pileup(gt.chrom, pos, pos + 1,
+                                          truncate=True, min_base_quality=min_baseq):
+                if pileupcolumn.pos != pos:
                     continue
-                if read.is_unmapped or read.is_secondary or read.is_supplementary:
-                    continue
 
-                total_reads += 1
+                for pileupread in pileupcolumn.pileups:
+                    if pileupread.is_del or pileupread.is_refskip:
+                        continue
 
-                # For SNPs: simple base comparison using pileup approach
-                if gt.variant_type == 'SNP':
-                    # Use get_aligned_pairs for position mapping
-                    aligned_pairs = read.get_aligned_pairs(with_seq=True)
-                    for query_pos, ref_pos, ref_base in aligned_pairs:
-                        if ref_pos == gt.pos and query_pos is not None:
-                            base = read.query_sequence[query_pos]
-                            if base == gt.alt_allele:
-                                alt_count += 1
-                            elif base == gt.ref_allele:
-                                ref_count += 1
-                            break
+                    read = pileupread.alignment
+                    if read.mapping_quality < min_mapq:
+                        continue
 
-                # For indels: check CIGAR for indel of matching size at/near variant position
-                else:
-                    cigar_tuples = read.cigartuples or []
-                    read_ref_pos = read.reference_start
+                    total_reads += 1
 
-                    found_indel = False
-                    for op, length in cigar_tuples:
-                        if op == 0:  # M (match/mismatch)
-                            read_ref_pos += length
-                        elif op == 2:  # D (deletion)
-                            # Check if this deletion is at our variant position
-                            # Allow some slop (±5bp) for alignment variation
-                            if abs(read_ref_pos - gt.pos) <= 5:
-                                # Check if deletion size matches expected
-                                if len(gt.ref_allele) > len(gt.alt_allele):
-                                    # This is a deletion variant
-                                    if abs(length - indel_size) <= 1:  # Allow 1bp tolerance
-                                        alt_count += 1
-                                        found_indel = True
-                                        break
-                            read_ref_pos += length
-                        elif op == 1:  # I (insertion)
-                            # Check if this insertion is at our variant position
-                            if abs(read_ref_pos - gt.pos) <= 5:
-                                # Check if insertion size matches expected
-                                if len(gt.alt_allele) > len(gt.ref_allele):
-                                    # This is an insertion variant
-                                    if abs(length - indel_size) <= 1:  # Allow 1bp tolerance
-                                        alt_count += 1
-                                        found_indel = True
-                                        break
-                        elif op == 4:  # S (soft clip)
-                            pass  # Soft clips don't consume reference
-                        elif op == 5:  # H (hard clip)
-                            pass  # Hard clips don't consume reference
+                    # Get query position
+                    query_pos = pileupread.query_position
+                    if query_pos is None:
+                        continue
 
-                    # If no matching indel found, count as REF
-                    if not found_indel:
+                    # Extract allele from read
+                    # Handle different variant types
+                    allele_len = max(len(gt.ref_allele), len(gt.alt_allele))
+                    read_allele = read.query_sequence[query_pos:query_pos + allele_len]
+
+                    if read_allele.startswith(gt.ref_allele):
                         ref_count += 1
+                    elif read_allele.startswith(gt.alt_allele):
+                        alt_count += 1
 
         except Exception as e:
-            print(f"  ⚠️  Error counting at {gt.chrom}:{gt.pos}: {e}")
+            print(f"  ⚠️  Error counting at {gt.chrom}:{pos}: {e}")
             continue
 
         # Calculate observed ratio
@@ -569,25 +462,26 @@ def count_alleles_in_bam(
         else:
             observed_ratio = float('inf') if ref_count > 0 else 0.0
 
-        # Calculate error
-        error = abs(observed_ratio - gt.true_ratio) if observed_ratio != float('inf') else float('inf')
-        error_pct = (error / gt.true_ratio * 100) if gt.true_ratio > 0 else 0
+        # Record for each replicate
+        for gt_rep in gt_list:
+            error = abs(observed_ratio - gt_rep.true_ratio) if observed_ratio != float('inf') else float('inf')
+            error_pct = (error / gt_rep.true_ratio * 100) if gt_rep.true_ratio > 0 else 0
 
-        results.append({
-            'chrom': gt.chrom,
-            'pos': gt.pos,
-            'variant_type': gt.variant_type,
-            'coverage': gt.coverage,
-            'replicate': gt.replicate,
-            'true_ratio': gt.true_ratio,
-            'ref_count': ref_count,
-            'alt_count': alt_count,
-            'total_reads': total_reads,
-            'observed_ratio': observed_ratio,
-            'error': error,
-            'error_pct': error_pct,
-            'status': 'PASS' if error_pct < 10 else 'FAIL'
-        })
+            results.append({
+                'chrom': gt_rep.chrom,
+                'pos': gt_rep.pos,
+                'variant_type': gt_rep.variant_type,
+                'coverage': gt_rep.coverage,
+                'replicate': gt_rep.replicate,
+                'true_ratio': gt_rep.true_ratio,
+                'ref_count': ref_count,
+                'alt_count': alt_count,
+                'total_reads': total_reads,
+                'observed_ratio': observed_ratio,
+                'error': error,
+                'error_pct': error_pct,
+                'status': 'PASS' if error_pct < 10 else 'FAIL'
+            })
 
     bam.close()
 
@@ -651,11 +545,8 @@ def generate_test_configurations(tier: str = 'minimum') -> List[GroundTruth]:
         raise ValueError(f"Unknown tier: {tier}")
 
     # Generate configurations
-    # CRITICAL FIX: Each replicate must have a UNIQUE position
-    # Previously all replicates at same position got their reads pooled together
     base_pos = 50000  # Start far from edges
-    pos_spacing = 1000  # Space variants apart (reduced for more variants)
-    variant_id = 0  # Unique ID for each variant instance (including replicates)
+    pos_spacing = 5000  # Space variants apart
 
     for size_name, vartypes in size_configs.items():
         for vtype, allele_pairs in vartypes.items():
@@ -665,9 +556,8 @@ def generate_test_configurations(tier: str = 'minimum') -> List[GroundTruth]:
                 for ratio in allelic_ratios:
                     for coverage in coverage_levels:
                         for replicate in range(n_replicates):
-                            # CRITICAL: Each replicate gets its own unique position
-                            pos = base_pos + (variant_id * pos_spacing)
-                            seed = variant_id * 1000 + replicate
+                            pos = base_pos + (config_id * pos_spacing)
+                            seed = config_id * 1000 + replicate
 
                             configs.append(GroundTruth(
                                 chrom='chr1',
@@ -681,7 +571,7 @@ def generate_test_configurations(tier: str = 'minimum') -> List[GroundTruth]:
                                 seed=seed
                             ))
 
-                            variant_id += 1  # Increment for EACH replicate
+                config_id += 1
 
     return configs
 
@@ -802,12 +692,12 @@ def main():
     # Create VCF
     vcf_file = create_vcf_from_ground_truth(ground_truth, str(workdir / 'variants.vcf'))
 
-    # Generate synthetic paired-end FASTQ
-    fastq_base = str(workdir / 'synthetic.fq')
-    fastq_files = create_synthetic_fastq(ref_seq, ground_truth, fastq_base)
+    # Generate synthetic FASTQ
+    fastq_file = str(workdir / 'synthetic.fq')
+    create_synthetic_fastq(ref_seq, ground_truth, fastq_file)
 
-    # Align with BWA (paired-end)
-    aligned_bam = align_with_bwa(ref_fasta, fastq_files, str(workdir / 'aligned.bam'))
+    # Align with BWA
+    aligned_bam = align_with_bwa(ref_fasta, fastq_file, str(workdir / 'aligned.bam'))
 
     # Run WASP2 pipeline
     wasp_output_dir = workdir / 'wasp2_output'

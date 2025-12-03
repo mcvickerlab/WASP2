@@ -131,6 +131,16 @@ def count_variants(
             help="Optional precomputed intersect bed file to skip bedtools intersect."
         )
     ] = None,
+    include_indels: Annotated[
+        bool,
+        typer.Option(
+            "--include-indels/--no-indels",
+            help=(
+                "Include indels in addition to SNPs for variant processing. "
+                "Default is SNPs only."
+            )
+        )
+    ] = False,
 
 ) -> None:
 
@@ -157,7 +167,8 @@ def count_variants(
                        gene_parent=gene_parent,
                        use_rust=use_rust,
                        precomputed_vcf_bed=vcf_bed,
-                       precomputed_intersect=intersect_bed
+                       precomputed_intersect=intersect_bed,
+                       include_indels=include_indels
                        )
     
     # TODO TEST CASES FOR TYPER
