@@ -1,0 +1,27 @@
+{
+    "description": "Expected pipeline counts for HG00731 RNA-seq validation dataset",
+    "dataset": {
+        "bam": "A_sorted.bam (4.4GB, 56M reads)",
+        "vcf": "HG00731_het_only_chr.vcf.gz (2.2M variants)",
+        "sample": "HG00731"
+    },
+    "expected_counts": {
+        "vcf_variants": 2206785,
+        "to_remap_bam_reads": 12627534,
+        "keep_bam_reads": 99881894,
+        "intersect_bed_lines": 34649181,
+        "unique_read_overlaps": 6890185,
+        "remap_reads_file": 6313766,
+        "r1_fastq_reads": 1534463,
+        "r2_fastq_reads": 1534463,
+        "total_haplotypes": 3068926
+    },
+    "validation_notes": {
+        "unit_tests_passed": "10/10 test_rust_python_match.py, 10/10 test_indel_correctness.py",
+        "fastq_format_validated": true,
+        "wasp_naming_convention": "@READNAME_WASP_POS1_POS2_HAP_TOTAL",
+        "r1_r2_matched": true
+    },
+    "generated_date": "2025-12-02",
+    "git_branch": "ropc-indels"
+}
