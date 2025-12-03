@@ -32,6 +32,14 @@ source /iblm/netapp/home/jjaureguy/mambaforge/etc/profile.d/conda.sh
 conda activate WASP2_dev2
 
 WASP2_DIR="/iblm/netapp/data3/jjaureguy/gvl_files/wasp2/WASP2_extensive_evaluation/WASP2_current/cvpc/WASP2-exp"
+
+# Force NFS cache refresh by reading the wheel .so file
+WHEEL_SO="/iblm/netapp/home/jjaureguy/mambaforge/envs/WASP2_dev2/lib/python3.10/site-packages/wasp2_rust/wasp2_rust.cpython-310-x86_64-linux-gnu.so"
+cat "$WHEEL_SO" > /dev/null 2>&1
+echo "Wheel timestamp: $(stat -c %Y "$WHEEL_SO")"
+
+# Verify we have v1.3.0 with parallel parameter
+python -c "import wasp2_rust; import inspect; sig = inspect.signature(wasp2_rust.remap_all_chromosomes); assert 'parallel' in str(sig), 'OLD WHEEL - need v1.3.0'; print('Wheel version: v1.3.0 OK')"
 log_file="${WASP2_DIR}/benchmarking/results/wasp2_rust_scale_${JOB_ID}.tsv"
 
 # Same inputs as aho

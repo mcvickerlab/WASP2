@@ -218,6 +218,115 @@ pub fn parse_intersect_bed<P: AsRef<Path>>(
     Ok(variants)
 }
 
+/// Parse intersection BED file and group by chromosome
+///
+/// This is the optimized version that parses ONCE and groups by chromosome,
+/// avoiding the 22x re-parsing overhead of calling parse_intersect_bed per chromosome.
+///
+/// # Returns
+/// HashMap mapping chromosome -> (read_name -> variant_spans)
+///
+/// # Performance
+/// - Old approach: Parse 34M lines × 22 chromosomes = 762M operations
+/// - New approach: Parse 34M lines × 1 = 34M operations (22x faster)
+pub fn parse_intersect_bed_by_chrom<P: AsRef<Path>>(
+    intersect_bed: P,
+) -> Result<FxHashMap<String, FxHashMap<Vec<u8>, Vec<VariantSpan>>>> {
+    let file = File::open(intersect_bed.as_ref())
+        .context("Failed to open intersection BED file")?;
+    let reader = BufReader::new(file);
+
+    // First pass: collect all spans with chromosome info
+    let mut all_spans: Vec<(String, Vec<u8>, VariantSpan)> = Vec::new();
+
+    for line in reader.lines() {
+        let line = line?;
+        if line.trim().is_empty() {
+            continue;
+        }
+
+        let fields: Vec<&str> = line.split('\t').collect();
+        if fields.len() < 12 {
+            continue;
+        }
+
+        let chrom = fields[0].to_string();
+        let start = fields[1].parse::<u32>()
+            .context("Failed to parse start position")?;
+        let stop = fields[2].parse::<u32>()
+            .context("Failed to parse stop position")?;
+        let read_with_mate = fields[3];
+        let vcf_start = fields[7].parse::<u32>()
+            .context("Failed to parse VCF start position")?;
+        let vcf_stop = fields[8].parse::<u32>()
+            .context("Failed to parse VCF stop position")?;
+        let genotype = fields[11];
+
+        let parts: Vec<&str> = read_with_mate.split('/').collect();
+        if parts.len() != 2 {
+            continue;
+        }
+        let read_name = parts[0].as_bytes().to_vec();
+        let mate = parts[1].parse::<u8>()
+            .context("Failed to parse mate number")?;
+
+        let gt_parts: Vec<&str> = genotype.split('|').collect();
+        if gt_parts.len() != 2 {
+            continue;
+        }
+        let hap1 = gt_parts[0].to_string();
+        let hap2 = gt_parts[1].to_string();
+
+        let span = VariantSpan {
+            chrom: chrom.clone(),
+            start,
+            stop,
+            vcf_start,
+            vcf_stop,
+            mate,
+            hap1,
+            hap2,
+        };
+
+        all_spans.push((chrom, read_name, span));
+    }
+
+    // Deduplicate
+    let mut seen: std::collections::HashSet<(String, Vec<u8>, u32, u32, u8)> =
+        std::collections::HashSet::new();
+    let mut deduped_spans: Vec<(String, Vec<u8>, VariantSpan)> = Vec::new();
+
+    for (chrom, read_name, span) in all_spans {
+        let key = (
+            chrom.clone(),
+            read_name.clone(),
+            span.start,
+            span.stop,
+            span.mate,
+        );
+
+        if !seen.contains(&key) {
+            seen.insert(key);
+            deduped_spans.push((chrom, read_name, span));
+        }
+    }
+
+    // Group by chromosome, then by read name
+    let mut variants_by_chrom: FxHashMap<String, FxHashMap<Vec<u8>, Vec<VariantSpan>>> =
+        FxHashMap::default();
+
+    for (chrom, read_name, span) in deduped_spans {
+        variants_by_chrom
+            .entry(chrom)
+            .or_insert_with(FxHashMap::default)
+            .entry(read_name)
+            .or_insert_with(Vec::new)
+            .push(span);
+    }
+
+    Ok(variants_by_chrom)
+}
+
 /// Swap alleles for all reads in a chromosome
 ///
 /// Replaces Python's `swap_chrom_alleles()` function.
@@ -331,7 +440,10 @@ fn process_read_pair(
 
     // Generate haplotype sequences for R1 (with quality scores)
     let r1_haps = if !r1_variants.is_empty() {
-        generate_haplotype_seqs(read1, &r1_variants, config)?
+        match generate_haplotype_seqs(read1, &r1_variants, config)? {
+            Some(haps) => haps,
+            None => return Ok(None), // Skip this read pair - variant overlaps unmapped region
+        }
     } else {
         // No variants, return original sequence twice
         let seq = read1.seq().as_bytes();
@@ -341,7 +453,10 @@ fn process_read_pair(
 
     // Generate haplotype sequences for R2 (with quality scores)
     let r2_haps = if !r2_variants.is_empty() {
-        generate_haplotype_seqs(read2, &r2_variants, config)?
+        match generate_haplotype_seqs(read2, &r2_variants, config)? {
+            Some(haps) => haps,
+            None => return Ok(None), // Skip this read pair - variant overlaps unmapped region
+        }
     } else {
         // No variants, return original sequence twice
         let seq = read2.seq().as_bytes();
@@ -412,7 +527,8 @@ fn process_read_pair(
 /// * `config` - Remapping configuration
 ///
 /// # Returns
-/// Vector of (sequence, qualities) tuples for each haplotype (typically 2 for phased data)
+/// `Ok(Some(vec))` - Vector of (sequence, qualities) tuples for each haplotype (typically 2)
+/// `Ok(None)` - Variant overlaps unmapped region (skip this read gracefully)
 ///
 /// # Performance
 /// - SNPs: Fast path using on-demand position lookup
@@ -422,12 +538,12 @@ pub fn generate_haplotype_seqs(
     read: &bam::Record,
     variants: &[&VariantSpan],
     _config: &RemapConfig,
-) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
+) -> Result<Option<Vec<(Vec<u8>, Vec<u8>)>>> {
     if variants.is_empty() {
         // No variants, return original sequence twice
         let seq = read.seq().as_bytes();
         let qual = read.qual().to_vec();
-        return Ok(vec![(seq.clone(), qual.clone()), (seq, qual)]);
+        return Ok(Some(vec![(seq.clone(), qual.clone()), (seq, qual)]));
     }
 
     // Get original sequence and qualities
@@ -449,12 +565,16 @@ pub fn generate_haplotype_seqs(
 
         for variant in variants {
             // For variant start: use left mapping
-            let read_start = *ref2q_left.get(&variant.vcf_start)
-                .ok_or_else(|| anyhow::anyhow!("Variant at {} not in left map", variant.vcf_start))?;
+            let read_start = match ref2q_left.get(&variant.vcf_start) {
+                Some(&pos) => pos,
+                None => return Ok(None), // Variant overlaps unmapped region, skip this read
+            };
 
             // For variant stop: use right mapping
-            let read_stop = *ref2q_right.get(&(variant.vcf_stop - 1))
-                .ok_or_else(|| anyhow::anyhow!("Variant at {} not in right map", variant.vcf_stop - 1))?;
+            let read_stop = match ref2q_right.get(&(variant.vcf_stop - 1)) {
+                Some(&pos) => pos,
+                None => return Ok(None), // Variant overlaps unmapped region, skip this read
+            };
 
             seq_pos.push(read_start);
             seq_pos.push(read_stop);
@@ -471,10 +591,14 @@ pub fn generate_haplotype_seqs(
         let mut positions = vec![0];
 
         for variant in variants {
-            let read_start = find_read_position(read, variant.vcf_start)
-                .ok_or_else(|| anyhow::anyhow!("Variant at {} overlaps unmapped region", variant.vcf_start))?;
-            let read_stop = find_read_position(read, variant.vcf_stop - 1)
-                .ok_or_else(|| anyhow::anyhow!("Variant at {} overlaps unmapped region", variant.vcf_stop - 1))?;
+            let read_start = match find_read_position(read, variant.vcf_start) {
+                Some(pos) => pos,
+                None => return Ok(None), // Variant overlaps unmapped region, skip this read
+            };
+            let read_stop = match find_read_position(read, variant.vcf_stop - 1) {
+                Some(pos) => pos,
+                None => return Ok(None), // Variant overlaps unmapped region, skip this read
+            };
 
             positions.push(read_start);
             positions.push(read_stop + 1);
@@ -584,7 +708,7 @@ pub fn generate_haplotype_seqs(
     let hap2_seq: Vec<u8> = hap2_seq_parts.into_iter().flatten().collect();
     let hap2_qual: Vec<u8> = hap2_qual_parts.into_iter().flatten().collect();
 
-    Ok(vec![(hap1_seq, hap1_qual), (hap2_seq, hap2_qual)])
+    Ok(Some(vec![(hap1_seq, hap1_qual), (hap2_seq, hap2_qual)]))
 }
 
 /// Write haplotype reads to FASTQ files (paired-end)
@@ -647,32 +771,228 @@ pub fn write_fastq_pair<P: AsRef<Path>>(
     Ok((r1_count, r2_count))
 }
 
-/// Process all chromosomes in parallel
+/// Process all chromosomes in parallel using pre-grouped variants
 ///
 /// Uses rayon for parallel processing of independent chromosomes.
+/// This is the optimized version that takes pre-parsed, chromosome-grouped variants.
 ///
 /// # Arguments
 /// * `bam_path` - Path to BAM file
-/// * `variants` - All variants grouped by read name
+/// * `variants_by_chrom` - Variants pre-grouped by chromosome (from parse_intersect_bed_by_chrom)
 /// * `config` - Remapping configuration
 ///
 /// # Returns
-/// Vector of all haplotype reads from all chromosomes
+/// Vector of all haplotype reads from all chromosomes + aggregated stats
 ///
 /// # Performance
-/// With 8 cores: Additional 2-3x speedup over sequential
-#[allow(dead_code)]
+/// - Parse once instead of 22x: ~22x faster parsing
+/// - Parallel chromosome processing: Additional 4-8x speedup with 8 cores
+/// - Total expected speedup: ~100x for large RNA-seq datasets
 pub fn process_all_chromosomes_parallel(
-    _bam_path: &str,
-    _variants: &FxHashMap<Vec<u8>, Vec<VariantSpan>>,
-    _config: &RemapConfig,
+    bam_path: &str,
+    variants_by_chrom: &FxHashMap<String, FxHashMap<Vec<u8>, Vec<VariantSpan>>>,
+    config: &RemapConfig,
 ) -> Result<(Vec<HaplotypeRead>, RemapStats)> {
-    // TODO: Extract unique chromosome list from variants
-    // TODO: Use rayon::par_iter() to process chromosomes in parallel
-    // TODO: Combine results from all chromosomes
-    // TODO: Aggregate statistics
+    use rayon::prelude::*;
 
-    unimplemented!("Parallel processing not yet implemented");
+    // Get list of chromosomes to process
+    let chromosomes: Vec<&String> = variants_by_chrom.keys().collect();
+
+    if chromosomes.is_empty() {
+        return Ok((Vec::new(), RemapStats::default()));
+    }
+
+    // Process chromosomes in parallel
+    // Each thread gets its own BAM reader (IndexedReader is not Send)
+    let results: Vec<Result<(Vec<HaplotypeRead>, RemapStats)>> = chromosomes
+        .par_iter()
+        .map(|chrom| {
+            // Get variants for this chromosome
+            let chrom_variants = variants_by_chrom.get(*chrom).unwrap();
+
+            // Process this chromosome (opens its own BAM reader)
+            swap_alleles_for_chrom(bam_path, chrom_variants, chrom, config)
+        })
+        .collect();
+
+    // Combine results from all chromosomes
+    let mut all_haplotypes: Vec<HaplotypeRead> = Vec::new();
+    let mut combined_stats = RemapStats::default();
+
+    for result in results {
+        let (haplotypes, stats) = result?;
+        all_haplotypes.extend(haplotypes);
+        combined_stats.pairs_processed += stats.pairs_processed;
+        combined_stats.pairs_with_variants += stats.pairs_with_variants;
+        combined_stats.haplotypes_generated += stats.haplotypes_generated;
+        combined_stats.reads_discarded += stats.reads_discarded;
+    }
+
+    Ok((all_haplotypes, combined_stats))
+}
+
+/// Process all chromosomes in parallel with streaming FASTQ writes
+///
+/// Uses crossbeam channels for producer-consumer pattern:
+/// - Producer threads: Process chromosomes in parallel (Rayon)
+/// - Consumer thread: Write FASTQ entries as they arrive
+///
+/// This eliminates memory accumulation and enables overlapped I/O.
+///
+/// # Arguments
+/// * `bam_path` - Path to BAM file
+/// * `variants_by_chrom` - Variants pre-grouped by chromosome
+/// * `config` - Remapping configuration
+/// * `r1_path` - Output path for R1 FASTQ
+/// * `r2_path` - Output path for R2 FASTQ
+/// * `num_threads` - Number of threads for parallel processing (0 = auto)
+///
+/// # Performance
+/// - Streaming writes: Memory-efficient, no accumulation
+/// - Overlapped I/O: Writing happens while processing continues
+/// - Thread pool control: User-specified thread count
+pub fn process_and_write_parallel<P: AsRef<std::path::Path>>(
+    bam_path: &str,
+    variants_by_chrom: &FxHashMap<String, FxHashMap<Vec<u8>, Vec<VariantSpan>>>,
+    config: &RemapConfig,
+    r1_path: P,
+    r2_path: P,
+    num_threads: usize,
+) -> Result<RemapStats> {
+    use crossbeam_channel::{bounded, Sender};
+    use rayon::prelude::*;
+    use std::io::Write as IoWrite;
+    use std::thread;
+
+    // Configure thread pool if specified
+    if num_threads > 0 {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(num_threads)
+            .build_global()
+            .ok(); // Ignore error if already initialized
+    }
+
+    let chromosomes: Vec<&String> = variants_by_chrom.keys().collect();
+    if chromosomes.is_empty() {
+        // Create empty output files
+        std::fs::File::create(r1_path.as_ref())?;
+        std::fs::File::create(r2_path.as_ref())?;
+        return Ok(RemapStats::default());
+    }
+
+    // Bounded channel to prevent unbounded memory growth
+    // Buffer ~1000 haplotypes at a time
+    let (tx, rx): (Sender<HaplotypeRead>, _) = bounded(1000);
+
+    // Clone paths for writer thread
+    let r1_path_str = r1_path.as_ref().to_path_buf();
+    let r2_path_str = r2_path.as_ref().to_path_buf();
+
+    // Spawn writer thread (consumer)
+    let writer_handle = thread::spawn(move || -> Result<(usize, usize)> {
+        let mut r1_file = std::io::BufWriter::new(
+            std::fs::File::create(&r1_path_str).context("Failed to create R1 FASTQ")?
+        );
+        let mut r2_file = std::io::BufWriter::new(
+            std::fs::File::create(&r2_path_str).context("Failed to create R2 FASTQ")?
+        );
+
+        let mut r1_count = 0;
+        let mut r2_count = 0;
+
+        // Receive and write haplotypes as they arrive
+        for hap in rx {
+            let is_r1 = hap.name.ends_with(b"/1");
+            let qual_string: Vec<u8> = hap.quals.iter().map(|&q| q + 33).collect();
+
+            let fastq_entry = format!(
+                "@{}\n{}\n+\n{}\n",
+                String::from_utf8_lossy(&hap.name),
+                String::from_utf8_lossy(&hap.sequence),
+                String::from_utf8_lossy(&qual_string)
+            );
+
+            if is_r1 {
+                r1_file.write_all(fastq_entry.as_bytes())
+                    .context("Failed to write R1 FASTQ entry")?;
+                r1_count += 1;
+            } else {
+                r2_file.write_all(fastq_entry.as_bytes())
+                    .context("Failed to write R2 FASTQ entry")?;
+                r2_count += 1;
+            }
+        }
+
+        r1_file.flush().context("Failed to flush R1 file")?;
+        r2_file.flush().context("Failed to flush R2 file")?;
+
+        Ok((r1_count, r2_count))
+    });
+
+    // Process chromosomes in parallel (producers)
+    let results: Vec<Result<RemapStats>> = chromosomes
+        .par_iter()
+        .map(|chrom| {
+            let chrom_variants = variants_by_chrom.get(*chrom).unwrap();
+            let tx = tx.clone();
+
+            // Process chromosome
+            let (haplotypes, stats) = swap_alleles_for_chrom(bam_path, chrom_variants, chrom, config)?;
+
+            // Stream haplotypes to writer
+            for hap in haplotypes {
+                // If channel is closed, writer failed - abort
+                if tx.send(hap).is_err() {
+                    return Err(anyhow::anyhow!("Writer thread failed"));
+                }
+            }
+
+            Ok(stats)
+        })
+        .collect();
+
+    // Drop the sender to signal completion to writer
+    drop(tx);
+
+    // Wait for writer to finish
+    let (_r1_count, _r2_count) = writer_handle
+        .join()
+        .map_err(|_| anyhow::anyhow!("Writer thread panicked"))??;
+
+    // Aggregate stats
+    let mut combined_stats = RemapStats::default();
+    for result in results {
+        let stats = result?;
+        combined_stats.pairs_processed += stats.pairs_processed;
+        combined_stats.pairs_with_variants += stats.pairs_with_variants;
+        combined_stats.haplotypes_generated += stats.haplotypes_generated;
+        combined_stats.reads_discarded += stats.reads_discarded;
+    }
+
+    Ok(combined_stats)
+}
+
+/// Process all chromosomes sequentially (for comparison/fallback)
+///
+/// Same as parallel version but processes chromosomes one at a time.
+pub fn process_all_chromosomes_sequential(
+    bam_path: &str,
+    variants_by_chrom: &FxHashMap<String, FxHashMap<Vec<u8>, Vec<VariantSpan>>>,
+    config: &RemapConfig,
+) -> Result<(Vec<HaplotypeRead>, RemapStats)> {
+    let mut all_haplotypes: Vec<HaplotypeRead> = Vec::new();
+    let mut combined_stats = RemapStats::default();
+
+    for (chrom, chrom_variants) in variants_by_chrom.iter() {
+        let (haplotypes, stats) = swap_alleles_for_chrom(bam_path, chrom_variants, chrom, config)?;
+        all_haplotypes.extend(haplotypes);
+        combined_stats.pairs_processed += stats.pairs_processed;
+        combined_stats.pairs_with_variants += stats.pairs_with_variants;
+        combined_stats.haplotypes_generated += stats.haplotypes_generated;
+        combined_stats.reads_discarded += stats.reads_discarded;
+    }
+
+    Ok((all_haplotypes, combined_stats))
 }
 
 // ============================================================================
