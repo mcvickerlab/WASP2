@@ -1,8 +1,18 @@
 # WASP2 Rust Optimization Engineering Plan
 
 **Created:** 2025-12-03
+**Updated:** 2025-12-03
 **Branch:** ropc-indels
 **Current State:** Unified pipeline at 99.8% baseline match (3,076 baseline-only, 344 unified-only)
+
+## Implementation Status
+
+| Optimization | Status | Commit |
+|-------------|--------|--------|
+| gzp parallel compression | ✅ Done | 6b06af0 |
+| Pre-allocated Record reading | ✅ Done | 9a09b90 |
+| rust-htslib upgrade | ⚠️ Blocked (NFS/hts-sys) | - |
+| Parallel chromosome processing | 🔄 Deferred | - |
 
 ---
 
