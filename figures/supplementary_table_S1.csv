@@ -1,0 +1,20 @@
+Metric,Value
+Total BAM reads,"112,509,428"
+VCF variants,"2,206,785"
+Reads at variants (to remap),"12,627,534"
+Reads without variants (keep),"99,881,894"
+Unique read-variant overlaps,"6,890,185"
+Haplotypes generated,"3,068,926"
+R1 FASTQ reads,"1,534,463"
+R2 FASTQ reads,"1,534,463"
+,
+WASP1 runtime (s),1541.13
+STAR+WASP runtime (s),331.67
+WASP2 runtime (s),29.85
+WASP2 speedup vs WASP1,2.77×
+WASP2 speedup vs STAR+WASP,0.59×
+,
+WASP2 STAR initial (s),475.95
+WASP2 find intersecting (s),16.88
+WASP2 STAR remap (s),48.03
+WASP2 filter remapped (s),12.97

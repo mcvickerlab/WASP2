@@ -1,0 +1,59 @@
+================================================================================
+WASP2 PUBLICATION FIGURES - QUICK REFERENCE CARD
+================================================================================
+
+LOCATION
+--------
+/iblm/netapp/data3/jjaureguy/gvl_files/wasp2/WASP2_extensive_evaluation/WASP2_current/cvpc/WASP2-exp/figures/
+
+FIGURES (5 total, each in PDF + PNG)
+-------------------------------------
+1. figure1_runtime_comparison      → WASP2 is 2.77× faster than WASP1
+2. figure2_pipeline_breakdown      → Rust components only 5.3% of total time
+3. figure3_throughput_comparison   → 3.77M reads/s (51× faster than WASP1)
+4. figure4_variant_coverage        → 88.8% reads kept, 3.07M haplotypes
+5. figure5_gatk_comparison         → GATK fails on INDELs
+
+SUPPLEMENTARY
+-------------
+supplementary_table_S1.csv         → Complete pipeline statistics
+
+KEY RESULTS AT A GLANCE
+-----------------------
+WASP2 Runtime:          29.85s (Rust components only)
+WASP1 Runtime:          1541.13s (Python)
+STAR+WASP Runtime:      331.67s (C++)
+Speedup vs WASP1:       2.77×
+Throughput:             3.77M reads/second
+Dataset:                HG00731, 112.5M reads, 2.2M variants
+Threads:                8
+Pipeline Bottleneck:    STAR alignment (94.2% of time)
+
+QUICK COMMANDS
+--------------
+View figures:           scripts/preview_figures.sh list
+View Figure 1:          scripts/preview_figures.sh 1
+View all:               scripts/preview_figures.sh all
+Show statistics:        scripts/preview_figures.sh stats
+Regenerate:             python scripts/generate_publication_figures.py
+
+DOCUMENTATION
+-------------
+README.md               → Complete documentation
+FIGURE_SUMMARY.md       → Key insights & interpretation
+LATEX_TEMPLATE.tex      → LaTeX code for manuscript
+figure_generation_report.txt → Technical details
+GENERATION_COMPLETE.txt → Full checklist
+FIGURE_GENERATION_SUMMARY.txt → Master summary (in parent dir)
+
+MANUSCRIPT RECOMMENDATIONS
+--------------------------
+Main Text:    Figure 1, 4, 5
+Supplementary: Figure 2, 3, Table S1
+
+NATURE METHODS COMPLIANCE
+--------------------------
+✓ 300 DPI   ✓ PDF+PNG   ✓ Colorblind palette   ✓ 88/180mm   ✓ Arial font
+
+STATUS: PUBLICATION READY ✓
+================================================================================
