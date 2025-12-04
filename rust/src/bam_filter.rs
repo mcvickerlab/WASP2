@@ -95,8 +95,8 @@ fn phase2_collect_remap_names(
 ) -> Result<FxHashSet<Vec<u8>>> {
     let mut bam = bam::Reader::from_path(bam_path).context("Failed to open BAM for phase 2")?;
 
-    // Enable multi-threaded BAM decompression
-    let num_threads = config.read_threads.min(4);
+    // Enable multi-threaded BAM decompression (use all available threads)
+    let num_threads = config.read_threads.min(rayon::current_num_threads());
     bam.set_threads(num_threads).ok();
 
     let header = bam.header().clone();
@@ -182,22 +182,24 @@ fn phase3_split_bam(
 ) -> Result<(usize, usize)> {
     let mut bam = bam::Reader::from_path(bam_path).context("Failed to open BAM for phase 3")?;
 
-    // Enable multi-threaded BAM reading
-    bam.set_threads(config.read_threads.min(4)).ok();
+    // Enable multi-threaded BAM reading (use all available threads)
+    bam.set_threads(config.read_threads.min(rayon::current_num_threads())).ok();
 
     // Convert HeaderView to Header for writer
     let header = bam::Header::from_template(bam.header());
 
-    // Create writers with parallel compression
+    // Create writers with parallel compression (use all available threads, fastest compression)
     let mut remap_writer =
         bam::Writer::from_path(remap_bam_path, &header, bam::Format::Bam)
             .context("Failed to create remap BAM writer")?;
-    remap_writer.set_threads(config.write_threads.min(4)).ok();
+    remap_writer.set_threads(config.write_threads.min(rayon::current_num_threads())).ok();
+    remap_writer.set_compression_level(bam::CompressionLevel::Fastest).ok();
 
     let mut keep_writer =
         bam::Writer::from_path(keep_bam_path, &header, bam::Format::Bam)
             .context("Failed to create keep BAM writer")?;
-    keep_writer.set_threads(config.write_threads.min(4)).ok();
+    keep_writer.set_threads(config.write_threads.min(rayon::current_num_threads())).ok();
+    keep_writer.set_compression_level(bam::CompressionLevel::Fastest).ok();
 
     let mut remap_count = 0usize;
     let mut keep_count = 0usize;

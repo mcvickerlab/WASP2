@@ -14,6 +14,7 @@ mod analysis;
 mod mapping_filter;
 mod vcf_to_bed;
 mod multi_sample;
+mod unified_pipeline;  // Single-pass unified make-reads (5x faster)
 
 use bam_counter::BamCounter;
 use mapping_filter::filter_bam_wasp;
@@ -440,6 +441,92 @@ fn filter_bam_by_variants_py(
 }
 
 // ============================================================================
+// PyO3 Bindings for Unified Pipeline (Single-pass make-reads)
+// ============================================================================
+
+/// Unified single-pass make-reads pipeline (Rust implementation)
+///
+/// Replaces the multi-step Python pipeline (filter + intersect + remap) with a
+/// single-pass Rust implementation that streams directly from BAM to FASTQ.
+/// Expected speedup: 5x (from ~500s to ~100s for 56M reads).
+///
+/// # Algorithm
+/// 1. Build coitrees interval tree from variant BED file
+/// 2. Stream BAM ONCE, buffer pairs, check variant overlap
+/// 3. For overlapping pairs: generate haplotypes, write to FASTQ
+/// 4. Track stats: pairs processed, haplotypes generated
+///
+/// # Arguments
+/// * `bam_path` - Input BAM file (should be coordinate-sorted)
+/// * `bed_path` - Variant BED file (chrom, start, stop, ref, alt, GT)
+/// * `out_r1` - Output path for read 1 FASTQ
+/// * `out_r2` - Output path for read 2 FASTQ
+/// * `max_seqs` - Maximum haplotype sequences per read pair (default: 64)
+/// * `threads` - Number of threads to use (default: 8)
+/// * `channel_buffer` - Channel buffer size for streaming (default: 50000)
+///
+/// # Returns
+/// Dictionary with stats: pairs_processed, pairs_with_variants, haplotypes_written, etc.
+///
+/// # Example (Python)
+/// ```python
+/// import wasp2_rust
+/// stats = wasp2_rust.unified_make_reads(
+///     "input.bam",
+///     "variants.bed",
+///     "remap_r1.fq",
+///     "remap_r2.fq",
+///     max_seqs=64,
+///     threads=8
+/// )
+/// print(f"Processed {stats['pairs_processed']} pairs -> {stats['haplotypes_written']} haplotypes")
+/// ```
+#[pyfunction]
+#[pyo3(signature = (bam_path, bed_path, out_r1, out_r2, max_seqs=64, threads=8, channel_buffer=50000))]
+fn unified_make_reads_py(
+    py: Python,
+    bam_path: &str,
+    bed_path: &str,
+    out_r1: &str,
+    out_r2: &str,
+    max_seqs: usize,
+    threads: usize,
+    channel_buffer: usize,
+) -> PyResult<PyObject> {
+    use pyo3::types::PyDict;
+
+    let config = unified_pipeline::UnifiedConfig {
+        read_threads: threads,
+        max_seqs,
+        channel_buffer,
+    };
+
+    let stats = unified_pipeline::unified_make_reads(
+        bam_path,
+        bed_path,
+        out_r1,
+        out_r2,
+        &config,
+    )
+    .map_err(|e| PyRuntimeError::new_err(format!("Unified pipeline failed: {}", e)))?;
+
+    // Return stats as Python dict
+    let py_dict = PyDict::new(py);
+    py_dict.set_item("total_reads", stats.total_reads)?;
+    py_dict.set_item("pairs_processed", stats.pairs_processed)?;
+    py_dict.set_item("pairs_with_variants", stats.pairs_with_variants)?;
+    py_dict.set_item("haplotypes_written", stats.haplotypes_written)?;
+    py_dict.set_item("pairs_kept", stats.pairs_kept)?;
+    py_dict.set_item("pairs_skipped_unmappable", stats.pairs_skipped_unmappable)?;
+    py_dict.set_item("pairs_haplotype_failed", stats.pairs_haplotype_failed)?;
+    py_dict.set_item("orphan_reads", stats.orphan_reads)?;
+    py_dict.set_item("tree_build_ms", stats.tree_build_ms)?;
+    py_dict.set_item("bam_stream_ms", stats.bam_stream_ms)?;
+
+    Ok(py_dict.into())
+}
+
+// ============================================================================
 // PyO3 Bindings for VCF/BCF to BED Conversion
 // ============================================================================
 
@@ -671,6 +758,9 @@ fn wasp2_rust(_py: Python, m: &PyModule) -> PyResult<()> {
 
     // BAM filtering by variant overlap (replaces samtools process_bam, 4-5x faster)
     m.add_function(wrap_pyfunction!(filter_bam_by_variants_py, m)?)?;
+
+    // Unified single-pass pipeline (replaces filter + intersect + remap, 5x faster)
+    m.add_function(wrap_pyfunction!(unified_make_reads_py, m)?)?;
 
     // Analysis module (beta-binomial allelic imbalance detection)
     m.add_function(wrap_pyfunction!(analyze_imbalance, m)?)?;

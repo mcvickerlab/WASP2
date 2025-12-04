@@ -188,8 +188,8 @@ pub fn intersect_bam_with_store(
 ) -> Result<usize> {
     let mut bam = bam::Reader::from_path(bam_path).context("Failed to open BAM")?;
 
-    // Enable multi-threaded BAM decompression (uses rayon thread pool)
-    let num_threads = rayon::current_num_threads().min(4);
+    // Enable multi-threaded BAM decompression (use all available threads)
+    let num_threads = rayon::current_num_threads();
     bam.set_threads(num_threads).ok();
 
     let header = bam.header().clone();
@@ -256,7 +256,7 @@ pub fn intersect_bam_with_store(
         // coitrees uses inclusive intervals, so query [start, end-1]
         querent.query(read_start as i32, read_end as i32 - 1, |node| {
             // Lookup full variant data by index (only on matches!)
-            let idx = *node.metadata as usize;
+            let idx: usize = node.metadata.clone() as usize;
             let info = &store.variants[idx];
             has_overlap = true;
 
@@ -451,7 +451,7 @@ pub fn intersect_bam_with_store_multi(
 ) -> Result<usize> {
     let mut bam = bam::Reader::from_path(bam_path).context("Failed to open BAM")?;
 
-    let num_threads = rayon::current_num_threads().min(4);
+    let num_threads = rayon::current_num_threads();
     bam.set_threads(num_threads).ok();
 
     let header = bam.header().clone();
@@ -505,7 +505,7 @@ pub fn intersect_bam_with_store_multi(
         let read_name = String::from_utf8_lossy(read.qname());
 
         querent.query(read_start as i32, read_end as i32 - 1, |node| {
-            let idx = *node.metadata as usize;
+            let idx: usize = node.metadata.clone() as usize;
             let info = &store.variants[idx];
 
             // Write base columns
