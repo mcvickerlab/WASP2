@@ -461,6 +461,9 @@ pub fn unified_make_reads(
     });
 
     // Phase 3: Stream BAM and process pairs
+    // OPTIMIZATION: Use pre-allocated Record with bam.read() instead of .records() iterator
+    // The docs say: "Using the iterator is about 10% slower than the read-based API"
+    // We move the record into the buffer when buffering first mates, then allocate fresh
     let t1 = Instant::now();
     eprintln!("Streaming BAM and processing pairs...");
 
@@ -474,96 +477,106 @@ pub fn unified_make_reads(
     let mut pair_buffer: FxHashMap<Vec<u8>, bam::Record> = FxHashMap::default();
     pair_buffer.reserve(1_000_000);
 
-    for result in bam.records() {
-        let read = result?;
-        stats.total_reads += 1;
+    // Pre-allocate a single record for reading - avoids per-read allocation
+    let mut record = bam::Record::new();
 
-        // Skip reads that don't pass baseline filtering:
-        // IMPORTANT: Match bam_intersect.rs exactly (unmapped, secondary, supplementary)
-        // Do NOT filter on QC fail (0x200) or duplicate (0x400) here because:
-        // - bam_filter phase2 adds names to remap set (filters qc/dup on primary read)
-        // - bam_filter phase3 writes BOTH mates by name (no filtering!)
-        // - bam_intersect filters unmapped, secondary, supplementary ONLY
-        // - If one mate is qc_fail but the other overlaps, BOTH go to remap.bam
-        // - So we must process qc_fail/duplicate reads to match baseline exactly
-        if read.is_unmapped() || read.is_secondary() || read.is_supplementary() {
-            continue;
-        }
-        // Also check proper_pair like bam_remapper.rs:374 does
-        if !read.is_proper_pair() {
-            continue;
-        }
+    // Use read() instead of records() iterator for ~10% speedup
+    loop {
+        match bam.read(&mut record) {
+            Some(Ok(())) => {
+                stats.total_reads += 1;
 
-        let read_name = read.qname().to_vec();
+                // Skip reads that don't pass baseline filtering:
+                // IMPORTANT: Match bam_intersect.rs exactly (unmapped, secondary, supplementary)
+                // Do NOT filter on QC fail (0x200) or duplicate (0x400) here because:
+                // - bam_filter phase2 adds names to remap set (filters qc/dup on primary read)
+                // - bam_filter phase3 writes BOTH mates by name (no filtering!)
+                // - bam_intersect filters unmapped, secondary, supplementary ONLY
+                // - If one mate is qc_fail but the other overlaps, BOTH go to remap.bam
+                // - So we must process qc_fail/duplicate reads to match baseline exactly
+                if record.is_unmapped() || record.is_secondary() || record.is_supplementary() {
+                    continue;
+                }
+                // Also check proper_pair like bam_remapper.rs:374 does
+                if !record.is_proper_pair() {
+                    continue;
+                }
 
-        // Try to complete a pair
-        match pair_buffer.remove(&read_name) {
-            Some(mate) => {
-                stats.pairs_processed += 1;
+                let read_name = record.qname().to_vec();
 
-                // Ensure read1 is first in template
-                let (r1, r2) = if read.is_first_in_template() {
-                    (read, mate)
-                } else {
-                    (mate, read)
-                };
+                // Try to complete a pair
+                if let Some(mate) = pair_buffer.remove(&read_name) {
+                    // Pair complete - process it
+                    stats.pairs_processed += 1;
 
-                // Check overlaps for both mates - returns ALL overlapping variants
-                let r1_result = check_overlaps(&r1, &tid_to_name, &store.trees, &store);
-                let r2_result = check_overlaps(&r2, &tid_to_name, &store.trees, &store);
+                    // Ensure read1 is first in template - use references to avoid moving record
+                    let (r1, r2): (&bam::Record, &bam::Record) = if record.is_first_in_template() {
+                        (&record, &mate)
+                    } else {
+                        (&mate, &record)
+                    };
 
-                // Extract variant vectors from results
-                let r1_variants = match &r1_result {
-                    CheckOverlapResult::Found(v) => v.clone(),
-                    CheckOverlapResult::NoOverlaps => Vec::new(),
-                };
-                let r2_variants = match &r2_result {
-                    CheckOverlapResult::Found(v) => v.clone(),
-                    CheckOverlapResult::NoOverlaps => Vec::new(),
-                };
+                    // Check overlaps for both mates - returns ALL overlapping variants
+                    let r1_result = check_overlaps(r1, &tid_to_name, &store.trees, &store);
+                    let r2_result = check_overlaps(r2, &tid_to_name, &store.trees, &store);
 
-                // Process based on overlap results
-                if r1_variants.is_empty() && r2_variants.is_empty() {
-                    // No variants at all - this pair would go to keep.bam
-                    stats.pairs_kept += 1;
-                } else {
-                    // At least one mate has variants - pass ALL to process_pair
-                    // process_pair will check if ANY variant is unmappable and return None
-                    // This matches baseline behavior: skip entire pair if ANY variant unmappable
-                    match process_pair(
-                        &r1,
-                        &r2,
-                        &r1_variants,
-                        &r2_variants,
-                        &store,
-                        config,
-                    ) {
-                        Some(outputs) => {
-                            stats.pairs_with_variants += 1;
-                            for output in outputs {
-                                tx.send(output).ok();
+                    // Extract variant vectors from results
+                    let r1_variants = match &r1_result {
+                        CheckOverlapResult::Found(v) => v.clone(),
+                        CheckOverlapResult::NoOverlaps => Vec::new(),
+                    };
+                    let r2_variants = match &r2_result {
+                        CheckOverlapResult::Found(v) => v.clone(),
+                        CheckOverlapResult::NoOverlaps => Vec::new(),
+                    };
+
+                    // Process based on overlap results
+                    if r1_variants.is_empty() && r2_variants.is_empty() {
+                        // No variants at all - this pair would go to keep.bam
+                        stats.pairs_kept += 1;
+                    } else {
+                        // At least one mate has variants - pass ALL to process_pair
+                        // process_pair will check if ANY variant is unmappable and return None
+                        // This matches baseline behavior: skip entire pair if ANY variant unmappable
+                        match process_pair(
+                            r1,
+                            r2,
+                            &r1_variants,
+                            &r2_variants,
+                            &store,
+                            config,
+                        ) {
+                            Some(outputs) => {
+                                stats.pairs_with_variants += 1;
+                                for output in outputs {
+                                    tx.send(output).ok();
+                                }
+                            }
+                            None => {
+                                // Haplotype generation failed - likely because a variant is in
+                                // an intron/deletion (unmappable). This matches baseline behavior.
+                                stats.pairs_skipped_unmappable += 1;
                             }
                         }
-                        None => {
-                            // Haplotype generation failed - likely because a variant is in
-                            // an intron/deletion (unmappable). This matches baseline behavior.
-                            stats.pairs_skipped_unmappable += 1;
-                        }
                     }
+                    // `mate` is dropped here, `record` is reused for next iteration
+                } else {
+                    // First mate seen - move record into buffer and allocate new one
+                    // This avoids cloning while still allowing record reuse for completed pairs
+                    pair_buffer.insert(read_name, record);
+                    record = bam::Record::new();
+                }
+
+                // Progress reporting
+                if stats.total_reads % 10_000_000 == 0 {
+                    eprintln!(
+                        "  {} reads, {} pairs, {} with variants",
+                        stats.total_reads, stats.pairs_processed, stats.pairs_with_variants
+                    );
                 }
             }
-            None => {
-                // First mate seen - buffer it
-                pair_buffer.insert(read_name, read);
-            }
-        }
-
-        // Progress reporting
-        if stats.total_reads % 10_000_000 == 0 {
-            eprintln!(
-                "  {} reads, {} pairs, {} with variants",
-                stats.total_reads, stats.pairs_processed, stats.pairs_with_variants
-            );
+            Some(Err(e)) => return Err(e.into()),
+            None => break, // End of file
         }
     }
 
