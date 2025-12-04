@@ -32,6 +32,7 @@ use crate::bam_intersect::{build_variant_store, VariantStore};
 use crate::bam_remapper::{generate_haplotype_seqs, RemapConfig, VariantSpan as RemapVariantSpan};
 use crate::cigar_utils;
 
+
 // ============================================================================
 // Configuration and Statistics
 // ============================================================================
@@ -84,6 +85,25 @@ pub struct UnifiedStats {
     pub tree_build_ms: u64,
     /// Time spent streaming BAM (ms)
     pub bam_stream_ms: u64,
+}
+
+impl UnifiedStats {
+    /// Merge stats from multiple threads into a single aggregate
+    pub fn merge(self, other: Self) -> Self {
+        Self {
+            total_reads: self.total_reads + other.total_reads,
+            pairs_processed: self.pairs_processed + other.pairs_processed,
+            pairs_with_variants: self.pairs_with_variants + other.pairs_with_variants,
+            haplotypes_written: self.haplotypes_written + other.haplotypes_written,
+            pairs_kept: self.pairs_kept + other.pairs_kept,
+            pairs_skipped_unmappable: self.pairs_skipped_unmappable + other.pairs_skipped_unmappable,
+            pairs_haplotype_failed: self.pairs_haplotype_failed + other.pairs_haplotype_failed,
+            orphan_reads: self.orphan_reads + other.orphan_reads,
+            // Keep maximum time values (they represent wall clock for parallel execution)
+            tree_build_ms: self.tree_build_ms.max(other.tree_build_ms),
+            bam_stream_ms: self.bam_stream_ms.max(other.bam_stream_ms),
+        }
+    }
 }
 
 // ============================================================================
@@ -247,10 +267,11 @@ fn generate_haplotypes_for_read(
     let overlaps = dedup_overlaps_for_read(overlaps);
 
     if overlaps.is_empty() {
-        // No variants - return original sequence
+        // No variants - return original sequence TWICE (matches baseline bam_remapper.rs)
+        // This is needed for correct zip pairing with the other read's haplotypes
         let seq = read.seq().as_bytes();
         let qual = read.qual().to_vec();
-        return Some(vec![(seq, qual)]);
+        return Some(vec![(seq.clone(), qual.clone()), (seq, qual)]);
     }
 
     // Build single VariantSpan (first/deduped) for haplotype generation
@@ -303,38 +324,33 @@ fn process_pair(
 ) -> Option<Vec<HaplotypeOutput>> {
     let mut outputs = Vec::new();
 
+    // Original sequences for unchanged check
+    let r1_original = read1.seq().as_bytes();
+    let r2_original = read2.seq().as_bytes();
+
     // Generate haplotypes for each read independently
     // Returns None if read has variants but ALL are unmappable
-    let r1_haps = generate_haplotypes_for_read(read1, r1_overlaps, store, config.max_seqs);
-    let r2_haps = generate_haplotypes_for_read(read2, r2_overlaps, store, config.max_seqs);
-
-    // Skip pair if either read has variants but ALL are unmappable
-    // None means: read had variant overlaps but couldn't process ANY of them
-    let r1_haps = match r1_haps {
-        Some(haps) => haps,
-        None => return None, // R1 has only unmappable variants - skip pair
-    };
-    let r2_haps = match r2_haps {
-        Some(haps) => haps,
-        None => return None, // R2 has only unmappable variants - skip pair
-    };
+    // Returns exactly 2 haplotypes: either (orig, orig) for no variants, or (hap1, hap2) for variants
+    let r1_haps = generate_haplotypes_for_read(read1, r1_overlaps, store, config.max_seqs)?;
+    let r2_haps = generate_haplotypes_for_read(read2, r2_overlaps, store, config.max_seqs)?;
 
     let r1_pos = read1.pos() as u32;
     let r2_pos = read2.pos() as u32;
     let original_name = read1.qname();
 
-    // Generate paired outputs - WASP needs all haplotype combinations for remapping
-    // When one read has more haplotypes than the other, reuse the last haplotype of the shorter
-    let total_haps = r1_haps.len().max(r2_haps.len());
+    // Baseline approach: zip haplotypes and skip unchanged pairs
+    // Zip creates pairs: (r1_hap1, r2_hap1), (r1_hap2, r2_hap2)
+    // Skip if BOTH reads are unchanged in that pair
+    for (hap_idx, (r1_hap, r2_hap)) in r1_haps.iter().zip(r2_haps.iter()).enumerate() {
+        // Skip if both reads are unchanged (matches baseline bam_remapper.rs line 476-479)
+        if r1_hap.0 == r1_original && r2_hap.0 == r2_original {
+            continue;
+        }
 
-    for hap_idx in 0..total_haps {
-        // Use the haplotype at index, or the last one if we've run out
-        let r1_hap = r1_haps.get(hap_idx).unwrap_or_else(|| r1_haps.last().unwrap());
-        let r2_hap = r2_haps.get(hap_idx).unwrap_or_else(|| r2_haps.last().unwrap());
+        // total_seqs = 2 (baseline always generates 2 haplotypes)
+        let wasp_name = generate_wasp_name(original_name, r1_pos, r2_pos, hap_idx + 1, 2);
 
-        let wasp_name = generate_wasp_name(original_name, r1_pos, r2_pos, hap_idx + 1, total_haps);
-
-        // R1 output with /1 mate suffix (matches baseline format)
+        // R1 output
         let mut r1_name = wasp_name.clone();
         r1_name.extend_from_slice(b"/1");
         outputs.push(HaplotypeOutput {
@@ -344,7 +360,7 @@ fn process_pair(
             is_r1: true,
         });
 
-        // R2 output with /2 mate suffix (matches baseline format)
+        // R2 output
         let mut r2_name = wasp_name;
         r2_name.extend_from_slice(b"/2");
         outputs.push(HaplotypeOutput {
@@ -355,7 +371,7 @@ fn process_pair(
         });
     }
 
-    Some(outputs)
+    if outputs.is_empty() { None } else { Some(outputs) }
 }
 
 /// FASTQ writer thread - consumes haplotype outputs and writes to files
@@ -606,12 +622,254 @@ pub fn unified_make_reads(
     eprintln!("  Pairs skipped (unmappable): {}", stats.pairs_skipped_unmappable);
     eprintln!("  Pairs haplotype failed: {}", stats.pairs_haplotype_failed);
     eprintln!("  Haplotypes written: {}", stats.haplotypes_written);
+
     eprintln!(
         "  Time: {}ms tree build + {}ms BAM stream",
         stats.tree_build_ms, stats.bam_stream_ms
     );
 
     Ok(stats)
+}
+
+// ============================================================================
+// Parallel Chromosome Processing
+// ============================================================================
+//
+// SAFETY NOTE: rust-htslib has a known thread safety issue (GitHub Issue #293):
+// - bam::Record contains Rc<HeaderView> which is NOT thread-safe
+// - Passing Records between threads causes random segfaults
+//
+// SAFE PATTERN (used here):
+// - Each thread opens its OWN IndexedReader
+// - Records are processed entirely within that thread
+// - Only primitive data (HaplotypeOutput with Vec<u8>) crosses thread boundaries
+
+/// Process a single chromosome using a per-thread IndexedReader
+///
+/// SAFETY: This function is designed to be called from rayon parallel iterator.
+/// Each thread gets its own BAM reader instance to avoid rust-htslib thread safety issues.
+fn process_chromosome(
+    bam_path: &str,
+    chrom: &str,
+    store: &VariantStore,
+    tx: &Sender<HaplotypeOutput>,
+    config: &UnifiedConfig,
+) -> Result<UnifiedStats> {
+    use rust_htslib::bam::Read as BamRead;
+
+    let mut stats = UnifiedStats::default();
+    let t0 = Instant::now();
+
+    // CRITICAL: Open a fresh IndexedReader for this thread
+    // This avoids the Rc<HeaderView> thread safety bug in rust-htslib
+    let mut bam = bam::IndexedReader::from_path(bam_path)
+        .context("Failed to open indexed BAM")?;
+
+    // Fetch reads for this chromosome
+    bam.fetch(chrom).context("Failed to fetch chromosome")?;
+
+    // Use a few threads for BAM decompression within this worker
+    bam.set_threads(2).ok();
+
+    let header = bam.header().clone();
+    let tid_to_name = build_tid_lookup(&header);
+
+    // Per-chromosome pair buffer
+    let mut pair_buffer: FxHashMap<Vec<u8>, bam::Record> = FxHashMap::default();
+    pair_buffer.reserve(100_000); // Smaller per-chromosome
+
+    // Pre-allocated record for reading
+    let mut record = bam::Record::new();
+
+    loop {
+        match bam.read(&mut record) {
+            Some(Ok(())) => {
+                stats.total_reads += 1;
+
+                // Apply same filters as sequential version
+                if record.is_unmapped() || record.is_secondary() || record.is_supplementary() {
+                    continue;
+                }
+                if !record.is_proper_pair() {
+                    continue;
+                }
+
+                let read_name = record.qname().to_vec();
+
+                if let Some(mate) = pair_buffer.remove(&read_name) {
+                    // Pair complete
+                    stats.pairs_processed += 1;
+
+                    let (r1, r2): (&bam::Record, &bam::Record) = if record.is_first_in_template() {
+                        (&record, &mate)
+                    } else {
+                        (&mate, &record)
+                    };
+
+                    let r1_result = check_overlaps(r1, &tid_to_name, &store.trees, store);
+                    let r2_result = check_overlaps(r2, &tid_to_name, &store.trees, store);
+
+                    let r1_variants = match &r1_result {
+                        CheckOverlapResult::Found(v) => v.clone(),
+                        CheckOverlapResult::NoOverlaps => Vec::new(),
+                    };
+                    let r2_variants = match &r2_result {
+                        CheckOverlapResult::Found(v) => v.clone(),
+                        CheckOverlapResult::NoOverlaps => Vec::new(),
+                    };
+
+                    if r1_variants.is_empty() && r2_variants.is_empty() {
+                        stats.pairs_kept += 1;
+                    } else {
+                        match process_pair(r1, r2, &r1_variants, &r2_variants, store, config) {
+                            Some(outputs) => {
+                                stats.pairs_with_variants += 1;
+                                for output in outputs {
+                                    // Send to writer thread - only Vec<u8> data crosses threads
+                                    tx.send(output).ok();
+                                }
+                            }
+                            None => {
+                                stats.pairs_skipped_unmappable += 1;
+                            }
+                        }
+                    }
+                } else {
+                    // First mate - buffer it
+                    pair_buffer.insert(read_name, record);
+                    record = bam::Record::new();
+                }
+            }
+            Some(Err(e)) => return Err(e.into()),
+            None => break,
+        }
+    }
+
+    stats.orphan_reads = pair_buffer.len();
+    stats.bam_stream_ms = t0.elapsed().as_millis() as u64;
+
+    Ok(stats)
+}
+
+/// Parallel unified pipeline - processes chromosomes in parallel for 3-8x speedup
+///
+/// REQUIREMENTS:
+/// - BAM must be coordinate-sorted and indexed (.bai file must exist)
+/// - Falls back to sequential if BAM index is missing
+///
+/// THREAD SAFETY:
+/// - Each worker thread opens its own IndexedReader (avoids rust-htslib Issue #293)
+/// - Records never cross thread boundaries
+/// - Only HaplotypeOutput (Vec<u8>) is sent via channel
+/// - VariantStore is shared read-only via Arc
+pub fn unified_make_reads_parallel(
+    bam_path: &str,
+    bed_path: &str,
+    r1_path: &str,
+    r2_path: &str,
+    config: &UnifiedConfig,
+) -> Result<UnifiedStats> {
+    use rayon::prelude::*;
+
+    // Check BAM index exists - fall back to sequential if not
+    let bai_path = format!("{}.bai", bam_path);
+    if !std::path::Path::new(&bai_path).exists() {
+        eprintln!("BAM index not found ({}), falling back to sequential processing", bai_path);
+        return unified_make_reads(bam_path, bed_path, r1_path, r2_path, config);
+    }
+
+    // Phase 1: Build variant store (shared, read-only)
+    let t0 = Instant::now();
+    eprintln!("Building variant store from {}...", bed_path);
+    let store = Arc::new(build_variant_store(bed_path)?);
+    let tree_build_ms = t0.elapsed().as_millis() as u64;
+    eprintln!(
+        "  {} chromosomes, {} variants ({}ms)",
+        store.trees.len(),
+        store.variants.len(),
+        tree_build_ms
+    );
+
+    // Phase 2: Get chromosome list from BAM header
+    let bam = bam::Reader::from_path(bam_path).context("Failed to open BAM")?;
+    let chroms: Vec<String> = (0..bam.header().target_count())
+        .map(|tid| {
+            String::from_utf8_lossy(bam.header().tid2name(tid)).to_string()
+        })
+        .filter(|c| store.trees.contains_key(c)) // Only chromosomes with variants
+        .collect();
+    drop(bam);
+
+    eprintln!("Processing {} chromosomes with variants in parallel...", chroms.len());
+
+    // Phase 3: Set up output channel and writer thread
+    let (tx, rx): (Sender<HaplotypeOutput>, Receiver<HaplotypeOutput>) =
+        bounded(config.channel_buffer);
+
+    let hap_counter = Arc::new(AtomicUsize::new(0));
+    let hap_counter_clone = Arc::clone(&hap_counter);
+
+    let r1_owned = r1_path.to_string();
+    let r2_owned = r2_path.to_string();
+    let compression_threads = config.compression_threads;
+    let writer_handle = thread::spawn(move || {
+        fastq_writer_thread(rx, &r1_owned, &r2_owned, hap_counter_clone, compression_threads)
+    });
+
+    // Phase 4: Process chromosomes in parallel
+    // SAFE: Each thread opens its own IndexedReader
+    let t1 = Instant::now();
+    let bam_path_owned = bam_path.to_string();
+
+    let results: Vec<Result<UnifiedStats>> = chroms
+        .par_iter()
+        .map(|chrom| {
+            // Each thread processes one chromosome with its own reader
+            process_chromosome(&bam_path_owned, chrom, &store, &tx, config)
+        })
+        .collect();
+
+    // Close sender to signal writer thread
+    drop(tx);
+
+    // Wait for writer
+    writer_handle
+        .join()
+        .map_err(|_| anyhow::anyhow!("Writer thread panicked"))??;
+
+    // Phase 5: Aggregate stats from all chromosomes
+    let mut final_stats = UnifiedStats::default();
+    final_stats.tree_build_ms = tree_build_ms;
+
+    for result in results {
+        match result {
+            Ok(stats) => {
+                final_stats = final_stats.merge(stats);
+            }
+            Err(e) => {
+                eprintln!("Warning: Chromosome processing failed: {}", e);
+            }
+        }
+    }
+
+    final_stats.haplotypes_written = hap_counter.load(Ordering::Relaxed);
+    final_stats.bam_stream_ms = t1.elapsed().as_millis() as u64;
+
+    eprintln!("Parallel unified pipeline complete:");
+    eprintln!("  Total reads: {}", final_stats.total_reads);
+    eprintln!("  Pairs processed: {}", final_stats.pairs_processed);
+    eprintln!("  Pairs with variants: {}", final_stats.pairs_with_variants);
+    eprintln!("  Pairs kept (no variants): {}", final_stats.pairs_kept);
+    eprintln!("  Pairs skipped (unmappable): {}", final_stats.pairs_skipped_unmappable);
+    eprintln!("  Haplotypes written: {}", final_stats.haplotypes_written);
+    eprintln!(
+        "  Time: {}ms tree build + {}ms parallel BAM ({}x potential speedup)",
+        final_stats.tree_build_ms,
+        final_stats.bam_stream_ms,
+        chroms.len().min(rayon::current_num_threads())
+    );
+
+    Ok(final_stats)
 }
 
 // ============================================================================

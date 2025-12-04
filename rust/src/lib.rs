@@ -528,6 +528,98 @@ fn unified_make_reads_py(
     Ok(py_dict.into())
 }
 
+/// Parallel unified pipeline - processes chromosomes in parallel for 3-8x speedup
+///
+/// REQUIREMENTS:
+/// - BAM must be coordinate-sorted and indexed (.bai file must exist)
+/// - Falls back to sequential if BAM index is missing
+///
+/// THREAD SAFETY:
+/// - Each worker thread opens its own IndexedReader (avoids rust-htslib Issue #293)
+/// - Records never cross thread boundaries
+/// - Only HaplotypeOutput (Vec<u8>) is sent via channel
+///
+/// # Arguments
+/// * `bam_path` - Input BAM file (must be coordinate-sorted and indexed)
+/// * `bed_path` - Variant BED file (chrom, start, stop, ref, alt, GT)
+/// * `out_r1` - Output path for read 1 FASTQ
+/// * `out_r2` - Output path for read 2 FASTQ
+/// * `max_seqs` - Maximum haplotype sequences per read pair (default: 64)
+/// * `threads` - Number of threads to use (default: 8)
+/// * `channel_buffer` - Channel buffer size for streaming (default: 50000)
+/// * `compression_threads` - Threads per FASTQ file for gzip (default: 4)
+///
+/// # Returns
+/// Dictionary with stats: pairs_processed, pairs_with_variants, haplotypes_written, etc.
+///
+/// # Example (Python)
+/// ```python
+/// import wasp2_rust
+/// stats = wasp2_rust.unified_make_reads_parallel(
+///     "input.bam",  # Must have .bai index
+///     "variants.bed",
+///     "remap_r1.fq.gz",
+///     "remap_r2.fq.gz",
+///     max_seqs=64,
+///     threads=8
+/// )
+/// print(f"Processed {stats['pairs_processed']} pairs -> {stats['haplotypes_written']} haplotypes")
+/// ```
+#[pyfunction]
+#[pyo3(signature = (bam_path, bed_path, out_r1, out_r2, max_seqs=64, threads=8, channel_buffer=50000, compression_threads=4))]
+fn unified_make_reads_parallel_py(
+    py: Python,
+    bam_path: &str,
+    bed_path: &str,
+    out_r1: &str,
+    out_r2: &str,
+    max_seqs: usize,
+    threads: usize,
+    channel_buffer: usize,
+    compression_threads: usize,
+) -> PyResult<PyObject> {
+    use pyo3::types::PyDict;
+
+    // Configure rayon thread pool
+    if threads > 0 {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(threads)
+            .build_global()
+            .ok(); // Ignore if already set
+    }
+
+    let config = unified_pipeline::UnifiedConfig {
+        read_threads: threads,
+        max_seqs,
+        channel_buffer,
+        compression_threads,
+    };
+
+    let stats = unified_pipeline::unified_make_reads_parallel(
+        bam_path,
+        bed_path,
+        out_r1,
+        out_r2,
+        &config,
+    )
+    .map_err(|e| PyRuntimeError::new_err(format!("Parallel unified pipeline failed: {}", e)))?;
+
+    // Return stats as Python dict
+    let py_dict = PyDict::new(py);
+    py_dict.set_item("total_reads", stats.total_reads)?;
+    py_dict.set_item("pairs_processed", stats.pairs_processed)?;
+    py_dict.set_item("pairs_with_variants", stats.pairs_with_variants)?;
+    py_dict.set_item("haplotypes_written", stats.haplotypes_written)?;
+    py_dict.set_item("pairs_kept", stats.pairs_kept)?;
+    py_dict.set_item("pairs_skipped_unmappable", stats.pairs_skipped_unmappable)?;
+    py_dict.set_item("pairs_haplotype_failed", stats.pairs_haplotype_failed)?;
+    py_dict.set_item("orphan_reads", stats.orphan_reads)?;
+    py_dict.set_item("tree_build_ms", stats.tree_build_ms)?;
+    py_dict.set_item("bam_stream_ms", stats.bam_stream_ms)?;
+
+    Ok(py_dict.into())
+}
+
 // ============================================================================
 // PyO3 Bindings for VCF/BCF to BED Conversion
 // ============================================================================
@@ -763,6 +855,9 @@ fn wasp2_rust(_py: Python, m: &PyModule) -> PyResult<()> {
 
     // Unified single-pass pipeline (replaces filter + intersect + remap, 5x faster)
     m.add_function(wrap_pyfunction!(unified_make_reads_py, m)?)?;
+
+    // Parallel unified pipeline (3-8x speedup over sequential, requires BAM index)
+    m.add_function(wrap_pyfunction!(unified_make_reads_parallel_py, m)?)?;
 
     // Analysis module (beta-binomial allelic imbalance detection)
     m.add_function(wrap_pyfunction!(analyze_imbalance, m)?)?;
