@@ -14,10 +14,10 @@
 //! - Total: ~1.3GB
 
 use anyhow::{Context, Result};
-use coitrees::{IntervalTree, SortedQuerent};
+use coitrees::SortedQuerent;
 use crossbeam_channel::{bounded, Receiver, Sender};
-use flate2::write::GzEncoder;
 use flate2::Compression;
+use gzp::{deflate::Gzip, ZBuilder};
 use rust_htslib::bam::ext::BamRecordExtensions;
 use rust_htslib::{bam, bam::Read as BamRead};
 use rustc_hash::FxHashMap;
@@ -45,6 +45,8 @@ pub struct UnifiedConfig {
     pub max_seqs: usize,
     /// Bounded channel buffer size
     pub channel_buffer: usize,
+    /// Number of compression threads per FASTQ file (0 = auto)
+    pub compression_threads: usize,
 }
 
 impl Default for UnifiedConfig {
@@ -53,6 +55,7 @@ impl Default for UnifiedConfig {
             read_threads: 8,
             max_seqs: 64,
             channel_buffer: 50_000,
+            compression_threads: 4,  // 4 threads per FASTQ file for parallel gzip
         }
     }
 }
@@ -356,29 +359,35 @@ fn process_pair(
 }
 
 /// FASTQ writer thread - consumes haplotype outputs and writes to files
+/// Uses gzp for parallel gzip compression (pigz-like)
 fn fastq_writer_thread(
     rx: Receiver<HaplotypeOutput>,
     r1_path: &str,
     r2_path: &str,
     counter: Arc<AtomicUsize>,
+    compression_threads: usize,
 ) -> Result<()> {
-    // Use gzip compression with fastest level
+    // Use gzp for parallel gzip compression (similar to pigz)
+    // This provides significant speedup for I/O-bound workloads
     let r1_file = File::create(r1_path)?;
     let r2_file = File::create(r2_path)?;
 
-    let mut r1_writer = BufWriter::with_capacity(
-        1024 * 1024,
-        GzEncoder::new(r1_file, Compression::fast()),
-    );
-    let mut r2_writer = BufWriter::with_capacity(
-        1024 * 1024,
-        GzEncoder::new(r2_file, Compression::fast()),
-    );
+    // ZBuilder creates a parallel compression writer
+    // num_threads(0) means auto-detect, otherwise use specified count
+    let mut r1_writer = ZBuilder::<Gzip, _>::new()
+        .num_threads(compression_threads)
+        .compression_level(Compression::fast())
+        .from_writer(BufWriter::with_capacity(1024 * 1024, r1_file));
+
+    let mut r2_writer = ZBuilder::<Gzip, _>::new()
+        .num_threads(compression_threads)
+        .compression_level(Compression::fast())
+        .from_writer(BufWriter::with_capacity(1024 * 1024, r2_file));
 
     for hap in rx {
         let qual_string: Vec<u8> = hap.quals.iter().map(|&q| q + 33).collect();
 
-        let writer = if hap.is_r1 {
+        let writer: &mut dyn Write = if hap.is_r1 {
             &mut r1_writer
         } else {
             &mut r2_writer
@@ -395,8 +404,9 @@ fn fastq_writer_thread(
         counter.fetch_add(1, Ordering::Relaxed);
     }
 
-    r1_writer.flush()?;
-    r2_writer.flush()?;
+    // Finish flushes and finalizes the gzip streams
+    r1_writer.finish().context("Failed to finish R1 gzip")?;
+    r2_writer.finish().context("Failed to finish R2 gzip")?;
 
     Ok(())
 }
@@ -442,11 +452,12 @@ pub fn unified_make_reads(
     let hap_counter = Arc::new(AtomicUsize::new(0));
     let hap_counter_clone = Arc::clone(&hap_counter);
 
-    // Spawn writer thread
+    // Spawn writer thread with parallel compression
     let r1_owned = r1_path.to_string();
     let r2_owned = r2_path.to_string();
+    let compression_threads = config.compression_threads;
     let writer_handle = thread::spawn(move || {
-        fastq_writer_thread(rx, &r1_owned, &r2_owned, hap_counter_clone)
+        fastq_writer_thread(rx, &r1_owned, &r2_owned, hap_counter_clone, compression_threads)
     });
 
     // Phase 3: Stream BAM and process pairs

@@ -9,7 +9,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 pyo3 = { version = "0.20", features = ["extension-module"] }
-rust-htslib = { version = "0.44", default-features = false }
+rust-htslib = { version = "0.44", default-features = false }  # Keep stable version (0.47+ has NFS build issues)
 rayon = "1.8"
 anyhow = "1.0"
 rustc-hash = "1.1"
@@ -19,6 +19,7 @@ argmin = "0.10"
 argmin-math = "0.4"
 coitrees = "0.4"  # Fast interval tree for BAM-BED intersection (15-30x faster than pybedtools)
 crossbeam-channel = "0.5"  # Fast MPMC channels for parallel FASTQ writing
+gzp = { version = "0.11", default-features = false, features = ["deflate_default"] }  # Parallel gzip compression
 
 # VCF/BCF parsing (noodles - pure Rust, no C dependencies)
 # Note: noodles-bcf depends on noodles-vcf, so we use compatible versions
