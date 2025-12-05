@@ -117,8 +117,10 @@ fn phase2_collect_remap_names(
     let mut processed = 0usize;
     let mut overlapping = 0usize;
 
-    for result in bam.records() {
-        let read = result?;
+    // Use read() with pre-allocated Record instead of records() iterator for better performance
+    let mut read = bam::Record::new();
+    while let Some(result) = bam.read(&mut read) {
+        result?;
         processed += 1;
 
         // Skip unmapped, secondary, supplementary, QC fail, duplicate
@@ -204,16 +206,18 @@ fn phase3_split_bam(
     let mut remap_count = 0usize;
     let mut keep_count = 0usize;
 
-    for result in bam.records() {
-        let read = result?;
+    // Use read() with pre-allocated Record instead of records() iterator for better performance
+    let mut record = bam::Record::new();
+    while let Some(result) = bam.read(&mut record) {
+        result?;
 
         // For paired-end: if THIS read's name is in the set, BOTH mates go to remap
         // This ensures pairs stay together
-        if remap_names.contains(read.qname()) {
-            remap_writer.write(&read)?;
+        if remap_names.contains(record.qname()) {
+            remap_writer.write(&record)?;
             remap_count += 1;
         } else {
-            keep_writer.write(&read)?;
+            keep_writer.write(&record)?;
             keep_count += 1;
         }
     }

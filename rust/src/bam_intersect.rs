@@ -218,8 +218,10 @@ pub fn intersect_bam_with_store(
         .map(|(k, v)| (k.clone(), SortedQuerent::new(v)))
         .collect();
 
-    for result in bam.records() {
-        let read = result?;
+    // Use read() with pre-allocated Record instead of records() iterator for better performance
+    let mut read = bam::Record::new();
+    while let Some(result) = bam.read(&mut read) {
+        result?;
         read_count += 1;
 
         // Skip unmapped, secondary, supplementary
@@ -478,8 +480,10 @@ pub fn intersect_bam_with_store_multi(
         .map(|(k, v)| (k.clone(), SortedQuerent::new(v)))
         .collect();
 
-    for result in bam.records() {
-        let read = result?;
+    // Use read() with pre-allocated Record instead of records() iterator for better performance
+    let mut read = bam::Record::new();
+    while let Some(result) = bam.read(&mut read) {
+        result?;
         read_count += 1;
 
         if read.is_unmapped() || read.is_secondary() || read.is_supplementary() {

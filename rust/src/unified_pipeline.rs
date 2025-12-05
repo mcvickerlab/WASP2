@@ -48,6 +48,8 @@ pub struct UnifiedConfig {
     pub channel_buffer: usize,
     /// Number of compression threads per FASTQ file (0 = auto)
     pub compression_threads: usize,
+    /// Compress output FASTQs (set to false for named pipe streaming)
+    pub compress_output: bool,
 }
 
 impl Default for UnifiedConfig {
@@ -57,6 +59,7 @@ impl Default for UnifiedConfig {
             max_seqs: 64,
             channel_buffer: 50_000,
             compression_threads: 4,  // 4 threads per FASTQ file for parallel gzip
+            compress_output: true,   // Default to compressed for disk storage
         }
     }
 }
@@ -121,6 +124,14 @@ pub struct HaplotypeOutput {
     pub quals: Vec<u8>,
     /// Is R1 (true) or R2 (false)
     pub is_r1: bool,
+}
+
+/// A paired haplotype output (R1 + R2 together) for atomic writing
+/// This ensures paired reads are written in the same order to both FASTQ files
+#[derive(Debug, Clone)]
+pub struct HaplotypePair {
+    pub r1: HaplotypeOutput,
+    pub r2: HaplotypeOutput,
 }
 
 // ============================================================================
@@ -306,7 +317,7 @@ fn generate_haplotypes_for_read(
     }
 }
 
-/// Process a complete read pair and generate haplotype outputs
+/// Process a complete read pair and generate haplotype pair outputs
 ///
 /// To match baseline behavior EXACTLY:
 /// - If a read has variants but ALL are unmappable → skip the entire pair
@@ -314,6 +325,8 @@ fn generate_haplotypes_for_read(
 /// - Baseline processes each (read, variant) pair from bedtools intersect
 /// - Unmappable variants (in introns/deletions) are skipped individually
 /// - Read appears in output if ANY variant was successfully processed
+///
+/// Returns HaplotypePairs (R1+R2 together) to ensure atomic writing and correct ordering
 fn process_pair(
     read1: &bam::Record,
     read2: &bam::Record,
@@ -321,7 +334,7 @@ fn process_pair(
     r2_overlaps: &[(u32, u32, u32)],
     store: &VariantStore,
     config: &UnifiedConfig,
-) -> Option<Vec<HaplotypeOutput>> {
+) -> Option<Vec<HaplotypePair>> {
     let mut outputs = Vec::new();
 
     // Original sequences for unchanged check
@@ -353,76 +366,103 @@ fn process_pair(
         // R1 output
         let mut r1_name = wasp_name.clone();
         r1_name.extend_from_slice(b"/1");
-        outputs.push(HaplotypeOutput {
+        let r1_output = HaplotypeOutput {
             name: r1_name,
             sequence: r1_hap.0.clone(),
             quals: r1_hap.1.clone(),
             is_r1: true,
-        });
+        };
 
         // R2 output
         let mut r2_name = wasp_name;
         r2_name.extend_from_slice(b"/2");
-        outputs.push(HaplotypeOutput {
+        let r2_output = HaplotypeOutput {
             name: r2_name,
             sequence: r2_hap.0.clone(),
             quals: r2_hap.1.clone(),
             is_r1: false,
+        };
+
+        // Bundle as pair for atomic writing
+        outputs.push(HaplotypePair {
+            r1: r1_output,
+            r2: r2_output,
         });
     }
 
     if outputs.is_empty() { None } else { Some(outputs) }
 }
 
-/// FASTQ writer thread - consumes haplotype outputs and writes to files
-/// Uses gzp for parallel gzip compression (pigz-like)
+/// Helper to write a single FASTQ record
+fn write_fastq_record<W: Write>(writer: &mut W, hap: &HaplotypeOutput) -> Result<()> {
+    let qual_string: Vec<u8> = hap.quals.iter().map(|&q| q + 33).collect();
+    writer.write_all(b"@")?;
+    writer.write_all(&hap.name)?;
+    writer.write_all(b"\n")?;
+    writer.write_all(&hap.sequence)?;
+    writer.write_all(b"\n+\n")?;
+    writer.write_all(&qual_string)?;
+    writer.write_all(b"\n")?;
+    Ok(())
+}
+
+/// FASTQ writer thread - consumes haplotype PAIRS and writes atomically to files
+/// Uses gzp for parallel gzip compression (pigz-like) when compress=true
+/// Uses plain buffered write when compress=false (faster for named pipes/streaming)
+///
+/// CRITICAL: Receives HaplotypePair to ensure R1 and R2 are written in the same order
+/// This fixes the parallel pipeline bug where R1/R2 could get out of sync
 fn fastq_writer_thread(
-    rx: Receiver<HaplotypeOutput>,
+    rx: Receiver<HaplotypePair>,
     r1_path: &str,
     r2_path: &str,
     counter: Arc<AtomicUsize>,
     compression_threads: usize,
+    compress: bool,
 ) -> Result<()> {
-    // Use gzp for parallel gzip compression (similar to pigz)
-    // This provides significant speedup for I/O-bound workloads
     let r1_file = File::create(r1_path)?;
     let r2_file = File::create(r2_path)?;
 
-    // ZBuilder creates a parallel compression writer
-    // num_threads(0) means auto-detect, otherwise use specified count
-    let mut r1_writer = ZBuilder::<Gzip, _>::new()
-        .num_threads(compression_threads)
-        .compression_level(Compression::fast())
-        .from_writer(BufWriter::with_capacity(1024 * 1024, r1_file));
+    if compress {
+        // Use gzp for parallel gzip compression (similar to pigz)
+        // This provides significant speedup for I/O-bound workloads
+        let mut r1_writer = ZBuilder::<Gzip, _>::new()
+            .num_threads(compression_threads)
+            .compression_level(Compression::fast())
+            .from_writer(BufWriter::with_capacity(1024 * 1024, r1_file));
 
-    let mut r2_writer = ZBuilder::<Gzip, _>::new()
-        .num_threads(compression_threads)
-        .compression_level(Compression::fast())
-        .from_writer(BufWriter::with_capacity(1024 * 1024, r2_file));
+        let mut r2_writer = ZBuilder::<Gzip, _>::new()
+            .num_threads(compression_threads)
+            .compression_level(Compression::fast())
+            .from_writer(BufWriter::with_capacity(1024 * 1024, r2_file));
 
-    for hap in rx {
-        let qual_string: Vec<u8> = hap.quals.iter().map(|&q| q + 33).collect();
+        for pair in rx {
+            // Write R1 and R2 atomically - they arrive together and are written together
+            write_fastq_record(&mut r1_writer, &pair.r1)?;
+            write_fastq_record(&mut r2_writer, &pair.r2)?;
+            counter.fetch_add(2, Ordering::Relaxed); // Count both reads
+        }
 
-        let writer: &mut dyn Write = if hap.is_r1 {
-            &mut r1_writer
-        } else {
-            &mut r2_writer
-        };
+        // Finish flushes and finalizes the gzip streams
+        r1_writer.finish().context("Failed to finish R1 gzip")?;
+        r2_writer.finish().context("Failed to finish R2 gzip")?;
+    } else {
+        // Uncompressed output - faster for named pipes and streaming to STAR
+        // Use larger buffer (4MB) for better throughput
+        let mut r1_writer = BufWriter::with_capacity(4 * 1024 * 1024, r1_file);
+        let mut r2_writer = BufWriter::with_capacity(4 * 1024 * 1024, r2_file);
 
-        writer.write_all(b"@")?;
-        writer.write_all(&hap.name)?;
-        writer.write_all(b"\n")?;
-        writer.write_all(&hap.sequence)?;
-        writer.write_all(b"\n+\n")?;
-        writer.write_all(&qual_string)?;
-        writer.write_all(b"\n")?;
+        for pair in rx {
+            // Write R1 and R2 atomically - they arrive together and are written together
+            write_fastq_record(&mut r1_writer, &pair.r1)?;
+            write_fastq_record(&mut r2_writer, &pair.r2)?;
+            counter.fetch_add(2, Ordering::Relaxed); // Count both reads
+        }
 
-        counter.fetch_add(1, Ordering::Relaxed);
+        // Flush uncompressed writers
+        r1_writer.flush().context("Failed to flush R1")?;
+        r2_writer.flush().context("Failed to flush R2")?;
     }
-
-    // Finish flushes and finalizes the gzip streams
-    r1_writer.finish().context("Failed to finish R1 gzip")?;
-    r2_writer.finish().context("Failed to finish R2 gzip")?;
 
     Ok(())
 }
@@ -461,19 +501,20 @@ pub fn unified_make_reads(
         stats.tree_build_ms
     );
 
-    // Phase 2: Set up writer channel
-    let (tx, rx): (Sender<HaplotypeOutput>, Receiver<HaplotypeOutput>) =
+    // Phase 2: Set up writer channel (sends pairs for atomic writing)
+    let (tx, rx): (Sender<HaplotypePair>, Receiver<HaplotypePair>) =
         bounded(config.channel_buffer);
 
     let hap_counter = Arc::new(AtomicUsize::new(0));
     let hap_counter_clone = Arc::clone(&hap_counter);
 
-    // Spawn writer thread with parallel compression
+    // Spawn writer thread (with optional compression)
     let r1_owned = r1_path.to_string();
     let r2_owned = r2_path.to_string();
     let compression_threads = config.compression_threads;
+    let compress = config.compress_output;
     let writer_handle = thread::spawn(move || {
-        fastq_writer_thread(rx, &r1_owned, &r2_owned, hap_counter_clone, compression_threads)
+        fastq_writer_thread(rx, &r1_owned, &r2_owned, hap_counter_clone, compression_threads, compress)
     });
 
     // Phase 3: Stream BAM and process pairs
@@ -562,10 +603,10 @@ pub fn unified_make_reads(
                             &store,
                             config,
                         ) {
-                            Some(outputs) => {
+                            Some(pairs) => {
                                 stats.pairs_with_variants += 1;
-                                for output in outputs {
-                                    tx.send(output).ok();
+                                for pair in pairs {
+                                    tx.send(pair).ok();
                                 }
                             }
                             None => {
@@ -652,7 +693,7 @@ fn process_chromosome(
     bam_path: &str,
     chrom: &str,
     store: &VariantStore,
-    tx: &Sender<HaplotypeOutput>,
+    tx: &Sender<HaplotypePair>,
     config: &UnifiedConfig,
 ) -> Result<UnifiedStats> {
     use rust_htslib::bam::Read as BamRead;
@@ -722,11 +763,11 @@ fn process_chromosome(
                         stats.pairs_kept += 1;
                     } else {
                         match process_pair(r1, r2, &r1_variants, &r2_variants, store, config) {
-                            Some(outputs) => {
+                            Some(pairs) => {
                                 stats.pairs_with_variants += 1;
-                                for output in outputs {
-                                    // Send to writer thread - only Vec<u8> data crosses threads
-                                    tx.send(output).ok();
+                                for pair in pairs {
+                                    // Send pairs to writer thread - only Vec<u8> data crosses threads
+                                    tx.send(pair).ok();
                                 }
                             }
                             None => {
@@ -760,7 +801,7 @@ fn process_chromosome(
 /// THREAD SAFETY:
 /// - Each worker thread opens its own IndexedReader (avoids rust-htslib Issue #293)
 /// - Records never cross thread boundaries
-/// - Only HaplotypeOutput (Vec<u8>) is sent via channel
+/// - Only HaplotypePair (paired Vec<u8>) is sent via channel for atomic writing
 /// - VariantStore is shared read-only via Arc
 pub fn unified_make_reads_parallel(
     bam_path: &str,
@@ -802,8 +843,8 @@ pub fn unified_make_reads_parallel(
 
     eprintln!("Processing {} chromosomes with variants in parallel...", chroms.len());
 
-    // Phase 3: Set up output channel and writer thread
-    let (tx, rx): (Sender<HaplotypeOutput>, Receiver<HaplotypeOutput>) =
+    // Phase 3: Set up output channel and writer thread (sends pairs for atomic writing)
+    let (tx, rx): (Sender<HaplotypePair>, Receiver<HaplotypePair>) =
         bounded(config.channel_buffer);
 
     let hap_counter = Arc::new(AtomicUsize::new(0));
@@ -812,8 +853,9 @@ pub fn unified_make_reads_parallel(
     let r1_owned = r1_path.to_string();
     let r2_owned = r2_path.to_string();
     let compression_threads = config.compression_threads;
+    let compress = config.compress_output;
     let writer_handle = thread::spawn(move || {
-        fastq_writer_thread(rx, &r1_owned, &r2_owned, hap_counter_clone, compression_threads)
+        fastq_writer_thread(rx, &r1_owned, &r2_owned, hap_counter_clone, compression_threads, compress)
     });
 
     // Phase 4: Process chromosomes in parallel

@@ -586,6 +586,9 @@ pub fn swap_alleles_for_chrom_multi(
     let mut bam = bam::IndexedReader::from_path(bam_path)
         .context("Failed to open BAM file")?;
 
+    // Enable parallel BGZF decompression (2 threads per chromosome worker)
+    bam.set_threads(2).ok();
+
     let mut stats = MultiSampleRemapStats::default();
 
     // Get chromosome tid

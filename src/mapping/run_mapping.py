@@ -35,6 +35,7 @@ def run_make_remap_reads_unified(
     threads: int = 8,
     compression_threads: int = 4,
     use_parallel: bool = True,
+    compress_output: bool = True,
 ) -> dict:
     """
     FAST unified single-pass pipeline for generating remap reads.
@@ -131,11 +132,14 @@ def run_make_remap_reads_unified(
         print(f"Using existing BED file: {bed_file}")
         step_prefix = "Step 1/1"
 
-    remap_fq1 = f"{out_dir}/{bam_prefix}_remap_r1.fq.gz"
-    remap_fq2 = f"{out_dir}/{bam_prefix}_remap_r2.fq.gz"
+    # Set output file extension based on compression setting
+    fq_ext = ".fq.gz" if compress_output else ".fq"
+    remap_fq1 = f"{out_dir}/{bam_prefix}_remap_r1{fq_ext}"
+    remap_fq2 = f"{out_dir}/{bam_prefix}_remap_r2{fq_ext}"
 
     # Run unified single-pass BAM processing
-    print(f"{step_prefix}: Running unified pipeline ({'parallel' if use_parallel else 'sequential'})...")
+    compress_str = "compressed" if compress_output else "uncompressed"
+    print(f"{step_prefix}: Running unified pipeline ({'parallel' if use_parallel else 'sequential'}, {compress_str})...")
 
     # Check for BAM index for parallel mode
     bai_path = f"{bam_file}.bai"
@@ -148,14 +152,16 @@ def run_make_remap_reads_unified(
             bam_file, bed_file, remap_fq1, remap_fq2,
             max_seqs=max_seqs,
             threads=threads,
-            compression_threads=compression_threads
+            compression_threads=compression_threads,
+            compress_output=compress_output
         )
     else:
         stats = _unified_sequential(
             bam_file, bed_file, remap_fq1, remap_fq2,
             max_seqs=max_seqs,
             threads=threads,
-            compression_threads=compression_threads
+            compression_threads=compression_threads,
+            compress_output=compress_output
         )
 
     print(f"\nUnified pipeline complete:")

@@ -482,7 +482,7 @@ fn filter_bam_by_variants_py(
 /// print(f"Processed {stats['pairs_processed']} pairs -> {stats['haplotypes_written']} haplotypes")
 /// ```
 #[pyfunction]
-#[pyo3(signature = (bam_path, bed_path, out_r1, out_r2, max_seqs=64, threads=8, channel_buffer=50000, compression_threads=4))]
+#[pyo3(signature = (bam_path, bed_path, out_r1, out_r2, max_seqs=64, threads=8, channel_buffer=50000, compression_threads=4, compress_output=true))]
 fn unified_make_reads_py(
     py: Python,
     bam_path: &str,
@@ -493,6 +493,7 @@ fn unified_make_reads_py(
     threads: usize,
     channel_buffer: usize,
     compression_threads: usize,
+    compress_output: bool,
 ) -> PyResult<PyObject> {
     use pyo3::types::PyDict;
 
@@ -501,6 +502,7 @@ fn unified_make_reads_py(
         max_seqs,
         channel_buffer,
         compression_threads,
+        compress_output,
     };
 
     let stats = unified_pipeline::unified_make_reads(
@@ -566,7 +568,7 @@ fn unified_make_reads_py(
 /// print(f"Processed {stats['pairs_processed']} pairs -> {stats['haplotypes_written']} haplotypes")
 /// ```
 #[pyfunction]
-#[pyo3(signature = (bam_path, bed_path, out_r1, out_r2, max_seqs=64, threads=8, channel_buffer=50000, compression_threads=4))]
+#[pyo3(signature = (bam_path, bed_path, out_r1, out_r2, max_seqs=64, threads=8, channel_buffer=50000, compression_threads=4, compress_output=true))]
 fn unified_make_reads_parallel_py(
     py: Python,
     bam_path: &str,
@@ -577,6 +579,7 @@ fn unified_make_reads_parallel_py(
     threads: usize,
     channel_buffer: usize,
     compression_threads: usize,
+    compress_output: bool,
 ) -> PyResult<PyObject> {
     use pyo3::types::PyDict;
 
@@ -593,6 +596,7 @@ fn unified_make_reads_parallel_py(
         max_seqs,
         channel_buffer,
         compression_threads,
+        compress_output,
     };
 
     let stats = unified_pipeline::unified_make_reads_parallel(
