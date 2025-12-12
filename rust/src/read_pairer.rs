@@ -79,10 +79,7 @@ impl ReadPairer {
     }
 
     /// Create a ReadPairer for a specific chromosome
-    pub fn for_chromosome(
-        bam_path: &str,
-        chrom: &str,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn for_chromosome(bam_path: &str, chrom: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let mut pairer = Self::new(bam_path)?;
         pairer.chrom = Some(chrom.to_string());
         Ok(pairer)

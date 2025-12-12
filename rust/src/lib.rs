@@ -1,20 +1,20 @@
 #![allow(non_local_definitions)]
 
-use pyo3::prelude::*;
 use pyo3::exceptions::PyRuntimeError;
+use pyo3::prelude::*;
 
 // Modules
-mod bam_counter;
-mod bam_remapper;
-mod bam_intersect;
-mod bam_filter;  // Fast BAM filtering by variant overlap (replaces samtools process_bam)
-mod cigar_utils;  // Shared CIGAR-aware position mapping utilities
-mod read_pairer;
 mod analysis;
+mod bam_counter;
+mod bam_filter; // Fast BAM filtering by variant overlap (replaces samtools process_bam)
+mod bam_intersect;
+mod bam_remapper;
+mod cigar_utils; // Shared CIGAR-aware position mapping utilities
 mod mapping_filter;
-mod vcf_to_bed;
 mod multi_sample;
-mod unified_pipeline;  // Single-pass unified make-reads (5x faster)
+mod read_pairer;
+mod unified_pipeline;
+mod vcf_to_bed; // Single-pass unified make-reads (5x faster)
 
 use bam_counter::BamCounter;
 use mapping_filter::filter_bam_wasp;
@@ -119,14 +119,13 @@ fn remap_chromosome(
         .map_err(|e| PyRuntimeError::new_err(format!("Failed to parse BED: {}", e)))?;
 
     // Process chromosome
-    let (haplotypes, stats) = bam_remapper::swap_alleles_for_chrom(
-        bam_path, &variants, chrom, &config
-    ).map_err(|e| PyRuntimeError::new_err(format!("Failed to swap alleles: {}", e)))?;
+    let (haplotypes, stats) =
+        bam_remapper::swap_alleles_for_chrom(bam_path, &variants, chrom, &config)
+            .map_err(|e| PyRuntimeError::new_err(format!("Failed to swap alleles: {}", e)))?;
 
     // Write FASTQ files
-    let (_r1_count, _r2_count) = bam_remapper::write_fastq_pair(
-        &haplotypes, out_r1, out_r2
-    ).map_err(|e| PyRuntimeError::new_err(format!("Failed to write FASTQ: {}", e)))?;
+    let (_r1_count, _r2_count) = bam_remapper::write_fastq_pair(&haplotypes, out_r1, out_r2)
+        .map_err(|e| PyRuntimeError::new_err(format!("Failed to write FASTQ: {}", e)))?;
 
     Ok((stats.pairs_processed, stats.haplotypes_generated))
 }
@@ -171,12 +170,22 @@ fn remap_all_chromosomes(
     // Report chromosome count
     let num_chroms = variants_by_chrom.len();
     let total_reads: usize = variants_by_chrom.values().map(|v| v.len()).sum();
-    eprintln!("Parsed {} chromosomes with {} reads from intersect file", num_chroms, total_reads);
+    eprintln!(
+        "Parsed {} chromosomes with {} reads from intersect file",
+        num_chroms, total_reads
+    );
 
     let stats = if parallel {
         // Use streaming parallel version with crossbeam channels
-        let effective_threads = if num_threads > 0 { num_threads } else { rayon::current_num_threads() };
-        eprintln!("Processing {} chromosomes in parallel ({} threads) with streaming writes...", num_chroms, effective_threads);
+        let effective_threads = if num_threads > 0 {
+            num_threads
+        } else {
+            rayon::current_num_threads()
+        };
+        eprintln!(
+            "Processing {} chromosomes in parallel ({} threads) with streaming writes...",
+            num_chroms, effective_threads
+        );
 
         bam_remapper::process_and_write_parallel(
             bam_path,
@@ -184,12 +193,16 @@ fn remap_all_chromosomes(
             &config,
             out_r1,
             out_r2,
-            num_threads
-        ).map_err(|e| PyRuntimeError::new_err(format!("Failed to process chromosomes: {}", e)))?
+            num_threads,
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("Failed to process chromosomes: {}", e)))?
     } else {
         eprintln!("Processing {} chromosomes sequentially...", num_chroms);
-        let (haplotypes, stats) = bam_remapper::process_all_chromosomes_sequential(bam_path, &variants_by_chrom, &config)
-            .map_err(|e| PyRuntimeError::new_err(format!("Failed to process chromosomes: {}", e)))?;
+        let (haplotypes, stats) =
+            bam_remapper::process_all_chromosomes_sequential(bam_path, &variants_by_chrom, &config)
+                .map_err(|e| {
+                    PyRuntimeError::new_err(format!("Failed to process chromosomes: {}", e))
+                })?;
 
         // Write FASTQ output files
         bam_remapper::write_fastq_pair(&haplotypes, out_r1, out_r2)
@@ -252,7 +265,12 @@ fn analyze_imbalance(
     let analysis_method = match method {
         "single" => analysis::AnalysisMethod::Single,
         "linear" => analysis::AnalysisMethod::Linear,
-        _ => return Err(PyRuntimeError::new_err(format!("Unknown method: {}", method))),
+        _ => {
+            return Err(PyRuntimeError::new_err(format!(
+                "Unknown method: {}",
+                method
+            )))
+        }
     };
 
     let config = analysis::AnalysisConfig {
@@ -270,7 +288,8 @@ fn analyze_imbalance(
     let mut header_seen = false;
 
     for line in reader.lines() {
-        let line = line.map_err(|e| PyRuntimeError::new_err(format!("Failed to read line: {}", e)))?;
+        let line =
+            line.map_err(|e| PyRuntimeError::new_err(format!("Failed to read line: {}", e)))?;
 
         if !header_seen {
             header_seen = true;
@@ -284,15 +303,18 @@ fn analyze_imbalance(
 
         // Parse fields: chrom, pos, ref, alt, region, ref_count, alt_count, other_count
         let chrom = fields[0].to_string();
-        let pos = fields[1].parse::<u32>()
+        let pos = fields[1]
+            .parse::<u32>()
             .map_err(|e| PyRuntimeError::new_err(format!("Invalid pos: {}", e)))?;
-        let ref_count = fields[5].parse::<u32>()
+        let ref_count = fields[5]
+            .parse::<u32>()
             .map_err(|e| PyRuntimeError::new_err(format!("Invalid ref_count: {}", e)))?;
-        let alt_count = fields[6].parse::<u32>()
+        let alt_count = fields[6]
+            .parse::<u32>()
             .map_err(|e| PyRuntimeError::new_err(format!("Invalid alt_count: {}", e)))?;
 
         // Create region identifier (chrom_pos_pos+1 format to match Python)
-        let region = format!("{}_{}_{}",  chrom, pos, pos + 1);
+        let region = format!("{}_{}_{}", chrom, pos, pos + 1);
 
         variants.push(analysis::VariantCounts {
             chrom,
@@ -437,7 +459,11 @@ fn filter_bam_by_variants_py(
     )
     .map_err(|e| PyRuntimeError::new_err(format!("BAM filter failed: {}", e)))?;
 
-    Ok((stats.remap_reads, stats.keep_reads, stats.unique_remap_names))
+    Ok((
+        stats.remap_reads,
+        stats.keep_reads,
+        stats.unique_remap_names,
+    ))
 }
 
 // ============================================================================
@@ -482,7 +508,7 @@ fn filter_bam_by_variants_py(
 /// print(f"Processed {stats['pairs_processed']} pairs -> {stats['haplotypes_written']} haplotypes")
 /// ```
 #[pyfunction]
-#[pyo3(signature = (bam_path, bed_path, out_r1, out_r2, max_seqs=64, threads=8, channel_buffer=50000, compression_threads=4, compress_output=true))]
+#[pyo3(signature = (bam_path, bed_path, out_r1, out_r2, max_seqs=64, threads=8, channel_buffer=50000, compression_threads=4, compress_output=true, indel_mode=false, max_indel_size=50, keep_no_flip_names_path=None, remap_names_path=None))]
 fn unified_make_reads_py(
     py: Python,
     bam_path: &str,
@@ -494,6 +520,10 @@ fn unified_make_reads_py(
     channel_buffer: usize,
     compression_threads: usize,
     compress_output: bool,
+    indel_mode: bool,
+    max_indel_size: usize,
+    keep_no_flip_names_path: Option<String>,
+    remap_names_path: Option<String>,
 ) -> PyResult<PyObject> {
     use pyo3::types::PyDict;
 
@@ -503,24 +533,26 @@ fn unified_make_reads_py(
         channel_buffer,
         compression_threads,
         compress_output,
+        indel_mode,
+        max_indel_size,
+        keep_no_flip_names_path,
+        remap_names_path,
     };
 
-    let stats = unified_pipeline::unified_make_reads(
-        bam_path,
-        bed_path,
-        out_r1,
-        out_r2,
-        &config,
-    )
-    .map_err(|e| PyRuntimeError::new_err(format!("Unified pipeline failed: {}", e)))?;
+    let stats = unified_pipeline::unified_make_reads(bam_path, bed_path, out_r1, out_r2, &config)
+        .map_err(|e| PyRuntimeError::new_err(format!("Unified pipeline failed: {}", e)))?;
 
     // Return stats as Python dict
     let py_dict = PyDict::new(py);
     py_dict.set_item("total_reads", stats.total_reads)?;
     py_dict.set_item("pairs_processed", stats.pairs_processed)?;
     py_dict.set_item("pairs_with_variants", stats.pairs_with_variants)?;
+    py_dict.set_item("pairs_with_snvs_only", stats.pairs_with_snvs_only)?;
+    py_dict.set_item("pairs_with_indels_only", stats.pairs_with_indels_only)?;
+    py_dict.set_item("pairs_with_snvs_and_indels", stats.pairs_with_snvs_and_indels)?;
     py_dict.set_item("haplotypes_written", stats.haplotypes_written)?;
     py_dict.set_item("pairs_kept", stats.pairs_kept)?;
+    py_dict.set_item("pairs_keep_no_flip", stats.pairs_keep_no_flip)?; // NEW: variant overlap but no flip
     py_dict.set_item("pairs_skipped_unmappable", stats.pairs_skipped_unmappable)?;
     py_dict.set_item("pairs_haplotype_failed", stats.pairs_haplotype_failed)?;
     py_dict.set_item("orphan_reads", stats.orphan_reads)?;
@@ -568,7 +600,7 @@ fn unified_make_reads_py(
 /// print(f"Processed {stats['pairs_processed']} pairs -> {stats['haplotypes_written']} haplotypes")
 /// ```
 #[pyfunction]
-#[pyo3(signature = (bam_path, bed_path, out_r1, out_r2, max_seqs=64, threads=8, channel_buffer=50000, compression_threads=4, compress_output=true))]
+#[pyo3(signature = (bam_path, bed_path, out_r1, out_r2, max_seqs=64, threads=8, channel_buffer=50000, compression_threads=4, compress_output=true, indel_mode=false, max_indel_size=50, keep_no_flip_names_path=None, remap_names_path=None))]
 fn unified_make_reads_parallel_py(
     py: Python,
     bam_path: &str,
@@ -580,6 +612,10 @@ fn unified_make_reads_parallel_py(
     channel_buffer: usize,
     compression_threads: usize,
     compress_output: bool,
+    indel_mode: bool,
+    max_indel_size: usize,
+    keep_no_flip_names_path: Option<String>,
+    remap_names_path: Option<String>,
 ) -> PyResult<PyObject> {
     use pyo3::types::PyDict;
 
@@ -597,24 +633,29 @@ fn unified_make_reads_parallel_py(
         channel_buffer,
         compression_threads,
         compress_output,
+        indel_mode,
+        max_indel_size,
+        keep_no_flip_names_path,
+        remap_names_path,
     };
 
-    let stats = unified_pipeline::unified_make_reads_parallel(
-        bam_path,
-        bed_path,
-        out_r1,
-        out_r2,
-        &config,
-    )
-    .map_err(|e| PyRuntimeError::new_err(format!("Parallel unified pipeline failed: {}", e)))?;
+    let stats =
+        unified_pipeline::unified_make_reads_parallel(bam_path, bed_path, out_r1, out_r2, &config)
+            .map_err(|e| {
+                PyRuntimeError::new_err(format!("Parallel unified pipeline failed: {}", e))
+            })?;
 
     // Return stats as Python dict
     let py_dict = PyDict::new(py);
     py_dict.set_item("total_reads", stats.total_reads)?;
     py_dict.set_item("pairs_processed", stats.pairs_processed)?;
     py_dict.set_item("pairs_with_variants", stats.pairs_with_variants)?;
+    py_dict.set_item("pairs_with_snvs_only", stats.pairs_with_snvs_only)?;
+    py_dict.set_item("pairs_with_indels_only", stats.pairs_with_indels_only)?;
+    py_dict.set_item("pairs_with_snvs_and_indels", stats.pairs_with_snvs_and_indels)?;
     py_dict.set_item("haplotypes_written", stats.haplotypes_written)?;
     py_dict.set_item("pairs_kept", stats.pairs_kept)?;
+    py_dict.set_item("pairs_keep_no_flip", stats.pairs_keep_no_flip)?; // NEW: variant overlap but no flip
     py_dict.set_item("pairs_skipped_unmappable", stats.pairs_skipped_unmappable)?;
     py_dict.set_item("pairs_haplotype_failed", stats.pairs_haplotype_failed)?;
     py_dict.set_item("orphan_reads", stats.orphan_reads)?;
@@ -793,8 +834,9 @@ fn remap_chromosome_multi(
 
     // Process chromosome
     let stats = multi_sample::swap_alleles_for_chrom_multi(
-        bam_path, &variants, chrom, out_r1, out_r2, max_seqs
-    ).map_err(|e| PyRuntimeError::new_err(format!("Failed to swap alleles: {}", e)))?;
+        bam_path, &variants, chrom, out_r1, out_r2, max_seqs,
+    )
+    .map_err(|e| PyRuntimeError::new_err(format!("Failed to swap alleles: {}", e)))?;
 
     Ok((stats.pairs_processed, stats.haplotypes_generated))
 }
@@ -853,6 +895,10 @@ fn wasp2_rust(_py: Python, m: &PyModule) -> PyResult<()> {
 
     // Mapping filter (WASP remap filter)
     m.add_function(wrap_pyfunction!(filter_bam_wasp, m)?)?;
+    // Mapping filter with explicit sidecar argument (CIGAR-aware expected positions)
+    m.add_function(wrap_pyfunction!(filter_bam_wasp_with_sidecar, m)?)?;
+    // Mapping filter with optional expected sidecar (explicit binding to ensure availability)
+    m.add_function(wrap_pyfunction!(filter_bam_wasp_with_sidecar, m)?)?;
 
     // BAM filtering by variant overlap (replaces samtools process_bam, 4-5x faster)
     m.add_function(wrap_pyfunction!(filter_bam_by_variants_py, m)?)?;
@@ -867,4 +913,27 @@ fn wasp2_rust(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(analyze_imbalance, m)?)?;
 
     Ok(())
+}
+
+/// Explicit binding exposing expected_sidecar argument (CIGAR-aware expected positions)
+#[pyfunction]
+#[pyo3(signature = (to_remap_bam, remapped_bam, remap_keep_bam, keep_read_file=None, threads=1, same_locus_slop=0, expected_sidecar=None))]
+fn filter_bam_wasp_with_sidecar(
+    to_remap_bam: String,
+    remapped_bam: String,
+    remap_keep_bam: String,
+    keep_read_file: Option<String>,
+    threads: usize,
+    same_locus_slop: i64,
+    expected_sidecar: Option<String>,
+) -> PyResult<(u64, u64, u64)> {
+    mapping_filter::filter_bam_wasp(
+        to_remap_bam,
+        remapped_bam,
+        remap_keep_bam,
+        keep_read_file,
+        threads,
+        same_locus_slop,
+        expected_sidecar,
+    )
 }

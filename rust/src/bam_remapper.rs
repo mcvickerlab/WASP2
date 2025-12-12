@@ -15,6 +15,7 @@
 //! This properly handles reads with insertions/deletions in their alignment.
 
 use anyhow::{Context, Result};
+use rust_htslib::bam::ext::BamRecordExtensions;
 use rust_htslib::{bam, bam::Read as BamRead};
 use rustc_hash::FxHashMap;
 use std::fs::File;
@@ -99,6 +100,68 @@ pub struct RemapStats {
 }
 
 // ============================================================================
+// INDEL Length-Preserving Trim Structures (Phase 1 of INDEL fix)
+// ============================================================================
+
+/// Represents a single trim combination for length-preserving INDEL handling
+///
+/// When processing INDELs, the swapped allele may change the read length.
+/// For an N-bp insertion, we need to trim N bases to restore original length.
+/// This struct represents one way to distribute the trim between left and right ends.
+///
+/// # Example
+/// For a 2bp insertion, we generate 3 combinations:
+/// - TrimCombination { trim_left: 0, trim_right: 2 }  // All from right
+/// - TrimCombination { trim_left: 1, trim_right: 1 }  // Split evenly
+/// - TrimCombination { trim_left: 2, trim_right: 0 }  // All from left
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct TrimCombination {
+    /// Bases to trim from left (5') end of the read
+    pub trim_left: usize,
+    /// Bases to trim from right (3') end of the read
+    pub trim_right: usize,
+}
+
+impl TrimCombination {
+    /// Create a new trim combination
+    pub fn new(trim_left: usize, trim_right: usize) -> Self {
+        Self {
+            trim_left,
+            trim_right,
+        }
+    }
+
+    /// Total bases trimmed (should equal the INDEL delta)
+    pub fn total_trim(&self) -> usize {
+        self.trim_left + self.trim_right
+    }
+
+    /// Check if this is an identity (no-op) trim
+    pub fn is_identity(&self) -> bool {
+        self.trim_left == 0 && self.trim_right == 0
+    }
+}
+
+/// Configuration for INDEL-aware remapping
+#[derive(Debug, Clone)]
+pub struct IndelConfig {
+    /// Maximum INDEL size to process (default: 50bp)
+    /// INDELs larger than this are skipped to avoid combinatorial explosion
+    pub max_indel_size: usize,
+    /// Whether to skip reads with large INDELs (vs failing)
+    pub skip_large_indels: bool,
+}
+
+impl Default for IndelConfig {
+    fn default() -> Self {
+        Self {
+            max_indel_size: 50,
+            skip_large_indels: true,
+        }
+    }
+}
+
+// ============================================================================
 // Main API Functions
 // ============================================================================
 
@@ -125,8 +188,8 @@ pub struct RemapStats {
 pub fn parse_intersect_bed<P: AsRef<Path>>(
     intersect_bed: P,
 ) -> Result<FxHashMap<Vec<u8>, Vec<VariantSpan>>> {
-    let file = File::open(intersect_bed.as_ref())
-        .context("Failed to open intersection BED file")?;
+    let file =
+        File::open(intersect_bed.as_ref()).context("Failed to open intersection BED file")?;
     let reader = BufReader::new(file);
 
     // First pass: collect all spans
@@ -145,14 +208,18 @@ pub fn parse_intersect_bed<P: AsRef<Path>>(
 
         // Parse fields (matching Python's column selection)
         let chrom = fields[0].to_string(); // Read chromosome
-        let start = fields[1].parse::<u32>()
+        let start = fields[1]
+            .parse::<u32>()
             .context("Failed to parse start position")?;
-        let stop = fields[2].parse::<u32>()
+        let stop = fields[2]
+            .parse::<u32>()
             .context("Failed to parse stop position")?;
         let read_with_mate = fields[3]; // e.g., "SRR891276.10516353/2"
-        let vcf_start = fields[7].parse::<u32>()
+        let vcf_start = fields[7]
+            .parse::<u32>()
             .context("Failed to parse VCF start position")?;
-        let vcf_stop = fields[8].parse::<u32>()
+        let vcf_stop = fields[8]
+            .parse::<u32>()
             .context("Failed to parse VCF stop position")?;
         let genotype = fields[11]; // e.g., "C|T"
 
@@ -162,7 +229,8 @@ pub fn parse_intersect_bed<P: AsRef<Path>>(
             continue; // Skip malformed read names
         }
         let read_name = parts[0].as_bytes().to_vec();
-        let mate = parts[1].parse::<u8>()
+        let mate = parts[1]
+            .parse::<u8>()
             .context("Failed to parse mate number")?;
 
         // Parse phased genotype
@@ -189,7 +257,8 @@ pub fn parse_intersect_bed<P: AsRef<Path>>(
 
     // Deduplicate: Python does df.unique(["chrom", "read", "mate", "start", "stop"], keep="first")
     // We'll use a HashSet to track seen combinations
-    let mut seen: std::collections::HashSet<(Vec<u8>, String, u32, u32, u8)> = std::collections::HashSet::new();
+    let mut seen: std::collections::HashSet<(Vec<u8>, String, u32, u32, u8)> =
+        std::collections::HashSet::new();
     let mut deduped_spans: Vec<(Vec<u8>, VariantSpan)> = Vec::new();
 
     for (read_name, span) in all_spans {
@@ -210,9 +279,10 @@ pub fn parse_intersect_bed<P: AsRef<Path>>(
     // Group by read name
     let mut variants: FxHashMap<Vec<u8>, Vec<VariantSpan>> = FxHashMap::default();
     for (read_name, span) in deduped_spans {
-        variants.entry(read_name)
-               .or_insert_with(Vec::new)
-               .push(span);
+        variants
+            .entry(read_name)
+            .or_insert_with(Vec::new)
+            .push(span);
     }
 
     Ok(variants)
@@ -232,8 +302,8 @@ pub fn parse_intersect_bed<P: AsRef<Path>>(
 pub fn parse_intersect_bed_by_chrom<P: AsRef<Path>>(
     intersect_bed: P,
 ) -> Result<FxHashMap<String, FxHashMap<Vec<u8>, Vec<VariantSpan>>>> {
-    let file = File::open(intersect_bed.as_ref())
-        .context("Failed to open intersection BED file")?;
+    let file =
+        File::open(intersect_bed.as_ref()).context("Failed to open intersection BED file")?;
     let reader = BufReader::new(file);
 
     // First pass: collect all spans with chromosome info
@@ -251,14 +321,18 @@ pub fn parse_intersect_bed_by_chrom<P: AsRef<Path>>(
         }
 
         let chrom = fields[0].to_string();
-        let start = fields[1].parse::<u32>()
+        let start = fields[1]
+            .parse::<u32>()
             .context("Failed to parse start position")?;
-        let stop = fields[2].parse::<u32>()
+        let stop = fields[2]
+            .parse::<u32>()
             .context("Failed to parse stop position")?;
         let read_with_mate = fields[3];
-        let vcf_start = fields[7].parse::<u32>()
+        let vcf_start = fields[7]
+            .parse::<u32>()
             .context("Failed to parse VCF start position")?;
-        let vcf_stop = fields[8].parse::<u32>()
+        let vcf_stop = fields[8]
+            .parse::<u32>()
             .context("Failed to parse VCF stop position")?;
         let genotype = fields[11];
 
@@ -267,7 +341,8 @@ pub fn parse_intersect_bed_by_chrom<P: AsRef<Path>>(
             continue;
         }
         let read_name = parts[0].as_bytes().to_vec();
-        let mate = parts[1].parse::<u8>()
+        let mate = parts[1]
+            .parse::<u8>()
             .context("Failed to parse mate number")?;
 
         let gt_parts: Vec<&str> = genotype.split('|').collect();
@@ -349,8 +424,7 @@ pub fn swap_alleles_for_chrom(
     chrom: &str,
     config: &RemapConfig,
 ) -> Result<(Vec<HaplotypeRead>, RemapStats)> {
-    let mut bam = bam::IndexedReader::from_path(bam_path)
-        .context("Failed to open BAM file")?;
+    let mut bam = bam::IndexedReader::from_path(bam_path).context("Failed to open BAM file")?;
 
     // Enable parallel BGZF decompression (2 threads per chromosome worker)
     bam.set_threads(2).ok();
@@ -361,7 +435,8 @@ pub fn swap_alleles_for_chrom(
     // Fetch reads for this chromosome
     // Use tid and fetch entire chromosome
     let header = bam.header().clone();
-    let tid = header.tid(chrom.as_bytes())
+    let tid = header
+        .tid(chrom.as_bytes())
         .ok_or_else(|| anyhow::anyhow!("Chromosome {} not found in BAM", chrom))?;
 
     bam.fetch(tid as i32)
@@ -394,7 +469,9 @@ pub fn swap_alleles_for_chrom(
             };
 
             // Process this pair
-            if let Some(pair_results) = process_read_pair(&read1, &read2, variants, config, &mut stats)? {
+            if let Some(pair_results) =
+                process_read_pair(&read1, &read2, variants, config, &mut stats)?
+            {
                 results.extend(pair_results);
             }
         } else {
@@ -431,15 +508,9 @@ fn process_read_pair(
     stats.pairs_with_variants += 1;
 
     // Separate variants by mate
-    let r1_variants: Vec<&VariantSpan> = read_variants
-        .iter()
-        .filter(|v| v.mate == 1)
-        .collect();
+    let r1_variants: Vec<&VariantSpan> = read_variants.iter().filter(|v| v.mate == 1).collect();
 
-    let r2_variants: Vec<&VariantSpan> = read_variants
-        .iter()
-        .filter(|v| v.mate == 2)
-        .collect();
+    let r2_variants: Vec<&VariantSpan> = read_variants.iter().filter(|v| v.mate == 2).collect();
 
     // Generate haplotype sequences for R1 (with quality scores)
     let r1_haps = if !r1_variants.is_empty() {
@@ -475,7 +546,9 @@ fn process_read_pair(
     // Only keep pairs where at least one read differs from original
     let mut haplotype_reads = Vec::new();
 
-    for (hap_idx, ((r1_seq, r1_qual), (r2_seq, r2_qual))) in r1_haps.iter().zip(r2_haps.iter()).enumerate() {
+    for (hap_idx, ((r1_seq, r1_qual), (r2_seq, r2_qual))) in
+        r1_haps.iter().zip(r2_haps.iter()).enumerate()
+    {
         // Skip if both sequences are unchanged
         if r1_seq == &r1_original && r2_seq == &r2_original {
             continue;
@@ -496,7 +569,7 @@ fn process_read_pair(
         haplotype_reads.push(HaplotypeRead {
             name: r1_name,
             sequence: r1_seq.clone(),
-            quals: r1_qual.clone(),  // NOW USES INDEL-ADJUSTED QUALITIES
+            quals: r1_qual.clone(), // NOW USES INDEL-ADJUSTED QUALITIES
             original_pos: (r1_pos, r2_pos),
             haplotype: (hap_idx + 1) as u8,
         });
@@ -506,7 +579,7 @@ fn process_read_pair(
         haplotype_reads.push(HaplotypeRead {
             name: r2_name,
             sequence: r2_seq.clone(),
-            quals: r2_qual.clone(),  // NOW USES INDEL-ADJUSTED QUALITIES
+            quals: r2_qual.clone(), // NOW USES INDEL-ADJUSTED QUALITIES
             original_pos: (r1_pos, r2_pos),
             haplotype: (hap_idx + 1) as u8,
         });
@@ -579,6 +652,11 @@ pub fn generate_haplotype_seqs(
                 None => return Ok(None), // Variant overlaps unmapped region, skip this read
             };
 
+            // Skip reads where variant positions are inverted (complex CIGAR or overlapping variants)
+            if read_start > read_stop {
+                return Ok(None);
+            }
+
             seq_pos.push(read_start);
             seq_pos.push(read_stop);
             qual_pos.push(read_start);
@@ -603,6 +681,11 @@ pub fn generate_haplotype_seqs(
                 None => return Ok(None), // Variant overlaps unmapped region, skip this read
             };
 
+            // Skip reads where variant positions are inverted (complex CIGAR or overlapping variants)
+            if read_start > read_stop {
+                return Ok(None);
+            }
+
             positions.push(read_start);
             positions.push(read_stop + 1);
         }
@@ -610,6 +693,18 @@ pub fn generate_haplotype_seqs(
         positions.push(original_seq.len());
         (positions.clone(), positions)
     };
+
+    // Validate positions are monotonically increasing (overlapping variants or complex CIGARs can cause issues)
+    for i in 1..split_positions.len() {
+        if split_positions[i] < split_positions[i - 1] {
+            return Ok(None); // Skip reads with overlapping or out-of-order variant positions
+        }
+    }
+    for i in 1..split_qual_positions.len() {
+        if split_qual_positions[i] < split_qual_positions[i - 1] {
+            return Ok(None);
+        }
+    }
 
     // Split sequence and quality into segments
     let mut split_seq: Vec<&[u8]> = Vec::new();
@@ -654,7 +749,11 @@ pub fn generate_haplotype_seqs(
                 // Insertion - fill extra qualities
                 let extra_len = allele_len - orig_len;
                 let left_qual = if i > 0 { split_qual[i - 1] } else { &[] };
-                let right_qual = if i < split_qual.len() - 1 { split_qual[i + 1] } else { &[] };
+                let right_qual = if i < split_qual.len() - 1 {
+                    split_qual[i + 1]
+                } else {
+                    &[]
+                };
 
                 let extra_quals = fill_insertion_quals(extra_len, left_qual, right_qual, 30);
                 let mut combined = split_qual[i].to_vec();
@@ -695,7 +794,11 @@ pub fn generate_haplotype_seqs(
                 // Insertion - fill extra qualities
                 let extra_len = allele_len - orig_len;
                 let left_qual = if i > 0 { split_qual[i - 1] } else { &[] };
-                let right_qual = if i < split_qual.len() - 1 { split_qual[i + 1] } else { &[] };
+                let right_qual = if i < split_qual.len() - 1 {
+                    split_qual[i + 1]
+                } else {
+                    &[]
+                };
 
                 let extra_quals = fill_insertion_quals(extra_len, left_qual, right_qual, 30);
                 let mut combined = split_qual[i].to_vec();
@@ -712,6 +815,202 @@ pub fn generate_haplotype_seqs(
     let hap2_qual: Vec<u8> = hap2_qual_parts.into_iter().flatten().collect();
 
     Ok(Some(vec![(hap1_seq, hap1_qual), (hap2_seq, hap2_qual)]))
+}
+
+// ============================================================================
+// INDEL Length-Preserving Trim Functions (Phase 2 of INDEL fix)
+// ============================================================================
+
+/// Generate all valid trim combinations for a given net length change
+///
+/// For an N-bp insertion (delta > 0), we need to trim N bases total.
+/// Generates N+1 combinations: (0,N), (1,N-1), ..., (N,0)
+///
+/// # Arguments
+/// * `indel_delta` - Net length change (positive = insertion bytes to trim)
+/// * `read_len` - Original read length (to validate trim doesn't exceed)
+///
+/// # Returns
+/// Vector of TrimCombination structs
+///
+/// # Examples
+/// ```
+/// let combos = generate_trim_combinations(2, 51);
+/// assert_eq!(combos.len(), 3);  // (0,2), (1,1), (2,0)
+/// ```
+pub fn generate_trim_combinations(indel_delta: i32, read_len: usize) -> Vec<TrimCombination> {
+    if indel_delta <= 0 {
+        // Deletion or SNP: no trim needed, single "identity" combination
+        return vec![TrimCombination::new(0, 0)];
+    }
+
+    let trim_needed = indel_delta as usize;
+
+    // Safety: don't trim more than half the read from either side
+    let max_trim_per_side = read_len / 2;
+
+    let mut combinations = Vec::with_capacity(trim_needed + 1);
+
+    for left_trim in 0..=trim_needed {
+        let right_trim = trim_needed - left_trim;
+
+        // Validate this combination is feasible (don't trim too much from either side)
+        if left_trim <= max_trim_per_side && right_trim <= max_trim_per_side {
+            combinations.push(TrimCombination::new(left_trim, right_trim));
+        }
+    }
+
+    // Fallback for very large indels where no combination works
+    if combinations.is_empty() {
+        // Fall back to splitting evenly
+        let half = trim_needed / 2;
+        let remainder = trim_needed % 2;
+        combinations.push(TrimCombination::new(half, half + remainder));
+    }
+
+    combinations
+}
+
+/// Apply trim combination to sequence and quality scores
+///
+/// Trims the extended sequence back to original length for insertions,
+/// or pads with N's for deletions (to maintain consistent length).
+///
+/// # Arguments
+/// * `seq` - The (possibly extended) sequence after allele swapping
+/// * `qual` - The quality scores corresponding to seq
+/// * `original_len` - The original read length we want to restore
+/// * `trim` - Which trim combination to apply
+///
+/// # Returns
+/// Tuple of (trimmed_sequence, trimmed_qualities) both with length = original_len
+pub fn apply_trim_combination(
+    seq: &[u8],
+    qual: &[u8],
+    original_len: usize,
+    trim: &TrimCombination,
+) -> (Vec<u8>, Vec<u8>) {
+    let seq_len = seq.len();
+
+    if seq_len <= original_len {
+        // Deletion case: sequence is shorter or equal to original
+        // Pad with N's to restore original length
+        let mut padded_seq = seq.to_vec();
+        let mut padded_qual = qual.to_vec();
+
+        while padded_seq.len() < original_len {
+            padded_seq.push(b'N');
+            padded_qual.push(0); // Quality 0 for padded bases
+        }
+        return (padded_seq, padded_qual);
+    }
+
+    // Insertion case: sequence is longer than original, need to trim
+    // Calculate start and end indices after trimming
+    let start = trim.trim_left.min(seq_len);
+    let end = seq_len.saturating_sub(trim.trim_right);
+    let end = end.max(start); // Ensure end >= start
+
+    // Extract the trimmed region
+    let trimmed_seq: Vec<u8> = seq[start..end].to_vec();
+    let trimmed_qual: Vec<u8> = qual[start..end.min(qual.len())].to_vec();
+
+    // Ensure exact length (should already be correct, but safety check)
+    let mut final_seq = trimmed_seq;
+    let mut final_qual = trimmed_qual;
+
+    final_seq.truncate(original_len);
+    final_qual.truncate(original_len);
+
+    // Pad if somehow still short (shouldn't happen with correct trim values)
+    while final_seq.len() < original_len {
+        final_seq.push(b'N');
+    }
+    while final_qual.len() < original_len {
+        final_qual.push(0);
+    }
+
+    (final_seq, final_qual)
+}
+
+/// Calculate the INDEL delta (length change) for a haplotype sequence
+///
+/// # Arguments
+/// * `hap_seq_len` - Length of the generated haplotype sequence
+/// * `original_len` - Original read length
+///
+/// # Returns
+/// Positive value for insertions (need to trim), negative for deletions, 0 for SNPs
+#[inline]
+pub fn calculate_indel_delta(hap_seq_len: usize, original_len: usize) -> i32 {
+    hap_seq_len as i32 - original_len as i32
+}
+
+/// Generate haplotype sequences with trim combinations for length preservation
+///
+/// This is the INDEL-aware version that maintains original read length.
+/// For each raw haplotype, generates multiple trimmed versions if the sequence
+/// was extended by an insertion.
+///
+/// # Arguments
+/// * `read` - BAM record
+/// * `variants` - Variants overlapping this read
+/// * `config` - Remapping configuration
+/// * `indel_config` - INDEL handling configuration
+///
+/// # Returns
+/// `Ok(Some(vec))` - Vector of (sequence, qualities, trim_combo_id) tuples
+/// `Ok(None)` - Read should be skipped (unmappable variant position or too large INDEL)
+pub fn generate_haplotype_seqs_with_trims(
+    read: &bam::Record,
+    variants: &[&VariantSpan],
+    config: &RemapConfig,
+    indel_config: &IndelConfig,
+) -> Result<Option<Vec<(Vec<u8>, Vec<u8>, u16)>>> {
+    let original_len = read.seq().len();
+
+    // Check for oversized INDELs
+    for variant in variants {
+        let ref_len = (variant.vcf_stop - variant.vcf_start) as usize;
+        let max_allele_len = variant.hap1.len().max(variant.hap2.len());
+        let indel_size = (max_allele_len as i32 - ref_len as i32).unsigned_abs() as usize;
+
+        if indel_size > indel_config.max_indel_size {
+            if indel_config.skip_large_indels {
+                return Ok(None); // Skip this read
+            }
+        }
+    }
+
+    // First, generate raw (potentially extended) haplotype sequences
+    let raw_haps = match generate_haplotype_seqs(read, variants, config)? {
+        Some(h) => h,
+        None => return Ok(None),
+    };
+
+    let mut result: Vec<(Vec<u8>, Vec<u8>, u16)> = Vec::new();
+
+    for (hap_idx, (raw_seq, raw_qual)) in raw_haps.iter().enumerate() {
+        let indel_delta = calculate_indel_delta(raw_seq.len(), original_len);
+
+        let trim_combos = generate_trim_combinations(indel_delta, original_len);
+
+        for (combo_idx, trim) in trim_combos.iter().enumerate() {
+            let (trimmed_seq, trimmed_qual) =
+                apply_trim_combination(raw_seq, raw_qual, original_len, trim);
+
+            // Encode: hap_idx * 1000 + combo_idx (allows up to 1000 combos per haplotype)
+            let trim_combo_id = (hap_idx as u16) * 1000 + (combo_idx as u16);
+
+            result.push((trimmed_seq, trimmed_qual, trim_combo_id));
+        }
+    }
+
+    if result.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(result))
+    }
 }
 
 /// Write haplotype reads to FASTQ files (paired-end)
@@ -731,10 +1030,10 @@ pub fn write_fastq_pair<P: AsRef<Path>>(
     use std::io::Write as IoWrite;
 
     let mut r1_file = std::io::BufWriter::new(
-        File::create(r1_path.as_ref()).context("Failed to create R1 FASTQ")?
+        File::create(r1_path.as_ref()).context("Failed to create R1 FASTQ")?,
     );
     let mut r2_file = std::io::BufWriter::new(
-        File::create(r2_path.as_ref()).context("Failed to create R2 FASTQ")?
+        File::create(r2_path.as_ref()).context("Failed to create R2 FASTQ")?,
     );
 
     let mut r1_count = 0;
@@ -757,11 +1056,13 @@ pub fn write_fastq_pair<P: AsRef<Path>>(
         );
 
         if is_r1 {
-            r1_file.write_all(fastq_entry.as_bytes())
+            r1_file
+                .write_all(fastq_entry.as_bytes())
                 .context("Failed to write R1 FASTQ entry")?;
             r1_count += 1;
         } else {
-            r2_file.write_all(fastq_entry.as_bytes())
+            r2_file
+                .write_all(fastq_entry.as_bytes())
                 .context("Failed to write R2 FASTQ entry")?;
             r2_count += 1;
         }
@@ -894,10 +1195,10 @@ pub fn process_and_write_parallel<P: AsRef<std::path::Path>>(
     // Spawn writer thread (consumer)
     let writer_handle = thread::spawn(move || -> Result<(usize, usize)> {
         let mut r1_file = std::io::BufWriter::new(
-            std::fs::File::create(&r1_path_str).context("Failed to create R1 FASTQ")?
+            std::fs::File::create(&r1_path_str).context("Failed to create R1 FASTQ")?,
         );
         let mut r2_file = std::io::BufWriter::new(
-            std::fs::File::create(&r2_path_str).context("Failed to create R2 FASTQ")?
+            std::fs::File::create(&r2_path_str).context("Failed to create R2 FASTQ")?,
         );
 
         let mut r1_count = 0;
@@ -916,11 +1217,13 @@ pub fn process_and_write_parallel<P: AsRef<std::path::Path>>(
             );
 
             if is_r1 {
-                r1_file.write_all(fastq_entry.as_bytes())
+                r1_file
+                    .write_all(fastq_entry.as_bytes())
                     .context("Failed to write R1 FASTQ entry")?;
                 r1_count += 1;
             } else {
-                r2_file.write_all(fastq_entry.as_bytes())
+                r2_file
+                    .write_all(fastq_entry.as_bytes())
                     .context("Failed to write R2 FASTQ entry")?;
                 r2_count += 1;
             }
@@ -940,7 +1243,8 @@ pub fn process_and_write_parallel<P: AsRef<std::path::Path>>(
             let tx = tx.clone();
 
             // Process chromosome
-            let (haplotypes, stats) = swap_alleles_for_chrom(bam_path, chrom_variants, chrom, config)?;
+            let (haplotypes, stats) =
+                swap_alleles_for_chrom(bam_path, chrom_variants, chrom, config)?;
 
             // Stream haplotypes to writer
             for hap in haplotypes {
@@ -1129,6 +1433,177 @@ fn find_read_position(read: &bam::Record, target_ref_pos: u32) -> Option<usize> 
     None // Position not found in alignment
 }
 
+// ============================================================================
+// CIGAR-Aware Expected Position Calculation
+// ============================================================================
+
+/// Classification of a variant relative to a read's CIGAR alignment
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VariantLocation {
+    /// Variant ends strictly before the read's reference start - shifts expected position
+    Upstream,
+    /// Variant overlaps the read's aligned region - no shift
+    WithinRead,
+    /// Variant starts after the read's reference end - no shift
+    Downstream,
+    /// Variant spans the read start boundary - treated as within-read (no shift)
+    SpansStart,
+}
+
+/// Classify a variant's location relative to a read using CIGAR information
+///
+/// This uses the read's CIGAR-derived reference span to determine if a variant
+/// is truly upstream (before alignment start), within the read's aligned region,
+/// or downstream (after alignment end).
+///
+/// # Arguments
+/// * `read` - BAM record with CIGAR information
+/// * `variant_start` - Variant start position (0-based, reference coordinates)
+/// * `variant_end` - Variant end position (0-based, exclusive, reference coordinates)
+///
+/// # Returns
+/// `VariantLocation` classification
+pub fn classify_variant_location(
+    read: &bam::Record,
+    variant_start: u32,
+    variant_end: u32,
+) -> VariantLocation {
+    // Get read's reference span from alignment
+    let read_ref_start = read.pos() as u32;
+    let read_ref_end = read.reference_end() as u32;
+
+    // Variant ends before read starts on reference
+    if variant_end <= read_ref_start {
+        return VariantLocation::Upstream;
+    }
+
+    // Variant starts after read ends on reference
+    if variant_start >= read_ref_end {
+        return VariantLocation::Downstream;
+    }
+
+    // Variant spans the read start boundary
+    if variant_start < read_ref_start && variant_end > read_ref_start {
+        return VariantLocation::SpansStart;
+    }
+
+    // Otherwise, variant is within the read's aligned region
+    VariantLocation::WithinRead
+}
+
+/// Compute expected alignment position for a read after applying haplotype variants
+///
+/// This is CIGAR-aware: it uses the read's CIGAR-derived reference span to
+/// classify variants as upstream vs within-read. Only **upstream** variants
+/// (those ending strictly before the read's reference start) shift the expected
+/// alignment position.
+///
+/// Within-read variants change the read sequence but don't change where it
+/// should align on the reference.
+///
+/// # Arguments
+/// * `read` - BAM record with CIGAR information
+/// * `variants` - Iterator of (variant_start, variant_end, delta) tuples where:
+///   - variant_start: 0-based reference position
+///   - variant_end: 0-based exclusive end position
+///   - delta: len(alt) - len(ref), positive for insertions, negative for deletions
+///
+/// # Returns
+/// Expected alignment position (0-based) after applying upstream variant shifts
+///
+/// # Example
+/// ```ignore
+/// // Read at pos=100, upstream 5bp insertion at pos=50
+/// // Expected position = 100 + 5 = 105
+/// let expected = compute_expected_position_cigar_aware(&read, &[(50, 51, 5)]);
+/// assert_eq!(expected, 105);
+/// ```
+pub fn compute_expected_position_cigar_aware<'a, I>(read: &bam::Record, variants: I) -> i64
+where
+    I: IntoIterator<Item = &'a (u32, u32, i32)>,
+{
+    let read_start = read.pos();
+    let mut cumulative_shift: i64 = 0;
+
+    for &(var_start, var_end, delta) in variants {
+        let location = classify_variant_location(read, var_start, var_end);
+
+        match location {
+            VariantLocation::Upstream => {
+                // Variant is fully upstream - shifts expected position
+                cumulative_shift += delta as i64;
+            }
+            VariantLocation::SpansStart => {
+                // Variant spans read start - complex case
+                // For deletions spanning into the read: the read start moves
+                // For insertions at boundary: treat as upstream shift
+                if delta < 0 {
+                    // Deletion spanning into read - shifts position
+                    cumulative_shift += delta as i64;
+                } else if delta > 0 && var_start < read_start as u32 {
+                    // Insertion before read start - shifts position
+                    cumulative_shift += delta as i64;
+                }
+                // SNVs at boundary: no shift
+            }
+            VariantLocation::WithinRead | VariantLocation::Downstream => {
+                // No shift for within-read or downstream variants
+            }
+        }
+    }
+
+    read_start + cumulative_shift
+}
+
+/// Simplified interface for compute_expected_position_cigar_aware
+///
+/// Takes variants as (position, delta) pairs where position is the variant start
+/// and delta is len(alt) - len(ref). Computes variant end as:
+/// - For deletions (delta < 0): end = start + |delta|
+/// - For insertions (delta > 0): end = start + 1 (point insertion)
+/// - For SNVs (delta == 0): end = start + 1
+///
+/// # Arguments
+/// * `read` - BAM record
+/// * `variants` - Iterator of (position, delta) pairs
+///
+/// # Returns
+/// Expected alignment position after upstream shifts
+pub fn compute_expected_position<'a, I>(read: &bam::Record, variants: I) -> i64
+where
+    I: IntoIterator<Item = &'a (u32, i32)>,
+{
+    let read_start = read.pos();
+    let read_ref_start = read_start as u32;
+    let mut cumulative_shift: i64 = 0;
+
+    for &(var_pos, delta) in variants {
+        // Compute variant end based on delta
+        let var_end = if delta < 0 {
+            // Deletion: spans |delta| reference bases
+            var_pos + ((-delta) as u32)
+        } else {
+            // Insertion or SNV: point position
+            var_pos + 1
+        };
+
+        // Check if variant is upstream
+        if var_end <= read_ref_start {
+            // Fully upstream - shift expected position
+            cumulative_shift += delta as i64;
+        } else if var_pos < read_ref_start && delta < 0 {
+            // Deletion spanning into read start - still shifts
+            cumulative_shift += delta as i64;
+        } else if var_pos < read_ref_start && delta > 0 {
+            // Insertion before read start - shifts
+            cumulative_shift += delta as i64;
+        }
+        // Within-read or downstream: no shift
+    }
+
+    read_start + cumulative_shift
+}
+
 /// Generate WASP read name
 ///
 /// Format: {original_name}_WASP_{pos1}_{pos2}_{seq_num}_{total_seqs}
@@ -1148,7 +1623,11 @@ fn generate_wasp_name(
     total_seqs: usize,
 ) -> Vec<u8> {
     let name_str = std::str::from_utf8(original_name).unwrap_or("unknown");
-    format!("{}_WASP_{}_{}_{}_{}", name_str, pos1, pos2, seq_num, total_seqs).into_bytes()
+    format!(
+        "{}_WASP_{}_{}_{}_{}",
+        name_str, pos1, pos2, seq_num, total_seqs
+    )
+    .into_bytes()
 }
 
 // ============================================================================
@@ -1165,11 +1644,27 @@ mod tests {
     fn test_parse_intersect_bed() {
         // Create test BED file
         let mut temp_file = NamedTempFile::new().unwrap();
-        writeln!(temp_file, "chr10\t87377\t87427\tSRR891276.10516353/2\t60\t+\tchr10\t87400\t87401\tC\tT\tC|T").unwrap();
-        writeln!(temp_file, "chr10\t87392\t87440\tSRR891276.5620594/2\t60\t+\tchr10\t87400\t87401\tC\tT\tC|T").unwrap();
-        writeln!(temp_file, "chr10\t87395\t87442\tSRR891276.5620594/1\t60\t-\tchr10\t87400\t87401\tC\tT\tC|T").unwrap();
+        writeln!(
+            temp_file,
+            "chr10\t87377\t87427\tSRR891276.10516353/2\t60\t+\tchr10\t87400\t87401\tC\tT\tC|T"
+        )
+        .unwrap();
+        writeln!(
+            temp_file,
+            "chr10\t87392\t87440\tSRR891276.5620594/2\t60\t+\tchr10\t87400\t87401\tC\tT\tC|T"
+        )
+        .unwrap();
+        writeln!(
+            temp_file,
+            "chr10\t87395\t87442\tSRR891276.5620594/1\t60\t-\tchr10\t87400\t87401\tC\tT\tC|T"
+        )
+        .unwrap();
         // Duplicate that should be removed
-        writeln!(temp_file, "chr10\t87392\t87440\tSRR891276.5620594/2\t60\t+\tchr10\t87401\t87402\tA\tG\tA|G").unwrap();
+        writeln!(
+            temp_file,
+            "chr10\t87392\t87440\tSRR891276.5620594/2\t60\t+\tchr10\t87401\t87402\tA\tG\tA|G"
+        )
+        .unwrap();
         temp_file.flush().unwrap();
 
         // Parse
@@ -1194,7 +1689,11 @@ mod tests {
         // Check second read (should have deduplication)
         let read2_name = b"SRR891276.5620594".to_vec();
         let read2_spans = result.get(&read2_name).unwrap();
-        assert_eq!(read2_spans.len(), 2, "Should have 2 spans after dedup (different mates)");
+        assert_eq!(
+            read2_spans.len(),
+            2,
+            "Should have 2 spans after dedup (different mates)"
+        );
 
         // Verify mate 1
         let mate1 = read2_spans.iter().find(|s| s.mate == 1).unwrap();
@@ -1233,5 +1732,437 @@ mod tests {
     fn test_generate_wasp_name() {
         // TODO: Generate name with test inputs
         // TODO: Verify format matches Python implementation
+    }
+
+    // ============================================================================
+    // INDEL Trim Combination Tests
+    // ============================================================================
+
+    #[test]
+    fn test_trim_combination_struct() {
+        let trim = TrimCombination::new(2, 3);
+        assert_eq!(trim.trim_left, 2);
+        assert_eq!(trim.trim_right, 3);
+        assert_eq!(trim.total_trim(), 5);
+        assert!(!trim.is_identity());
+
+        let identity = TrimCombination::new(0, 0);
+        assert!(identity.is_identity());
+    }
+
+    #[test]
+    fn test_generate_trim_combinations_2bp_insertion() {
+        // 2bp insertion → need to trim 2 bases total
+        // Should generate 3 combinations: (0,2), (1,1), (2,0)
+        let combos = generate_trim_combinations(2, 51);
+        assert_eq!(combos.len(), 3, "2bp insertion should give 3 combos");
+        assert_eq!(combos[0], TrimCombination::new(0, 2));
+        assert_eq!(combos[1], TrimCombination::new(1, 1));
+        assert_eq!(combos[2], TrimCombination::new(2, 0));
+    }
+
+    #[test]
+    fn test_generate_trim_combinations_snv() {
+        // SNV (delta=0) → no trimming needed
+        let combos = generate_trim_combinations(0, 51);
+        assert_eq!(combos.len(), 1);
+        assert_eq!(combos[0], TrimCombination::new(0, 0));
+        assert!(combos[0].is_identity());
+    }
+
+    #[test]
+    fn test_generate_trim_combinations_deletion() {
+        // Deletion (delta=-2) → no trimming needed (padding is separate)
+        let combos = generate_trim_combinations(-2, 51);
+        assert_eq!(combos.len(), 1);
+        assert_eq!(combos[0], TrimCombination::new(0, 0));
+    }
+
+    #[test]
+    fn test_generate_trim_combinations_5bp_insertion() {
+        // 5bp insertion → 6 combinations
+        let combos = generate_trim_combinations(5, 51);
+        assert_eq!(combos.len(), 6, "5bp insertion should give 6 combos");
+        // Check all combinations sum to 5
+        for combo in &combos {
+            assert_eq!(combo.total_trim(), 5);
+        }
+    }
+
+    #[test]
+    fn test_apply_trim_combination_insertion() {
+        // Original: 10bp, Extended: 12bp (2bp insertion)
+        let seq = b"ACGTACGTACGT".to_vec(); // 12bp
+        let qual = vec![30; 12];
+        let original_len = 10;
+
+        // Trim 1 from left, 1 from right → should get middle 10bp
+        let trim = TrimCombination::new(1, 1);
+        let (trimmed_seq, trimmed_qual) = apply_trim_combination(&seq, &qual, original_len, &trim);
+
+        assert_eq!(
+            trimmed_seq.len(),
+            original_len,
+            "Trimmed seq should match original length"
+        );
+        assert_eq!(
+            trimmed_qual.len(),
+            original_len,
+            "Trimmed qual should match original length"
+        );
+        assert_eq!(trimmed_seq, b"CGTACGTACG".to_vec());
+    }
+
+    #[test]
+    fn test_apply_trim_combination_trim_all_left() {
+        // Trim all from left
+        let seq = b"ACGTACGTACGT".to_vec(); // 12bp
+        let qual = vec![30; 12];
+        let original_len = 10;
+
+        let trim = TrimCombination::new(2, 0);
+        let (trimmed_seq, _) = apply_trim_combination(&seq, &qual, original_len, &trim);
+
+        assert_eq!(trimmed_seq.len(), original_len);
+        assert_eq!(trimmed_seq, b"GTACGTACGT".to_vec());
+    }
+
+    #[test]
+    fn test_apply_trim_combination_trim_all_right() {
+        // Trim all from right
+        let seq = b"ACGTACGTACGT".to_vec(); // 12bp
+        let qual = vec![30; 12];
+        let original_len = 10;
+
+        let trim = TrimCombination::new(0, 2);
+        let (trimmed_seq, _) = apply_trim_combination(&seq, &qual, original_len, &trim);
+
+        assert_eq!(trimmed_seq.len(), original_len);
+        assert_eq!(trimmed_seq, b"ACGTACGTAC".to_vec());
+    }
+
+    #[test]
+    fn test_apply_trim_combination_deletion_pads() {
+        // Deletion case: seq shorter than original → should pad with N's
+        let seq = b"ACGTACGT".to_vec(); // 8bp
+        let qual = vec![30; 8];
+        let original_len = 10;
+
+        let trim = TrimCombination::new(0, 0); // No trim for deletions
+        let (trimmed_seq, trimmed_qual) = apply_trim_combination(&seq, &qual, original_len, &trim);
+
+        assert_eq!(trimmed_seq.len(), original_len);
+        assert_eq!(trimmed_qual.len(), original_len);
+        // Should be padded with N's
+        assert_eq!(&trimmed_seq[8..], b"NN");
+        assert_eq!(&trimmed_qual[8..], &[0, 0]);
+    }
+
+    #[test]
+    fn test_calculate_indel_delta() {
+        // Insertion: hap_len > original
+        assert_eq!(calculate_indel_delta(53, 51), 2);
+
+        // Deletion: hap_len < original
+        assert_eq!(calculate_indel_delta(49, 51), -2);
+
+        // SNV: hap_len == original
+        assert_eq!(calculate_indel_delta(51, 51), 0);
+    }
+
+    #[test]
+    fn test_indel_config_default() {
+        let config = IndelConfig::default();
+        assert_eq!(config.max_indel_size, 50);
+        assert!(config.skip_large_indels);
+    }
+
+    // ========================================================================
+    // CIGAR-Aware Expected Position Tests
+    // ========================================================================
+
+    /// Helper to create a minimal BAM record with specified pos and CIGAR
+    fn create_test_record(pos: i64, cigar_str: &str) -> bam::Record {
+        use rust_htslib::bam::record::{Cigar, CigarString};
+
+        let mut rec = bam::Record::new();
+        rec.set_pos(pos);
+
+        // Parse simple CIGAR string (e.g., "50M", "10M5D10M", "5S45M")
+        let mut cigars = Vec::new();
+        let mut num_str = String::new();
+
+        for c in cigar_str.chars() {
+            if c.is_ascii_digit() {
+                num_str.push(c);
+            } else {
+                let len: u32 = num_str.parse().unwrap_or(1);
+                num_str.clear();
+                let op = match c {
+                    'M' => Cigar::Match(len),
+                    'I' => Cigar::Ins(len),
+                    'D' => Cigar::Del(len),
+                    'S' => Cigar::SoftClip(len),
+                    'N' => Cigar::RefSkip(len),
+                    '=' => Cigar::Equal(len),
+                    'X' => Cigar::Diff(len),
+                    'H' => Cigar::HardClip(len),
+                    _ => Cigar::Match(len),
+                };
+                cigars.push(op);
+            }
+        }
+
+        let cigar_string = CigarString(cigars);
+        rec.set(
+            b"test_read",
+            Some(&cigar_string),
+            &vec![b'A'; 50], // Dummy sequence
+            &vec![30u8; 50], // Dummy qualities
+        );
+        rec.set_pos(pos);
+
+        rec
+    }
+
+    #[test]
+    fn test_classify_variant_upstream() {
+        // Read at pos=100 with 50M CIGAR (covers ref 100-149)
+        let rec = create_test_record(100, "50M");
+
+        // Variant at 50-51 is upstream (ends before read starts)
+        let loc = classify_variant_location(&rec, 50, 51);
+        assert_eq!(loc, VariantLocation::Upstream);
+
+        // Variant at 90-99 is upstream (ends at 99, before read start at 100)
+        let loc = classify_variant_location(&rec, 90, 99);
+        assert_eq!(loc, VariantLocation::Upstream);
+
+        // Variant at 90-100 is upstream (ends exactly at read start)
+        let loc = classify_variant_location(&rec, 90, 100);
+        assert_eq!(loc, VariantLocation::Upstream);
+    }
+
+    #[test]
+    fn test_classify_variant_within_read() {
+        // Read at pos=100 with 50M CIGAR (covers ref 100-149)
+        let rec = create_test_record(100, "50M");
+
+        // Variant at 110-111 is within read
+        let loc = classify_variant_location(&rec, 110, 111);
+        assert_eq!(loc, VariantLocation::WithinRead);
+
+        // Variant at 100-101 is within read (at read start)
+        let loc = classify_variant_location(&rec, 100, 101);
+        assert_eq!(loc, VariantLocation::WithinRead);
+
+        // Variant at 148-150 overlaps read end - still within
+        let loc = classify_variant_location(&rec, 148, 150);
+        assert_eq!(loc, VariantLocation::WithinRead);
+    }
+
+    #[test]
+    fn test_classify_variant_downstream() {
+        // Read at pos=100 with 50M CIGAR (covers ref 100-149)
+        let rec = create_test_record(100, "50M");
+
+        // Variant at 150-151 is downstream (starts at read end)
+        let loc = classify_variant_location(&rec, 150, 151);
+        assert_eq!(loc, VariantLocation::Downstream);
+
+        // Variant at 200-201 is downstream
+        let loc = classify_variant_location(&rec, 200, 201);
+        assert_eq!(loc, VariantLocation::Downstream);
+    }
+
+    #[test]
+    fn test_classify_variant_spans_start() {
+        // Read at pos=100 with 50M CIGAR (covers ref 100-149)
+        let rec = create_test_record(100, "50M");
+
+        // Variant at 95-105 spans read start (starts before, ends after)
+        let loc = classify_variant_location(&rec, 95, 105);
+        assert_eq!(loc, VariantLocation::SpansStart);
+
+        // Deletion from 98-102 spans read start
+        let loc = classify_variant_location(&rec, 98, 102);
+        assert_eq!(loc, VariantLocation::SpansStart);
+    }
+
+    #[test]
+    fn test_compute_expected_position_no_variants() {
+        let rec = create_test_record(100, "50M");
+        let variants: Vec<(u32, i32)> = vec![];
+        let expected = compute_expected_position(&rec, &variants);
+        assert_eq!(expected, 100);
+    }
+
+    #[test]
+    fn test_compute_expected_position_upstream_insertion() {
+        // Read at pos=100, upstream 5bp insertion at pos=50
+        let rec = create_test_record(100, "50M");
+        let variants = vec![(50u32, 5i32)]; // 5bp insertion
+        let expected = compute_expected_position(&rec, &variants);
+        // Upstream insertion shifts expected position right
+        assert_eq!(expected, 105);
+    }
+
+    #[test]
+    fn test_compute_expected_position_upstream_deletion() {
+        // Read at pos=100, upstream 3bp deletion at pos=50
+        let rec = create_test_record(100, "50M");
+        let variants = vec![(50u32, -3i32)]; // 3bp deletion (spans 50-52)
+        let expected = compute_expected_position(&rec, &variants);
+        // Upstream deletion shifts expected position left
+        assert_eq!(expected, 97);
+    }
+
+    #[test]
+    fn test_compute_expected_position_upstream_snv() {
+        // Read at pos=100, upstream SNV at pos=50
+        let rec = create_test_record(100, "50M");
+        let variants = vec![(50u32, 0i32)]; // SNV (delta=0)
+        let expected = compute_expected_position(&rec, &variants);
+        // SNV doesn't shift position
+        assert_eq!(expected, 100);
+    }
+
+    #[test]
+    fn test_compute_expected_position_within_read_variants() {
+        // Read at pos=100, within-read variants shouldn't shift
+        let rec = create_test_record(100, "50M");
+
+        // Insertion within read
+        let variants = vec![(120u32, 5i32)];
+        let expected = compute_expected_position(&rec, &variants);
+        assert_eq!(expected, 100); // No shift
+
+        // Deletion within read
+        let variants = vec![(120u32, -3i32)];
+        let expected = compute_expected_position(&rec, &variants);
+        assert_eq!(expected, 100); // No shift
+    }
+
+    #[test]
+    fn test_compute_expected_position_downstream_variants() {
+        // Read at pos=100 with 50M (ends at 149), downstream variant at 200
+        let rec = create_test_record(100, "50M");
+        let variants = vec![(200u32, 10i32)]; // Far downstream insertion
+        let expected = compute_expected_position(&rec, &variants);
+        assert_eq!(expected, 100); // No shift
+    }
+
+    #[test]
+    fn test_compute_expected_position_multiple_upstream() {
+        // Read at pos=100, multiple upstream variants
+        let rec = create_test_record(100, "50M");
+        let variants = vec![
+            (30u32, 5i32),  // +5bp insertion
+            (50u32, -2i32), // -2bp deletion
+            (70u32, 3i32),  // +3bp insertion
+        ];
+        let expected = compute_expected_position(&rec, &variants);
+        // Net shift: +5 - 2 + 3 = +6
+        assert_eq!(expected, 106);
+    }
+
+    #[test]
+    fn test_compute_expected_position_mixed_locations() {
+        // Read at pos=100, variants at different locations
+        let rec = create_test_record(100, "50M");
+        let variants = vec![
+            (30u32, 5i32),   // Upstream insertion: +5
+            (120u32, 10i32), // Within-read: no shift
+            (200u32, -3i32), // Downstream: no shift
+        ];
+        let expected = compute_expected_position(&rec, &variants);
+        // Only upstream counts: +5
+        assert_eq!(expected, 105);
+    }
+
+    #[test]
+    fn test_compute_expected_position_deletion_spanning_start() {
+        // Read at pos=100, deletion from 95-105 spans read start
+        let rec = create_test_record(100, "50M");
+        let variants = vec![(95u32, -10i32)]; // 10bp deletion spanning 95-104
+        let expected = compute_expected_position(&rec, &variants);
+        // Spanning deletion still shifts (it started upstream)
+        assert_eq!(expected, 90);
+    }
+
+    #[test]
+    fn test_compute_expected_position_insertion_at_boundary() {
+        // Read at pos=100, insertion right before read start (at pos=99)
+        let rec = create_test_record(100, "50M");
+        let variants = vec![(99u32, 5i32)]; // 5bp insertion at 99
+        let expected = compute_expected_position(&rec, &variants);
+        // Insertion before read start shifts position
+        assert_eq!(expected, 105);
+    }
+
+    #[test]
+    fn test_compute_expected_position_cigar_with_deletion() {
+        // Read at pos=100 with deletion in CIGAR: 20M5D30M
+        // This covers ref 100-154 (20 + 5 + 30 - 1 = 54 bases)
+        let rec = create_test_record(100, "20M5D30M");
+
+        // Upstream variant should still work
+        let variants = vec![(50u32, 3i32)];
+        let expected = compute_expected_position(&rec, &variants);
+        assert_eq!(expected, 103);
+
+        // Within-read variant (in CIGAR deletion region)
+        let variants = vec![(120u32, 5i32)]; // pos 120 is in CIGAR deletion
+        let expected = compute_expected_position(&rec, &variants);
+        assert_eq!(expected, 100); // No shift - within read's ref span
+    }
+
+    #[test]
+    fn test_compute_expected_position_cigar_with_softclip() {
+        // Read at pos=100 with soft clip: 5S45M
+        // Soft clip doesn't affect reference span
+        let rec = create_test_record(100, "5S45M");
+
+        // Upstream variant
+        let variants = vec![(50u32, 5i32)];
+        let expected = compute_expected_position(&rec, &variants);
+        assert_eq!(expected, 105);
+
+        // Within-read variant
+        let variants = vec![(110u32, 5i32)];
+        let expected = compute_expected_position(&rec, &variants);
+        assert_eq!(expected, 100); // No shift
+    }
+
+    #[test]
+    fn test_compute_expected_position_large_indels() {
+        // Test with larger indels (50bp)
+        let rec = create_test_record(1000, "100M");
+
+        // Large upstream insertion
+        let variants = vec![(500u32, 50i32)];
+        let expected = compute_expected_position(&rec, &variants);
+        assert_eq!(expected, 1050);
+
+        // Large upstream deletion
+        let variants = vec![(500u32, -50i32)];
+        let expected = compute_expected_position(&rec, &variants);
+        assert_eq!(expected, 950);
+    }
+
+    #[test]
+    fn test_compute_expected_position_cigar_aware_full_api() {
+        // Test the full API with (start, end, delta) tuples
+        let rec = create_test_record(100, "50M");
+
+        // Upstream insertion
+        let variants = vec![(50u32, 51u32, 5i32)];
+        let expected = compute_expected_position_cigar_aware(&rec, &variants);
+        assert_eq!(expected, 105);
+
+        // Within-read deletion
+        let variants = vec![(110u32, 115u32, -5i32)];
+        let expected = compute_expected_position_cigar_aware(&rec, &variants);
+        assert_eq!(expected, 100); // No shift
     }
 }

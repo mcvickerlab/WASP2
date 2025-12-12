@@ -3,7 +3,6 @@
 Validation script for WASP2 indel handling.
 
 Tests Python implementation against ground truth expected behavior.
-See INDEL_VALIDATION_PLAN.md for specifications.
 """
 
 import sys

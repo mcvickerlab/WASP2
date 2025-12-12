@@ -1,5 +1,5 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
-use rust_htslib::bam::{self, Read, Writer, Header, Format};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use rust_htslib::bam::{self, Format, Header, Read, Writer};
 use std::collections::HashMap;
 
 /// Create a synthetic BAM file for benchmarking
@@ -16,7 +16,13 @@ fn create_test_bam(path: &str, n_reads: usize, include_wasp_suffix: bool) -> std
 
         // Create read name with WASP suffix for remapped BAM
         let qname = if include_wasp_suffix {
-            format!("read_{}_WASP_{}_{}_{}_2", i, 1000 + i * 100, 1300 + i * 100, i % 10)
+            format!(
+                "read_{}_WASP_{}_{}_{}_2",
+                i,
+                1000 + i * 100,
+                1300 + i * 100,
+                i % 10
+            )
         } else {
             format!("read_{}", i)
         };
@@ -36,9 +42,9 @@ fn create_test_bam(path: &str, n_reads: usize, include_wasp_suffix: bool) -> std
         record.set_qual(&qual);
 
         // Set CIGAR - simple match for now
-        let cigar = bam::record::CigarString::try_from(vec![
-            bam::record::Cigar::Match(seq.len() as u32)
-        ]).unwrap();
+        let cigar =
+            bam::record::CigarString::try_from(vec![bam::record::Cigar::Match(seq.len() as u32)])
+                .unwrap();
         record.set_cigar(&cigar);
 
         writer.write(&record).unwrap();
@@ -86,9 +92,9 @@ fn bench_qname_parsing(c: &mut Criterion) {
 /// Benchmark position comparison logic
 fn bench_position_matching(c: &mut Criterion) {
     let test_cases = vec![
-        ((1000i64, 1300i64), (1000i64, 1300i64), 0i64),  // Exact match
-        ((1000i64, 1300i64), (1002i64, 1298i64), 5i64),  // Within slop
-        ((1000i64, 1300i64), (1010i64, 1310i64), 5i64),  // Outside slop
+        ((1000i64, 1300i64), (1000i64, 1300i64), 0i64), // Exact match
+        ((1000i64, 1300i64), (1002i64, 1298i64), 5i64), // Within slop
+        ((1000i64, 1300i64), (1010i64, 1310i64), 5i64), // Outside slop
     ];
 
     c.bench_function("position_matching", |b| {
@@ -98,8 +104,7 @@ fn bench_position_matching(c: &mut Criterion) {
                 let (exp_p, exp_m) = expect_pos;
 
                 let _ = if *slop == 0 {
-                    (*rec_p == *exp_p && *rec_m == *exp_m)
-                        || (*rec_p == *exp_m && *rec_m == *exp_p)
+                    (*rec_p == *exp_p && *rec_m == *exp_m) || (*rec_p == *exp_m && *rec_m == *exp_p)
                 } else {
                     let pos_diff1 = (*rec_p - *exp_p).abs();
                     let mate_diff1 = (*rec_m - *exp_m).abs();
@@ -153,9 +158,7 @@ fn bench_string_allocation(c: &mut Criterion) {
     group.bench_function("string_from_utf8_owned", |b| {
         b.iter(|| {
             for _ in 0..1000 {
-                let _ = black_box(std::str::from_utf8(qname_bytes)
-                    .ok()
-                    .map(|s| s.to_owned()));
+                let _ = black_box(std::str::from_utf8(qname_bytes).ok().map(|s| s.to_owned()));
             }
         });
     });

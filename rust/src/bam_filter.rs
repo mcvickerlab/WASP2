@@ -185,23 +185,30 @@ fn phase3_split_bam(
     let mut bam = bam::Reader::from_path(bam_path).context("Failed to open BAM for phase 3")?;
 
     // Enable multi-threaded BAM reading (use all available threads)
-    bam.set_threads(config.read_threads.min(rayon::current_num_threads())).ok();
+    bam.set_threads(config.read_threads.min(rayon::current_num_threads()))
+        .ok();
 
     // Convert HeaderView to Header for writer
     let header = bam::Header::from_template(bam.header());
 
     // Create writers with parallel compression (use all available threads, fastest compression)
-    let mut remap_writer =
-        bam::Writer::from_path(remap_bam_path, &header, bam::Format::Bam)
-            .context("Failed to create remap BAM writer")?;
-    remap_writer.set_threads(config.write_threads.min(rayon::current_num_threads())).ok();
-    remap_writer.set_compression_level(bam::CompressionLevel::Fastest).ok();
+    let mut remap_writer = bam::Writer::from_path(remap_bam_path, &header, bam::Format::Bam)
+        .context("Failed to create remap BAM writer")?;
+    remap_writer
+        .set_threads(config.write_threads.min(rayon::current_num_threads()))
+        .ok();
+    remap_writer
+        .set_compression_level(bam::CompressionLevel::Fastest)
+        .ok();
 
-    let mut keep_writer =
-        bam::Writer::from_path(keep_bam_path, &header, bam::Format::Bam)
-            .context("Failed to create keep BAM writer")?;
-    keep_writer.set_threads(config.write_threads.min(rayon::current_num_threads())).ok();
-    keep_writer.set_compression_level(bam::CompressionLevel::Fastest).ok();
+    let mut keep_writer = bam::Writer::from_path(keep_bam_path, &header, bam::Format::Bam)
+        .context("Failed to create keep BAM writer")?;
+    keep_writer
+        .set_threads(config.write_threads.min(rayon::current_num_threads()))
+        .ok();
+    keep_writer
+        .set_compression_level(bam::CompressionLevel::Fastest)
+        .ok();
 
     let mut remap_count = 0usize;
     let mut keep_count = 0usize;
@@ -289,8 +296,13 @@ pub fn filter_bam_by_variants(
     // Phase 3: Split BAM
     let t2 = Instant::now();
     eprintln!("Phase 3: Splitting BAM into remap/keep...");
-    let (remap_count, keep_count) =
-        phase3_split_bam(bam_path, &remap_names, remap_bam_path, keep_bam_path, &config)?;
+    let (remap_count, keep_count) = phase3_split_bam(
+        bam_path,
+        &remap_names,
+        remap_bam_path,
+        keep_bam_path,
+        &config,
+    )?;
     stats.phase3_ms = t2.elapsed().as_millis() as u64;
     stats.remap_reads = remap_count;
     stats.keep_reads = keep_count;
@@ -299,7 +311,9 @@ pub fn filter_bam_by_variants(
     let total_ms = stats.phase1_ms + stats.phase2_ms + stats.phase3_ms;
     eprintln!(
         "✅ Filter complete: {} remap, {} keep, {} unique names",
-        remap_count, keep_count, remap_names.len()
+        remap_count,
+        keep_count,
+        remap_names.len()
     );
     eprintln!(
         "   Total time: {}ms (phase1: {}ms, phase2: {}ms, phase3: {}ms)",

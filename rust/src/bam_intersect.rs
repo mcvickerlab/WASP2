@@ -94,8 +94,7 @@ pub fn build_variant_store(bed_path: &str) -> Result<VariantStore> {
     let mut variants: Vec<VariantInfo> = Vec::new();
 
     // Collect interval nodes per chromosome (storing indices)
-    let mut chrom_intervals: FxHashMap<String, Vec<IntervalNode<u32, u32>>> =
-        FxHashMap::default();
+    let mut chrom_intervals: FxHashMap<String, Vec<IntervalNode<u32, u32>>> = FxHashMap::default();
 
     for line in reader.lines() {
         let line = line?;
@@ -371,8 +370,7 @@ pub fn build_variant_store_multi(bed_path: &str, num_samples: usize) -> Result<V
     let reader = BufReader::with_capacity(1024 * 1024, file);
 
     let mut variants: Vec<VariantInfoMulti> = Vec::new();
-    let mut chrom_intervals: FxHashMap<String, Vec<IntervalNode<u32, u32>>> =
-        FxHashMap::default();
+    let mut chrom_intervals: FxHashMap<String, Vec<IntervalNode<u32, u32>>> = FxHashMap::default();
 
     let expected_cols = 5 + num_samples; // chrom, start, stop, ref, alt, GT1, GT2, ...
 

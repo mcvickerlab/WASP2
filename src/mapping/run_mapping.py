@@ -139,7 +139,8 @@ def run_make_remap_reads_unified(
 
     # Run unified single-pass BAM processing
     compress_str = "compressed" if compress_output else "uncompressed"
-    print(f"{step_prefix}: Running unified pipeline ({'parallel' if use_parallel else 'sequential'}, {compress_str})...")
+    indel_str = f", INDEL mode (max {max_indel_len}bp)" if include_indels else ""
+    print(f"{step_prefix}: Running unified pipeline ({'parallel' if use_parallel else 'sequential'}, {compress_str}{indel_str})...")
 
     # Check for BAM index for parallel mode
     bai_path = f"{bam_file}.bai"
@@ -153,7 +154,9 @@ def run_make_remap_reads_unified(
             max_seqs=max_seqs,
             threads=threads,
             compression_threads=compression_threads,
-            compress_output=compress_output
+            compress_output=compress_output,
+            indel_mode=include_indels,
+            max_indel_size=max_indel_len
         )
     else:
         stats = _unified_sequential(
@@ -161,7 +164,9 @@ def run_make_remap_reads_unified(
             max_seqs=max_seqs,
             threads=threads,
             compression_threads=compression_threads,
-            compress_output=compress_output
+            compress_output=compress_output,
+            indel_mode=include_indels,
+            max_indel_size=max_indel_len
         )
 
     print(f"\nUnified pipeline complete:")

@@ -4,7 +4,6 @@
 /// Uses beta-binomial model to detect allelic imbalance in ASE data.
 ///
 /// Performance target: 3-5x speedup over Python (2.7s → 0.5-0.9s)
-
 use anyhow::{Context, Result};
 use rayon::prelude::*;
 use rv::dist::BetaBinomial;
@@ -35,12 +34,12 @@ pub struct ImbalanceResult {
     pub alt_count: u32,
     pub n: u32,
     pub snp_count: usize,
-    pub null_ll: f64,     // Null model log-likelihood
-    pub alt_ll: f64,      // Alternative model log-likelihood
-    pub mu: f64,          // Estimated imbalance proportion
-    pub lrt: f64,         // Likelihood ratio test statistic
-    pub pval: f64,        // P-value
-    pub fdr_pval: f64,    // FDR-corrected p-value
+    pub null_ll: f64,  // Null model log-likelihood
+    pub alt_ll: f64,   // Alternative model log-likelihood
+    pub mu: f64,       // Estimated imbalance proportion
+    pub lrt: f64,      // Likelihood ratio test statistic
+    pub pval: f64,     // P-value
+    pub fdr_pval: f64, // FDR-corrected p-value
 }
 
 /// Configuration for analysis
@@ -53,8 +52,8 @@ pub struct AnalysisConfig {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AnalysisMethod {
-    Single,  // Single dispersion parameter
-    Linear,  // Linear dispersion model
+    Single, // Single dispersion parameter
+    Linear, // Linear dispersion model
 }
 
 impl Default for AnalysisConfig {
@@ -89,8 +88,8 @@ pub fn opt_prob(prob: f64, rho: f64, k: u32, n: u32) -> Result<f64> {
     let beta = (1.0 - prob) * (1.0 - rho) / rho;
 
     // Create beta-binomial distribution (rv uses: n as u32, alpha, beta)
-    let bb = BetaBinomial::new(n, alpha, beta)
-        .context("Failed to create beta-binomial distribution")?;
+    let bb =
+        BetaBinomial::new(n, alpha, beta).context("Failed to create beta-binomial distribution")?;
 
     // Return negative log-likelihood (rv uses reference for ln_f, k as u64)
     let log_pmf = bb.ln_f(&(k as u64));
@@ -100,7 +99,12 @@ pub fn opt_prob(prob: f64, rho: f64, k: u32, n: u32) -> Result<f64> {
 /// Calculate beta-binomial log-likelihood for array of counts
 ///
 /// Python equivalent: Used in `single_model()` for null/alt likelihood
-pub fn betabinom_logpmf_sum(ref_counts: &[u32], n_array: &[u32], alpha: f64, beta: f64) -> Result<f64> {
+pub fn betabinom_logpmf_sum(
+    ref_counts: &[u32],
+    n_array: &[u32],
+    alpha: f64,
+    beta: f64,
+) -> Result<f64> {
     let mut sum = 0.0;
 
     for (k, n) in ref_counts.iter().zip(n_array.iter()) {
@@ -126,7 +130,7 @@ fn optimize_dispersion(ref_counts: &[u32], n_array: &[u32]) -> Result<f64> {
         let beta = 0.5 * (1.0 - rho) / rho;
 
         match betabinom_logpmf_sum(ref_counts, n_array, alpha, beta) {
-            Ok(ll) => -ll,  // Return negative for minimization
+            Ok(ll) => -ll, // Return negative for minimization
             Err(_) => f64::INFINITY,
         }
     };
@@ -271,10 +275,16 @@ pub fn single_model(variants: Vec<VariantCounts>) -> Result<Vec<ImbalanceResult>
     // Step 2: Group by region
     let mut region_map: HashMap<String, Vec<usize>> = HashMap::new();
     for (i, variant) in variants.iter().enumerate() {
-        region_map.entry(variant.region.clone()).or_default().push(i);
+        region_map
+            .entry(variant.region.clone())
+            .or_default()
+            .push(i);
     }
 
-    println!("Optimizing imbalance likelihood for {} regions...", region_map.len());
+    println!(
+        "Optimizing imbalance likelihood for {} regions...",
+        region_map.len()
+    );
 
     // Step 3: Calculate null and alternative likelihoods per region (parallel)
     let alpha_null = 0.5 * (1.0 - disp) / disp;
@@ -297,15 +307,12 @@ pub fn single_model(variants: Vec<VariantCounts>) -> Result<Vec<ImbalanceResult>
             let lrt = -2.0 * (null_ll - alt_ll);
 
             // P-value from chi-squared distribution (df=1)
-            let chi2 = ChiSquared::new(1.0)
-                .context("Failed to create chi-squared distribution")?;
+            let chi2 = ChiSquared::new(1.0).context("Failed to create chi-squared distribution")?;
             let pval = 1.0 - chi2.cdf(lrt);
 
             // Sum counts for this region
             let total_ref: u32 = region_ref.iter().sum();
-            let total_alt: u32 = indices.iter()
-                .map(|&i| variants[i].alt_count)
-                .sum();
+            let total_alt: u32 = indices.iter().map(|&i| variants[i].alt_count).sum();
             let total_n = total_ref + total_alt;
 
             Ok(ImbalanceResult {
@@ -319,7 +326,7 @@ pub fn single_model(variants: Vec<VariantCounts>) -> Result<Vec<ImbalanceResult>
                 mu,
                 lrt,
                 pval,
-                fdr_pval: 0.0,  // Will be filled later
+                fdr_pval: 0.0, // Will be filled later
             })
         })
         .collect();

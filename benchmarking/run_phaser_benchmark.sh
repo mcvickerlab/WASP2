@@ -1,7 +1,8 @@
 #!/bin/bash
 #$ -N phaser_bench
 #$ -cwd
-#$ -pe smp 8
+#$ -q iblm.q
+#$ -pe iblm 8
 #$ -l h_rt=04:00:00
 #$ -l h_vmem=4G
 #$ -o logs/phaser_benchmark.o$JOB_ID

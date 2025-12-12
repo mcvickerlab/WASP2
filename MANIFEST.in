@@ -1,11 +1,8 @@
 # Include documentation
 include README.md
 include LICENSE
-include CITATION.cff
-include PRODUCTION_RELEASE_PLAN.md
-include TH2_COMPLETION_SUMMARY.md
-include MYPY_ERRORS_ANALYSIS.md
-include DEVELOPMENT.md
+# NOTE: Internal planning/citation files are intentionally excluded from
+# the publication release. Keep MANIFEST aligned to existing public docs.
 
 # Include configuration files
 include pyproject.toml

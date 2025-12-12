@@ -89,8 +89,8 @@ pub fn parse_intersect_bed_multi<P: AsRef<Path>>(
     intersect_bed: P,
     num_samples: usize,
 ) -> Result<MultiSampleVariants> {
-    let file = File::open(intersect_bed.as_ref())
-        .context("Failed to open intersection BED file")?;
+    let file =
+        File::open(intersect_bed.as_ref()).context("Failed to open intersection BED file")?;
     let reader = BufReader::with_capacity(1024 * 1024, file);
 
     let mut variants: MultiSampleVariants = FxHashMap::default();
@@ -285,7 +285,10 @@ pub fn generate_unique_haplotype_columns(
 /// Vector of allele combinations, where each inner vector has one allele per variant
 pub fn generate_unique_combinations(variants: &[&VariantSpanMulti]) -> Vec<Vec<String>> {
     let unique_cols = generate_unique_haplotype_columns(variants);
-    unique_cols.into_iter().map(|(_, alleles)| alleles).collect()
+    unique_cols
+        .into_iter()
+        .map(|(_, alleles)| alleles)
+        .collect()
 }
 
 // ============================================================================
@@ -328,28 +331,25 @@ pub fn apply_allele_substitutions_cigar_aware(
         let ref_end = variant.vcf_stop as i64;
 
         // Get query positions using CIGAR-aware mapping
-        let query_start = ref2query_left
-            .get(&ref_start)
-            .copied()
-            .ok_or_else(|| anyhow::anyhow!(
+        let query_start = ref2query_left.get(&ref_start).copied().ok_or_else(|| {
+            anyhow::anyhow!(
                 "Variant at ref {} not in left map (read may not cover variant)",
                 ref_start
-            ))?;
+            )
+        })?;
 
         // For end: use right mapping for ref_end - 1, then add 1
         let query_end = ref2query_right
             .get(&(ref_end - 1))
             .map(|&p| p + 1)
-            .ok_or_else(|| anyhow::anyhow!(
-                "Variant at ref {} not in right map",
-                ref_end - 1
-            ))?;
+            .ok_or_else(|| anyhow::anyhow!("Variant at ref {} not in right map", ref_end - 1))?;
 
         variant_positions.push((query_start, query_end.min(seq.len())));
     }
 
     // Segment the sequence at variant positions
-    let (seq_segments, qual_segments) = cigar_utils::segment_sequence(seq, qual, &variant_positions);
+    let (seq_segments, qual_segments) =
+        cigar_utils::segment_sequence(seq, qual, &variant_positions);
 
     // Build new sequence with allele substitutions
     let mut new_seq = Vec::with_capacity(seq.len());
@@ -398,7 +398,10 @@ pub fn apply_allele_substitutions_cigar_aware(
 /// with insertions/deletions in their CIGAR string. Use
 /// `apply_allele_substitutions_cigar_aware` or `generate_multi_sample_sequences_from_record`
 /// instead.
-#[deprecated(since = "1.2.0", note = "Use apply_allele_substitutions_cigar_aware instead")]
+#[deprecated(
+    since = "1.2.0",
+    note = "Use apply_allele_substitutions_cigar_aware instead"
+)]
 #[allow(dead_code)]
 pub fn apply_allele_substitutions(
     seq: &[u8],
@@ -498,7 +501,7 @@ pub fn generate_multi_sample_sequences_from_record(
             variants,
             &alleles,
             &ref2query_left,
-            &ref2query_right
+            &ref2query_right,
         ) {
             Ok((new_seq, new_qual)) => results.push((new_seq, new_qual)),
             Err(e) => {
@@ -520,7 +523,10 @@ pub fn generate_multi_sample_sequences_from_record(
 /// Legacy function - DEPRECATED
 ///
 /// Use `generate_multi_sample_sequences_from_record` instead.
-#[deprecated(since = "1.2.0", note = "Use generate_multi_sample_sequences_from_record instead")]
+#[deprecated(
+    since = "1.2.0",
+    note = "Use generate_multi_sample_sequences_from_record instead"
+)]
 #[allow(dead_code)]
 pub fn generate_multi_sample_sequences(
     seq: &[u8],
@@ -583,8 +589,7 @@ pub fn swap_alleles_for_chrom_multi(
 ) -> Result<MultiSampleRemapStats> {
     use rustc_hash::FxHashMap;
 
-    let mut bam = bam::IndexedReader::from_path(bam_path)
-        .context("Failed to open BAM file")?;
+    let mut bam = bam::IndexedReader::from_path(bam_path).context("Failed to open BAM file")?;
 
     // Enable parallel BGZF decompression (2 threads per chromosome worker)
     bam.set_threads(2).ok();
@@ -605,10 +610,8 @@ pub fn swap_alleles_for_chrom_multi(
         .context("Failed to fetch chromosome")?;
 
     // Open output files
-    let r1_file = std::fs::File::create(out_r1)
-        .context("Failed to create R1 output file")?;
-    let r2_file = std::fs::File::create(out_r2)
-        .context("Failed to create R2 output file")?;
+    let r1_file = std::fs::File::create(out_r1).context("Failed to create R1 output file")?;
+    let r2_file = std::fs::File::create(out_r2).context("Failed to create R2 output file")?;
     let mut r1_writer = BufWriter::with_capacity(1024 * 1024, r1_file);
     let mut r2_writer = BufWriter::with_capacity(1024 * 1024, r2_file);
 
@@ -683,15 +686,11 @@ fn process_read_pair_multi<W: Write>(
     stats.pairs_with_variants += 1;
 
     // Separate variants by mate
-    let r1_variants: Vec<&VariantSpanMulti> = read_variants
-        .iter()
-        .filter(|v| v.mate == 1)
-        .collect();
+    let r1_variants: Vec<&VariantSpanMulti> =
+        read_variants.iter().filter(|v| v.mate == 1).collect();
 
-    let r2_variants: Vec<&VariantSpanMulti> = read_variants
-        .iter()
-        .filter(|v| v.mate == 2)
-        .collect();
+    let r2_variants: Vec<&VariantSpanMulti> =
+        read_variants.iter().filter(|v| v.mate == 2).collect();
 
     // Get original sequences for comparison
     let r1_seq = read1.seq().as_bytes();
@@ -732,8 +731,11 @@ fn process_read_pair_multi<W: Write>(
     let mut write_num = 0;
     let mut pairs_to_write = Vec::new();
 
-    for (idx, ((r1_hap_seq, r1_hap_qual), (r2_hap_seq, r2_hap_qual))) in
-        r1_haps.iter().zip(r2_haps.iter()).take(num_haps).enumerate()
+    for (idx, ((r1_hap_seq, r1_hap_qual), (r2_hap_seq, r2_hap_qual))) in r1_haps
+        .iter()
+        .zip(r2_haps.iter())
+        .take(num_haps)
+        .enumerate()
     {
         // Skip if both sequences are unchanged
         if r1_hap_seq == &r1_seq && r2_hap_seq == &r2_seq {
@@ -928,7 +930,9 @@ mod tests {
     // CIGAR-Aware INDEL Tests
     // ========================================================================
 
-    fn make_position_maps(positions: &[(i64, usize)]) -> (FxHashMap<i64, usize>, FxHashMap<i64, usize>) {
+    fn make_position_maps(
+        positions: &[(i64, usize)],
+    ) -> (FxHashMap<i64, usize>, FxHashMap<i64, usize>) {
         let left: FxHashMap<i64, usize> = positions.iter().cloned().collect();
         let right: FxHashMap<i64, usize> = positions.iter().cloned().collect();
         (left, right)
@@ -949,12 +953,26 @@ mod tests {
 
         // Create position maps: simple 1:1 mapping (no CIGAR complexity)
         let (ref2q_left, ref2q_right) = make_position_maps(&[
-            (0, 0), (1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8)
+            (0, 0),
+            (1, 1),
+            (2, 2),
+            (3, 3),
+            (4, 4),
+            (5, 5),
+            (6, 6),
+            (7, 7),
+            (8, 8),
         ]);
 
         let (new_seq, new_qual) = apply_allele_substitutions_cigar_aware(
-            &seq, &qual, &variants, &alleles, &ref2q_left, &ref2q_right
-        ).unwrap();
+            &seq,
+            &qual,
+            &variants,
+            &alleles,
+            &ref2q_left,
+            &ref2q_right,
+        )
+        .unwrap();
 
         assert_eq!(&new_seq, b"AAAAAGAAA"); // Position 5 changed to G
         assert_eq!(new_qual.len(), 9); // Same length
@@ -977,12 +995,26 @@ mod tests {
 
         // Simple 1:1 position mapping
         let (ref2q_left, ref2q_right) = make_position_maps(&[
-            (0, 0), (1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8)
+            (0, 0),
+            (1, 1),
+            (2, 2),
+            (3, 3),
+            (4, 4),
+            (5, 5),
+            (6, 6),
+            (7, 7),
+            (8, 8),
         ]);
 
         let (new_seq, new_qual) = apply_allele_substitutions_cigar_aware(
-            &seq, &qual, &variants, &alleles, &ref2q_left, &ref2q_right
-        ).unwrap();
+            &seq,
+            &qual,
+            &variants,
+            &alleles,
+            &ref2q_left,
+            &ref2q_right,
+        )
+        .unwrap();
 
         // After deletion: AAA + A + AAAA = AAAAAAA (7 bases)
         assert_eq!(&new_seq, b"AAAAAAA");
@@ -1004,13 +1036,18 @@ mod tests {
         let alleles = vec!["ACGT".to_string()]; // Replace A with ACGT
 
         // Simple 1:1 position mapping
-        let (ref2q_left, ref2q_right) = make_position_maps(&[
-            (0, 0), (1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6)
-        ]);
+        let (ref2q_left, ref2q_right) =
+            make_position_maps(&[(0, 0), (1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6)]);
 
         let (new_seq, new_qual) = apply_allele_substitutions_cigar_aware(
-            &seq, &qual, &variants, &alleles, &ref2q_left, &ref2q_right
-        ).unwrap();
+            &seq,
+            &qual,
+            &variants,
+            &alleles,
+            &ref2q_left,
+            &ref2q_right,
+        )
+        .unwrap();
 
         // Segmentation:
         // - Before (pos 0-2): "AAA" (3 chars)
@@ -1051,14 +1088,28 @@ mod tests {
         // ref 5-6 -> deleted (mapped to flanking: 4 for left, 5 for right)
         // ref 7-11 -> query 5-9 (shifted by 2)
         let (ref2q_left, ref2q_right) = make_position_maps(&[
-            (0, 0), (1, 1), (2, 2), (3, 3), (4, 4),
+            (0, 0),
+            (1, 1),
+            (2, 2),
+            (3, 3),
+            (4, 4),
             // ref 5-6 would be deleted - but we need them for flanking
-            (7, 5), (8, 6), (9, 7), (10, 8), (11, 9)
+            (7, 5),
+            (8, 6),
+            (9, 7),
+            (10, 8),
+            (11, 9),
         ]);
 
         let (new_seq, new_qual) = apply_allele_substitutions_cigar_aware(
-            &seq, &qual, &variants, &alleles, &ref2q_left, &ref2q_right
-        ).unwrap();
+            &seq,
+            &qual,
+            &variants,
+            &alleles,
+            &ref2q_left,
+            &ref2q_right,
+        )
+        .unwrap();
 
         // The variant at ref 7 should map to query position 5
         // So sequence should be AAAAAXBBBB
@@ -1086,12 +1137,26 @@ mod tests {
         let alleles = vec!["G".to_string(), "T".to_string()];
 
         let (ref2q_left, ref2q_right) = make_position_maps(&[
-            (0, 0), (1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8)
+            (0, 0),
+            (1, 1),
+            (2, 2),
+            (3, 3),
+            (4, 4),
+            (5, 5),
+            (6, 6),
+            (7, 7),
+            (8, 8),
         ]);
 
         let (new_seq, new_qual) = apply_allele_substitutions_cigar_aware(
-            &seq, &qual, &variants, &alleles, &ref2q_left, &ref2q_right
-        ).unwrap();
+            &seq,
+            &qual,
+            &variants,
+            &alleles,
+            &ref2q_left,
+            &ref2q_right,
+        )
+        .unwrap();
 
         // Positions 2 and 6 changed
         assert_eq!(&new_seq, b"AAGAAATAA");

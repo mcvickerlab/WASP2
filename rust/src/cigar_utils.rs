@@ -45,7 +45,10 @@ pub enum QueryPosition {
     /// Exact match: ref position maps to this query position
     Mapped(usize),
     /// Deletion: ref position is deleted, use flanking positions
-    Deleted { left_flank: usize, right_flank: usize },
+    Deleted {
+        left_flank: usize,
+        right_flank: usize,
+    },
     /// Not covered: ref position is outside the alignment
     NotCovered,
 }
@@ -68,9 +71,7 @@ pub enum QueryPosition {
 /// # Performance
 /// O(n) where n = alignment length. Builds ~n entries in each map.
 /// Consider using `find_query_position()` for single lookups.
-pub fn build_ref2query_maps(
-    read: &bam::Record,
-) -> (FxHashMap<i64, usize>, FxHashMap<i64, usize>) {
+pub fn build_ref2query_maps(read: &bam::Record) -> (FxHashMap<i64, usize>, FxHashMap<i64, usize>) {
     let mut ref2query_left: FxHashMap<i64, usize> = FxHashMap::default();
     let mut ref2query_right: FxHashMap<i64, usize> = FxHashMap::default();
 
@@ -193,10 +194,7 @@ pub fn find_query_position(read: &bam::Record, target_ref_pos: i64) -> Option<us
 /// - `QueryPosition::Mapped(pos)` - exact mapping
 /// - `QueryPosition::Deleted { left, right }` - position is deleted, use flanks
 /// - `QueryPosition::NotCovered` - position outside alignment
-pub fn find_query_position_with_flanks(
-    read: &bam::Record,
-    target_ref_pos: i64,
-) -> QueryPosition {
+pub fn find_query_position_with_flanks(read: &bam::Record, target_ref_pos: i64) -> QueryPosition {
     use rust_htslib::bam::record::Cigar;
 
     let cigar = read.cigar();
@@ -306,7 +304,9 @@ pub fn apply_cigar_aware_substitution(
         }
     } else {
         // Insertion: copy original quals + fill extra with default Q30
-        let orig_qual_len = query_end.saturating_sub(query_start).min(qual.len() - query_start);
+        let orig_qual_len = query_end
+            .saturating_sub(query_start)
+            .min(qual.len() - query_start);
         if query_start + orig_qual_len <= qual.len() {
             new_qual.extend_from_slice(&qual[query_start..query_start + orig_qual_len]);
         }
@@ -327,9 +327,9 @@ pub fn apply_cigar_aware_substitution(
 
 /// Check if any variants in a list are indels (different ref/alt lengths)
 pub fn has_indels(variants: &[(i64, i64, &str, &str)]) -> bool {
-    variants.iter().any(|(_, _, ref_allele, alt_allele)| {
-        ref_allele.len() != alt_allele.len()
-    })
+    variants
+        .iter()
+        .any(|(_, _, ref_allele, alt_allele)| ref_allele.len() != alt_allele.len())
 }
 
 /// Segment a sequence based on variant positions
@@ -404,10 +404,7 @@ mod tests {
 
     #[test]
     fn test_has_indels_snp_only() {
-        let variants = vec![
-            (100, 101, "A", "G"),
-            (200, 201, "C", "T"),
-        ];
+        let variants = vec![(100, 101, "A", "G"), (200, 201, "C", "T")];
         let variants_ref: Vec<(i64, i64, &str, &str)> = variants
             .iter()
             .map(|(s, e, r, a)| (*s as i64, *e as i64, *r, *a))
@@ -418,8 +415,8 @@ mod tests {
     #[test]
     fn test_has_indels_with_deletion() {
         let variants = vec![
-            (100, 101, "A", "G"),      // SNP
-            (200, 203, "ACG", "A"),    // Deletion
+            (100, 101, "A", "G"),   // SNP
+            (200, 203, "ACG", "A"), // Deletion
         ];
         let variants_ref: Vec<(i64, i64, &str, &str)> = variants
             .iter()
@@ -431,7 +428,7 @@ mod tests {
     #[test]
     fn test_has_indels_with_insertion() {
         let variants = vec![
-            (100, 101, "A", "ACGT"),   // Insertion
+            (100, 101, "A", "ACGT"), // Insertion
         ];
         let variants_ref: Vec<(i64, i64, &str, &str)> = variants
             .iter()

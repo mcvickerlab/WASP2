@@ -1,7 +1,7 @@
 use pyo3::prelude::*;
 use pyo3::types::PyList;
 use rayon::prelude::*;
-use rust_htslib::{bam, bam::Read as BamRead, bam::ext::BamRecordExtensions};
+use rust_htslib::{bam, bam::ext::BamRecordExtensions, bam::Read as BamRead};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::path::Path;
 
@@ -14,7 +14,7 @@ pub struct BamCounter {
 #[derive(Debug, Clone)]
 struct Region {
     chrom: String,
-    pos: u32,  // 1-based position from Python
+    pos: u32, // 1-based position from Python
     ref_base: char,
     alt_base: char,
 }
@@ -29,7 +29,7 @@ impl BamCounter {
         // Verify BAM file exists
         if !Path::new(&bam_path).exists() {
             return Err(PyErr::new::<pyo3::exceptions::PyFileNotFoundError, _>(
-                format!("BAM file not found: {}", bam_path)
+                format!("BAM file not found: {}", bam_path),
             ));
         }
 
@@ -71,9 +71,7 @@ impl BamCounter {
         }
 
         // Release GIL for parallel processing
-        py.allow_threads(|| {
-            self.count_alleles_impl(&rust_regions, min_qual, threads)
-        })
+        py.allow_threads(|| self.count_alleles_impl(&rust_regions, min_qual, threads))
     }
 }
 
@@ -97,15 +95,23 @@ impl BamCounter {
             rayon::ThreadPoolBuilder::new()
                 .num_threads(threads)
                 .build()
-                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-                    format!("Failed to create thread pool: {}", e)
-                ))?
+                .map_err(|e| {
+                    PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                        "Failed to create thread pool: {}",
+                        e
+                    ))
+                })?
                 .install(|| {
                     // Process chromosomes in parallel
                     let partial_results: Result<Vec<_>, _> = grouped
                         .par_iter()
                         .map(|(chrom, chrom_regions)| {
-                            self.process_chromosome_reads(chrom, chrom_regions, min_qual, &debug_sites)
+                            self.process_chromosome_reads(
+                                chrom,
+                                chrom_regions,
+                                min_qual,
+                                &debug_sites,
+                            )
                         })
                         .collect();
 
@@ -123,7 +129,8 @@ impl BamCounter {
         } else {
             // Single-threaded path
             for (chrom, chrom_regions) in grouped {
-                let partial = self.process_chromosome_reads(&chrom, &chrom_regions, min_qual, &debug_sites)?;
+                let partial =
+                    self.process_chromosome_reads(&chrom, &chrom_regions, min_qual, &debug_sites)?;
                 for (idx, (r, a, o)) in partial {
                     let entry = &mut results[idx];
                     entry.0 += r;
@@ -144,10 +151,9 @@ impl BamCounter {
         min_qual: u8,
         debug_sites: &FxHashMap<(String, u32), usize>,
     ) -> PyResult<FxHashMap<usize, (u32, u32, u32)>> {
-        let mut bam = bam::IndexedReader::from_path(&self.bam_path)
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyIOError, _>(
-                format!("Failed to open BAM: {}", e)
-            ))?;
+        let mut bam = bam::IndexedReader::from_path(&self.bam_path).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("Failed to open BAM: {}", e))
+        })?;
 
         let mut seen_reads: FxHashSet<Vec<u8>> = FxHashSet::default();
         let total_snps: usize = regions.len();
@@ -159,11 +165,16 @@ impl BamCounter {
         let mut min_pos: u32 = u32::MAX;
         let mut max_pos: u32 = 0;
         for (idx, region) in regions.iter() {
-            pos_map.entry(region.pos)
+            pos_map
+                .entry(region.pos)
                 .or_insert_with(Vec::new)
                 .push((*idx, region.clone()));
-            if region.pos < min_pos { min_pos = region.pos; }
-            if region.pos > max_pos { max_pos = region.pos; }
+            if region.pos < min_pos {
+                min_pos = region.pos;
+            }
+            if region.pos > max_pos {
+                max_pos = region.pos;
+            }
         }
 
         if pos_map.is_empty() {
@@ -171,7 +182,11 @@ impl BamCounter {
         }
 
         // Fetch the span covering all SNPs on this chromosome
-        let start = if min_pos == 0 { 0 } else { (min_pos - 1) as i64 };
+        let start = if min_pos == 0 {
+            0
+        } else {
+            (min_pos - 1) as i64
+        };
         let end = max_pos.saturating_add(1) as i64;
         if bam.fetch((chrom, start, end)).is_err() {
             return Ok(counts);
@@ -184,7 +199,11 @@ impl BamCounter {
                 Ok(r) => r,
                 Err(_) => continue,
             };
-            if record.is_unmapped() || record.is_secondary() || record.is_supplementary() || record.is_duplicate() {
+            if record.is_unmapped()
+                || record.is_secondary()
+                || record.is_supplementary()
+                || record.is_duplicate()
+            {
                 continue;
             }
             let qname = record.qname().to_vec();
@@ -239,7 +258,9 @@ impl BamCounter {
                 seen_reads.insert(qname.clone());
 
                 if let Some(limit) = debug_sites.get(&(chrom.to_string(), pos1)) {
-                    if *limit > 0 && entry_counts.0 + entry_counts.1 + entry_counts.2 <= *limit as u32 {
+                    if *limit > 0
+                        && entry_counts.0 + entry_counts.1 + entry_counts.2 <= *limit as u32
+                    {
                         eprintln!(
                             "[DEBUG SNP] {}:{} read={} flags(unmap/sec/supp/dup)={}/{}/{}/{} qpos={} base={} -> idx={} ref={} alt={}",
                             chrom,
@@ -264,10 +285,7 @@ impl BamCounter {
     }
 
     /// Group regions by chromosome while preserving encounter order
-    fn group_regions_by_chrom(
-        &self,
-        regions: &[Region]
-    ) -> Vec<(String, Vec<(usize, Region)>)> {
+    fn group_regions_by_chrom(&self, regions: &[Region]) -> Vec<(String, Vec<(usize, Region)>)> {
         let mut grouped: Vec<Vec<(usize, Region)>> = Vec::new();
         let mut chrom_order: Vec<String> = Vec::new();
         let mut chrom_index: FxHashMap<String, usize> = FxHashMap::default();
@@ -292,7 +310,7 @@ impl BamCounter {
 #[allow(dead_code)]
 fn get_base_at_position(
     record: &bam::Record,
-    target_pos: u32,  // 0-based genomic position
+    target_pos: u32, // 0-based genomic position
     min_qual: u8,
 ) -> Option<char> {
     // Get read sequence and qualities
@@ -362,11 +380,28 @@ mod tests {
 
     #[test]
     fn groups_regions_by_chrom_preserving_order() {
-        let counter = BamCounter { bam_path: "dummy.bam".to_string() };
+        let counter = BamCounter {
+            bam_path: "dummy.bam".to_string(),
+        };
         let regions = vec![
-            Region { chrom: "chr1".into(), pos: 10, ref_base: 'A', alt_base: 'G' },
-            Region { chrom: "chr1".into(), pos: 20, ref_base: 'C', alt_base: 'T' },
-            Region { chrom: "chr2".into(), pos: 5, ref_base: 'T', alt_base: 'C' },
+            Region {
+                chrom: "chr1".into(),
+                pos: 10,
+                ref_base: 'A',
+                alt_base: 'G',
+            },
+            Region {
+                chrom: "chr1".into(),
+                pos: 20,
+                ref_base: 'C',
+                alt_base: 'T',
+            },
+            Region {
+                chrom: "chr2".into(),
+                pos: 5,
+                ref_base: 'T',
+                alt_base: 'C',
+            },
         ];
 
         let grouped = counter.group_regions_by_chrom(&regions);

@@ -392,14 +392,15 @@ class VCFSource(VariantSource):
         """Export variants to BED using bcftools subprocess (fallback).
 
         This is the original implementation using bcftools.
+        Note: Multi-allelic sites are now included (removed -m2 -M2 filter)
+        to match bcftools -g het behavior used by WASP2-Python benchmark.
         """
         # Build bcftools commands based on parameters
-        # This follows the pattern from intersect_variant_data.py
+        # NOTE: Removed -m2 -M2 biallelic filter to include multi-allelic het sites
 
-        # Base view command: filter to biallelic variants
+        # Base view command
         view_cmd = [
             "bcftools", "view", str(self.path),
-            "-m2", "-M2",  # min/max alleles
         ]
 
         # Add variant type filter

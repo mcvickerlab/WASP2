@@ -163,4 +163,3 @@ When you **intentionally** change outputs:
 
 - `baselines/pipeline_metadata.txt` - Detailed benchmark data
 - `docs/modules/COUNTING_MODULE.md` - Module documentation
-- `ENGINEERING_PLAN.md` - Overall refactoring strategy

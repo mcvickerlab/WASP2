@@ -99,6 +99,9 @@ def _vcf_to_bed_bcftools(
     This is the original implementation for backward compatibility.
     Prefer variants_to_bed() which uses VariantSource.
 
+    Note: Multi-allelic sites are now included (removed -m2 -M2 filter)
+    to match bcftools -g het behavior used by WASP2-Python benchmark.
+
     Args:
         vcf_file: Path to VCF/VCF.GZ/BCF file
         out_bed: Output BED file path
@@ -113,10 +116,9 @@ def _vcf_to_bed_bcftools(
     vcf_file = Path(vcf_file)
     out_bed = Path(out_bed)
 
-    # Base commands - filter to biallelic variants
+    # Base commands - NOTE: Removed -m2 -M2 to include multi-allelic het sites
     view_cmd = [
         "bcftools", "view", str(vcf_file),
-        "-m2", "-M2"
     ]
 
     # Add variant type filter
