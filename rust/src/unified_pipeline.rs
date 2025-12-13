@@ -24,6 +24,7 @@ use rust_htslib::{bam, bam::Read as BamRead};
 use rustc_hash::FxHashMap;
 use std::fs::File;
 use std::io::{BufWriter, Write};
+use std::sync::atomic::AtomicU64;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
@@ -115,6 +116,14 @@ pub struct UnifiedStats {
     pub tree_build_ms: u64,
     /// Time spent streaming BAM (ms)
     pub bam_stream_ms: u64,
+    /// Time spent querying overlap trees (ms, accumulated)
+    pub overlap_query_ms: u64,
+    /// Time spent processing pairs with variants (ms, accumulated)
+    pub pair_process_ms: u64,
+    /// Time spent blocked sending to writer (ms, accumulated)
+    pub send_ms: u64,
+    /// Time spent in writer thread (ms)
+    pub writer_thread_ms: u64,
 }
 
 impl UnifiedStats {
@@ -135,9 +144,13 @@ impl UnifiedStats {
                 + other.pairs_skipped_unmappable,
             pairs_haplotype_failed: self.pairs_haplotype_failed + other.pairs_haplotype_failed,
             orphan_reads: self.orphan_reads + other.orphan_reads,
+            overlap_query_ms: self.overlap_query_ms + other.overlap_query_ms,
+            pair_process_ms: self.pair_process_ms + other.pair_process_ms,
+            send_ms: self.send_ms + other.send_ms,
             // Keep maximum time values (they represent wall clock for parallel execution)
             tree_build_ms: self.tree_build_ms.max(other.tree_build_ms),
             bam_stream_ms: self.bam_stream_ms.max(other.bam_stream_ms),
+            writer_thread_ms: self.writer_thread_ms.max(other.writer_thread_ms),
         }
     }
 }
@@ -886,9 +899,25 @@ fn fastq_writer_thread(
     r2_path: &str,
     sidecar_path: &str,
     counter: Arc<AtomicUsize>,
+    writer_time_ms: Arc<AtomicU64>,
     compression_threads: usize,
     compress: bool,
 ) -> Result<()> {
+    struct StoreDurationOnDrop {
+        start: Instant,
+        out: Arc<AtomicU64>,
+    }
+    impl Drop for StoreDurationOnDrop {
+        fn drop(&mut self) {
+            self.out
+                .store(self.start.elapsed().as_millis() as u64, Ordering::Relaxed);
+        }
+    }
+    let _writer_timer = StoreDurationOnDrop {
+        start: Instant::now(),
+        out: writer_time_ms,
+    };
+
     let r1_file = File::create(r1_path)?;
     let r2_file = File::create(r2_path)?;
     let mut sidecar = File::create(sidecar_path)?;
@@ -987,6 +1016,10 @@ pub fn unified_make_reads(
     config: &UnifiedConfig,
 ) -> Result<UnifiedStats> {
     let mut stats = UnifiedStats::default();
+    let enable_timing = std::env::var_os("WASP2_TIMING").is_some();
+    let mut overlap_query_ns: u64 = 0;
+    let mut pair_process_ns: u64 = 0;
+    let mut send_ns: u64 = 0;
 
     // Phase 1: Build variant store
     let t0 = Instant::now();
@@ -1005,6 +1038,8 @@ pub fn unified_make_reads(
 
     let hap_counter = Arc::new(AtomicUsize::new(0));
     let hap_counter_clone = Arc::clone(&hap_counter);
+    let writer_time_ms = Arc::new(AtomicU64::new(0));
+    let writer_time_ms_clone = Arc::clone(&writer_time_ms);
 
     // Spawn writer thread (with optional compression)
     let r1_owned = r1_path.to_string();
@@ -1019,6 +1054,7 @@ pub fn unified_make_reads(
             &r2_owned,
             &sidecar_owned,
             hap_counter_clone,
+            writer_time_ms_clone,
             compression_threads,
             compress,
         )
@@ -1082,9 +1118,19 @@ pub fn unified_make_reads(
 
                 // Try to complete a pair without allocating the qname
                 let qname = record.qname();
-                let record_variants = match check_overlaps(&record, &mut querents_by_tid, &store) {
-                    CheckOverlapResult::Found(v) => v,
-                    CheckOverlapResult::NoOverlaps => Vec::new(),
+                let record_variants = if enable_timing {
+                    let t_overlap = Instant::now();
+                    let v = match check_overlaps(&record, &mut querents_by_tid, &store) {
+                        CheckOverlapResult::Found(v) => v,
+                        CheckOverlapResult::NoOverlaps => Vec::new(),
+                    };
+                    overlap_query_ns += t_overlap.elapsed().as_nanos() as u64;
+                    v
+                } else {
+                    match check_overlaps(&record, &mut querents_by_tid, &store) {
+                        CheckOverlapResult::Found(v) => v,
+                        CheckOverlapResult::NoOverlaps => Vec::new(),
+                    }
                 };
 
                 if let Some(mate) = pair_buffer.remove(qname) {
@@ -1108,6 +1154,12 @@ pub fn unified_make_reads(
                         let overlap_mask =
                             overlap_mask_for_pair(&r1_variants, &r2_variants, &store);
                         increment_overlap_stats(&mut stats, overlap_mask);
+                        let t_pair = if enable_timing {
+                            Some(Instant::now())
+                        } else {
+                            None
+                        };
+
                         if config.indel_mode {
                             // INDEL mode: use trim combinations for length preservation
                             let indel_config = IndelConfig {
@@ -1131,8 +1183,16 @@ pub fn unified_make_reads(
                                         writer.write_all(r1.qname()).ok();
                                         writer.write_all(b"\n").ok();
                                     }
-                                    for pair in pairs {
-                                        tx.send(pair).ok();
+                                    if enable_timing {
+                                        let t_send = Instant::now();
+                                        for pair in pairs {
+                                            tx.send(pair).ok();
+                                        }
+                                        send_ns += t_send.elapsed().as_nanos() as u64;
+                                    } else {
+                                        for pair in pairs {
+                                            tx.send(pair).ok();
+                                        }
                                     }
                                 }
                                 ProcessPairResult::KeepAsIs => {
@@ -1164,8 +1224,16 @@ pub fn unified_make_reads(
                                         writer.write_all(r1.qname()).ok();
                                         writer.write_all(b"\n").ok();
                                     }
-                                    for pair in pairs {
-                                        tx.send(pair).ok();
+                                    if enable_timing {
+                                        let t_send = Instant::now();
+                                        for pair in pairs {
+                                            tx.send(pair).ok();
+                                        }
+                                        send_ns += t_send.elapsed().as_nanos() as u64;
+                                    } else {
+                                        for pair in pairs {
+                                            tx.send(pair).ok();
+                                        }
                                     }
                                 }
                                 ProcessPairResult::KeepAsIs => {
@@ -1183,6 +1251,10 @@ pub fn unified_make_reads(
                                     stats.pairs_skipped_unmappable += 1;
                                 }
                             }
+                        }
+
+                        if let Some(t0_pair) = t_pair {
+                            pair_process_ns += t0_pair.elapsed().as_nanos() as u64;
                         }
                     }
                     // `mate` is dropped here, `record` is reused for next iteration
@@ -1239,6 +1311,10 @@ pub fn unified_make_reads(
         .map_err(|_| anyhow::anyhow!("Writer thread panicked"))??;
 
     stats.haplotypes_written = hap_counter.load(Ordering::Relaxed);
+    stats.writer_thread_ms = writer_time_ms.load(Ordering::Relaxed);
+    stats.overlap_query_ms = overlap_query_ns / 1_000_000;
+    stats.pair_process_ms = pair_process_ns / 1_000_000;
+    stats.send_ms = send_ns / 1_000_000;
 
     eprintln!("Unified pipeline complete:");
     eprintln!("  Total reads: {}", stats.total_reads);
@@ -1263,6 +1339,12 @@ pub fn unified_make_reads(
         "  Time: {}ms tree build + {}ms BAM stream",
         stats.tree_build_ms, stats.bam_stream_ms
     );
+    if enable_timing {
+        eprintln!(
+            "  Timing breakdown: {}ms overlaps + {}ms pair-process + {}ms send + {}ms writer",
+            stats.overlap_query_ms, stats.pair_process_ms, stats.send_ms, stats.writer_thread_ms
+        );
+    }
 
     Ok(stats)
 }
@@ -1294,6 +1376,10 @@ fn process_chromosome(
     use rust_htslib::bam::Read as BamRead;
 
     let mut stats = UnifiedStats::default();
+    let enable_timing = std::env::var_os("WASP2_TIMING").is_some();
+    let mut overlap_query_ns: u64 = 0;
+    let mut pair_process_ns: u64 = 0;
+    let mut send_ns: u64 = 0;
     let t0 = Instant::now();
 
     // CRITICAL: Open a fresh IndexedReader for this thread
@@ -1331,9 +1417,19 @@ fn process_chromosome(
 
                 // Try to complete a pair without allocating the qname
                 let qname = record.qname();
-                let record_variants = match check_overlaps(&record, &mut querents_by_tid, store) {
-                    CheckOverlapResult::Found(v) => v,
-                    CheckOverlapResult::NoOverlaps => Vec::new(),
+                let record_variants = if enable_timing {
+                    let t_overlap = Instant::now();
+                    let v = match check_overlaps(&record, &mut querents_by_tid, store) {
+                        CheckOverlapResult::Found(v) => v,
+                        CheckOverlapResult::NoOverlaps => Vec::new(),
+                    };
+                    overlap_query_ns += t_overlap.elapsed().as_nanos() as u64;
+                    v
+                } else {
+                    match check_overlaps(&record, &mut querents_by_tid, store) {
+                        CheckOverlapResult::Found(v) => v,
+                        CheckOverlapResult::NoOverlaps => Vec::new(),
+                    }
                 };
 
                 if let Some(mate) = pair_buffer.remove(qname) {
@@ -1349,6 +1445,11 @@ fn process_chromosome(
                     if r1_variants.is_empty() && r2_variants.is_empty() {
                         stats.pairs_kept += 1;
                     } else {
+                        let t_pair = if enable_timing {
+                            Some(Instant::now())
+                        } else {
+                            None
+                        };
                         let overlap_mask =
                             overlap_mask_for_pair(&r1_variants, &r2_variants, store);
                         increment_overlap_stats(&mut stats, overlap_mask);
@@ -1370,8 +1471,16 @@ fn process_chromosome(
                             ) {
                                 ProcessPairResult::NeedsRemap(pairs) => {
                                     stats.pairs_with_variants += 1;
-                                    for pair in pairs {
-                                        tx.send(pair).ok();
+                                    if enable_timing {
+                                        let t_send = Instant::now();
+                                        for pair in pairs {
+                                            tx.send(pair).ok();
+                                        }
+                                        send_ns += t_send.elapsed().as_nanos() as u64;
+                                    } else {
+                                        for pair in pairs {
+                                            tx.send(pair).ok();
+                                        }
                                     }
                                 }
                                 ProcessPairResult::KeepAsIs => {
@@ -1394,9 +1503,18 @@ fn process_chromosome(
                             ) {
                                 ProcessPairResult::NeedsRemap(pairs) => {
                                     stats.pairs_with_variants += 1;
-                                    for pair in pairs {
-                                        // Send pairs to writer thread - only Vec<u8> data crosses threads
-                                        tx.send(pair).ok();
+                                    if enable_timing {
+                                        let t_send = Instant::now();
+                                        for pair in pairs {
+                                            // Send pairs to writer thread - only Vec<u8> data crosses threads
+                                            tx.send(pair).ok();
+                                        }
+                                        send_ns += t_send.elapsed().as_nanos() as u64;
+                                    } else {
+                                        for pair in pairs {
+                                            // Send pairs to writer thread - only Vec<u8> data crosses threads
+                                            tx.send(pair).ok();
+                                        }
                                     }
                                 }
                                 ProcessPairResult::KeepAsIs => {
@@ -1407,6 +1525,10 @@ fn process_chromosome(
                                     stats.pairs_skipped_unmappable += 1;
                                 }
                             }
+                        }
+
+                        if let Some(t0_pair) = t_pair {
+                            pair_process_ns += t0_pair.elapsed().as_nanos() as u64;
                         }
                     }
                 } else {
@@ -1429,6 +1551,9 @@ fn process_chromosome(
 
     stats.orphan_reads = pair_buffer.len();
     stats.bam_stream_ms = t0.elapsed().as_millis() as u64;
+    stats.overlap_query_ms = overlap_query_ns / 1_000_000;
+    stats.pair_process_ms = pair_process_ns / 1_000_000;
+    stats.send_ms = send_ns / 1_000_000;
 
     Ok(stats)
 }
@@ -1452,6 +1577,7 @@ pub fn unified_make_reads_parallel(
     config: &UnifiedConfig,
 ) -> Result<UnifiedStats> {
     use rayon::prelude::*;
+    let enable_timing = std::env::var_os("WASP2_TIMING").is_some();
 
     // Check BAM index exists - fall back to sequential if not
     let bai_path = format!("{}.bai", bam_path);
@@ -1502,6 +1628,8 @@ pub fn unified_make_reads_parallel(
 
     let hap_counter = Arc::new(AtomicUsize::new(0));
     let hap_counter_clone = Arc::clone(&hap_counter);
+    let writer_time_ms = Arc::new(AtomicU64::new(0));
+    let writer_time_ms_clone = Arc::clone(&writer_time_ms);
 
     let r1_owned = r1_path.to_string();
     let r2_owned = r2_path.to_string();
@@ -1515,6 +1643,7 @@ pub fn unified_make_reads_parallel(
             &r2_owned,
             &sidecar_owned,
             hap_counter_clone,
+            writer_time_ms_clone,
             compression_threads,
             compress,
         )
@@ -1558,6 +1687,7 @@ pub fn unified_make_reads_parallel(
 
     final_stats.haplotypes_written = hap_counter.load(Ordering::Relaxed);
     final_stats.bam_stream_ms = t1.elapsed().as_millis() as u64;
+    final_stats.writer_thread_ms = writer_time_ms.load(Ordering::Relaxed);
 
     eprintln!("Parallel unified pipeline complete:");
     eprintln!("  Total reads: {}", final_stats.total_reads);
@@ -1582,6 +1712,15 @@ pub fn unified_make_reads_parallel(
         final_stats.bam_stream_ms,
         chroms.len().min(rayon::current_num_threads())
     );
+    if enable_timing {
+        eprintln!(
+            "  Timing breakdown (accumulated): {}ms overlaps + {}ms pair-process + {}ms send + {}ms writer",
+            final_stats.overlap_query_ms,
+            final_stats.pair_process_ms,
+            final_stats.send_ms,
+            final_stats.writer_thread_ms
+        );
+    }
 
     Ok(final_stats)
 }
@@ -1654,5 +1793,11 @@ mod tests {
         assert_eq!(stats.total_reads, 0);
         assert_eq!(stats.pairs_processed, 0);
         assert_eq!(stats.haplotypes_written, 0);
+        assert_eq!(stats.tree_build_ms, 0);
+        assert_eq!(stats.bam_stream_ms, 0);
+        assert_eq!(stats.overlap_query_ms, 0);
+        assert_eq!(stats.pair_process_ms, 0);
+        assert_eq!(stats.send_ms, 0);
+        assert_eq!(stats.writer_thread_ms, 0);
     }
 }

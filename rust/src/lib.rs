@@ -558,6 +558,10 @@ fn unified_make_reads_py(
     py_dict.set_item("orphan_reads", stats.orphan_reads)?;
     py_dict.set_item("tree_build_ms", stats.tree_build_ms)?;
     py_dict.set_item("bam_stream_ms", stats.bam_stream_ms)?;
+    py_dict.set_item("overlap_query_ms", stats.overlap_query_ms)?;
+    py_dict.set_item("pair_process_ms", stats.pair_process_ms)?;
+    py_dict.set_item("send_ms", stats.send_ms)?;
+    py_dict.set_item("writer_thread_ms", stats.writer_thread_ms)?;
 
     Ok(py_dict.into())
 }
@@ -661,6 +665,10 @@ fn unified_make_reads_parallel_py(
     py_dict.set_item("orphan_reads", stats.orphan_reads)?;
     py_dict.set_item("tree_build_ms", stats.tree_build_ms)?;
     py_dict.set_item("bam_stream_ms", stats.bam_stream_ms)?;
+    py_dict.set_item("overlap_query_ms", stats.overlap_query_ms)?;
+    py_dict.set_item("pair_process_ms", stats.pair_process_ms)?;
+    py_dict.set_item("send_ms", stats.send_ms)?;
+    py_dict.set_item("writer_thread_ms", stats.writer_thread_ms)?;
 
     Ok(py_dict.into())
 }
