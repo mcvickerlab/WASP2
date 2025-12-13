@@ -51,6 +51,23 @@ pub struct VariantSpan {
     pub hap2: String,
 }
 
+/// Lightweight view of a variant span for allele swapping.
+///
+/// `generate_haplotype_seqs()` only needs the VCF coordinates and haplotype alleles,
+/// so the unified pipeline can avoid per-read `String` allocations by using this
+/// borrowed form.
+#[derive(Debug, Clone, Copy)]
+pub struct VariantSpanView<'a> {
+    /// VCF variant start position (genomic coordinates)
+    pub vcf_start: u32,
+    /// VCF variant end position (genomic coordinates, exclusive)
+    pub vcf_stop: u32,
+    /// Haplotype 1 allele (phased genotype)
+    pub hap1: &'a str,
+    /// Haplotype 2 allele (phased genotype)
+    pub hap2: &'a str,
+}
+
 /// Configuration for remapping
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
@@ -809,6 +826,185 @@ pub fn generate_haplotype_seqs(
     }
 
     // Join segments to create final sequences and qualities
+    let hap1_seq: Vec<u8> = hap1_seq_parts.into_iter().flatten().collect();
+    let hap1_qual: Vec<u8> = hap1_qual_parts.into_iter().flatten().collect();
+    let hap2_seq: Vec<u8> = hap2_seq_parts.into_iter().flatten().collect();
+    let hap2_qual: Vec<u8> = hap2_qual_parts.into_iter().flatten().collect();
+
+    Ok(Some(vec![(hap1_seq, hap1_qual), (hap2_seq, hap2_qual)]))
+}
+
+pub fn generate_haplotype_seqs_view(
+    read: &bam::Record,
+    variants: &[VariantSpanView<'_>],
+    _config: &RemapConfig,
+) -> Result<Option<Vec<(Vec<u8>, Vec<u8>)>>> {
+    if variants.is_empty() {
+        let seq = read.seq().as_bytes();
+        let qual = read.qual().to_vec();
+        return Ok(Some(vec![(seq.clone(), qual.clone()), (seq, qual)]));
+    }
+
+    let original_seq = read.seq().as_bytes();
+    let original_qual = read.qual();
+
+    let has_indels = variants.iter().any(|v| {
+        let ref_len = (v.vcf_stop - v.vcf_start) as usize;
+        v.hap1.len() != ref_len || v.hap2.len() != ref_len
+    });
+
+    let (split_positions, split_qual_positions) = if has_indels {
+        let (ref2q_left, ref2q_right) = build_ref2read_maps(read);
+
+        let mut seq_pos = vec![0];
+        let mut qual_pos = vec![0];
+
+        for variant in variants {
+            let read_start = match ref2q_left.get(&variant.vcf_start) {
+                Some(&pos) => pos,
+                None => return Ok(None),
+            };
+
+            let read_stop = match ref2q_right.get(&(variant.vcf_stop - 1)) {
+                Some(&pos) => pos,
+                None => return Ok(None),
+            };
+
+            if read_start > read_stop {
+                return Ok(None);
+            }
+
+            seq_pos.push(read_start);
+            seq_pos.push(read_stop);
+            qual_pos.push(read_start);
+            qual_pos.push(read_stop);
+        }
+
+        seq_pos.push(original_seq.len());
+        qual_pos.push(original_qual.len());
+
+        (seq_pos, qual_pos)
+    } else {
+        let mut positions = vec![0];
+        for variant in variants {
+            let read_start = match find_read_position(read, variant.vcf_start) {
+                Some(pos) => pos,
+                None => return Ok(None),
+            };
+            let read_stop = match find_read_position(read, variant.vcf_stop - 1) {
+                Some(pos) => pos,
+                None => return Ok(None),
+            };
+
+            if read_start > read_stop {
+                return Ok(None);
+            }
+
+            positions.push(read_start);
+            positions.push(read_stop + 1);
+        }
+
+        positions.push(original_seq.len());
+        (positions.clone(), positions)
+    };
+
+    for i in 1..split_positions.len() {
+        if split_positions[i] < split_positions[i - 1] {
+            return Ok(None);
+        }
+    }
+    for i in 1..split_qual_positions.len() {
+        if split_qual_positions[i] < split_qual_positions[i - 1] {
+            return Ok(None);
+        }
+    }
+
+    let mut split_seq: Vec<&[u8]> = Vec::new();
+    let mut split_qual: Vec<&[u8]> = Vec::new();
+
+    for i in 0..split_positions.len() - 1 {
+        split_seq.push(&original_seq[split_positions[i]..split_positions[i + 1]]);
+    }
+    for i in 0..split_qual_positions.len() - 1 {
+        split_qual.push(&original_qual[split_qual_positions[i]..split_qual_positions[i + 1]]);
+    }
+
+    let mut hap1_seq_parts: Vec<Vec<u8>> = Vec::new();
+    let mut hap1_qual_parts: Vec<Vec<u8>> = Vec::new();
+
+    for (i, seq_part) in split_seq.iter().enumerate() {
+        if i % 2 == 0 {
+            hap1_seq_parts.push(seq_part.to_vec());
+            hap1_qual_parts.push(split_qual[i].to_vec());
+        } else {
+            let variant_idx = i / 2;
+            let variant = &variants[variant_idx];
+            let allele = variant.hap1.as_bytes();
+
+            hap1_seq_parts.push(allele.to_vec());
+
+            let orig_len = seq_part.len();
+            let allele_len = allele.len();
+
+            if allele_len == orig_len {
+                hap1_qual_parts.push(split_qual[i].to_vec());
+            } else if allele_len < orig_len {
+                hap1_qual_parts.push(split_qual[i][..allele_len].to_vec());
+            } else {
+                let extra_len = allele_len - orig_len;
+                let left_qual = if i > 0 { split_qual[i - 1] } else { &[] };
+                let right_qual = if i < split_qual.len() - 1 {
+                    split_qual[i + 1]
+                } else {
+                    &[]
+                };
+
+                let extra_quals = fill_insertion_quals(extra_len, left_qual, right_qual, 30);
+                let mut combined = split_qual[i].to_vec();
+                combined.extend(extra_quals);
+                hap1_qual_parts.push(combined);
+            }
+        }
+    }
+
+    let mut hap2_seq_parts: Vec<Vec<u8>> = Vec::new();
+    let mut hap2_qual_parts: Vec<Vec<u8>> = Vec::new();
+
+    for (i, seq_part) in split_seq.iter().enumerate() {
+        if i % 2 == 0 {
+            hap2_seq_parts.push(seq_part.to_vec());
+            hap2_qual_parts.push(split_qual[i].to_vec());
+        } else {
+            let variant_idx = i / 2;
+            let variant = &variants[variant_idx];
+            let allele = variant.hap2.as_bytes();
+
+            hap2_seq_parts.push(allele.to_vec());
+
+            let orig_len = seq_part.len();
+            let allele_len = allele.len();
+
+            if allele_len == orig_len {
+                hap2_qual_parts.push(split_qual[i].to_vec());
+            } else if allele_len < orig_len {
+                hap2_qual_parts.push(split_qual[i][..allele_len].to_vec());
+            } else {
+                let extra_len = allele_len - orig_len;
+                let left_qual = if i > 0 { split_qual[i - 1] } else { &[] };
+                let right_qual = if i < split_qual.len() - 1 {
+                    split_qual[i + 1]
+                } else {
+                    &[]
+                };
+
+                let extra_quals = fill_insertion_quals(extra_len, left_qual, right_qual, 30);
+                let mut combined = split_qual[i].to_vec();
+                combined.extend(extra_quals);
+                hap2_qual_parts.push(combined);
+            }
+        }
+    }
+
     let hap1_seq: Vec<u8> = hap1_seq_parts.into_iter().flatten().collect();
     let hap1_qual: Vec<u8> = hap1_qual_parts.into_iter().flatten().collect();
     let hap2_seq: Vec<u8> = hap2_seq_parts.into_iter().flatten().collect();
@@ -1923,6 +2119,62 @@ mod tests {
         rec.set_pos(pos);
 
         rec
+    }
+
+    #[test]
+    fn test_generate_haplotype_seqs_view_matches_owned_snp() {
+        let rec = create_test_record(100, "50M");
+        let owned = vec![VariantSpan {
+            chrom: "chr1".to_string(),
+            start: 100,
+            stop: 150,
+            vcf_start: 120,
+            vcf_stop: 121,
+            mate: 1,
+            hap1: "A".to_string(),
+            hap2: "G".to_string(),
+        }];
+        let owned_refs: Vec<&VariantSpan> = owned.iter().collect();
+
+        let view = vec![VariantSpanView {
+            vcf_start: 120,
+            vcf_stop: 121,
+            hap1: "A",
+            hap2: "G",
+        }];
+
+        let cfg = RemapConfig::default();
+        let out_owned = generate_haplotype_seqs(&rec, &owned_refs, &cfg).unwrap();
+        let out_view = generate_haplotype_seqs_view(&rec, &view, &cfg).unwrap();
+        assert_eq!(out_owned, out_view);
+    }
+
+    #[test]
+    fn test_generate_haplotype_seqs_view_matches_owned_insertion() {
+        let rec = create_test_record(100, "50M");
+        let owned = vec![VariantSpan {
+            chrom: "chr1".to_string(),
+            start: 100,
+            stop: 150,
+            vcf_start: 125,
+            vcf_stop: 126,
+            mate: 1,
+            hap1: "A".to_string(),
+            hap2: "ATG".to_string(), // 2bp insertion relative to ref len=1
+        }];
+        let owned_refs: Vec<&VariantSpan> = owned.iter().collect();
+
+        let view = vec![VariantSpanView {
+            vcf_start: 125,
+            vcf_stop: 126,
+            hap1: "A",
+            hap2: "ATG",
+        }];
+
+        let cfg = RemapConfig::default();
+        let out_owned = generate_haplotype_seqs(&rec, &owned_refs, &cfg).unwrap();
+        let out_view = generate_haplotype_seqs_view(&rec, &view, &cfg).unwrap();
+        assert_eq!(out_owned, out_view);
     }
 
     #[test]

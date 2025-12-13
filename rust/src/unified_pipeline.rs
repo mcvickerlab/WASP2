@@ -32,8 +32,8 @@ use std::time::Instant;
 use crate::bam_intersect::{build_variant_store, VariantStore};
 use crate::bam_remapper::{
     apply_trim_combination, calculate_indel_delta, classify_variant_location,
-    generate_haplotype_seqs, generate_trim_combinations, IndelConfig, RemapConfig, VariantLocation,
-    VariantSpan as RemapVariantSpan,
+    generate_haplotype_seqs_view, generate_trim_combinations, IndelConfig, RemapConfig,
+    VariantLocation, VariantSpanView,
 };
 
 // ============================================================================
@@ -240,9 +240,9 @@ fn expected_start_upstream_only(
         // Use CIGAR-aware classification from bam_remapper
         let location = classify_variant_location(read, v_start, v_stop);
 
-        // Get haplotype-specific allele for delta calculation
-        let (hap1, hap2) = genotype_to_alleles(&v.genotype, &v.ref_allele, &v.alt_allele)
-            .unwrap_or_else(|| (v.ref_allele.clone(), v.alt_allele.clone()));
+        // Get haplotype-specific allele for delta calculation (borrowed; avoid per-read allocations)
+        let (hap1, hap2) = genotype_to_alleles_view(&v.genotype, &v.ref_allele, &v.alt_allele)
+            .unwrap_or((v.ref_allele.as_str(), v.alt_allele.as_str()));
         let ref_len = v.ref_allele.len() as i64;
         let alt_len = if hap_idx == 0 {
             hap1.len() as i64
@@ -411,29 +411,21 @@ fn increment_overlap_stats(stats: &mut UnifiedStats, mask: u8) {
     }
 }
 
-/// Convert phased genotype to haplotype allele strings
+/// Convert phased genotype to haplotype alleles (borrowed).
+///
 /// Supports both 0/1 indexing (ref/alt) and direct allele strings.
-fn genotype_to_alleles(
-    genotype: &str,
-    ref_allele: &str,
-    alt_allele: &str,
-) -> Option<(String, String)> {
-    let parts: Vec<&str> = genotype.split('|').collect();
-    if parts.len() != 2 {
-        return None;
-    }
-
-    let to_allele = |s: &str| -> Option<String> {
-        match s {
-            "0" => Some(ref_allele.to_string()),
-            "1" => Some(alt_allele.to_string()),
-            _ => Some(s.to_string()), // Already allele string
-        }
+fn genotype_to_alleles_view<'a>(
+    genotype: &'a str,
+    ref_allele: &'a str,
+    alt_allele: &'a str,
+) -> Option<(&'a str, &'a str)> {
+    let (left, right) = genotype.split_once('|')?;
+    let to_allele = |s: &'a str| match s {
+        "0" => ref_allele,
+        "1" => alt_allele,
+        _ => s,
     };
-
-    let hap1 = to_allele(parts[0])?;
-    let hap2 = to_allele(parts[1])?;
-    Some((hap1, hap2))
+    Some((to_allele(left), to_allele(right)))
 }
 
 /// Generate haplotype sequences for a read with variants
@@ -468,41 +460,27 @@ fn generate_haplotypes_for_read(
     let mut sorted_overlaps = overlaps.to_vec();
     sorted_overlaps.sort_by_key(|&(_, start, _)| start);
 
-    // Build VariantSpan for EACH overlapping variant (not just first!)
-    let mate = if read.is_first_in_template() { 1 } else { 2 };
-    let mut spans: Vec<RemapVariantSpan> = Vec::with_capacity(sorted_overlaps.len());
+    let mut spans: Vec<VariantSpanView<'_>> = Vec::with_capacity(sorted_overlaps.len());
 
     for (variant_idx, _, _) in &sorted_overlaps {
         let variant = &store.variants[*variant_idx as usize];
-        let (hap1, hap2) = match genotype_to_alleles(
-            &variant.genotype,
-            &variant.ref_allele,
-            &variant.alt_allele,
-        ) {
-            Some(h) => h,
-            None => return None, // Invalid genotype format
-        };
-
-        spans.push(RemapVariantSpan {
-            chrom: variant.chrom.clone(),
-            start: read.pos() as u32,
-            stop: read.reference_end() as u32,
+        let (hap1, hap2) =
+            genotype_to_alleles_view(&variant.genotype, &variant.ref_allele, &variant.alt_allele)?;
+        spans.push(VariantSpanView {
             vcf_start: variant.start,
             vcf_stop: variant.stop,
-            mate,
             hap1,
             hap2,
         });
     }
 
     // Pass ALL spans to generate_haplotype_seqs (which already supports multiple variants)
-    let span_refs: Vec<&RemapVariantSpan> = spans.iter().collect();
     let remap_config = RemapConfig {
         max_seqs,
         is_phased: true,
     };
 
-    match generate_haplotype_seqs(read, &span_refs, &remap_config) {
+    match generate_haplotype_seqs_view(read, &spans, &remap_config) {
         Ok(Some(haps)) => Some(haps),
         _ => None, // Unmappable or error: skip this read
     }
