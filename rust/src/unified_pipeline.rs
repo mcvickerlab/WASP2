@@ -18,6 +18,7 @@ use coitrees::SortedQuerent;
 use crossbeam_channel::{bounded, Receiver, Sender};
 use flate2::Compression;
 use gzp::{deflate::Gzip, ZBuilder};
+use itoa::Buffer as ItoaBuffer;
 use rust_htslib::bam::ext::BamRecordExtensions;
 use rust_htslib::{bam, bam::Read as BamRead};
 use rustc_hash::FxHashMap;
@@ -198,21 +199,16 @@ pub enum ProcessPairResult {
 // Core Functions
 // ============================================================================
 
-/// Reverse complement a DNA sequence
-/// BAM stores reverse-strand reads as already reverse-complemented
-/// For FASTQ output (for remapping), we need to reverse-complement back to original orientation
-fn reverse_complement(seq: &[u8]) -> Vec<u8> {
-    seq.iter()
-        .rev()
-        .map(|&b| match b {
-            b'A' | b'a' => b'T',
-            b'T' | b't' => b'A',
-            b'C' | b'c' => b'G',
-            b'G' | b'g' => b'C',
-            b'N' | b'n' => b'N',
-            _ => b'N', // Handle any unexpected bases
-        })
-        .collect()
+#[inline]
+fn complement_base(b: u8) -> u8 {
+    match b {
+        b'A' | b'a' => b'T',
+        b'T' | b't' => b'A',
+        b'C' | b'c' => b'G',
+        b'G' | b'g' => b'C',
+        b'N' | b'n' => b'N',
+        _ => b'N',
+    }
 }
 
 /// Compute expected reference start for a read in a haplotype/trim combo.
@@ -282,11 +278,6 @@ fn expected_start_upstream_only(
     }
 }
 
-/// Reverse a quality string (for reverse-complemented reads)
-fn reverse_quals(quals: &[u8]) -> Vec<u8> {
-    quals.iter().rev().copied().collect()
-}
-
 /// Build chromosome name lookup from BAM header
 fn build_tid_lookup(header: &bam::HeaderView) -> Vec<String> {
     (0..header.target_count())
@@ -306,15 +297,17 @@ fn generate_wasp_name(
     hap_idx: usize,
     total_haps: usize,
 ) -> Vec<u8> {
-    let mut name = original_name.to_vec();
+    let mut name = Vec::with_capacity(original_name.len() + 64);
+    name.extend_from_slice(original_name);
     name.extend_from_slice(b"_WASP_");
-    name.extend_from_slice(r1_pos.to_string().as_bytes());
+    let mut tmp = ItoaBuffer::new();
+    name.extend_from_slice(tmp.format(r1_pos).as_bytes());
     name.extend_from_slice(b"_");
-    name.extend_from_slice(r2_pos.to_string().as_bytes());
+    name.extend_from_slice(tmp.format(r2_pos).as_bytes());
     name.extend_from_slice(b"_");
-    name.extend_from_slice(hap_idx.to_string().as_bytes());
+    name.extend_from_slice(tmp.format(hap_idx).as_bytes());
     name.extend_from_slice(b"_");
-    name.extend_from_slice(total_haps.to_string().as_bytes());
+    name.extend_from_slice(tmp.format(total_haps).as_bytes());
     name
 }
 
@@ -836,47 +829,65 @@ fn generate_wasp_name_extended(
     r1_delta: i32,
     r2_delta: i32,
 ) -> Vec<u8> {
-    let mut name = original_name.to_vec();
+    let mut name = Vec::with_capacity(original_name.len() + 128);
+    name.extend_from_slice(original_name);
     name.extend_from_slice(b"_WASP_");
-    name.extend_from_slice(r1_pos.to_string().as_bytes());
+    let mut tmp = ItoaBuffer::new();
+    name.extend_from_slice(tmp.format(r1_pos).as_bytes());
     name.extend_from_slice(b"_");
-    name.extend_from_slice(r2_pos.to_string().as_bytes());
+    name.extend_from_slice(tmp.format(r2_pos).as_bytes());
     name.extend_from_slice(b"_");
-    name.extend_from_slice(hap_idx.to_string().as_bytes());
+    name.extend_from_slice(tmp.format(hap_idx).as_bytes());
     name.extend_from_slice(b"_");
-    name.extend_from_slice(total_haps.to_string().as_bytes());
+    name.extend_from_slice(tmp.format(total_haps).as_bytes());
     name.extend_from_slice(b"_");
-    name.extend_from_slice(trim_combo_id.to_string().as_bytes());
+    name.extend_from_slice(tmp.format(trim_combo_id).as_bytes());
     name.extend_from_slice(b"_");
-    name.extend_from_slice(total_combos.to_string().as_bytes());
+    name.extend_from_slice(tmp.format(total_combos).as_bytes());
     name.extend_from_slice(b"_");
-    name.extend_from_slice(r1_delta.abs().to_string().as_bytes());
+    name.extend_from_slice(tmp.format(r1_delta.abs()).as_bytes());
     name.extend_from_slice(b"_");
-    name.extend_from_slice(r2_delta.abs().to_string().as_bytes());
+    name.extend_from_slice(tmp.format(r2_delta.abs()).as_bytes());
     name
 }
 
-/// Helper to write a single FASTQ record
-/// If the read was originally on the reverse strand, reverse-complement the sequence
-/// and reverse the quality scores to restore the original read orientation.
-/// This is required because BAM stores reverse-strand reads as already rev-comped.
-fn write_fastq_record<W: Write>(writer: &mut W, hap: &HaplotypeOutput) -> Result<()> {
-    // If the original read was on reverse strand, reverse-complement to restore original orientation
-    // BAM stores reverse-strand reads as already reverse-complemented
-    // For FASTQ (for BWA remapping), we need the original read sequence orientation
-    let (seq, quals) = if hap.is_reverse {
-        (reverse_complement(&hap.sequence), reverse_quals(&hap.quals))
-    } else {
-        (hap.sequence.clone(), hap.quals.clone())
-    };
-
-    let qual_string: Vec<u8> = quals.iter().map(|&q| q + 33).collect();
+/// Helper to write a single FASTQ record.
+///
+/// Uses caller-provided scratch buffers to avoid per-record allocations.
+fn write_fastq_record<W: Write>(
+    writer: &mut W,
+    hap: &HaplotypeOutput,
+    seq_buf: &mut Vec<u8>,
+    qual_buf: &mut Vec<u8>,
+) -> Result<()> {
     writer.write_all(b"@")?;
     writer.write_all(&hap.name)?;
     writer.write_all(b"\n")?;
-    writer.write_all(&seq)?;
+
+    // Sequence
+    if hap.is_reverse {
+        seq_buf.clear();
+        seq_buf.reserve(hap.sequence.len());
+        seq_buf.extend(hap.sequence.iter().rev().map(|&b| complement_base(b)));
+        writer.write_all(seq_buf)?;
+    } else {
+        writer.write_all(&hap.sequence)?;
+    }
     writer.write_all(b"\n+\n")?;
-    writer.write_all(&qual_string)?;
+
+    // Quals (+33, reverse if needed)
+    qual_buf.clear();
+    qual_buf.reserve(hap.quals.len());
+    if hap.is_reverse {
+        for &q in hap.quals.iter().rev() {
+            qual_buf.push(q + 33);
+        }
+    } else {
+        for &q in &hap.quals {
+            qual_buf.push(q + 33);
+        }
+    }
+    writer.write_all(qual_buf)?;
     writer.write_all(b"\n")?;
     Ok(())
 }
@@ -899,6 +910,9 @@ fn fastq_writer_thread(
     let r1_file = File::create(r1_path)?;
     let r2_file = File::create(r2_path)?;
     let mut sidecar = File::create(sidecar_path)?;
+    let mut seq_buf: Vec<u8> = Vec::new();
+    let mut qual_buf: Vec<u8> = Vec::new();
+    let mut itoa_buf = ItoaBuffer::new();
 
     if compress {
         // Use gzp for parallel gzip compression (similar to pigz)
@@ -915,20 +929,20 @@ fn fastq_writer_thread(
 
         for pair in rx {
             // Write R1 and R2 atomically - they arrive together and are written together
-            write_fastq_record(&mut r1_writer, &pair.r1)?;
-            write_fastq_record(&mut r2_writer, &pair.r2)?;
+            write_fastq_record(&mut r1_writer, &pair.r1, &mut seq_buf, &mut qual_buf)?;
+            write_fastq_record(&mut r2_writer, &pair.r2, &mut seq_buf, &mut qual_buf)?;
             // Sidecar: qname  exp_pos1  exp_pos2  trim_combo_id  total_combos  overlap_mask
             sidecar.write_all(&pair.r1.name)?;
             sidecar.write_all(b"\t")?;
-            sidecar.write_all(pair.exp_pos1.to_string().as_bytes())?;
+            sidecar.write_all(itoa_buf.format(pair.exp_pos1).as_bytes())?;
             sidecar.write_all(b"\t")?;
-            sidecar.write_all(pair.exp_pos2.to_string().as_bytes())?;
+            sidecar.write_all(itoa_buf.format(pair.exp_pos2).as_bytes())?;
             sidecar.write_all(b"\t")?;
-            sidecar.write_all(pair.trim_combo_id.to_string().as_bytes())?;
+            sidecar.write_all(itoa_buf.format(pair.trim_combo_id).as_bytes())?;
             sidecar.write_all(b"\t")?;
-            sidecar.write_all(pair.total_combos.to_string().as_bytes())?;
+            sidecar.write_all(itoa_buf.format(pair.total_combos).as_bytes())?;
             sidecar.write_all(b"\t")?;
-            sidecar.write_all(pair.overlap_mask.to_string().as_bytes())?;
+            sidecar.write_all(&[b'0' + pair.overlap_mask])?;
             sidecar.write_all(b"\n")?;
             counter.fetch_add(2, Ordering::Relaxed); // Count both reads
         }
@@ -944,20 +958,20 @@ fn fastq_writer_thread(
 
         for pair in rx {
             // Write R1 and R2 atomically - they arrive together and are written together
-            write_fastq_record(&mut r1_writer, &pair.r1)?;
-            write_fastq_record(&mut r2_writer, &pair.r2)?;
+            write_fastq_record(&mut r1_writer, &pair.r1, &mut seq_buf, &mut qual_buf)?;
+            write_fastq_record(&mut r2_writer, &pair.r2, &mut seq_buf, &mut qual_buf)?;
             // Sidecar: qname  exp_pos1  exp_pos2  trim_combo_id  total_combos  overlap_mask
             sidecar.write_all(&pair.r1.name)?;
             sidecar.write_all(b"\t")?;
-            sidecar.write_all(pair.exp_pos1.to_string().as_bytes())?;
+            sidecar.write_all(itoa_buf.format(pair.exp_pos1).as_bytes())?;
             sidecar.write_all(b"\t")?;
-            sidecar.write_all(pair.exp_pos2.to_string().as_bytes())?;
+            sidecar.write_all(itoa_buf.format(pair.exp_pos2).as_bytes())?;
             sidecar.write_all(b"\t")?;
-            sidecar.write_all(pair.trim_combo_id.to_string().as_bytes())?;
+            sidecar.write_all(itoa_buf.format(pair.trim_combo_id).as_bytes())?;
             sidecar.write_all(b"\t")?;
-            sidecar.write_all(pair.total_combos.to_string().as_bytes())?;
+            sidecar.write_all(itoa_buf.format(pair.total_combos).as_bytes())?;
             sidecar.write_all(b"\t")?;
-            sidecar.write_all(pair.overlap_mask.to_string().as_bytes())?;
+            sidecar.write_all(&[b'0' + pair.overlap_mask])?;
             sidecar.write_all(b"\n")?;
             counter.fetch_add(2, Ordering::Relaxed); // Count both reads
         }
@@ -1606,6 +1620,45 @@ mod tests {
         let name = generate_wasp_name(b"ERR123456.1000", 12345, 67890, 1, 2);
         let expected = b"ERR123456.1000_WASP_12345_67890_1_2";
         assert_eq!(name, expected.to_vec());
+    }
+
+    #[test]
+    fn test_generate_wasp_name_extended() {
+        let name = generate_wasp_name_extended(b"ERR123456.1000", 10, 20, 3, 5, 257, 16, -2, 4);
+        let expected = b"ERR123456.1000_WASP_10_20_3_5_257_16_2_4";
+        assert_eq!(name, expected.to_vec());
+    }
+
+    #[test]
+    fn test_write_fastq_record_forward() {
+        let hap = HaplotypeOutput {
+            name: b"read/1".to_vec(),
+            sequence: b"ACGTN".to_vec(),
+            quals: vec![0, 1, 2, 3, 4],
+            is_r1: true,
+            is_reverse: false,
+        };
+        let mut out: Vec<u8> = Vec::new();
+        let mut seq_buf: Vec<u8> = Vec::new();
+        let mut qual_buf: Vec<u8> = Vec::new();
+        write_fastq_record(&mut out, &hap, &mut seq_buf, &mut qual_buf).unwrap();
+        assert_eq!(out, b"@read/1\nACGTN\n+\n!\"#$%\n".to_vec());
+    }
+
+    #[test]
+    fn test_write_fastq_record_reverse() {
+        let hap = HaplotypeOutput {
+            name: b"read/1".to_vec(),
+            sequence: b"ACGTN".to_vec(),
+            quals: vec![0, 1, 2, 3, 4],
+            is_r1: true,
+            is_reverse: true,
+        };
+        let mut out: Vec<u8> = Vec::new();
+        let mut seq_buf: Vec<u8> = Vec::new();
+        let mut qual_buf: Vec<u8> = Vec::new();
+        write_fastq_record(&mut out, &hap, &mut seq_buf, &mut qual_buf).unwrap();
+        assert_eq!(out, b"@read/1\nNACGT\n+\n%$#\"!\n".to_vec());
     }
 
     #[test]
