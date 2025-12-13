@@ -257,7 +257,7 @@ pub fn intersect_bam_with_store(
         // coitrees uses inclusive intervals, so query [start, end-1]
         querent.query(read_start as i32, read_end as i32 - 1, |node| {
             // Lookup full variant data by index (only on matches!)
-            let idx: usize = node.metadata.clone() as usize;
+            let idx: usize = u32::from(node.metadata.clone()) as usize;
             let info = &store.variants[idx];
             has_overlap = true;
 
@@ -507,7 +507,7 @@ pub fn intersect_bam_with_store_multi(
         let read_name = String::from_utf8_lossy(read.qname());
 
         querent.query(read_start as i32, read_end as i32 - 1, |node| {
-            let idx: usize = node.metadata.clone() as usize;
+            let idx: usize = u32::from(node.metadata.clone()) as usize;
             let info = &store.variants[idx];
 
             // Write base columns
@@ -648,7 +648,7 @@ mod tests {
         // Query that should hit first variant
         let mut found_indices: Vec<u32> = Vec::new();
         tree.query(50, 150, |node| {
-            found_indices.push(*node.metadata);
+            found_indices.push(u32::from(node.metadata.clone()));
         });
         assert_eq!(found_indices.len(), 1);
         assert_eq!(found_indices[0], 0);
@@ -657,14 +657,14 @@ mod tests {
         // Query that should hit both variants
         found_indices.clear();
         tree.query(50, 250, |node| {
-            found_indices.push(*node.metadata);
+            found_indices.push(u32::from(node.metadata.clone()));
         });
         assert_eq!(found_indices.len(), 2);
 
         // Query that should hit nothing
         found_indices.clear();
         tree.query(300, 400, |node| {
-            found_indices.push(*node.metadata);
+            found_indices.push(u32::from(node.metadata.clone()));
         });
         assert_eq!(found_indices.len(), 0);
     }

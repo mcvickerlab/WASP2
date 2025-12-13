@@ -368,7 +368,7 @@ fn check_overlaps(
     let mut querent: coitrees::COITreeSortedQuerent<u32, u32> = SortedQuerent::new(tree);
 
     querent.query(read_start, read_end, |node| {
-        let variant_idx: u32 = node.metadata.clone();
+        let variant_idx: u32 = u32::from(node.metadata.clone());
         let variant = &store.variants[variant_idx as usize];
         overlapping.push((variant_idx, variant.start, variant.stop));
     });
