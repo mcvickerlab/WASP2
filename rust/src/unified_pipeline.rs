@@ -14,7 +14,7 @@
 //! - Total: ~1.3GB
 
 use anyhow::{Context, Result};
-use coitrees::SortedQuerent;
+use coitrees::IntervalTree;
 use crossbeam_channel::{bounded, Receiver, Sender};
 use flate2::Compression;
 use gzp::{deflate::Gzip, ZBuilder};
@@ -278,13 +278,14 @@ fn expected_start_upstream_only(
     }
 }
 
-/// Build chromosome name lookup from BAM header
-fn build_tid_lookup(header: &bam::HeaderView) -> Vec<String> {
+fn build_trees_by_tid<'a>(
+    header: &bam::HeaderView,
+    trees: &'a FxHashMap<String, coitrees::COITree<u32, u32>>,
+) -> Vec<Option<&'a coitrees::COITree<u32, u32>>> {
     (0..header.target_count())
         .map(|tid| {
-            std::str::from_utf8(header.tid2name(tid))
-                .unwrap_or("unknown")
-                .to_string()
+            let name = std::str::from_utf8(header.tid2name(tid)).unwrap_or("unknown");
+            trees.get(name)
         })
         .collect()
 }
@@ -338,17 +339,15 @@ enum CheckOverlapResult {
 /// - Found: All overlapping variants (baseline traversal order)
 fn check_overlaps(
     read: &bam::Record,
-    tid_to_name: &[String],
-    trees: &FxHashMap<String, coitrees::COITree<u32, u32>>,
+    trees_by_tid: &[Option<&coitrees::COITree<u32, u32>>],
     store: &VariantStore,
 ) -> CheckOverlapResult {
     let tid = read.tid();
-    if tid < 0 || tid as usize >= tid_to_name.len() {
+    if tid < 0 {
         return CheckOverlapResult::NoOverlaps;
     }
 
-    let chrom = &tid_to_name[tid as usize];
-    let tree = match trees.get(chrom) {
+    let tree = match trees_by_tid.get(tid as usize).and_then(|t| *t) {
         Some(t) => t,
         None => return CheckOverlapResult::NoOverlaps,
     };
@@ -356,11 +355,8 @@ fn check_overlaps(
     let read_start = read.pos() as i32;
     let read_end = read.reference_end() as i32 - 1;
 
-    // Collect ALL overlapping variants using a fresh SortedQuerent per read
     let mut overlapping: Vec<(u32, u32, u32)> = Vec::new();
-    let mut querent: coitrees::COITreeSortedQuerent<u32, u32> = SortedQuerent::new(tree);
-
-    querent.query(read_start, read_end, |node| {
+    tree.query(read_start, read_end, |node| {
         let variant_idx: u32 = u32::from(node.metadata.clone());
         let variant = &store.variants[variant_idx as usize];
         overlapping.push((variant_idx, variant.start, variant.stop));
@@ -1067,7 +1063,7 @@ pub fn unified_make_reads(
     bam.set_threads(config.read_threads).ok();
 
     let header = bam.header().clone();
-    let tid_to_name = build_tid_lookup(&header);
+    let trees_by_tid = build_trees_by_tid(&header, &store.trees);
 
     // Pair buffer: read_name -> first-seen mate
     let mut pair_buffer: FxHashMap<Vec<u8>, bam::Record> = FxHashMap::default();
@@ -1113,11 +1109,11 @@ pub fn unified_make_reads(
 
                     // Check overlaps for both mates - returns ALL overlapping variants
                     // Avoid cloning by moving the Vec out of the result enum.
-                    let r1_variants = match check_overlaps(r1, &tid_to_name, &store.trees, &store) {
+                    let r1_variants = match check_overlaps(r1, &trees_by_tid, &store) {
                         CheckOverlapResult::Found(v) => v,
                         CheckOverlapResult::NoOverlaps => Vec::new(),
                     };
-                    let r2_variants = match check_overlaps(r2, &tid_to_name, &store.trees, &store) {
+                    let r2_variants = match check_overlaps(r2, &trees_by_tid, &store) {
                         CheckOverlapResult::Found(v) => v,
                         CheckOverlapResult::NoOverlaps => Vec::new(),
                     };
@@ -1325,7 +1321,7 @@ fn process_chromosome(
     bam.set_threads(2).ok();
 
     let header = bam.header().clone();
-    let tid_to_name = build_tid_lookup(&header);
+    let trees_by_tid = build_trees_by_tid(&header, &store.trees);
 
     // Per-chromosome pair buffer
     let mut pair_buffer: FxHashMap<Vec<u8>, bam::Record> = FxHashMap::default();
@@ -1360,11 +1356,11 @@ fn process_chromosome(
                     };
 
                     // Avoid cloning by moving the Vec out of the result enum.
-                    let r1_variants = match check_overlaps(r1, &tid_to_name, &store.trees, store) {
+                    let r1_variants = match check_overlaps(r1, &trees_by_tid, store) {
                         CheckOverlapResult::Found(v) => v,
                         CheckOverlapResult::NoOverlaps => Vec::new(),
                     };
-                    let r2_variants = match check_overlaps(r2, &tid_to_name, &store.trees, store) {
+                    let r2_variants = match check_overlaps(r2, &trees_by_tid, store) {
                         CheckOverlapResult::Found(v) => v,
                         CheckOverlapResult::NoOverlaps => Vec::new(),
                     };
