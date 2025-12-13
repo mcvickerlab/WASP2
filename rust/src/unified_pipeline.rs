@@ -1098,10 +1098,9 @@ pub fn unified_make_reads(
                     continue;
                 }
 
-                let read_name = record.qname().to_vec();
-
-                // Try to complete a pair
-                if let Some(mate) = pair_buffer.remove(&read_name) {
+                // Try to complete a pair without allocating the qname
+                let qname = record.qname();
+                if let Some(mate) = pair_buffer.remove(qname) {
                     // Pair complete - process it
                     stats.pairs_processed += 1;
 
@@ -1113,16 +1112,13 @@ pub fn unified_make_reads(
                     };
 
                     // Check overlaps for both mates - returns ALL overlapping variants
-                    let r1_result = check_overlaps(r1, &tid_to_name, &store.trees, &store);
-                    let r2_result = check_overlaps(r2, &tid_to_name, &store.trees, &store);
-
-                    // Extract variant vectors from results
-                    let r1_variants = match &r1_result {
-                        CheckOverlapResult::Found(v) => v.clone(),
+                    // Avoid cloning by moving the Vec out of the result enum.
+                    let r1_variants = match check_overlaps(r1, &tid_to_name, &store.trees, &store) {
+                        CheckOverlapResult::Found(v) => v,
                         CheckOverlapResult::NoOverlaps => Vec::new(),
                     };
-                    let r2_variants = match &r2_result {
-                        CheckOverlapResult::Found(v) => v.clone(),
+                    let r2_variants = match check_overlaps(r2, &tid_to_name, &store.trees, &store) {
+                        CheckOverlapResult::Found(v) => v,
                         CheckOverlapResult::NoOverlaps => Vec::new(),
                     };
 
@@ -1217,6 +1213,7 @@ pub fn unified_make_reads(
                 } else {
                     // First mate seen - move record into buffer and allocate new one
                     // This avoids cloning while still allowing record reuse for completed pairs
+                    let read_name = qname.to_vec();
                     pair_buffer.insert(read_name, record);
                     record = bam::Record::new();
                 }
@@ -1350,9 +1347,9 @@ fn process_chromosome(
                     continue;
                 }
 
-                let read_name = record.qname().to_vec();
-
-                if let Some(mate) = pair_buffer.remove(&read_name) {
+                // Try to complete a pair without allocating the qname
+                let qname = record.qname();
+                if let Some(mate) = pair_buffer.remove(qname) {
                     // Pair complete
                     stats.pairs_processed += 1;
 
@@ -1362,15 +1359,13 @@ fn process_chromosome(
                         (&mate, &record)
                     };
 
-                    let r1_result = check_overlaps(r1, &tid_to_name, &store.trees, store);
-                    let r2_result = check_overlaps(r2, &tid_to_name, &store.trees, store);
-
-                    let r1_variants = match &r1_result {
-                        CheckOverlapResult::Found(v) => v.clone(),
+                    // Avoid cloning by moving the Vec out of the result enum.
+                    let r1_variants = match check_overlaps(r1, &tid_to_name, &store.trees, store) {
+                        CheckOverlapResult::Found(v) => v,
                         CheckOverlapResult::NoOverlaps => Vec::new(),
                     };
-                    let r2_variants = match &r2_result {
-                        CheckOverlapResult::Found(v) => v.clone(),
+                    let r2_variants = match check_overlaps(r2, &tid_to_name, &store.trees, store) {
+                        CheckOverlapResult::Found(v) => v,
                         CheckOverlapResult::NoOverlaps => Vec::new(),
                     };
 
@@ -1439,6 +1434,7 @@ fn process_chromosome(
                     }
                 } else {
                     // First mate - buffer it
+                    let read_name = qname.to_vec();
                     pair_buffer.insert(read_name, record);
                     record = bam::Record::new();
                 }
