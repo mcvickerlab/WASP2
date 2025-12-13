@@ -14,7 +14,7 @@
 //! - Total: ~1.3GB
 
 use anyhow::{Context, Result};
-use coitrees::IntervalTree;
+use coitrees::{COITreeSortedQuerent, SortedQuerent};
 use crossbeam_channel::{bounded, Receiver, Sender};
 use flate2::Compression;
 use gzp::{deflate::Gzip, ZBuilder};
@@ -278,14 +278,14 @@ fn expected_start_upstream_only(
     }
 }
 
-fn build_trees_by_tid<'a>(
+fn build_querents_by_tid<'a>(
     header: &bam::HeaderView,
     trees: &'a FxHashMap<String, coitrees::COITree<u32, u32>>,
-) -> Vec<Option<&'a coitrees::COITree<u32, u32>>> {
+) -> Vec<Option<COITreeSortedQuerent<'a, u32, u32>>> {
     (0..header.target_count())
         .map(|tid| {
             let name = std::str::from_utf8(header.tid2name(tid)).unwrap_or("unknown");
-            trees.get(name)
+            trees.get(name).map(SortedQuerent::new)
         })
         .collect()
 }
@@ -327,6 +327,11 @@ enum CheckOverlapResult {
     Found(Vec<(u32, u32, u32)>),
 }
 
+struct BufferedMate {
+    record: bam::Record,
+    overlaps: Vec<(u32, u32, u32)>,
+}
+
 /// Check if a read overlaps any variants and return ALL of them
 ///
 /// To match baseline behavior exactly:
@@ -339,7 +344,7 @@ enum CheckOverlapResult {
 /// - Found: All overlapping variants (baseline traversal order)
 fn check_overlaps(
     read: &bam::Record,
-    trees_by_tid: &[Option<&coitrees::COITree<u32, u32>>],
+    querents_by_tid: &mut [Option<COITreeSortedQuerent<'_, u32, u32>>],
     store: &VariantStore,
 ) -> CheckOverlapResult {
     let tid = read.tid();
@@ -347,8 +352,11 @@ fn check_overlaps(
         return CheckOverlapResult::NoOverlaps;
     }
 
-    let tree = match trees_by_tid.get(tid as usize).and_then(|t| *t) {
-        Some(t) => t,
+    let querent = match querents_by_tid
+        .get_mut(tid as usize)
+        .and_then(|q| q.as_mut())
+    {
+        Some(q) => q,
         None => return CheckOverlapResult::NoOverlaps,
     };
 
@@ -356,7 +364,7 @@ fn check_overlaps(
     let read_end = read.reference_end() as i32 - 1;
 
     let mut overlapping: Vec<(u32, u32, u32)> = Vec::new();
-    tree.query(read_start, read_end, |node| {
+    querent.query(read_start, read_end, |node| {
         let variant_idx: u32 = u32::from(node.metadata.clone());
         let variant = &store.variants[variant_idx as usize];
         overlapping.push((variant_idx, variant.start, variant.stop));
@@ -1041,10 +1049,10 @@ pub fn unified_make_reads(
     bam.set_threads(config.read_threads).ok();
 
     let header = bam.header().clone();
-    let trees_by_tid = build_trees_by_tid(&header, &store.trees);
+    let mut querents_by_tid = build_querents_by_tid(&header, &store.trees);
 
     // Pair buffer: read_name -> first-seen mate
-    let mut pair_buffer: FxHashMap<Vec<u8>, bam::Record> = FxHashMap::default();
+    let mut pair_buffer: FxHashMap<Vec<u8>, BufferedMate> = FxHashMap::default();
     pair_buffer.reserve(1_000_000);
 
     // Pre-allocate a single record for reading - avoids per-read allocation
@@ -1074,26 +1082,20 @@ pub fn unified_make_reads(
 
                 // Try to complete a pair without allocating the qname
                 let qname = record.qname();
+                let record_variants = match check_overlaps(&record, &mut querents_by_tid, &store) {
+                    CheckOverlapResult::Found(v) => v,
+                    CheckOverlapResult::NoOverlaps => Vec::new(),
+                };
+
                 if let Some(mate) = pair_buffer.remove(qname) {
                     // Pair complete - process it
                     stats.pairs_processed += 1;
 
-                    // Ensure read1 is first in template - use references to avoid moving record
-                    let (r1, r2): (&bam::Record, &bam::Record) = if record.is_first_in_template() {
-                        (&record, &mate)
+                    // Ensure read1 is first in template - use references to avoid moving record.
+                    let (r1, r2, r1_variants, r2_variants) = if record.is_first_in_template() {
+                        (&record, &mate.record, record_variants, mate.overlaps)
                     } else {
-                        (&mate, &record)
-                    };
-
-                    // Check overlaps for both mates - returns ALL overlapping variants
-                    // Avoid cloning by moving the Vec out of the result enum.
-                    let r1_variants = match check_overlaps(r1, &trees_by_tid, &store) {
-                        CheckOverlapResult::Found(v) => v,
-                        CheckOverlapResult::NoOverlaps => Vec::new(),
-                    };
-                    let r2_variants = match check_overlaps(r2, &trees_by_tid, &store) {
-                        CheckOverlapResult::Found(v) => v,
-                        CheckOverlapResult::NoOverlaps => Vec::new(),
+                        (&mate.record, &record, mate.overlaps, record_variants)
                     };
 
                     // Process based on overlap results
@@ -1188,7 +1190,13 @@ pub fn unified_make_reads(
                     // First mate seen - move record into buffer and allocate new one
                     // This avoids cloning while still allowing record reuse for completed pairs
                     let read_name = qname.to_vec();
-                    pair_buffer.insert(read_name, record);
+                    pair_buffer.insert(
+                        read_name,
+                        BufferedMate {
+                            record,
+                            overlaps: record_variants,
+                        },
+                    );
                     record = bam::Record::new();
                 }
 
@@ -1299,10 +1307,10 @@ fn process_chromosome(
     bam.set_threads(2).ok();
 
     let header = bam.header().clone();
-    let trees_by_tid = build_trees_by_tid(&header, &store.trees);
+    let mut querents_by_tid = build_querents_by_tid(&header, &store.trees);
 
     // Per-chromosome pair buffer
-    let mut pair_buffer: FxHashMap<Vec<u8>, bam::Record> = FxHashMap::default();
+    let mut pair_buffer: FxHashMap<Vec<u8>, BufferedMate> = FxHashMap::default();
     pair_buffer.reserve(100_000); // Smaller per-chromosome
 
     // Pre-allocated record for reading
@@ -1323,24 +1331,19 @@ fn process_chromosome(
 
                 // Try to complete a pair without allocating the qname
                 let qname = record.qname();
+                let record_variants = match check_overlaps(&record, &mut querents_by_tid, store) {
+                    CheckOverlapResult::Found(v) => v,
+                    CheckOverlapResult::NoOverlaps => Vec::new(),
+                };
+
                 if let Some(mate) = pair_buffer.remove(qname) {
                     // Pair complete
                     stats.pairs_processed += 1;
 
-                    let (r1, r2): (&bam::Record, &bam::Record) = if record.is_first_in_template() {
-                        (&record, &mate)
+                    let (r1, r2, r1_variants, r2_variants) = if record.is_first_in_template() {
+                        (&record, &mate.record, record_variants, mate.overlaps)
                     } else {
-                        (&mate, &record)
-                    };
-
-                    // Avoid cloning by moving the Vec out of the result enum.
-                    let r1_variants = match check_overlaps(r1, &trees_by_tid, store) {
-                        CheckOverlapResult::Found(v) => v,
-                        CheckOverlapResult::NoOverlaps => Vec::new(),
-                    };
-                    let r2_variants = match check_overlaps(r2, &trees_by_tid, store) {
-                        CheckOverlapResult::Found(v) => v,
-                        CheckOverlapResult::NoOverlaps => Vec::new(),
+                        (&mate.record, &record, mate.overlaps, record_variants)
                     };
 
                     if r1_variants.is_empty() && r2_variants.is_empty() {
@@ -1409,7 +1412,13 @@ fn process_chromosome(
                 } else {
                     // First mate - buffer it
                     let read_name = qname.to_vec();
-                    pair_buffer.insert(read_name, record);
+                    pair_buffer.insert(
+                        read_name,
+                        BufferedMate {
+                            record,
+                            overlaps: record_variants,
+                        },
+                    );
                     record = bam::Record::new();
                 }
             }
