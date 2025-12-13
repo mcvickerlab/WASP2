@@ -1932,6 +1932,7 @@ dependencies = [
  "crossbeam-channel",
  "flate2",
  "gzp",
+ "itoa",
  "noodles-bcf",
  "noodles-bgzf 0.33.0",
  "noodles-core 0.15.0",
