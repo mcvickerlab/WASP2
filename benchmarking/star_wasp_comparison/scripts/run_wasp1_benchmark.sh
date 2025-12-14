@@ -35,17 +35,13 @@ echo "Benchmark timestamp: ${TIMESTAMP}"
 BENCHMARK_DIR="/iblm/netapp/data3/jjaureguy/gvl_files/wasp2/WASP2_extensive_evaluation/WASP2_current/cvpc/WASP2-exp/benchmarking/star_wasp_comparison"
 DATA_DIR="${BENCHMARK_DIR}/data"
 OUTPUT_BASE="${BENCHMARK_DIR}/results"
-OUTPUT_DIR="${OUTPUT_BASE}/wasp1_${TIMESTAMP}"
+FINAL_OUTPUT_DIR="${OUTPUT_BASE}/wasp1_${TIMESTAMP}"
 
 # WASP1 source (local copy in our repo)
 WASP1_DIR="/iblm/netapp/data3/jjaureguy/gvl_files/wasp2/WASP2_extensive_evaluation/WASP2_current/cvpc/WASP2-exp/benchmarking/wasp1_source"
 SNP2H5="${WASP1_DIR}/snp2h5/snp2h5"
 FIND_INTERSECTING="${WASP1_DIR}/mapping/find_intersecting_snps.py"
 FILTER_REMAPPED="${WASP1_DIR}/mapping/filter_remapped_reads.py"
-
-# Create timestamped output directory
-mkdir -p "${OUTPUT_DIR}"
-echo "Output directory: ${OUTPUT_DIR}"
 
 # Data files
 FASTQ_R1="${DATA_DIR}/ERR1050079_1.fastq.gz"
@@ -55,6 +51,13 @@ VCF="${DATA_DIR}/HG00731_het_only_chr.vcf.gz"
 # Reference - STAR index (GRCh38 + Gencode v26)
 STAR_INDEX_REMOTE="/iblm/netapp/data1/external/GRC38/combined/google_cloud/star_index"
 LOCAL_SCRATCH="${TMPDIR:-/tmp}"
+WORK_OUTPUT_DIR="${LOCAL_SCRATCH}/wasp1_${JOB_ID:-local}_${TIMESTAMP}"
+OUTPUT_DIR="${WORK_OUTPUT_DIR}"
+
+# Create work output directory
+mkdir -p "${OUTPUT_DIR}"
+echo "Work directory: ${OUTPUT_DIR}"
+echo "Final output directory: ${FINAL_OUTPUT_DIR}"
 
 # Chromsizes for snp2h5
 CHROM_SIZES="${WASP1_DIR}/hg38_chromsizes.txt"
@@ -365,7 +368,8 @@ SPEEDUP_VS_STAR_WASP=$(echo "scale=2; ${TOTAL_TIME} / ${STAR_WASP_TIME}" | bc)
 
 echo "WASP1 vs STAR+WASP: ${SPEEDUP_VS_STAR_WASP}x slower"
 echo ""
-echo "Output directory: ${OUTPUT_DIR}"
+echo "Work directory: ${OUTPUT_DIR}"
+echo "Final output directory: ${FINAL_OUTPUT_DIR}"
 echo "End time: $(date)"
 
 # Save results to JSON
@@ -393,6 +397,32 @@ EOF
 echo ""
 echo "Results saved to: ${OUTPUT_DIR}/benchmark_results.json"
 
+# -----------------------------------------------------------------------------
+# Copy artifacts back to final output directory (NFS)
+# -----------------------------------------------------------------------------
+echo ""
+echo "Copying benchmark artifacts to final output directory..."
+mkdir -p "${FINAL_OUTPUT_DIR}"
+for f in \
+    "${OUTPUT_DIR}/benchmark_results.json" \
+    "${PROFILE_LOG}"
+do
+    if [ -f "${f}" ]; then
+        rsync -a "${f}" "${FINAL_OUTPUT_DIR}/"
+    fi
+done
+
+# Optional: keep large outputs
+if [ "${KEEP_BAMS:-0}" = "1" ]; then
+    for f in "${OUTPUT_DIR}/wasp1_final_sorted.bam" "${OUTPUT_DIR}/wasp1_final_sorted.bam.bai"; do
+        if [ -f "${f}" ]; then
+            rsync -a "${f}" "${FINAL_OUTPUT_DIR}/"
+        fi
+    done
+fi
+
+echo "Final output directory: ${FINAL_OUTPUT_DIR}"
+
 # Remove genome from shared memory before cleanup
 echo "Removing genome from shared memory..."
 ${STAR} --genomeDir ${STAR_INDEX} --genomeLoad Remove 2>/dev/null || true
@@ -400,6 +430,8 @@ ${STAR} --genomeDir ${STAR_INDEX} --genomeLoad Remove 2>/dev/null || true
 # Cleanup local scratch
 rm -rf "${LOCAL_FASTQ_DIR}"
 rm -rf "${LOCAL_STAR_INDEX}"
+cd /
+rm -rf "${WORK_OUTPUT_DIR}"
 echo "Cleaned up local scratch files"
 
 # Append summary to profile log
