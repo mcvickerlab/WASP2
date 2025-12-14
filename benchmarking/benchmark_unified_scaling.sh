@@ -17,7 +17,7 @@
 #
 # Threading:
 #   - SGE: 8 cores (-pe iblm 8)
-#   - Unified pipeline: 8 threads + 4 compression threads
+#   - Unified pipeline: 8 threads + configurable compression threads
 #   - BWA mem: -t 16
 #   - filter: 8 threads
 #
@@ -32,6 +32,12 @@ set -e
 
 source /iblm/netapp/home/jjaureguy/mambaforge/etc/profile.d/conda.sh
 conda activate WASP2_dev2
+
+# Threading controls
+# - THREADS defaults to NSLOTS (SGE), else 8
+# - COMPRESSION_THREADS is per FASTQ file (R1 and R2); defaults to 1 to avoid oversubscription
+THREADS="${THREADS:-${NSLOTS:-8}}"
+COMPRESSION_THREADS="${COMPRESSION_THREADS:-1}"
 
 # Use a stable run ID shared across all array tasks.
 # Prefer RUN_TIMESTAMP if passed at qsub time, else fall back to JOB_ID (shared
@@ -116,8 +122,8 @@ stats = run_make_remap_reads_unified(
     variant_file='${input_vcf}',
     samples='${sample}',
     out_dir='${dir}',
-    threads=8,
-    compression_threads=4,
+    threads=${THREADS},
+    compression_threads=${COMPRESSION_THREADS},
     use_parallel=True
 )
 

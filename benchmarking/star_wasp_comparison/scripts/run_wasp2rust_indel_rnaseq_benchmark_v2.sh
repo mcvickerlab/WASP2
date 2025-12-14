@@ -40,6 +40,7 @@ OUTPUT_DIR="${WORK_OUTPUT_DIR}"
 
 SAMPLE="HG00731"
 THREADS=8
+COMPRESSION_THREADS="${COMPRESSION_THREADS:-1}"
 MAX_INDEL_LEN=10  # Maximum INDEL length to include
 
 # Conda
@@ -69,6 +70,7 @@ echo "WASP2-Rust INDEL Benchmark Profile (v2 - coordinated trims)" > ${PROFILE_L
 echo "Sample: HG00731 RNA-seq" >> ${PROFILE_LOG}
 echo "Timestamp: ${TIMESTAMP}" >> ${PROFILE_LOG}
 echo "Threads: ${THREADS}" >> ${PROFILE_LOG}
+echo "Compression threads: ${COMPRESSION_THREADS}" >> ${PROFILE_LOG}
 echo "INDEL Support: ENABLED (max ${MAX_INDEL_LEN}bp)" >> ${PROFILE_LOG}
 echo "Pipeline: run_make_remap_reads_unified with indel_mode=True" >> ${PROFILE_LOG}
 
@@ -83,6 +85,7 @@ echo "Start time: $(date)"
 echo "FASTQs: ${FASTQ_R1}"
 echo "VCF: ${VCF}"
 echo "Threads: ${THREADS}"
+echo "Compression threads: ${COMPRESSION_THREADS}"
 
 # Verify modules
 echo "Verifying modules..."
@@ -179,12 +182,12 @@ stats = run_make_remap_reads_unified(
     variant_file='${VCF}',
     samples='${SAMPLE}',
     out_dir='${OUTPUT_DIR}',
-    include_indels=True,    # INDEL SUPPORT ENABLED
-    max_indel_len=${MAX_INDEL_LEN},
-    threads=${THREADS},
-    compression_threads=4,
-    use_parallel=True
-)
+	    include_indels=True,    # INDEL SUPPORT ENABLED
+	    max_indel_len=${MAX_INDEL_LEN},
+	    threads=${THREADS},
+	    compression_threads=${COMPRESSION_THREADS},
+	    use_parallel=True
+	)
 
 with open('${OUTPUT_DIR}/unified_stats.json', 'w') as f:
     json.dump(stats, f, indent=2)

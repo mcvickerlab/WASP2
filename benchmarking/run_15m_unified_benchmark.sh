@@ -28,6 +28,8 @@ genome_index="/iblm/netapp/data1/aho/ref_genomes/index/Homo_sapiens/NCBI/GRCh38/
 input_bam="/iblm/netapp/data1/aho/atac/Buenrostro2013/merged/GM12878_ATACseq_50k/GM12878_ATACseq_50k_merged.sorted.bam"
 input_vcf="/iblm/netapp/data1/aho/variants/NA12878.vcf.gz"
 sample="NA12878"
+THREADS="${THREADS:-8}"
+COMPRESSION_THREADS="${COMPRESSION_THREADS:-1}"
 
 # 15M reads
 n_subset=15000000
@@ -77,8 +79,8 @@ stats = run_make_remap_reads_unified(
     variant_file='${input_vcf}',
     samples='${sample}',
     out_dir='${OUTPUT_DIR}',
-    threads=8,
-    compression_threads=4,
+    threads=${THREADS},
+    compression_threads=${COMPRESSION_THREADS},
     use_parallel=True
 )
 

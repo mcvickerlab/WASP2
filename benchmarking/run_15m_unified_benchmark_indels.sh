@@ -28,6 +28,8 @@ genome_index="/iblm/netapp/data1/aho/ref_genomes/index/Homo_sapiens/NCBI/GRCh38/
 input_bam="/iblm/netapp/data1/aho/atac/Buenrostro2013/merged/GM12878_ATACseq_50k/GM12878_ATACseq_50k_merged.sorted.bam"
 input_vcf="/iblm/netapp/data1/aho/variants/NA12878.vcf.gz"
 sample="NA12878"
+THREADS="${THREADS:-8}"
+COMPRESSION_THREADS="${COMPRESSION_THREADS:-1}"
 
 # 15M reads
 n_subset=15000000
@@ -72,17 +74,17 @@ python -c "
 from mapping.run_mapping import run_make_remap_reads_unified
 import json
 
-stats = run_make_remap_reads_unified(
-    bam_file='${subset_bam}',
-    variant_file='${input_vcf}',
-    samples='${sample}',
-    out_dir='${OUTPUT_DIR}',
-    include_indels=True,   # INDELS ENABLED
-    max_indel_len=10,
-    threads=8,
-    compression_threads=4,
-    use_parallel=True
-)
+	stats = run_make_remap_reads_unified(
+	    bam_file='${subset_bam}',
+	    variant_file='${input_vcf}',
+	    samples='${sample}',
+	    out_dir='${OUTPUT_DIR}',
+	    include_indels=True,   # INDELS ENABLED
+	    max_indel_len=10,
+	    threads=${THREADS},
+	    compression_threads=${COMPRESSION_THREADS},
+	    use_parallel=True
+	)
 
 with open('${OUTPUT_DIR}/unified_stats.json', 'w') as f:
     json.dump(stats, f, indent=2)

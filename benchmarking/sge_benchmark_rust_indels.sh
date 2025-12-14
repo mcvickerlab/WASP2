@@ -15,6 +15,12 @@
 source /iblm/netapp/home/jjaureguy/mambaforge/etc/profile.d/conda.sh
 conda activate WASP2_dev2
 
+# Threading controls
+# - THREADS defaults to NSLOTS (SGE), else 8
+# - COMPRESSION_THREADS is per FASTQ file (R1 and R2); defaults to 1 to avoid oversubscription
+THREADS="${THREADS:-${NSLOTS:-8}}"
+COMPRESSION_THREADS="${COMPRESSION_THREADS:-1}"
+
 # Read counts: 1M, 2M, 3M, ..., 150M (150 tasks)
 n_subset=$(($SGE_TASK_ID * 1000000))
 
@@ -56,19 +62,19 @@ export PYTHONPATH="${WASP2_DIR}/src:${PYTHONPATH}"
 python -c "
 from mapping.run_mapping import run_make_remap_reads_unified
 
-stats = run_make_remap_reads_unified(
-    bam_file='${subset_out}',
-    variant_file='${input_vcf}',
-    samples='${sample}',
-    out_dir='${dir}',
-    include_indels=True,
-    max_indel_len=10,
-    threads=8,
-    compression_threads=4,
-    use_parallel=True
-)
-print(f'Pairs processed: {stats[\"pairs_processed\"]:,}')
-print(f'Haplotypes written: {stats[\"haplotypes_written\"]:,}')
+	stats = run_make_remap_reads_unified(
+	    bam_file='${subset_out}',
+	    variant_file='${input_vcf}',
+	    samples='${sample}',
+	    out_dir='${dir}',
+	    include_indels=True,
+	    max_indel_len=10,
+	    threads=${THREADS},
+	    compression_threads=${COMPRESSION_THREADS},
+	    use_parallel=True
+	)
+	print(f'Pairs processed: {stats[\"pairs_processed\"]:,}')
+	print(f'Haplotypes written: {stats[\"haplotypes_written\"]:,}')
 "
 
 intersect_end=$(date +%s)
@@ -94,14 +100,14 @@ remap_runtime=$(($remap_end-$intersect_end))
 python -c "
 from wasp2_rust import filter_bam_wasp
 
-kept, removed_moved, removed_missing = filter_bam_wasp(
-    '${subset_out}',
-    '${remapped_bam}',
-    '${dir}/remap_keep.bam',
-    threads=8
-)
-print(f'Kept: {kept}, Removed: {removed_moved}, Missing: {removed_missing}')
-"
+	kept, removed_moved, removed_missing = filter_bam_wasp(
+	    '${subset_out}',
+	    '${remapped_bam}',
+	    '${dir}/remap_keep.bam',
+	    threads=${THREADS}
+	)
+	print(f'Kept: {kept}, Removed: {removed_moved}, Missing: {removed_missing}')
+	"
 
 end=$(date +%s)
 filt_runtime=$(($end-$remap_end))

@@ -23,6 +23,12 @@ conda activate WASP2_dev2
 export PYTHONPATH="/iblm/netapp/home/jjaureguy/mambaforge/lib/python3.10/site-packages:${PYTHONPATH}"
 export LD_LIBRARY_PATH="${CONDA_PREFIX}/lib:${LD_LIBRARY_PATH}"
 
+# Threading controls
+# - THREADS defaults to NSLOTS (SGE), else 8
+# - COMPRESSION_THREADS is per FASTQ file (R1 and R2); defaults to 1 to avoid oversubscription
+THREADS="${THREADS:-${NSLOTS:-8}}"
+COMPRESSION_THREADS="${COMPRESSION_THREADS:-1}"
+
 # Use a shared timestamp across array tasks if RUN_TIMESTAMP is exported at qsub time.
 # This keeps all tasks in a single results directory.
 RUN_TIMESTAMP="${RUN_TIMESTAMP:-}"
@@ -94,8 +100,8 @@ stats = run_make_remap_reads_unified(
     variant_file='${input_vcf}',
     samples='${sample}',
     out_dir='${dir}',
-    threads=8,
-    compression_threads=4,
+    threads=${THREADS},
+    compression_threads=${COMPRESSION_THREADS},
     use_parallel=True,
     include_indels=True,
     max_indel_len=10

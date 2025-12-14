@@ -24,6 +24,7 @@ OUTDIR="/iblm/netapp/data3/jjaureguy/gvl_files/wasp2/WASP2_extensive_evaluation/
 mkdir -p "${OUTDIR}"
 
 THREADS=8
+COMPRESSION_THREADS="${COMPRESSION_THREADS:-1}"
 SAMPLE="GM12878"
 
 echo "=========================================="
@@ -60,7 +61,7 @@ stats = wasp2_rust.unified_make_reads_parallel_py(
     max_seqs=64,
     threads=${THREADS},
     channel_buffer=50000,
-    compression_threads=4,
+    compression_threads=${COMPRESSION_THREADS},
     compress_output=True
 )
 print(f"Stats: {stats}")
