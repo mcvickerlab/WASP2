@@ -25,7 +25,7 @@ echo "Benchmark timestamp: ${TIMESTAMP}"
 WASP2_DIR="/iblm/netapp/data3/jjaureguy/gvl_files/wasp2/WASP2_extensive_evaluation/WASP2_current/cvpc/WASP2-exp"
 BENCHMARK_DIR="${WASP2_DIR}/benchmarking/star_wasp_comparison"
 DATA_DIR="${BENCHMARK_DIR}/data"
-OUTPUT_DIR="${BENCHMARK_DIR}/results/wasp2rust_indel_rnaseq_v2_${TIMESTAMP}"
+FINAL_OUTPUT_DIR="${BENCHMARK_DIR}/results/wasp2rust_indel_rnaseq_v2_${TIMESTAMP}"
 
 # Input data
 FASTQ_R1="${DATA_DIR}/ERR1050079_1.fastq.gz"
@@ -35,6 +35,8 @@ VCF="${DATA_DIR}/HG00731_het_only_chr.vcf.gz"
 # Reference - STAR index
 STAR_INDEX_REMOTE="/iblm/netapp/data1/external/GRC38/combined/google_cloud/star_index"
 LOCAL_SCRATCH="${TMPDIR:-/tmp}"
+WORK_OUTPUT_DIR="${LOCAL_SCRATCH}/wasp2rust_indel_rnaseq_v2_${JOB_ID:-local}_${TIMESTAMP}"
+OUTPUT_DIR="${WORK_OUTPUT_DIR}"
 
 SAMPLE="HG00731"
 THREADS=8
@@ -422,7 +424,8 @@ echo ""
 echo "Variant counts:"
 echo "  Total variants:       ${VARIANT_COUNT}"
 echo ""
-echo "Output directory: ${OUTPUT_DIR}"
+echo "Work directory: ${OUTPUT_DIR}"
+echo "Final output directory: ${FINAL_OUTPUT_DIR}"
 echo "End time: $(date)"
 
 # Save results to JSON
@@ -464,7 +467,27 @@ cat > ${OUTPUT_DIR}/benchmark_results.json << EOF
 EOF
 
 echo ""
-echo "Results saved to: ${OUTPUT_DIR}/benchmark_results.json"
+echo "Results saved to: ${OUTPUT_DIR}/benchmark_results.json (work dir)"
+
+# -----------------------------------------------------------------------------
+# Copy artifacts back to final output directory (NFS)
+# -----------------------------------------------------------------------------
+echo "Copying benchmark artifacts to final output directory..."
+mkdir -p "${FINAL_OUTPUT_DIR}"
+for f in \
+    "${OUTPUT_DIR}/benchmark_results.json" \
+    "${OUTPUT_DIR}/profile.log" \
+    "${OUTPUT_DIR}/unified_stats.json" \
+    "${OUTPUT_DIR}/remap_keep.bam" \
+    "${OUTPUT_DIR}/remap_keep.bam.bai" \
+    "${OUTPUT_DIR}/star_initial/${SAMPLE}_Log.final.out" \
+    "${OUTPUT_DIR}/star_remap/${SAMPLE}_remap_Log.final.out"
+do
+    if [ -f "${f}" ]; then
+        rsync -a "${f}" "${FINAL_OUTPUT_DIR}/"
+    fi
+done
+echo "Final output directory: ${FINAL_OUTPUT_DIR}"
 
 # Cleanup STAR index from scratch
 echo "Cleaning up STAR index from local scratch..."
