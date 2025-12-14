@@ -529,8 +529,6 @@ fn process_pair(
     config: &UnifiedConfig,
     overlap_mask: u8,
 ) -> ProcessPairResult {
-    let mut outputs = Vec::new();
-
     // Original sequences for unchanged check
     let r1_original = read1.seq().as_bytes();
     let r2_original = read2.seq().as_bytes();
@@ -551,16 +549,15 @@ fn process_pair(
     let r2_pos = read2.pos() as u32;
     let original_name = read1.qname();
 
-    // First pass: filter to only pairs where at least one sequence changed
-    // This matches Python DEV behavior where total = actual count of written pairs
-    let changed_pairs: Vec<_> = r1_haps
-        .iter()
-        .zip(r2_haps.iter())
-        .filter(|(r1_hap, r2_hap)| {
-            // Keep if at least one read is changed (matches baseline bam_remapper.rs line 476-479)
-            r1_hap.0 != r1_original || r2_hap.0 != r2_original
-        })
-        .collect();
+    // First pass: filter to only pairs where at least one sequence changed.
+    // We keep ownership of the sequences to avoid re-cloning when building outputs.
+    let mut changed_pairs: Vec<(Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>)> = Vec::new();
+    for (r1_hap, r2_hap) in r1_haps.into_iter().zip(r2_haps.into_iter()) {
+        // Keep if at least one read is changed (matches baseline bam_remapper.rs line 476-479)
+        if r1_hap.0 != r1_original || r2_hap.0 != r2_original {
+            changed_pairs.push((r1_hap.0, r1_hap.1, r2_hap.0, r2_hap.1));
+        }
+    }
 
     let total_seqs = changed_pairs.len();
     if total_seqs == 0 {
@@ -569,6 +566,8 @@ fn process_pair(
         return ProcessPairResult::KeepAsIs;
     }
 
+    let mut outputs = Vec::with_capacity(total_seqs);
+
     // Track reverse strand status for FASTQ output
     // IMPORTANT: BAM stores reverse-strand reads as already reverse-complemented
     // For FASTQ output (for remapping), we need to reverse-complement back to original orientation
@@ -576,7 +575,7 @@ fn process_pair(
     let r2_is_reverse = read2.is_reverse();
 
     // Second pass: generate outputs with correct total count
-    for (write_idx, (r1_hap, r2_hap)) in changed_pairs.into_iter().enumerate() {
+    for (write_idx, (r1_seq, r1_qual, r2_seq, r2_qual)) in changed_pairs.into_iter().enumerate() {
         // Use actual count of changed pairs as total (matches Python DEV make_remap_reads.py)
         let wasp_name =
             generate_wasp_name(original_name, r1_pos, r2_pos, write_idx + 1, total_seqs);
@@ -586,8 +585,8 @@ fn process_pair(
         r1_name.extend_from_slice(b"/1");
         let r1_output = HaplotypeOutput {
             name: r1_name,
-            sequence: r1_hap.0.clone(),
-            quals: r1_hap.1.clone(),
+            sequence: r1_seq,
+            quals: r1_qual,
             is_r1: true,
             is_reverse: r1_is_reverse,
         };
@@ -597,8 +596,8 @@ fn process_pair(
         r2_name.extend_from_slice(b"/2");
         let r2_output = HaplotypeOutput {
             name: r2_name,
-            sequence: r2_hap.0.clone(),
-            quals: r2_hap.1.clone(),
+            sequence: r2_seq,
+            quals: r2_qual,
             is_r1: false,
             is_reverse: r2_is_reverse,
         };
