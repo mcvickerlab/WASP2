@@ -42,6 +42,13 @@ SAMPLE="HG00731"
 THREADS=8
 COMPRESSION_THREADS="${COMPRESSION_THREADS:-1}"
 MAX_INDEL_LEN=10  # Maximum INDEL length to include
+ENABLE_WASP2_TIMING="${ENABLE_WASP2_TIMING:-0}"
+if [ -n "${WASP2_TIMING+x}" ]; then
+    ENABLE_WASP2_TIMING=1
+fi
+if [ "${ENABLE_WASP2_TIMING}" = "1" ]; then
+    export WASP2_TIMING=1
+fi
 
 # Conda
 source /iblm/netapp/home/jjaureguy/mambaforge/etc/profile.d/conda.sh
@@ -71,6 +78,7 @@ echo "Sample: HG00731 RNA-seq" >> ${PROFILE_LOG}
 echo "Timestamp: ${TIMESTAMP}" >> ${PROFILE_LOG}
 echo "Threads: ${THREADS}" >> ${PROFILE_LOG}
 echo "Compression threads: ${COMPRESSION_THREADS}" >> ${PROFILE_LOG}
+echo "WASP2_TIMING enabled: ${ENABLE_WASP2_TIMING}" >> ${PROFILE_LOG}
 echo "INDEL Support: ENABLED (max ${MAX_INDEL_LEN}bp)" >> ${PROFILE_LOG}
 echo "Pipeline: run_make_remap_reads_unified with indel_mode=True" >> ${PROFILE_LOG}
 
@@ -86,6 +94,7 @@ echo "FASTQs: ${FASTQ_R1}"
 echo "VCF: ${VCF}"
 echo "Threads: ${THREADS}"
 echo "Compression threads: ${COMPRESSION_THREADS}"
+echo "WASP2_TIMING enabled: ${ENABLE_WASP2_TIMING}"
 
 # Verify modules
 echo "Verifying modules..."
@@ -199,6 +208,10 @@ print(f'Haplotypes written: {stats[\"haplotypes_written\"]:,}')
 STEP1_END=$(date +%s.%N)
 STEP1_TIME=$(echo "${STEP1_END} - ${STEP1_START}" | bc)
 echo "STEP 1 completed in ${STEP1_TIME} seconds"
+
+# Log unified stats (including timing breakdown)
+${PYTHON} "${WASP2_DIR}/benchmarking/tools/log_unified_stats.py" "${OUTPUT_DIR}/unified_stats.json" \
+    --label "rnaseq_indel_step1" >> ${PROFILE_LOG} 2>&1 || echo "WARN: failed to log unified_stats" >> ${PROFILE_LOG}
 
 # Count SNV-only vs INDEL-only vs BOTH overlaps (PRE-filter, from unified stats; pairs)
 TYPE_PRE=$(${PYTHON} - <<PY

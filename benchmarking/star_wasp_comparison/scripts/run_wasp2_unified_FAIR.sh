@@ -45,6 +45,13 @@ mkdir -p "${OUTPUT_DIR}"
 # Sample
 SAMPLE="HG00731"
 THREADS=8
+ENABLE_WASP2_TIMING="${ENABLE_WASP2_TIMING:-0}"
+if [ -n "${WASP2_TIMING+x}" ]; then
+    ENABLE_WASP2_TIMING=1
+fi
+if [ "${ENABLE_WASP2_TIMING}" = "1" ]; then
+    export WASP2_TIMING=1
+fi
 
 # Conda
 source /iblm/netapp/home/jjaureguy/mambaforge/etc/profile.d/conda.sh
@@ -69,6 +76,7 @@ echo "Timestamp: ${TIMESTAMP}" >> ${PROFILE_LOG}
 echo "Date: $(date)" >> ${PROFILE_LOG}
 echo "Sample: ${SAMPLE}" >> ${PROFILE_LOG}
 echo "Threads: ${THREADS}" >> ${PROFILE_LOG}
+echo "WASP2_TIMING enabled: ${ENABLE_WASP2_TIMING}" >> ${PROFILE_LOG}
 echo "" >> ${PROFILE_LOG}
 echo "FAIR COMPARISON METHODOLOGY:" >> ${PROFILE_LOG}
 echo "  - genomeLoad: LoadAndKeep (load once, reuse for remap)" >> ${PROFILE_LOG}
@@ -84,6 +92,7 @@ echo "Start time: $(date)"
 echo "FASTQs: ${FASTQ_R1}"
 echo "VCF: ${VCF}"
 echo "Threads: ${THREADS}"
+echo "WASP2_TIMING enabled: ${ENABLE_WASP2_TIMING}"
 echo ""
 
 # Verify Rust module
@@ -282,6 +291,9 @@ print(f'Haplotypes written: {stats[\"haplotypes_written\"]:,}')
 STEP3_END=$(date +%s.%N)
 STEP3_TIME=$(echo "${STEP3_END} - ${STEP3_START}" | bc)
 echo "STEP 3 completed in ${STEP3_TIME} seconds"
+
+${PYTHON} "${WASP2_DIR}/benchmarking/tools/log_unified_stats.py" "${OUTPUT_DIR}/unified_stats.json" \
+    --label "rnaseq_snv_fair_step3" >> ${PROFILE_LOG} 2>&1 || echo "WARN: failed to log unified_stats" >> ${PROFILE_LOG}
 
 # Count reads to remap
 if [ -f "${OUTPUT_DIR}/remap_r1.fq" ]; then

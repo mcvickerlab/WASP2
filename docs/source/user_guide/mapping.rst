@@ -173,7 +173,7 @@ Full WASP workflow:
      --output remap
 
    # Step 3: Remap (user's aligner)
-   bwa mem -t 16 reference.fa \
+   bwa mem -t <threads> reference.fa \
      remap_R1.fastq remap_R2.fastq | \
      samtools sort -o remapped.bam -
    samtools index remapped.bam

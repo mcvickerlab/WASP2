@@ -28,6 +28,8 @@ export LD_LIBRARY_PATH="${CONDA_PREFIX}/lib:${LD_LIBRARY_PATH}"
 # - COMPRESSION_THREADS is per FASTQ file (R1 and R2); defaults to 1 to avoid oversubscription
 THREADS="${THREADS:-${NSLOTS:-8}}"
 COMPRESSION_THREADS="${COMPRESSION_THREADS:-1}"
+BWA_THREADS="${BWA_THREADS:-${THREADS}}"
+SAMTOOLS_SORT_THREADS="${SAMTOOLS_SORT_THREADS:-${THREADS}}"
 
 # Use a shared timestamp across array tasks if RUN_TIMESTAMP is exported at qsub time.
 # This keeps all tasks in a single results directory.
@@ -156,9 +158,11 @@ zcat ${r1_reads} > ${dir}/remap_r1.fq
 zcat ${r2_reads} > ${dir}/remap_r2.fq
 
 remapped_bam="${dir}/${prefix}_remapped.bam"
-bwa mem -t 16 -M ${genome_index} ${dir}/remap_r1.fq ${dir}/remap_r2.fq | \
-    samtools view -S -b -h -F 4 - > ${remapped_bam}
-samtools sort -o ${remapped_bam} ${remapped_bam}
+remapped_unsorted_bam="${dir}/${prefix}_remapped_unsorted.bam"
+bwa mem -t ${BWA_THREADS} -M ${genome_index} ${dir}/remap_r1.fq ${dir}/remap_r2.fq | \
+    samtools view -S -b -h -F 4 - > ${remapped_unsorted_bam}
+samtools sort -@ ${SAMTOOLS_SORT_THREADS} -o ${remapped_bam} ${remapped_unsorted_bam}
+rm -f ${remapped_unsorted_bam}
 samtools index ${remapped_bam}
 
 rm -f ${dir}/remap_r1.fq ${dir}/remap_r2.fq
@@ -181,7 +185,7 @@ kept, removed_moved, removed_missing = filter_bam_wasp_with_sidecar(
     '${subset_bam}',
     '${remapped_bam}',
     '${dir}/remap_keep.bam',
-    threads=8,
+    threads=${THREADS},
     same_locus_slop=10,
     expected_sidecar='${sidecar}'
 )

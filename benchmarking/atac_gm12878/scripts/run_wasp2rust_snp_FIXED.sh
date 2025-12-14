@@ -40,6 +40,13 @@ REF_GENOME="/iblm/netapp/data1/aho/ref_genomes/index/Homo_sapiens/NCBI/GRCh38/Se
 # Sample
 SAMPLE="NA12878"
 THREADS=8
+ENABLE_WASP2_TIMING="${ENABLE_WASP2_TIMING:-0}"
+if [ -n "${WASP2_TIMING+x}" ]; then
+    ENABLE_WASP2_TIMING=1
+fi
+if [ "${ENABLE_WASP2_TIMING}" = "1" ]; then
+    export WASP2_TIMING=1
+fi
 
 # Conda
 source /iblm/netapp/home/jjaureguy/mambaforge/etc/profile.d/conda.sh
@@ -64,6 +71,7 @@ echo "Timestamp: ${TIMESTAMP}" >> ${PROFILE_LOG}
 echo "Date: $(date)" >> ${PROFILE_LOG}
 echo "Sample: ${SAMPLE}" >> ${PROFILE_LOG}
 echo "Threads: ${THREADS}" >> ${PROFILE_LOG}
+echo "WASP2_TIMING enabled: ${ENABLE_WASP2_TIMING}" >> ${PROFILE_LOG}
 echo "" >> ${PROFILE_LOG}
 echo "FIXED PIPELINE: filter → unified → remap → filter → MERGE" >> ${PROFILE_LOG}
 echo "" >> ${PROFILE_LOG}
@@ -77,6 +85,7 @@ echo "Start time: $(date)"
 echo "Input BAM: ${INPUT_BAM}"
 echo "VCF: ${VCF}"
 echo "Threads: ${THREADS}"
+echo "WASP2_TIMING enabled: ${ENABLE_WASP2_TIMING}"
 echo ""
 
 # Verify Rust module
@@ -206,6 +215,9 @@ print(f'Haplotypes written: {stats[\"haplotypes_written\"]:,}')
 STEP2_END=$(date +%s.%N)
 STEP2_TIME=$(echo "${STEP2_END} - ${STEP2_START}" | bc)
 echo "STEP 2 completed in ${STEP2_TIME} seconds"
+
+${PYTHON} "${WASP2_DIR}/benchmarking/tools/log_unified_stats.py" "${OUTPUT_DIR}/unified_stats.json" \
+    --label "atac_snv_step2" >> ${PROFILE_LOG} 2>&1 || echo "WARN: failed to log unified_stats" >> ${PROFILE_LOG}
 
 # Count reads to remap
 if [ -f "${OUTPUT_DIR}/remap_r1.fq" ]; then

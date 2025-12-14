@@ -18,7 +18,7 @@
 # Threading (same as aho):
 #   - SGE: 8 cores (-pe iblm 8)
 #   - make-reads: -t 8
-#   - BWA mem: -t 16
+#   - BWA mem: -t ${BWA_THREADS} (default: THREADS/NSLOTS)
 #   - filter-remapped: -t 8
 #
 # INDEL-specific Rust optimizations:
@@ -30,6 +30,11 @@
 
 source /iblm/netapp/home/jjaureguy/mambaforge/etc/profile.d/conda.sh
 conda activate WASP2_dev2
+
+# Threading controls
+THREADS="${THREADS:-${NSLOTS:-8}}"
+BWA_THREADS="${BWA_THREADS:-${THREADS}}"
+SAMTOOLS_SORT_THREADS="${SAMTOOLS_SORT_THREADS:-${THREADS}}"
 
 WASP2_DIR="/iblm/netapp/data3/jjaureguy/gvl_files/wasp2/WASP2_extensive_evaluation/WASP2_current/cvpc/WASP2-exp"
 log_file="${WASP2_DIR}/benchmarking/results/wasp2_rust_indels_${JOB_ID}.tsv"
@@ -66,7 +71,7 @@ samtools index ${subset_bam}
 export PYTHONPATH="${WASP2_DIR}/src:${PYTHONPATH}"
 start=$(date +%s)
 
-python -m mapping make-reads ${subset_bam} ${input_vcf} -t 8 -s ${sample} --out ${dir} --paired --phased --indels --temp_loc ${dir}
+python -m mapping make-reads ${subset_bam} ${input_vcf} -t ${THREADS} -s ${sample} --out ${dir} --paired --phased --indels --temp_loc ${dir}
 
 intersect_end=$(date +%s)
 intersect_runtime=$(($intersect_end-$start))
@@ -76,8 +81,10 @@ r1_reads="${dir}/${prefix}_swapped_alleles_r1.fq"
 r2_reads="${dir}/${prefix}_swapped_alleles_r2.fq"
 remapped_bam="${dir}/${prefix}_remapped.bam"
 
-bwa mem -t 16 -M ${genome_index} ${r1_reads} ${r2_reads} | samtools view -S -b -h -F 4 - > ${remapped_bam}
-samtools sort -o ${remapped_bam} ${remapped_bam}
+bam_unsorted="${dir}/${prefix}_remapped_unsorted.bam"
+bwa mem -t ${BWA_THREADS} -M ${genome_index} ${r1_reads} ${r2_reads} | samtools view -S -b -h -F 4 - > ${bam_unsorted}
+samtools sort -@ ${SAMTOOLS_SORT_THREADS} -o ${remapped_bam} ${bam_unsorted}
+rm -f ${bam_unsorted}
 samtools index ${remapped_bam}
 
 remap_end=$(date +%s)
@@ -85,7 +92,7 @@ remap_runtime=$(($remap_end-$intersect_end))
 
 # WASP2 filter with slop for indel micro-homology (Rust accelerated)
 wasp_json="${dir}/${prefix}_wasp_data_files.json"
-python -m mapping filter-remapped ${remapped_bam} --json ${wasp_json} -t 8
+python -m mapping filter-remapped ${remapped_bam} --json ${wasp_json} -t ${THREADS}
 
 end=$(date +%s)
 filt_runtime=$(($end-$remap_end))

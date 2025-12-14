@@ -20,6 +20,8 @@ conda activate WASP2_dev2
 # - COMPRESSION_THREADS is per FASTQ file (R1 and R2); defaults to 1 to avoid oversubscription
 THREADS="${THREADS:-${NSLOTS:-8}}"
 COMPRESSION_THREADS="${COMPRESSION_THREADS:-1}"
+BWA_THREADS="${BWA_THREADS:-${THREADS}}"
+SAMTOOLS_SORT_THREADS="${SAMTOOLS_SORT_THREADS:-${THREADS}}"
 
 # Read counts: 1M, 2M, 3M, ..., 150M (150 tasks)
 n_subset=$(($SGE_TASK_ID * 1000000))
@@ -89,8 +91,10 @@ zcat ${r1_reads} > ${dir}/remap_r1.fq
 zcat ${r2_reads} > ${dir}/remap_r2.fq
 remapped_bam="${dir}/${prefix}_remapped.bam"
 
-bwa mem -t 16 -M ${genome_index} ${dir}/remap_r1.fq ${dir}/remap_r2.fq | samtools view -S -b -h -F 4 - > ${remapped_bam}
-samtools sort -o ${remapped_bam} ${remapped_bam}
+bam_unsorted="${dir}/${prefix}_remapped_unsorted.bam"
+bwa mem -t ${BWA_THREADS} -M ${genome_index} ${dir}/remap_r1.fq ${dir}/remap_r2.fq | samtools view -S -b -h -F 4 - > ${bam_unsorted}
+samtools sort -@ ${SAMTOOLS_SORT_THREADS} -o ${remapped_bam} ${bam_unsorted}
+rm -f ${bam_unsorted}
 samtools index ${remapped_bam}
 
 remap_end=$(date +%s)

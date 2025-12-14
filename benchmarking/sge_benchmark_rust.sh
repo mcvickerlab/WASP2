@@ -16,6 +16,11 @@
 source /iblm/netapp/home/jjaureguy/mambaforge/etc/profile.d/conda.sh
 conda activate WASP2_dev2
 
+# Threading controls
+THREADS="${THREADS:-${NSLOTS:-8}}"
+BWA_THREADS="${BWA_THREADS:-${THREADS}}"
+SAMTOOLS_SORT_THREADS="${SAMTOOLS_SORT_THREADS:-${THREADS}}"
+
 # Target subset
 n_subset=$(($SGE_TASK_ID * 1000000))
 
@@ -53,7 +58,7 @@ start=$(date +%s)
 
 # IMPORTANT: Must use -m and PYTHONPATH for proper module import
 export PYTHONPATH="${WASP2_DIR}/src:${PYTHONPATH}"
-python -m mapping make-reads ${subset_out} ${input_vcf} -s ${sample} --out ${dir} --paired --phased --temp_loc ${dir} --threads 8
+python -m mapping make-reads ${subset_out} ${input_vcf} -s ${sample} --out ${dir} --paired --phased --temp_loc ${dir} --threads ${THREADS}
 
 intersect_end=$(date +%s)
 intersect_runtime=$(($intersect_end-$start))
@@ -63,8 +68,10 @@ r1_reads="${dir}/${prefix}_swapped_alleles_r1.fq"
 r2_reads="${dir}/${prefix}_swapped_alleles_r2.fq"
 remapped_bam="${dir}/${prefix}_remapped.bam"
 
-bwa mem -t 16 -M ${genome_index} ${r1_reads} ${r2_reads} | samtools view -S -b -h -F 4 - > ${remapped_bam}
-samtools sort -o ${remapped_bam} ${remapped_bam}
+bam_unsorted="${dir}/${prefix}_remapped_unsorted.bam"
+bwa mem -t ${BWA_THREADS} -M ${genome_index} ${r1_reads} ${r2_reads} | samtools view -S -b -h -F 4 - > ${bam_unsorted}
+samtools sort -@ ${SAMTOOLS_SORT_THREADS} -o ${remapped_bam} ${bam_unsorted}
+rm -f ${bam_unsorted}
 samtools index ${remapped_bam}
 
 remap_end=$(date +%s)
@@ -72,7 +79,7 @@ remap_runtime=$(($remap_end-$intersect_end))
 
 # Filter remapped reads
 wasp_json="${dir}/${prefix}_wasp_data_files.json"
-python -m mapping filter-remapped ${remapped_bam} --json ${wasp_json} --threads 8
+python -m mapping filter-remapped ${remapped_bam} --json ${wasp_json} --threads ${THREADS}
 
 end=$(date +%s)
 filt_runtime=$(($end-$remap_end))

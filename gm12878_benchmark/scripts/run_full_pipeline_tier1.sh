@@ -17,6 +17,10 @@ export WASP2_DISABLE_RUST=0
 TESTDIR="gm12878_benchmark/test_full_pipeline"
 mkdir -p ${TESTDIR}/logs
 
+THREADS="${THREADS:-8}"
+BWA_THREADS="${BWA_THREADS:-${THREADS}}"
+SAMTOOLS_SORT_THREADS="${SAMTOOLS_SORT_THREADS:-${THREADS}}"
+
 BAM="/iblm/netapp/data3/aho/alignment/GM12878_rna_v2/GM12878_merged.sorted.bam"
 VCF="/iblm/netapp/data1/aho/variants/NA12878.vcf.gz"
 GTF="/iblm/netapp/data3/aho/project_data/wasp2/imprinted_rna/data/geneimprint.gtf"
@@ -62,14 +66,14 @@ echo ""
 # ==========================================
 # STEP 2: Remap with BWA
 # ==========================================
-echo "Step 2: Remapping with BWA (16 threads)..."
+echo "Step 2: Remapping with BWA (${BWA_THREADS} threads)..."
 echo "----------------------------------------"
-/usr/bin/time -v bwa mem -t 16 \
+/usr/bin/time -v bwa mem -t ${BWA_THREADS} \
     ${REF} \
     ${TESTDIR}/remap_data/to_remap.fq1.gz \
     ${TESTDIR}/remap_data/to_remap.fq2.gz \
     2> ${TESTDIR}/logs/step2_bwa_stderr.log \
-    | samtools sort -@ 4 -o ${TESTDIR}/remapped.bam - \
+    | samtools sort -@ ${SAMTOOLS_SORT_THREADS} -o ${TESTDIR}/remapped.bam - \
     2>&1 | tee ${TESTDIR}/logs/step2_bwa_remap.log
 
 samtools index ${TESTDIR}/remapped.bam

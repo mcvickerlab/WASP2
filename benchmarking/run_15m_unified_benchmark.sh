@@ -30,6 +30,8 @@ input_vcf="/iblm/netapp/data1/aho/variants/NA12878.vcf.gz"
 sample="NA12878"
 THREADS="${THREADS:-8}"
 COMPRESSION_THREADS="${COMPRESSION_THREADS:-1}"
+BWA_THREADS="${BWA_THREADS:-${THREADS}}"
+SAMTOOLS_SORT_THREADS="${SAMTOOLS_SORT_THREADS:-${THREADS}}"
 
 # 15M reads
 n_subset=15000000
@@ -109,9 +111,9 @@ STEP2_START=$(date +%s.%N)
 zcat ${r1_reads} > ${OUTPUT_DIR}/remap_r1.fq
 zcat ${r2_reads} > ${OUTPUT_DIR}/remap_r2.fq
 
-bwa mem -t 16 -M ${genome_index} ${OUTPUT_DIR}/remap_r1.fq ${OUTPUT_DIR}/remap_r2.fq | \
+bwa mem -t ${BWA_THREADS} -M ${genome_index} ${OUTPUT_DIR}/remap_r1.fq ${OUTPUT_DIR}/remap_r2.fq | \
     samtools view -S -b -h -F 4 - > ${OUTPUT_DIR}/remapped.bam
-samtools sort -o ${OUTPUT_DIR}/remapped_sorted.bam ${OUTPUT_DIR}/remapped.bam
+samtools sort -@ ${SAMTOOLS_SORT_THREADS} -o ${OUTPUT_DIR}/remapped_sorted.bam ${OUTPUT_DIR}/remapped.bam
 mv ${OUTPUT_DIR}/remapped_sorted.bam ${OUTPUT_DIR}/remapped.bam
 samtools index ${OUTPUT_DIR}/remapped.bam
 

@@ -18,7 +18,7 @@
 # Threading:
 #   - SGE: 8 cores (-pe iblm 8)
 #   - Unified pipeline: 8 threads + configurable compression threads
-#   - BWA mem: -t 16
+#   - BWA mem: -t ${BWA_THREADS} (defaults to THREADS/NSLOTS)
 #   - filter: 8 threads
 #
 # Pipeline:
@@ -38,6 +38,8 @@ conda activate WASP2_dev2
 # - COMPRESSION_THREADS is per FASTQ file (R1 and R2); defaults to 1 to avoid oversubscription
 THREADS="${THREADS:-${NSLOTS:-8}}"
 COMPRESSION_THREADS="${COMPRESSION_THREADS:-1}"
+BWA_THREADS="${BWA_THREADS:-${THREADS}}"
+SAMTOOLS_SORT_THREADS="${SAMTOOLS_SORT_THREADS:-${THREADS}}"
 
 # Use a stable run ID shared across all array tasks.
 # Prefer RUN_TIMESTAMP if passed at qsub time, else fall back to JOB_ID (shared
@@ -161,9 +163,11 @@ zcat ${r1_reads} > ${dir}/remap_r1.fq
 zcat ${r2_reads} > ${dir}/remap_r2.fq
 
 remapped_bam="${dir}/${prefix}_remapped.bam"
-bwa mem -t 16 -M ${genome_index} ${dir}/remap_r1.fq ${dir}/remap_r2.fq | \
-    samtools view -S -b -h -F 4 - > ${remapped_bam}
-samtools sort -o ${remapped_bam} ${remapped_bam}
+remapped_unsorted_bam="${dir}/${prefix}_remapped_unsorted.bam"
+bwa mem -t ${BWA_THREADS} -M ${genome_index} ${dir}/remap_r1.fq ${dir}/remap_r2.fq | \
+    samtools view -S -b -h -F 4 - > ${remapped_unsorted_bam}
+samtools sort -@ ${SAMTOOLS_SORT_THREADS} -o ${remapped_bam} ${remapped_unsorted_bam}
+rm -f ${remapped_unsorted_bam}
 samtools index ${remapped_bam}
 
 # Clean up uncompressed FASTQs
@@ -187,7 +191,7 @@ kept, removed_moved, removed_missing = filter_bam_wasp(
     '${subset_bam}',
     '${remapped_bam}',
     '${dir}/remap_keep.bam',
-    threads=8
+    threads=${THREADS}
 )
 
 print(f'Kept: {kept}, Removed: {removed_moved}, Missing: {removed_missing}')
