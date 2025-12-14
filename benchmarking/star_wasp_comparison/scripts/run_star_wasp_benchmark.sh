@@ -24,10 +24,7 @@ echo "STAR+WASP Benchmark timestamp: ${TIMESTAMP}"
 BENCHMARK_DIR="/iblm/netapp/data3/jjaureguy/gvl_files/wasp2/WASP2_extensive_evaluation/WASP2_current/cvpc/WASP2-exp/benchmarking/star_wasp_comparison"
 DATA_DIR="${BENCHMARK_DIR}/data"
 OUTPUT_BASE="${BENCHMARK_DIR}/results"
-OUTPUT_DIR="${OUTPUT_BASE}/star_wasp_${TIMESTAMP}"
-
-mkdir -p "${OUTPUT_DIR}"
-echo "Output directory: ${OUTPUT_DIR}"
+FINAL_OUTPUT_DIR="${OUTPUT_BASE}/star_wasp_${TIMESTAMP}"
 
 # Input files (remote/NFS)
 FASTQ_R1="${DATA_DIR}/ERR1050079_1.fastq.gz"
@@ -37,6 +34,12 @@ STAR_INDEX_REMOTE="/iblm/netapp/data1/external/GRC38/combined/google_cloud/star_
 
 # Local scratch
 LOCAL_SCRATCH="${TMPDIR:-/tmp}"
+WORK_OUTPUT_DIR="${LOCAL_SCRATCH}/star_wasp_${JOB_ID:-local}_${TIMESTAMP}"
+OUTPUT_DIR="${WORK_OUTPUT_DIR}"
+
+mkdir -p "${OUTPUT_DIR}"
+echo "Work directory: ${OUTPUT_DIR}"
+echo "Final output directory: ${FINAL_OUTPUT_DIR}"
 
 # =============================================================================
 # CONFIGURATION (matches paper)
@@ -242,17 +245,46 @@ echo "WASP pass (vW:i:1): ${WASP_PASS}" >> ${PROFILE_LOG}
 echo "WASP fail (vW:i:2-7): ${WASP_FAIL}" >> ${PROFILE_LOG}
 
 # =============================================================================
+# COPY BACK (NFS)
+# =============================================================================
+echo ""
+echo "Copying benchmark artifacts to final output directory..."
+mkdir -p "${FINAL_OUTPUT_DIR}"
+for f in \
+    "${OUTPUT_DIR}/benchmark_results.json" \
+    "${PROFILE_LOG}" \
+    "${OUTPUT_DIR}/Log.final.out"
+do
+    if [ -f "${f}" ]; then
+        rsync -a "${f}" "${FINAL_OUTPUT_DIR}/"
+    fi
+done
+
+# Optional: keep BAM outputs (large)
+if [ "${KEEP_BAMS:-0}" = "1" ]; then
+    for f in "${OUTPUT_DIR}/star_wasp_output.bam" "${OUTPUT_DIR}/star_wasp_output.bam.bai"; do
+        if [ -f "${f}" ]; then
+            rsync -a "${f}" "${FINAL_OUTPUT_DIR}/"
+        fi
+    done
+fi
+
+echo "Final output directory: ${FINAL_OUTPUT_DIR}"
+
+# =============================================================================
 # CLEANUP
 # =============================================================================
 echo ""
 echo "Cleaning up local scratch files..."
+cd /
 rm -rf "${LOCAL_FASTQ_DIR}"
 rm -rf "$(dirname ${LOCAL_VCF})"
 rm -rf "${LOCAL_STAR_INDEX}"
+rm -rf "${WORK_OUTPUT_DIR}"
 echo "Done."
 
 echo ""
 echo "========================================"
 echo "STAR+WASP Benchmark Complete"
-echo "Output: ${OUTPUT_DIR}"
+echo "Final output: ${FINAL_OUTPUT_DIR}"
 echo "========================================"

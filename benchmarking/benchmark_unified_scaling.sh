@@ -33,8 +33,14 @@ set -e
 source /iblm/netapp/home/jjaureguy/mambaforge/etc/profile.d/conda.sh
 conda activate WASP2_dev2
 
-# Timestamp for this run
-TIMESTAMP=$(date +%Y-%m-%d_%H-%M-%S)
+# Use a stable run ID shared across all array tasks.
+# Prefer RUN_TIMESTAMP if passed at qsub time, else fall back to JOB_ID (shared
+# across tasks), else a wall-clock timestamp (interactive use).
+RUN_TIMESTAMP="${RUN_TIMESTAMP:-}"
+if [ -z "${RUN_TIMESTAMP}" ]; then
+    RUN_TIMESTAMP="${JOB_ID:-$(date +%Y-%m-%d_%H-%M-%S)}"
+fi
+TIMESTAMP="${RUN_TIMESTAMP}"
 
 WASP2_DIR="/iblm/netapp/data3/jjaureguy/gvl_files/wasp2/WASP2_extensive_evaluation/WASP2_current/cvpc/WASP2-exp"
 
@@ -43,9 +49,9 @@ RESULTS_DIR="${WASP2_DIR}/benchmarking/results/unified_scaling_${TIMESTAMP}"
 mkdir -p "${RESULTS_DIR}"
 log_file="${RESULTS_DIR}/wasp2_unified_scaling.tsv"
 
-# Write header if first task
-if [ "$SGE_TASK_ID" = "1" ]; then
-    echo -e "timestamp\tn_reads\tseed\ttotal_s\tunified_s\tremap_s\tfilter_s" > ${log_file}
+# Write header exactly once across all tasks (atomic mkdir)
+if mkdir "${RESULTS_DIR}/.init" 2>/dev/null; then
+    echo -e "timestamp\tn_reads\tseed\ttotal_s\tunified_s\tremap_s\tfilter_s" > "${log_file}"
 fi
 
 # Same inputs as aho/SNP benchmark

@@ -25,8 +25,7 @@ echo "Benchmark timestamp: ${TIMESTAMP}"
 WASP2_DIR="/iblm/netapp/data3/jjaureguy/gvl_files/wasp2/WASP2_extensive_evaluation/WASP2_current/cvpc/WASP2-exp"
 BENCHMARK_DIR="${WASP2_DIR}/benchmarking/star_wasp_comparison"
 DATA_DIR="${BENCHMARK_DIR}/data"
-OUTPUT_DIR="${BENCHMARK_DIR}/results/wasp2rust_fixed_${TIMESTAMP}"
-mkdir -p "${OUTPUT_DIR}"
+FINAL_OUTPUT_DIR="${BENCHMARK_DIR}/results/wasp2rust_fixed_${TIMESTAMP}"
 
 # Data files
 FASTQ_R1="${DATA_DIR}/ERR1050079_1.fastq.gz"
@@ -36,6 +35,9 @@ VCF="${DATA_DIR}/HG00731_het_only_chr.vcf.gz"
 # Reference - STAR index
 STAR_INDEX_REMOTE="/iblm/netapp/data1/external/GRC38/combined/google_cloud/star_index"
 LOCAL_SCRATCH="${TMPDIR:-/tmp}"
+WORK_OUTPUT_DIR="${LOCAL_SCRATCH}/wasp2rust_fixed_${JOB_ID:-local}_${TIMESTAMP}"
+OUTPUT_DIR="${WORK_OUTPUT_DIR}"
+mkdir -p "${OUTPUT_DIR}"
 
 # Sample
 SAMPLE="HG00731"
@@ -384,7 +386,8 @@ echo "  Remap keep reads:     ${REMAP_KEEP_READS}"
 echo "  FINAL (merged):       ${FINAL_READS}"
 echo "  Pass rate:            ${PASS_RATE}%"
 echo ""
-echo "Output directory: ${OUTPUT_DIR}"
+echo "Work directory: ${OUTPUT_DIR}"
+echo "Final output directory: ${FINAL_OUTPUT_DIR}"
 echo "End time: $(date)"
 
 # Save results to JSON
@@ -419,3 +422,35 @@ echo "COMPARISON TO WASP1:"
 echo "  WASP1 total:    2961.17 s (97M reads output)"
 echo "  WASP2 total:    ${TOTAL_TIME} s (${FINAL_READS} reads output)"
 echo "  WASP2 speedup:  $(echo "scale=2; 2961.17 / ${TOTAL_TIME}" | bc)x"
+
+# -----------------------------------------------------------------------------
+# Copy artifacts back to final output directory (NFS)
+# -----------------------------------------------------------------------------
+echo ""
+echo "Copying benchmark artifacts to final output directory..."
+mkdir -p "${FINAL_OUTPUT_DIR}"
+for f in \
+    "${OUTPUT_DIR}/benchmark_results.json" \
+    "${PROFILE_LOG}" \
+    "${OUTPUT_DIR}/unified_stats.json" \
+    "${OUTPUT_DIR}/remap_keep.bam" \
+    "${OUTPUT_DIR}/remap_keep.bam.bai" \
+    "${OUTPUT_DIR}/Log.final.out"
+do
+    if [ -f "${f}" ]; then
+        rsync -a "${f}" "${FINAL_OUTPUT_DIR}/"
+    fi
+done
+
+# Optional: keep large BAM outputs (merged/kept reads)
+if [ "${KEEP_BAMS:-0}" = "1" ]; then
+    for f in "${OUTPUT_DIR}/wasp_filtered.bam" "${OUTPUT_DIR}/wasp_filtered.bam.bai"; do
+        if [ -f "${f}" ]; then
+            rsync -a "${f}" "${FINAL_OUTPUT_DIR}/"
+        fi
+    done
+fi
+
+echo "Final output directory: ${FINAL_OUTPUT_DIR}"
+cd /
+rm -rf "${WORK_OUTPUT_DIR}"

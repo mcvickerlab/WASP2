@@ -27,7 +27,7 @@ export LD_LIBRARY_PATH="${CONDA_PREFIX}/lib:${LD_LIBRARY_PATH}"
 # This keeps all tasks in a single results directory.
 RUN_TIMESTAMP="${RUN_TIMESTAMP:-}"
 if [ -z "${RUN_TIMESTAMP}" ]; then
-    RUN_TIMESTAMP=$(date +%Y-%m-%d_%H-%M-%S)
+    RUN_TIMESTAMP="${JOB_ID:-$(date +%Y-%m-%d_%H-%M-%S)}"
 fi
 TIMESTAMP="${RUN_TIMESTAMP}"
 
@@ -37,8 +37,9 @@ RESULTS_DIR="${WASP2_DIR}/benchmarking/results/unified_indel_scaling_${TIMESTAMP
 mkdir -p "${RESULTS_DIR}"
 log_file="${RESULTS_DIR}/wasp2_unified_indel_scaling.tsv"
 
-if [ "$SGE_TASK_ID" = "1" ]; then
-    echo -e "timestamp\tn_reads\tseed\ttotal_s\tunified_s\tremap_s\tfilter_s" > ${log_file}
+# Write header exactly once across all tasks (atomic mkdir)
+if mkdir "${RESULTS_DIR}/.init" 2>/dev/null; then
+    echo -e "timestamp\tn_reads\tseed\ttotal_s\tunified_s\tremap_s\tfilter_s" > "${log_file}"
 fi
 
 genome_index="/iblm/netapp/data1/aho/ref_genomes/index/Homo_sapiens/NCBI/GRCh38/Sequence/BWAIndex/genome.fa"

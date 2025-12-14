@@ -26,7 +26,10 @@ echo "Benchmark timestamp: ${TIMESTAMP}"
 # Paths
 WASP2_DIR="/iblm/netapp/data3/jjaureguy/gvl_files/wasp2/WASP2_extensive_evaluation/WASP2_current/cvpc/WASP2-exp"
 BENCHMARK_DIR="${WASP2_DIR}/benchmarking/atac_gm12878"
-OUTPUT_DIR="${BENCHMARK_DIR}/results/wasp2rust_snp_fixed_${TIMESTAMP}"
+FINAL_OUTPUT_DIR="${BENCHMARK_DIR}/results/wasp2rust_snp_fixed_${TIMESTAMP}"
+LOCAL_SCRATCH="${TMPDIR:-/tmp}"
+WORK_OUTPUT_DIR="${LOCAL_SCRATCH}/wasp2rust_gm12878_snp_${JOB_ID:-local}_${TIMESTAMP}"
+OUTPUT_DIR="${WORK_OUTPUT_DIR}"
 mkdir -p "${OUTPUT_DIR}"
 
 # Data files
@@ -401,7 +404,8 @@ echo "  Remap keep reads:     ${REMAP_KEEP_READS}"
 echo "  FINAL (merged):       ${FINAL_READS}"
 echo "  Pass rate:            ${PASS_RATE}%"
 echo ""
-echo "Output directory: ${OUTPUT_DIR}"
+echo "Work directory: ${OUTPUT_DIR}"
+echo "Final output directory: ${FINAL_OUTPUT_DIR}"
 echo "End time: $(date)"
 
 # Save results to JSON
@@ -438,3 +442,26 @@ echo "COMPARISON TO WASP1:"
 echo "  WASP1 total:    5523.97 s (147M reads output)"
 echo "  WASP2 total:    ${TOTAL_TIME} s (${FINAL_READS} reads output)"
 echo "  WASP2 speedup:  $(echo "scale=2; 5523.97 / ${TOTAL_TIME}" | bc)x"
+
+# -----------------------------------------------------------------------------
+# Copy artifacts back to final output directory (NFS)
+# -----------------------------------------------------------------------------
+echo ""
+echo "Copying benchmark artifacts to final output directory..."
+mkdir -p "${FINAL_OUTPUT_DIR}"
+for f in \
+    "${OUTPUT_DIR}/benchmark_results.json" \
+    "${PROFILE_LOG}" \
+    "${OUTPUT_DIR}/unified_stats.json" \
+    "${OUTPUT_DIR}/remap_keep.bam" \
+    "${OUTPUT_DIR}/remap_keep.bam.bai" \
+    "${OUTPUT_DIR}/wasp_filtered.bam" \
+    "${OUTPUT_DIR}/wasp_filtered.bam.bai"
+do
+    if [ -f "${f}" ]; then
+        rsync -a "${f}" "${FINAL_OUTPUT_DIR}/"
+    fi
+done
+echo "Final output directory: ${FINAL_OUTPUT_DIR}"
+cd /
+rm -rf "${WORK_OUTPUT_DIR}"
