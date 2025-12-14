@@ -923,7 +923,8 @@ fn fastq_writer_thread(
 
     let r1_file = File::create(r1_path)?;
     let r2_file = File::create(r2_path)?;
-    let mut sidecar = File::create(sidecar_path)?;
+    let sidecar_file = File::create(sidecar_path)?;
+    let mut sidecar = BufWriter::with_capacity(4 * 1024 * 1024, sidecar_file);
     let mut seq_buf: Vec<u8> = Vec::new();
     let mut qual_buf: Vec<u8> = Vec::new();
     let mut itoa_buf = ItoaBuffer::new();
@@ -964,6 +965,7 @@ fn fastq_writer_thread(
         // Finish flushes and finalizes the gzip streams
         r1_writer.finish().context("Failed to finish R1 gzip")?;
         r2_writer.finish().context("Failed to finish R2 gzip")?;
+        sidecar.flush().context("Failed to flush sidecar")?;
     } else {
         // Uncompressed output - faster for named pipes and streaming to STAR
         // Use larger buffer (4MB) for better throughput
@@ -993,6 +995,7 @@ fn fastq_writer_thread(
         // Flush uncompressed writers
         r1_writer.flush().context("Failed to flush R1")?;
         r2_writer.flush().context("Failed to flush R2")?;
+        sidecar.flush().context("Failed to flush sidecar")?;
     }
 
     Ok(())
