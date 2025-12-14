@@ -11,8 +11,8 @@
 //!
 //! # INDEL Support (v1.2+)
 //!
-//! Uses shared `cigar_utils` module for CIGAR-aware position mapping.
-//! This properly handles reads with insertions/deletions in their alignment.
+//! Uses CIGAR-walk coordinate mapping (no per-base aligned-pairs expansion),
+//! properly handling reads with insertions/deletions in their alignment.
 
 use anyhow::{Context, Result};
 use rust_htslib::bam::ext::BamRecordExtensions;
@@ -21,8 +21,6 @@ use rustc_hash::FxHashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
-
-use crate::cigar_utils;
 
 // ============================================================================
 // Data Structures
@@ -625,7 +623,7 @@ fn process_read_pair(
 ///
 /// # Performance
 /// - SNPs: Fast path using on-demand position lookup
-/// - Indels: Uses build_ref2read_maps() for correct deletion handling
+/// - Indels: CIGAR-walk boundary mapping (no aligned_pairs_full)
 /// - Still 3-5x faster than Python even with indel support
 pub fn generate_haplotype_seqs(
     read: &bam::Record,
@@ -650,23 +648,21 @@ pub fn generate_haplotype_seqs(
     });
 
     let (split_positions, split_qual_positions) = if has_indels {
-        // Use indel-aware mapping with left/right flanking
-        let (ref2q_left, ref2q_right) = build_ref2read_maps(read);
-
+        // Indel-aware mapping: map BED half-open coordinates [start, stop) to query positions.
+        // This matches Python’s remap_utils.py behavior:
+        //   query_start = ref2q_left[start]
+        //   query_stop  = ref2q_right[stop]
         let mut seq_pos = vec![0];
         let mut qual_pos = vec![0];
 
         for variant in variants {
-            // For variant start: use left mapping
-            let read_start = match ref2q_left.get(&variant.vcf_start) {
-                Some(&pos) => pos,
-                None => return Ok(None), // Variant overlaps unmapped region, skip this read
+            let read_start = match find_query_boundary(read, variant.vcf_start) {
+                Some(pos) => pos,
+                None => return Ok(None), // Variant overlaps unmapped region (e.g. splice), skip
             };
-
-            // For variant stop: use right mapping
-            let read_stop = match ref2q_right.get(&(variant.vcf_stop - 1)) {
-                Some(&pos) => pos,
-                None => return Ok(None), // Variant overlaps unmapped region, skip this read
+            let read_stop = match find_query_boundary(read, variant.vcf_stop) {
+                Some(pos) => pos,
+                None => return Ok(None),
             };
 
             // Skip reads where variant positions are inverted (complex CIGAR or overlapping variants)
@@ -854,19 +850,16 @@ pub fn generate_haplotype_seqs_view(
     });
 
     let (split_positions, split_qual_positions) = if has_indels {
-        let (ref2q_left, ref2q_right) = build_ref2read_maps(read);
-
         let mut seq_pos = vec![0];
         let mut qual_pos = vec![0];
 
         for variant in variants {
-            let read_start = match ref2q_left.get(&variant.vcf_start) {
-                Some(&pos) => pos,
+            let read_start = match find_query_boundary(read, variant.vcf_start) {
+                Some(pos) => pos,
                 None => return Ok(None),
             };
-
-            let read_stop = match ref2q_right.get(&(variant.vcf_stop - 1)) {
-                Some(&pos) => pos,
+            let read_stop = match find_query_boundary(read, variant.vcf_stop) {
+                Some(pos) => pos,
                 None => return Ok(None),
             };
 
@@ -1502,51 +1495,6 @@ pub fn process_all_chromosomes_sequential(
 // Helper Functions
 // ============================================================================
 
-/// Build reference-to-read position mappings for indel support
-///
-/// Creates two mappings to handle deletions properly:
-/// - ref2q_left: Maps reference position to nearest left query position
-/// - ref2q_right: Maps reference position to nearest right query position
-///
-/// For positions in deletions, left and right maps will differ (flanking positions).
-/// For matches, both maps point to the same query position.
-///
-/// This uses the shared `cigar_utils::build_ref2query_maps()` which leverages
-/// rust-htslib's `aligned_pairs_full()` API (equivalent to pysam's
-/// `get_aligned_pairs(matches_only=False)`).
-///
-/// # Returns
-/// (ref2q_left, ref2q_right) FxHashMaps mapping reference positions to query positions
-fn build_ref2read_maps(read: &bam::Record) -> (FxHashMap<u32, usize>, FxHashMap<u32, usize>) {
-    // Use the shared cigar_utils implementation which uses aligned_pairs_full()
-    let (left_i64, right_i64) = cigar_utils::build_ref2query_maps(read);
-
-    // Convert from i64 keys to u32 keys (for backwards compatibility with existing code)
-    let ref2q_left: FxHashMap<u32, usize> = left_i64
-        .into_iter()
-        .filter_map(|(k, v)| {
-            if k >= 0 && k <= u32::MAX as i64 {
-                Some((k as u32, v))
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    let ref2q_right: FxHashMap<u32, usize> = right_i64
-        .into_iter()
-        .filter_map(|(k, v)| {
-            if k >= 0 && k <= u32::MAX as i64 {
-                Some((k as u32, v))
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    (ref2q_left, ref2q_right)
-}
-
 /// Fill quality scores for inserted bases
 ///
 /// When an insertion makes a haplotype longer than the original read,
@@ -1575,6 +1523,77 @@ fn fill_insertion_quals(
     let mean_qual = (sum / flank_quals.len() as u32) as u8;
 
     vec![mean_qual; insert_len]
+}
+
+/// Map a reference coordinate to a query (read) coordinate using CIGAR.
+///
+/// Returns the query position corresponding to the *boundary before* `target_ref_pos`
+/// in the reference coordinate system, which matches the semantics used by WASP2’s
+/// Python implementation for indel-aware splitting:
+/// - query_start = ref2q_left[start]
+/// - query_stop  = ref2q_right[stop]
+///
+/// We treat:
+/// - `D` (deletion) as mappable using the current query position (flank)
+/// - `N` (ref-skip / splice) as NOT mappable (returns None)
+fn find_query_boundary(read: &bam::Record, target_ref_pos: u32) -> Option<usize> {
+    use rust_htslib::bam::record::Cigar;
+
+    let mut query_pos: usize = 0;
+    let mut ref_pos: u32 = read.pos() as u32;
+
+    for op in read.cigar().iter() {
+        match op {
+            Cigar::Ins(len) | Cigar::SoftClip(len) => {
+                // Query advances, reference stays. This must be applied before mapping the
+                // next reference-consuming operation at the same ref_pos.
+                query_pos += *len as usize;
+            }
+            Cigar::Match(len) | Cigar::Equal(len) | Cigar::Diff(len) => {
+                let op_ref_len = *len;
+                if target_ref_pos < ref_pos {
+                    return None;
+                }
+                if target_ref_pos < ref_pos + op_ref_len {
+                    let offset = (target_ref_pos - ref_pos) as usize;
+                    return Some(query_pos + offset);
+                }
+                // target is at or after end of this op
+                query_pos += op_ref_len as usize;
+                ref_pos += op_ref_len;
+            }
+            Cigar::Del(len) => {
+                let op_ref_len = *len;
+                if target_ref_pos < ref_pos {
+                    return None;
+                }
+                if target_ref_pos < ref_pos + op_ref_len {
+                    // Inside a deletion: return flank (query doesn't advance)
+                    return Some(query_pos);
+                }
+                ref_pos += op_ref_len;
+            }
+            Cigar::RefSkip(len) => {
+                let op_ref_len = *len;
+                if target_ref_pos < ref_pos {
+                    return None;
+                }
+                if target_ref_pos < ref_pos + op_ref_len {
+                    // Splice/intron skip: treat as unmappable
+                    return None;
+                }
+                ref_pos += op_ref_len;
+            }
+            Cigar::HardClip(_) | Cigar::Pad(_) => {}
+        }
+    }
+
+    // If target is exactly at the end of the reference span, return boundary at end of read.
+    if target_ref_pos == ref_pos {
+        Some(query_pos)
+    } else {
+        None
+    }
 }
 
 /// Find read position for a given reference position (optimized)
@@ -2109,16 +2128,111 @@ mod tests {
             }
         }
 
+        let query_len: usize = cigars
+            .iter()
+            .map(|op| match op {
+                Cigar::Match(len)
+                | Cigar::Ins(len)
+                | Cigar::SoftClip(len)
+                | Cigar::Equal(len)
+                | Cigar::Diff(len) => *len as usize,
+                Cigar::Del(_) | Cigar::RefSkip(_) | Cigar::HardClip(_) | Cigar::Pad(_) => 0,
+            })
+            .sum();
+
         let cigar_string = CigarString(cigars);
+        let seq = vec![b'A'; query_len];
+        let qual = vec![30u8; query_len];
         rec.set(
             b"test_read",
             Some(&cigar_string),
-            &vec![b'A'; 50], // Dummy sequence
-            &vec![30u8; 50], // Dummy qualities
+            &seq,  // Dummy sequence
+            &qual, // Dummy qualities
         );
         rec.set_pos(pos);
 
         rec
+    }
+
+    #[test]
+    fn test_find_query_boundary_simple_match() {
+        let rec = create_test_record(100, "50M");
+
+        assert_eq!(find_query_boundary(&rec, 100), Some(0));
+        assert_eq!(find_query_boundary(&rec, 101), Some(1));
+        assert_eq!(find_query_boundary(&rec, 150), Some(50)); // end boundary
+        assert_eq!(find_query_boundary(&rec, 99), None);
+    }
+
+    #[test]
+    fn test_find_query_boundary_softclip() {
+        // 5S45M: aligned portion starts at query offset 5
+        let rec = create_test_record(100, "5S45M");
+        assert_eq!(find_query_boundary(&rec, 100), Some(5));
+        assert_eq!(find_query_boundary(&rec, 101), Some(6));
+        assert_eq!(find_query_boundary(&rec, 145), Some(50)); // 5 + 45
+    }
+
+    #[test]
+    fn test_find_query_boundary_insertion_shifts_downstream() {
+        // 10M2I40M: insertion occurs at ref_pos=110, pushing downstream query coords by +2
+        let rec = create_test_record(100, "10M2I40M");
+        assert_eq!(find_query_boundary(&rec, 109), Some(9));
+        assert_eq!(find_query_boundary(&rec, 110), Some(12));
+        assert_eq!(find_query_boundary(&rec, 111), Some(13));
+    }
+
+    #[test]
+    fn test_find_query_boundary_deletion_keeps_query_constant() {
+        // 10M2D40M: deletion consumes ref 110-111 with no query advance
+        let rec = create_test_record(100, "10M2D40M");
+        assert_eq!(find_query_boundary(&rec, 110), Some(10));
+        assert_eq!(find_query_boundary(&rec, 111), Some(10));
+        assert_eq!(find_query_boundary(&rec, 112), Some(10));
+    }
+
+    #[test]
+    fn test_find_query_boundary_refskip_is_unmappable() {
+        // 10M100N40M: positions within N are unmappable
+        let rec = create_test_record(100, "10M100N40M");
+        assert_eq!(find_query_boundary(&rec, 110), None);
+        assert_eq!(find_query_boundary(&rec, 150), None);
+        assert_eq!(find_query_boundary(&rec, 210), Some(10));
+    }
+
+    #[test]
+    fn test_generate_haplotype_seqs_view_insertion_uses_stop_boundary() {
+        // Insertion at [125,126): should replace 1 ref base with 3 bases, net +2 length
+        let rec = create_test_record(100, "50M");
+        let view = vec![VariantSpanView {
+            vcf_start: 125,
+            vcf_stop: 126,
+            hap1: "A",
+            hap2: "ATG",
+        }];
+        let cfg = RemapConfig::default();
+        let out = generate_haplotype_seqs_view(&rec, &view, &cfg).unwrap().unwrap();
+
+        assert_eq!(out[0].0.len(), 50); // hap1: ref allele
+        assert_eq!(out[1].0.len(), 52); // hap2: insertion allele, replaces 1 base with 3
+        assert_eq!(&out[1].0[25..28], b"ATG");
+    }
+
+    #[test]
+    fn test_generate_haplotype_seqs_view_deletion_contracts_sequence() {
+        // Deletion at [120,122): replaces 2 ref bases with 1 base, net -1 length
+        let rec = create_test_record(100, "50M");
+        let view = vec![VariantSpanView {
+            vcf_start: 120,
+            vcf_stop: 122,
+            hap1: "AA",
+            hap2: "A",
+        }];
+        let cfg = RemapConfig::default();
+        let out = generate_haplotype_seqs_view(&rec, &view, &cfg).unwrap().unwrap();
+
+        assert_eq!(out[0].0.len(), 50); // hap1 matches ref length
+        assert_eq!(out[1].0.len(), 49); // hap2 shorter by 1
     }
 
     #[test]
