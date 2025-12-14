@@ -48,6 +48,12 @@ pub struct UnifiedConfig {
     pub read_threads: usize,
     /// Maximum haplotype sequences per read pair
     pub max_seqs: usize,
+    /// Initial reserve for the in-flight mate-pair buffer (HashMap).
+    ///
+    /// This buffer stores first-seen mates until the second mate is encountered.
+    /// Over-reserving can consume large amounts of memory because each bucket
+    /// includes a full `bam::Record` in the value type.
+    pub pair_buffer_reserve: usize,
     /// Bounded channel buffer size
     pub channel_buffer: usize,
     /// Number of compression threads per FASTQ file (0 = auto)
@@ -72,6 +78,7 @@ impl Default for UnifiedConfig {
         Self {
             read_threads: 8,
             max_seqs: 64,
+            pair_buffer_reserve: 100_000,
             channel_buffer: 50_000,
             compression_threads: 4, // 4 threads per FASTQ file for parallel gzip
             compress_output: true,  // Default to compressed for disk storage
@@ -1088,7 +1095,7 @@ pub fn unified_make_reads(
 
     // Pair buffer: read_name -> first-seen mate
     let mut pair_buffer: FxHashMap<Vec<u8>, BufferedMate> = FxHashMap::default();
-    pair_buffer.reserve(1_000_000);
+    pair_buffer.reserve(config.pair_buffer_reserve);
 
     // Pre-allocate a single record for reading - avoids per-read allocation
     let mut record = bam::Record::new();
