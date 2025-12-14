@@ -484,13 +484,10 @@ fn generate_haplotypes_for_read(
         return Some(vec![(seq.clone(), qual.clone()), (seq, qual)]);
     }
 
-    // Sort overlaps by genomic position for deterministic substitution order
-    let mut sorted_overlaps = overlaps.to_vec();
-    sorted_overlaps.sort_by_key(|&(_, start, _)| start);
+    // Overlaps are already sorted by genomic position in `check_overlaps`.
+    let mut spans: Vec<VariantSpanView<'_>> = Vec::with_capacity(overlaps.len());
 
-    let mut spans: Vec<VariantSpanView<'_>> = Vec::with_capacity(sorted_overlaps.len());
-
-    for (variant_idx, _, _) in &sorted_overlaps {
+    for (variant_idx, _, _) in overlaps {
         let variant = &store.variants[*variant_idx as usize];
         let (hap1, hap2) =
             genotype_to_alleles_view(&variant.genotype, &variant.ref_allele, &variant.alt_allele)?;
