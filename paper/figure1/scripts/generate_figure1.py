@@ -38,6 +38,18 @@ from config import get_plot_path, get_data_path, REPO_ROOT
 
 # Path to WASP2 logo
 LOGO_PATH = REPO_ROOT / 'doc/wasp2_hex_logo_v1.png'
+FIG1_BENCH_DIR = get_data_path(1, 'benchmarks')
+
+
+def first_existing(*paths):
+    """Return the first existing Path from the given candidates."""
+    for p in paths:
+        if p is None:
+            continue
+        p = Path(p)
+        if p.exists():
+            return p
+    return None
 
 # =========================================
 # SPACING CONSTANTS (audit recommendations)
@@ -402,14 +414,25 @@ def panel_a_architecture(ax):
 
 def panel_b_benchmark(ax):
     """Panel B: Runtime benchmark with actual data from unified pipeline."""
-    # Old baseline files (WASP1, WASP2-Python)
-    wasp1_file = REPO_ROOT / 'benchmarking/data/aho_perf_logs/wasp1_perf_logs_snp2h5_7881649-Copy1.txt'
-    wasp2_py_file = REPO_ROOT / 'benchmarking/data/aho_perf_logs/wasp2_perf_logs_7908428-Copy1.txt'
-    # NEW unified pipeline results (Dec 2025)
-    rust_snp_file = REPO_ROOT / 'benchmarking/results/wasp2_unified_scaling_COMBINED.tsv'
-    rust_indel_file = REPO_ROOT / 'benchmarking/results/wasp2_unified_indel_scaling_COMBINED.tsv'
+    # Publication source data (tracked)
+    wasp1_file = first_existing(
+        FIG1_BENCH_DIR / 'panel_b_wasp1_perf_log.tsv',
+        REPO_ROOT / 'benchmarking/data/aho_perf_logs/wasp1_perf_logs_snp2h5_7881649-Copy1.txt',
+    )
+    wasp2_py_file = first_existing(
+        FIG1_BENCH_DIR / 'panel_b_wasp2python_perf_log.tsv',
+        REPO_ROOT / 'benchmarking/data/aho_perf_logs/wasp2_perf_logs_7908428-Copy1.txt',
+    )
+    rust_snp_file = first_existing(
+        FIG1_BENCH_DIR / 'panel_b_wasp2rust_snv_scaling.tsv',
+        REPO_ROOT / 'benchmarking/results/wasp2_unified_scaling_COMBINED.tsv',
+    )
+    rust_indel_file = first_existing(
+        FIG1_BENCH_DIR / 'panel_b_wasp2rust_indel_scaling.tsv',
+        REPO_ROOT / 'benchmarking/results/wasp2_unified_indel_scaling_COMBINED.tsv',
+    )
 
-    if all(f.exists() for f in [wasp1_file, wasp2_py_file, rust_snp_file, rust_indel_file]):
+    if all([wasp1_file, wasp2_py_file, rust_snp_file, rust_indel_file]):
         # WASP1
         wasp1 = pd.read_csv(wasp1_file, sep='\t',
                            names=['n_reads', 'seed', 'total', 'snp2h5', 'intersect', 'remap', 'filter', 'extra'])
@@ -533,23 +556,33 @@ def panel_c_filtering(ax):
     results = {}
 
     # WASP2-Python ATAC (fixed SNP-only run)
-    py_file = REPO_ROOT / 'benchmarking/atac_gm12878/results/wasp2python_snp_fixed_2025-12-07_13-12-00/benchmark_results.json'
-    r = load_split_retention(py_file)
+    py_file = first_existing(
+        FIG1_BENCH_DIR / 'panel_c_atac_wasp2python_snv.json',
+        REPO_ROOT
+        / 'benchmarking/atac_gm12878/results/wasp2python_snp_fixed_2025-12-07_13-12-00/benchmark_results.json',
+    )
+    r = load_split_retention(py_file) if py_file else None
     if r:
         results['wasp2python'] = {'pre': r[0], 'post': r[1]}
 
     # WASP2-Rust SNP ATAC (fixed SNP-only run)
-    rust_snp_file = REPO_ROOT / 'benchmarking/atac_gm12878/results/wasp2rust_snp_fixed_2025-12-10_00-45-32/benchmark_results.json'
-    r = load_split_retention(rust_snp_file)
+    rust_snp_file = first_existing(
+        FIG1_BENCH_DIR / 'panel_c_atac_wasp2rust_snv.json',
+        REPO_ROOT
+        / 'benchmarking/atac_gm12878/results/wasp2rust_snp_fixed_2025-12-10_00-45-32/benchmark_results.json',
+    )
+    r = load_split_retention(rust_snp_file) if rust_snp_file else None
     if r:
         results['wasp2rust_snp'] = {'pre': r[0], 'post': r[1]}
 
     # WASP2-Rust INDEL ATAC (latest fixed run with split fields)
-    rust_indel_files = sorted(
-        (REPO_ROOT / 'benchmarking/atac_gm12878/results').glob('wasp2rust_indel_fixed_*/benchmark_results.json')
-    )
-    if rust_indel_files:
-        indel_file = rust_indel_files[-1]
+    indel_file = first_existing(FIG1_BENCH_DIR / 'panel_c_atac_wasp2rust_indel.json')
+    if indel_file is None:
+        rust_indel_files = sorted(
+            (REPO_ROOT / 'benchmarking/atac_gm12878/results').glob('wasp2rust_indel_fixed_*/benchmark_results.json')
+        )
+        indel_file = rust_indel_files[-1] if rust_indel_files else None
+    if indel_file is not None:
         r = load_split_retention(indel_file)
         if r:
             results['wasp2rust_indel'] = {'pre': r[0], 'post': r[1]}
@@ -650,28 +683,44 @@ def panel_d_rnaseq_benchmark(ax):
     times = {}
 
     # STAR+WASP
-    star_wasp_file = REPO_ROOT / 'benchmarking/star_wasp_comparison/results/star_wasp_2025-12-04_00-58-54/benchmark_results.json'
-    if star_wasp_file.exists():
+    star_wasp_file = first_existing(
+        FIG1_BENCH_DIR / 'panel_de_rnaseq_star_wasp.json',
+        REPO_ROOT / 'benchmarking/star_wasp_comparison/results/star_wasp_2025-12-04_00-58-54/benchmark_results.json',
+    )
+    if star_wasp_file is not None and star_wasp_file.exists():
         d = json.loads(star_wasp_file.read_text())
         times['star_wasp'] = d['wall_clock_s']
 
     # WASP2-Python (from dev branch with multithread support)
-    py_fixed_files = list((REPO_ROOT / 'benchmarking/star_wasp_comparison/results').glob('wasp2python_rnaseq_fixed_*/benchmark_results.json'))
-    if py_fixed_files:
-        d = json.loads(py_fixed_files[-1].read_text())
+    py_file = first_existing(FIG1_BENCH_DIR / 'panel_de_rnaseq_wasp2python.json')
+    if py_file is None:
+        py_fixed_files = list(
+            (REPO_ROOT / 'benchmarking/star_wasp_comparison/results').glob('wasp2python_rnaseq_fixed_*/benchmark_results.json')
+        )
+        py_file = py_fixed_files[-1] if py_fixed_files else None
+    if py_file is not None and py_file.exists():
+        d = json.loads(py_file.read_text())
         times['wasp2python'] = d['total_s']
 
     # WASP2-Rust SNP FAIR (with LoadAndKeep genome caching)
     # Use specific SNP-only run (not the broken INDEL run which lacks indel_mode=True)
-    rust_snp_fair_file = REPO_ROOT / 'benchmarking/star_wasp_comparison/results/wasp2rust_fair_2025-12-10_19-23-02/benchmark_results.json'
-    if rust_snp_fair_file.exists():
+    rust_snp_fair_file = first_existing(
+        FIG1_BENCH_DIR / 'panel_de_rnaseq_wasp2rust_snv.json',
+        REPO_ROOT / 'benchmarking/star_wasp_comparison/results/wasp2rust_fair_2025-12-10_19-23-02/benchmark_results.json',
+    )
+    if rust_snp_fair_file is not None and rust_snp_fair_file.exists():
         d = json.loads(rust_snp_fair_file.read_text())
         times['wasp2rust_snv'] = d['total_s']
 
     # WASP2-Rust INDEL RNA-seq (v2). Include if old-style retention looks sane (avoid old broken runs).
-    rust_indel_files = list((REPO_ROOT / 'benchmarking/star_wasp_comparison/results').glob('wasp2rust_indel_rnaseq_v2_*/benchmark_results.json'))
-    if rust_indel_files:
-        d = json.loads(sorted(rust_indel_files)[-1].read_text())
+    indel_file = first_existing(FIG1_BENCH_DIR / 'panel_de_rnaseq_wasp2rust_indel.json')
+    if indel_file is None:
+        rust_indel_files = list(
+            (REPO_ROOT / 'benchmarking/star_wasp_comparison/results').glob('wasp2rust_indel_rnaseq_v2_*/benchmark_results.json')
+        )
+        indel_file = sorted(rust_indel_files)[-1] if rust_indel_files else None
+    if indel_file is not None and indel_file.exists():
+        d = json.loads(indel_file.read_text())
         indel_overall = d.get('overall_pass_rate_percent') or d.get('pass_rate_percent')
         if 'snv_only_overlap_pairs_pre' in d and 'snv_only_overlap_pairs_post' in d:
             pre_total = (
@@ -690,8 +739,11 @@ def panel_d_rnaseq_benchmark(ax):
             times['wasp2rust_indel'] = d['total_s']
 
     # WASP1
-    wasp1_file = REPO_ROOT / 'benchmarking/star_wasp_comparison/results/wasp1_2025-12-06_20-28-15/benchmark_results.json'
-    if wasp1_file.exists():
+    wasp1_file = first_existing(
+        FIG1_BENCH_DIR / 'panel_de_rnaseq_wasp1.json',
+        REPO_ROOT / 'benchmarking/star_wasp_comparison/results/wasp1_2025-12-06_20-28-15/benchmark_results.json',
+    )
+    if wasp1_file is not None and wasp1_file.exists():
         d = json.loads(wasp1_file.read_text())
         times['wasp1'] = d['total_s']
 
@@ -754,7 +806,7 @@ def panel_e_rnaseq_filtering(ax):
 
     def load_split_retention(run_dir, json_path):
         """Return ({pre_by_type}, {post_by_type}) in PAIRS using old-style definitions, or None."""
-        if not json_path.exists():
+        if json_path is None or not json_path.exists():
             return None
         d = json.loads(json_path.read_text())
         if 'snv_only_overlap_pairs_pre' not in d:
@@ -786,34 +838,48 @@ def panel_e_rnaseq_filtering(ax):
     results = {}
 
     # STAR+WASP (old-style split keys backfilled into its JSON)
-    star_wasp_file = REPO_ROOT / 'benchmarking/star_wasp_comparison/results/star_wasp_2025-12-04_00-58-54/benchmark_results.json'
-    if star_wasp_file.exists():
+    star_wasp_file = first_existing(
+        FIG1_BENCH_DIR / 'panel_de_rnaseq_star_wasp.json',
+        REPO_ROOT / 'benchmarking/star_wasp_comparison/results/star_wasp_2025-12-04_00-58-54/benchmark_results.json',
+    )
+    if star_wasp_file is not None and star_wasp_file.exists():
         run_dir = star_wasp_file.parent
         r = load_split_retention(run_dir, star_wasp_file)
         if r:
             results['star_wasp'] = {'pre': r[0], 'post': r[1]}
 
     # WASP2-Python FIXED (latest)
-    py_fixed_files = sorted((REPO_ROOT / 'benchmarking/star_wasp_comparison/results').glob('wasp2python_rnaseq_fixed_*/benchmark_results.json'))
-    if py_fixed_files:
-        py_file = py_fixed_files[-1]
+    py_file = first_existing(FIG1_BENCH_DIR / 'panel_de_rnaseq_wasp2python.json')
+    if py_file is None:
+        py_fixed_files = sorted(
+            (REPO_ROOT / 'benchmarking/star_wasp_comparison/results').glob('wasp2python_rnaseq_fixed_*/benchmark_results.json')
+        )
+        py_file = py_fixed_files[-1] if py_fixed_files else None
+    if py_file is not None and py_file.exists():
         run_dir = py_file.parent
         r = load_split_retention(run_dir, py_file)
         if r:
             results['wasp2python'] = {'pre': r[0], 'post': r[1]}
 
     # WASP2-Rust SNV FAIR (specific SNP-only run)
-    rust_snp_fair_file = REPO_ROOT / 'benchmarking/star_wasp_comparison/results/wasp2rust_fair_2025-12-10_19-23-02/benchmark_results.json'
-    if rust_snp_fair_file.exists():
+    rust_snp_fair_file = first_existing(
+        FIG1_BENCH_DIR / 'panel_de_rnaseq_wasp2rust_snv.json',
+        REPO_ROOT / 'benchmarking/star_wasp_comparison/results/wasp2rust_fair_2025-12-10_19-23-02/benchmark_results.json',
+    )
+    if rust_snp_fair_file is not None and rust_snp_fair_file.exists():
         run_dir = rust_snp_fair_file.parent
         r = load_split_retention(run_dir, rust_snp_fair_file)
         if r:
             results['wasp2rust_snv'] = {'pre': r[0], 'post': r[1]}
 
     # WASP2-Rust INDEL RNA-seq v2 (latest)
-    rust_indel_files = sorted((REPO_ROOT / 'benchmarking/star_wasp_comparison/results').glob('wasp2rust_indel_rnaseq_v2_*/benchmark_results.json'))
-    if rust_indel_files:
-        indel_file = rust_indel_files[-1]
+    indel_file = first_existing(FIG1_BENCH_DIR / 'panel_de_rnaseq_wasp2rust_indel.json')
+    if indel_file is None:
+        rust_indel_files = sorted(
+            (REPO_ROOT / 'benchmarking/star_wasp_comparison/results').glob('wasp2rust_indel_rnaseq_v2_*/benchmark_results.json')
+        )
+        indel_file = rust_indel_files[-1] if rust_indel_files else None
+    if indel_file is not None and indel_file.exists():
         run_dir = indel_file.parent
         r = load_split_retention(run_dir, indel_file)
         if r:
