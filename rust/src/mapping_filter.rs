@@ -1,6 +1,7 @@
 use pyo3::prelude::*;
 use rust_htslib::bam::{self, Read, Writer};
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
+use std::io::{BufRead, BufReader};
 
 /// Buffered record info for paired-read handling
 struct BufferedRead {
@@ -8,79 +9,97 @@ struct BufferedRead {
     mpos: i64,
 }
 
-/// Parsed WASP name components
-/// Supports both old format (4 parts) and new extended format (6 parts)
-#[derive(Debug, Clone)]
-struct WaspNameInfo {
-    orig_name: String,
+struct ExpectedPos {
     pos1: i64,
     pos2: i64,
-    seq_num: i64,
+    slop: i64,
+}
+
+/// Minimal parsed WASP name components needed for filtering.
+///
+/// Supports:
+/// - Old format: `{name}_WASP_{pos1}_{pos2}_{seq}_{total}`
+/// - New format: `{name}_WASP_{pos1}_{pos2}_{seq}_{total}_{trim_combo}_{total_combos}`
+/// - New+delta:  `{name}_WASP_{pos1}_{pos2}_{seq}_{total}_{trim_combo}_{total_combos}_{d1}_{d2}`
+#[derive(Debug, Clone, Copy)]
+struct WaspNameInfo<'a> {
+    orig_name: &'a [u8],
+    pos1: i64,
+    pos2: i64,
     total_seqs: i64,
-    /// Trim combination ID (hap_idx * 1000 + combo_idx), 0 for old format
-    trim_combo_id: u16,
-    /// Total number of trim combinations, 1 for old format
-    total_combos: u16,
     /// Expected position shift tolerance per mate (absolute delta of indels)
     delta1: i64,
     delta2: i64,
 }
 
+fn parse_i64_ascii(bytes: &[u8]) -> Option<i64> {
+    if bytes.is_empty() {
+        return None;
+    }
+    let mut idx = 0;
+    let mut neg = false;
+    if bytes[0] == b'-' {
+        neg = true;
+        idx = 1;
+    } else if bytes[0] == b'+' {
+        idx = 1;
+    }
+    if idx >= bytes.len() {
+        return None;
+    }
+    let mut val: i64 = 0;
+    let mut seen_digit = false;
+    for &b in &bytes[idx..] {
+        if !(b'0'..=b'9').contains(&b) {
+            break;
+        }
+        seen_digit = true;
+        val = val.checked_mul(10)? + (b - b'0') as i64;
+    }
+    if !seen_digit {
+        return None;
+    }
+    Some(if neg { -val } else { val })
+}
+
 /// Parse WASP-encoded name into components
 /// Supports both old format: {name}_WASP_{pos1}_{pos2}_{seq}_{total}
 /// And new format: {name}_WASP_{pos1}_{pos2}_{seq}_{total}_{trim_combo}_{total_combos}
-fn parse_wasp_name(qname: &[u8]) -> Option<WaspNameInfo> {
+fn parse_wasp_name(qname: &[u8]) -> Option<WaspNameInfo<'_>> {
     let split_idx = qname.windows(6).position(|w| w == b"_WASP_")?;
 
-    let orig_name = std::str::from_utf8(&qname[..split_idx]).ok()?.to_string();
+    let orig_name = &qname[..split_idx];
     let suffix = &qname[split_idx + 6..];
-    let parts: Vec<&[u8]> = suffix.split(|b| *b == b'_').collect();
+    let mut parts = suffix.split(|&b| b == b'_');
 
-    let parse_i64 =
-        |bytes: &[u8]| -> Option<i64> { std::str::from_utf8(bytes).ok()?.parse::<i64>().ok() };
+    let pos1 = parse_i64_ascii(parts.next()?)?;
+    let pos2 = parse_i64_ascii(parts.next()?)?;
+    // seq_num is not needed by the filter
+    let _seq_num = parts.next()?;
+    let total_seqs = parse_i64_ascii(parts.next()?)?;
 
-    if parts.len() >= 8 {
-        // New extended format with trim combinations and per-mate deltas
-        Some(WaspNameInfo {
-            orig_name,
-            pos1: parse_i64(parts[0])?,
-            pos2: parse_i64(parts[1])?,
-            seq_num: parse_i64(parts[2])?,
-            total_seqs: parse_i64(parts[3])?,
-            trim_combo_id: parse_i64(parts[4])? as u16,
-            total_combos: parse_i64(parts[5])? as u16,
-            delta1: parse_i64(parts[6])?.abs(),
-            delta2: parse_i64(parts[7])?.abs(),
-        })
-    } else if parts.len() >= 6 {
-        // New extended format with trim combinations
-        Some(WaspNameInfo {
-            orig_name,
-            pos1: parse_i64(parts[0])?,
-            pos2: parse_i64(parts[1])?,
-            seq_num: parse_i64(parts[2])?,
-            total_seqs: parse_i64(parts[3])?,
-            trim_combo_id: parse_i64(parts[4])? as u16,
-            total_combos: parse_i64(parts[5])? as u16,
-            delta1: 0,
-            delta2: 0,
-        })
-    } else if parts.len() >= 4 {
-        // Old format - backwards compatibility
-        Some(WaspNameInfo {
-            orig_name,
-            pos1: parse_i64(parts[0])?,
-            pos2: parse_i64(parts[1])?,
-            seq_num: parse_i64(parts[2])?,
-            total_seqs: parse_i64(parts[3])?,
-            trim_combo_id: 0,
-            total_combos: 1,
-            delta1: 0,
-            delta2: 0,
-        })
-    } else {
-        None
-    }
+    // Optional fields
+    let _trim_combo = parts.next();
+    let _total_combos = parts.next();
+    let delta1 = parts
+        .next()
+        .and_then(parse_i64_ascii)
+        .map(|v| v.abs())
+        .unwrap_or(0);
+    let delta2 = parts
+        .next()
+        .and_then(parse_i64_ascii)
+        .map(|v| v.abs())
+        .unwrap_or(0);
+
+    Some(WaspNameInfo {
+        orig_name,
+        pos1,
+        pos2,
+        total_seqs,
+        delta1,
+        delta2,
+    })
 }
 
 /// WASP-aware remap filter:
@@ -108,47 +127,72 @@ pub fn filter_bam_wasp(
             .flatten()
     });
 
-    // Optional sidecar of expected positions keyed by full qname
-    let expected_map: Option<std::collections::HashMap<String, (i64, i64)>> =
-        if let Some(sidecar_path) = expected_sidecar.as_ref() {
-            let mut map = std::collections::HashMap::new();
-            let content = std::fs::read_to_string(sidecar_path).map_err(|e| {
+    // Optional sidecar of expected positions keyed by full qname.
+    // Stored as bytes to avoid per-read UTF-8/String allocations in the hot loop.
+    let expected_map: Option<FxHashMap<Vec<u8>, (i64, i64)>> = if let Some(sidecar_path) =
+        expected_sidecar.as_ref()
+    {
+        let file = std::fs::File::open(sidecar_path).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                "Failed to open sidecar {}: {}",
+                sidecar_path, e
+            ))
+        })?;
+        let mut reader = BufReader::new(file);
+        let mut buf: Vec<u8> = Vec::new();
+        let mut map: FxHashMap<Vec<u8>, (i64, i64)> = FxHashMap::default();
+
+        loop {
+            buf.clear();
+            let n = reader.read_until(b'\n', &mut buf).map_err(|e| {
                 PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
                     "Failed to read sidecar {}: {}",
                     sidecar_path, e
                 ))
             })?;
-            for line in content.lines() {
-                let parts: Vec<&str> = line.split('\t').collect();
-                if parts.len() < 5 {
-                    continue;
-                }
-                let q = parts[0].to_string();
-                let p1 = parts[1].parse::<i64>().unwrap_or(0);
-                let p2 = parts[2].parse::<i64>().unwrap_or(0);
-                map.insert(q, (p1, p2));
+            if n == 0 {
+                break;
             }
-            Some(map)
-        } else {
-            None
-        };
+            if buf.ends_with(b"\n") {
+                buf.pop();
+                if buf.ends_with(b"\r") {
+                    buf.pop();
+                }
+            }
+
+            let mut parts = buf.split(|&b| b == b'\t');
+            let q = match parts.next() {
+                Some(v) if !v.is_empty() => v,
+                _ => continue,
+            };
+            let p1 = match parts.next().and_then(parse_i64_ascii) {
+                Some(v) => v,
+                None => continue,
+            };
+            let p2 = match parts.next().and_then(parse_i64_ascii) {
+                Some(v) => v,
+                None => continue,
+            };
+            // Keep compatibility with older sidecars: require at least 5 columns (q, p1, p2, ...)
+            if parts.next().is_none() || parts.next().is_none() {
+                continue;
+            }
+            map.insert(q.to_vec(), (p1, p2));
+        }
+        Some(map)
+    } else {
+        None
+    };
 
     // Track expected positions and remaining remapped copies
-    let mut keep_set: FxHashSet<String> = FxHashSet::default();
-    let mut pos_map: std::collections::HashMap<String, (i64, i64)> =
-        std::collections::HashMap::new();
-    let mut remaining: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
+    let mut keep_set: FxHashSet<Vec<u8>> = FxHashSet::default();
+    let mut pos_map: FxHashMap<Vec<u8>, ExpectedPos> = FxHashMap::default();
+    let mut remaining: FxHashMap<Vec<u8>, i64> = FxHashMap::default();
     let mut removed_moved: u64 = 0;
-    // Track per-read dynamic slop (variant-aware deltas)
-    let mut slop_map: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
-    // Optional expected positions from sidecar
-    let mut expected_pos_map: std::collections::HashMap<String, (i64, i64)> =
-        std::collections::HashMap::new();
 
     // Buffer for incomplete pairs: keyed by full qname (with WASP suffix)
     // This mimics Python's paired_read_gen which buffers until both mates arrive
-    let mut read_buffer: std::collections::HashMap<String, BufferedRead> =
-        std::collections::HashMap::new();
+    let mut read_buffer: FxHashMap<Vec<u8>, BufferedRead> = FxHashMap::default();
 
     let mut remapped_reader = bam::Reader::from_path(&remapped_bam).map_err(|e| {
         PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("Failed to open remapped BAM: {}", e))
@@ -178,7 +222,7 @@ pub fn filter_bam_wasp(
             None => continue,
         };
 
-        let name = wasp_info.orig_name.clone();
+        let name = wasp_info.orig_name;
         let pos1 = wasp_info.pos1;
         let pos2 = wasp_info.pos2;
         let total = wasp_info.total_seqs;
@@ -188,20 +232,14 @@ pub fn filter_bam_wasp(
             wasp_info.delta1.max(wasp_info.delta2)
         };
 
-        // Full query name for buffering (includes WASP suffix to distinguish haplotype copies)
-        let full_qname = match std::str::from_utf8(qname) {
-            Ok(s) => s.to_owned(),
-            Err(_) => continue,
-        };
-
         // Buffer records until both mates arrive (like Python's paired_read_gen)
         let rec_pos = rec.pos();
         let mate_pos = rec.mpos();
 
-        if !read_buffer.contains_key(&full_qname) {
+        if !read_buffer.contains_key(qname) {
             // First mate of this pair - buffer it and continue
             read_buffer.insert(
-                full_qname,
+                qname.to_vec(),
                 BufferedRead {
                     pos: rec_pos,
                     mpos: mate_pos,
@@ -211,59 +249,87 @@ pub fn filter_bam_wasp(
         }
 
         // Second mate arrived - now we have a complete pair, process it
-        let _first_read = read_buffer.remove(&full_qname).unwrap();
+        let _first_read = read_buffer.remove(qname).unwrap();
 
         // Initialize tracking for this original read name if not seen
-        if !pos_map.contains_key(&name) {
-            pos_map.insert(name.clone(), (pos1, pos2));
-            remaining.insert(name.clone(), total);
-            keep_set.insert(name.clone());
-            slop_map.insert(name.clone(), dyn_slop);
-            if let Some(ref m) = expected_map {
-                if let Some((e1, e2)) = m.get(&full_qname) {
-                    expected_pos_map.insert(full_qname.clone(), (*e1, *e2));
-                }
-            }
-        } else if !keep_set.contains(&name) {
+        if !pos_map.contains_key(name) {
+            let owned_name = name.to_vec();
+            pos_map.insert(
+                owned_name.clone(),
+                ExpectedPos {
+                    pos1,
+                    pos2,
+                    slop: dyn_slop,
+                },
+            );
+            remaining.insert(owned_name.clone(), total);
+            keep_set.insert(owned_name);
+        } else if !keep_set.contains(name) {
             // Already marked as failed
             continue;
         }
 
         // Count down expected copies - once per PAIR (not per record)
-        if let Some(rem) = remaining.get_mut(&name) {
+        if let Some(rem) = remaining.get_mut(name) {
             *rem -= 1;
         }
 
         // Check if the remapped position matches original coordinates (mate order agnostic)
         // For indels, allow slop tolerance to handle micro-homology shifts
-        if let Some((expect_pos, expect_mate)) = pos_map.get(&name) {
+        if let Some(expect) = pos_map.get(name) {
             // Prefer expected positions from sidecar (variant-aware), else use slop
-            if let Some((e1, e2)) = expected_pos_map.get(&full_qname) {
-                // Require remap to land on expected coords (mate-order agnostic)
-                if !((rec_pos == *e1 && mate_pos == *e2) || (rec_pos == *e2 && mate_pos == *e1)) {
-                    keep_set.remove(&name);
-                    removed_moved += 1;
-                    continue;
+            if let Some(ref m) = expected_map {
+                if let Some((e1, e2)) = m.get(qname) {
+                    // Require remap to land on expected coords (mate-order agnostic)
+                    if !((rec_pos == *e1 && mate_pos == *e2)
+                        || (rec_pos == *e2 && mate_pos == *e1))
+                    {
+                        keep_set.remove(name);
+                        removed_moved += 1;
+                        continue;
+                    }
+                } else {
+                    let slop = expect.slop;
+                    let matches = if slop == 0 {
+                        // Strict matching for SNPs
+                        (rec_pos == expect.pos1 && mate_pos == expect.pos2)
+                            || (rec_pos == expect.pos2 && mate_pos == expect.pos1)
+                    } else {
+                        // Allow slop tolerance for indels
+                        let pos_diff1 = (rec_pos - expect.pos1).abs();
+                        let mate_diff1 = (mate_pos - expect.pos2).abs();
+                        let pos_diff2 = (rec_pos - expect.pos2).abs();
+                        let mate_diff2 = (mate_pos - expect.pos1).abs();
+
+                        (pos_diff1 <= slop && mate_diff1 <= slop)
+                            || (pos_diff2 <= slop && mate_diff2 <= slop)
+                    };
+
+                    if !matches {
+                        keep_set.remove(name);
+                        removed_moved += 1;
+                        continue;
+                    }
                 }
             } else {
-                let slop = *slop_map.get(&name).unwrap_or(&same_locus_slop);
+                let slop = expect.slop;
                 let matches = if slop == 0 {
                     // Strict matching for SNPs
-                    (rec_pos == *expect_pos && mate_pos == *expect_mate)
-                        || (rec_pos == *expect_mate && mate_pos == *expect_pos)
+                    (rec_pos == expect.pos1 && mate_pos == expect.pos2)
+                        || (rec_pos == expect.pos2 && mate_pos == expect.pos1)
                 } else {
                     // Allow slop tolerance for indels
-                    let pos_diff1 = (rec_pos - *expect_pos).abs();
-                    let mate_diff1 = (mate_pos - *expect_mate).abs();
-                    let pos_diff2 = (rec_pos - *expect_mate).abs();
-                    let mate_diff2 = (mate_pos - *expect_pos).abs();
+                    let pos_diff1 = (rec_pos - expect.pos1).abs();
+                    let mate_diff1 = (mate_pos - expect.pos2).abs();
+                    let pos_diff2 = (rec_pos - expect.pos2).abs();
+                    let mate_diff2 = (mate_pos - expect.pos1).abs();
 
                     (pos_diff1 <= slop && mate_diff1 <= slop)
                         || (pos_diff2 <= slop && mate_diff2 <= slop)
                 };
 
                 if !matches {
-                    keep_set.remove(&name);
+                    keep_set.remove(name);
                     removed_moved += 1;
                     continue;
                 }
@@ -271,10 +337,10 @@ pub fn filter_bam_wasp(
         }
 
         // Drop bookkeeping if all expected pairs seen
-        if let Some(rem) = remaining.get(&name) {
+        if let Some(rem) = remaining.get(name) {
             if *rem <= 0 {
-                remaining.remove(&name);
-                pos_map.remove(&name);
+                remaining.remove(name);
+                pos_map.remove(name);
             }
         }
     }
@@ -298,7 +364,7 @@ pub fn filter_bam_wasp(
         })?;
         for name in keep_set.iter() {
             use std::io::Write;
-            file.write_all(name.as_bytes())
+            file.write_all(name)
                 .and_then(|_| file.write_all(b"\n"))
                 .map_err(|e| {
                     PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
@@ -334,11 +400,7 @@ pub fn filter_bam_wasp(
             Ok(r) => r,
             Err(_) => continue,
         };
-        let qname = match std::str::from_utf8(rec.qname()) {
-            Ok(s) => s,
-            Err(_) => continue,
-        };
-        if keep_set.contains(qname) {
+        if keep_set.contains(rec.qname()) {
             writer.write(&rec).map_err(|e| {
                 PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("Write failed: {}", e))
             })?;
@@ -347,4 +409,56 @@ pub fn filter_bam_wasp(
     }
 
     Ok((kept_written, removed_moved, missing_count))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_i64_ascii() {
+        assert_eq!(parse_i64_ascii(b"123"), Some(123));
+        assert_eq!(parse_i64_ascii(b"-123"), Some(-123));
+        assert_eq!(parse_i64_ascii(b"+123"), Some(123));
+        assert_eq!(parse_i64_ascii(b"123/1"), Some(123));
+        assert_eq!(parse_i64_ascii(b"/1"), None);
+        assert_eq!(parse_i64_ascii(b""), None);
+        assert_eq!(parse_i64_ascii(b"abc"), None);
+    }
+
+    #[test]
+    fn test_parse_wasp_name_old_format_with_mate_suffix() {
+        let qname = b"readX_WASP_100_200_1_10/1";
+        let info = parse_wasp_name(qname).unwrap();
+        assert_eq!(info.orig_name, b"readX");
+        assert_eq!(info.pos1, 100);
+        assert_eq!(info.pos2, 200);
+        assert_eq!(info.total_seqs, 10);
+        assert_eq!(info.delta1, 0);
+        assert_eq!(info.delta2, 0);
+    }
+
+    #[test]
+    fn test_parse_wasp_name_extended_without_delta() {
+        let qname = b"readX_WASP_100_200_1_10_5_6/1";
+        let info = parse_wasp_name(qname).unwrap();
+        assert_eq!(info.orig_name, b"readX");
+        assert_eq!(info.pos1, 100);
+        assert_eq!(info.pos2, 200);
+        assert_eq!(info.total_seqs, 10);
+        assert_eq!(info.delta1, 0);
+        assert_eq!(info.delta2, 0);
+    }
+
+    #[test]
+    fn test_parse_wasp_name_extended_with_delta() {
+        let qname = b"readX_WASP_100_200_1_10_5_6_2_3/1";
+        let info = parse_wasp_name(qname).unwrap();
+        assert_eq!(info.orig_name, b"readX");
+        assert_eq!(info.pos1, 100);
+        assert_eq!(info.pos2, 200);
+        assert_eq!(info.total_seqs, 10);
+        assert_eq!(info.delta1, 2);
+        assert_eq!(info.delta2, 3);
+    }
 }

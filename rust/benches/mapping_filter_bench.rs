@@ -1,14 +1,25 @@
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
-use rust_htslib::bam::{self, Format, Header, Read, Writer};
+use rust_htslib::bam::{self, header::HeaderRecord, Format, Header, Writer};
 use std::collections::HashMap;
 
 /// Create a synthetic BAM file for benchmarking
 fn create_test_bam(path: &str, n_reads: usize, include_wasp_suffix: bool) -> std::io::Result<()> {
-    let header_text = b"@HD\tVN:1.6\tSO:coordinate
-@SQ\tSN:chr1\tLN:248956422
-@PG\tID:test\tPN:benchmark\tVN:1.0
-";
-    let header = Header::from_text(header_text);
+    let mut header = Header::new();
+    let mut hd = HeaderRecord::new(b"HD");
+    hd.push_tag(b"VN", &"1.6");
+    hd.push_tag(b"SO", &"coordinate");
+    header.push_record(&hd);
+
+    let mut sq = HeaderRecord::new(b"SQ");
+    sq.push_tag(b"SN", &"chr1");
+    sq.push_tag(b"LN", &"248956422");
+    header.push_record(&sq);
+
+    let mut pg = HeaderRecord::new(b"PG");
+    pg.push_tag(b"ID", &"test");
+    pg.push_tag(b"PN", &"benchmark");
+    pg.push_tag(b"VN", &"1.0");
+    header.push_record(&pg);
     let mut writer = Writer::from_path(path, &header, Format::Bam).unwrap();
 
     for i in 0..n_reads {
@@ -35,17 +46,12 @@ fn create_test_bam(path: &str, n_reads: usize, include_wasp_suffix: bool) -> std
         record.set_flags(99); // Proper pair, first read
         record.set_insert_size(450);
 
-        // Set sequence and quality
         let seq = b"ATCGATCGATCGATCGATCGATCG";
-        record.set_seq(seq);
         let qual = vec![30u8; seq.len()];
-        record.set_qual(&qual);
 
-        // Set CIGAR - simple match for now
-        let cigar =
-            bam::record::CigarString::try_from(vec![bam::record::Cigar::Match(seq.len() as u32)])
-                .unwrap();
-        record.set_cigar(&cigar);
+        // Set qname/seq/qual/cigar together (rust-htslib 0.44 API)
+        let cigar = bam::record::CigarString(vec![bam::record::Cigar::Match(seq.len() as u32)]);
+        record.set(qname.as_bytes(), Some(&cigar), seq, &qual);
 
         writer.write(&record).unwrap();
     }
@@ -55,11 +61,11 @@ fn create_test_bam(path: &str, n_reads: usize, include_wasp_suffix: bool) -> std
 
 /// Benchmark the WASP name parsing (hottest part)
 fn bench_qname_parsing(c: &mut Criterion) {
-    let test_names = vec![
-        b"read_1_WASP_1000_1300_5_10",
-        b"read_2_WASP_2000_2300_3_8",
-        b"read_3_WASP_3000_3300_7_12",
-        b"very_long_read_name_12345_WASP_4000_4300_2_15",
+    let test_names: Vec<&[u8]> = vec![
+        b"read_1_WASP_1000_1300_5_10".as_ref(),
+        b"read_2_WASP_2000_2300_3_8".as_ref(),
+        b"read_3_WASP_3000_3300_7_12".as_ref(),
+        b"very_long_read_name_12345_WASP_4000_4300_2_15".as_ref(),
     ];
 
     c.bench_function("qname_wasp_parse", |b| {
