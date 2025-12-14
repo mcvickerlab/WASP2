@@ -168,18 +168,11 @@ out_json.write_text(json.dumps(stats, indent=2))
 print(json.dumps({"pairs_processed": stats.get("pairs_processed"), "haplotypes_written": stats.get("haplotypes_written"), "wall_s": wall_s}))
 PY
 
-    # Append TSV row
-    python "${WASP2_DIR}/benchmarking/tools/log_unified_stats.py" "${RUN_DIR}/unified_stats.json" --label "${LABEL}" --prefix "" \
-      | python - <<PY >> "${TSV}"
-import sys
+    # Append TSV row from per-run JSON
+    python - <<PY >> "${TSV}"
+import json
 
-parts = sys.stdin.read().strip().split()
-kv = {}
-for p in parts:
-  if "=" in p:
-    k, v = p.split("=", 1)
-    kv[k] = v
-
+d = json.load(open("${RUN_DIR}/unified_stats.json"))
 row = [
   "${LABEL}",
   "${t}",
@@ -188,15 +181,15 @@ row = [
   str(int(${INDEL_MODE})),
   str(int(${MAX_INDEL_SIZE})),
   str(int(${MAX_SEQS})),
-  str(kv.get("wall_s", "NA")),
-  str(kv.get("pairs_processed", "NA")),
-  str(kv.get("haplotypes_written", "NA")),
-  str(kv.get("tree_build_ms", "NA")),
-  str(kv.get("bam_stream_ms", "NA")),
-  str(kv.get("overlap_query_ms", "NA")),
-  str(kv.get("pair_process_ms", "NA")),
-  str(kv.get("send_ms", "NA")),
-  str(kv.get("writer_thread_ms", "NA")),
+  str(d.get("wall_s", "NA")),
+  str(d.get("pairs_processed", "NA")),
+  str(d.get("haplotypes_written", "NA")),
+  str(d.get("tree_build_ms", "NA")),
+  str(d.get("bam_stream_ms", "NA")),
+  str(d.get("overlap_query_ms", "NA")),
+  str(d.get("pair_process_ms", "NA")),
+  str(d.get("send_ms", "NA")),
+  str(d.get("writer_thread_ms", "NA")),
 ]
 print("\t".join(row))
 PY
