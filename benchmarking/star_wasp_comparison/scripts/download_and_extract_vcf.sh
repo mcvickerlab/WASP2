@@ -1,11 +1,12 @@
 #!/bin/bash
 # Download 1000 Genomes VCFs and extract HG00731 heterozygous variants
 
-set -e
+set -euo pipefail
 
 DATA_DIR="/iblm/netapp/data3/jjaureguy/gvl_files/wasp2/WASP2_extensive_evaluation/WASP2_current/cvpc/WASP2-exp/benchmarking/star_wasp_comparison/data"
 VCF_DIR="${DATA_DIR}/1000g_vcf"
-OUTPUT="${DATA_DIR}/HG00731_het.vcf.gz"
+OUTPUT="${DATA_DIR}/HG00731_het_only_chr.vcf.gz"
+RENAME_CHRS="${DATA_DIR}/chr_rename.txt"
 
 mkdir -p ${VCF_DIR}
 cd ${VCF_DIR}
@@ -37,10 +38,12 @@ for chr in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22; do
     VCF_LIST="${VCF_LIST} ALL.chr${chr}.shapeit2_integrated_snvindels_v2a_27022019.GRCh38.phased.vcf.gz"
 done
 
-# Extract HG00731 and filter for heterozygous only
+# Extract HG00731 and filter for heterozygous only, then rename contigs to `chr*`
+# to match our STAR index/BAM reference names.
 bcftools concat ${VCF_LIST} | \
     bcftools view -s HG00731 | \
-    bcftools view -g het -Oz -o ${OUTPUT}
+    bcftools view -g het -Ou | \
+    bcftools annotate --rename-chrs "${RENAME_CHRS}" -Oz -o ${OUTPUT}
 
 bcftools index -t ${OUTPUT}
 
