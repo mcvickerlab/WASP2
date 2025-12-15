@@ -27,3 +27,21 @@ Outputs:
 Notes:
 - `--indel-mode` runs unified trim-combo mode; parity compare is disabled because the multi-pass baseline does not generate trim combos.
 
+## Thread Sweep (Unified Only)
+
+This runs unified on a subset BAM/BED repeatedly with different:
+- Rayon worker threads (`--threads`)
+- htslib BAM decompression threads per worker (`--bam-threads`, via `WASP2_BAM_THREADS`)
+
+Run:
+
+```bash
+python benchmarking/dev_harness/thread_sweep.py \
+  --bam /path/to/input.bam \
+  --vcf /path/to/variants.vcf.gz \
+  --sample NA12878 \
+  --region chr1:1-2000000 \
+  --threads 1,2,4,8,16 \
+  --bam-threads 1,2,4 \
+  --out-tsv benchmarking/dev_harness_out/thread_sweep.tsv
+```

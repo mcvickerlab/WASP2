@@ -1942,6 +1942,7 @@ dependencies = [
  "rust-htslib",
  "rustc-hash",
  "rv",
+ "smallvec",
  "statrs",
  "tempfile",
 ]

@@ -16,6 +16,8 @@ mod read_pairer;
 mod unified_pipeline;
 mod vcf_to_bed; // Single-pass unified make-reads (5x faster)
 
+pub use unified_pipeline::{unified_make_reads, unified_make_reads_parallel, UnifiedConfig, UnifiedStats};
+
 use bam_counter::BamCounter;
 use mapping_filter::filter_bam_wasp;
 
@@ -626,14 +628,6 @@ fn unified_make_reads_parallel_py(
 ) -> PyResult<PyObject> {
     use pyo3::types::PyDict;
 
-    // Configure rayon thread pool
-    if threads > 0 {
-        rayon::ThreadPoolBuilder::new()
-            .num_threads(threads)
-            .build_global()
-            .ok(); // Ignore if already set
-    }
-
     let config = unified_pipeline::UnifiedConfig {
         read_threads: threads,
         max_seqs,
@@ -647,11 +641,19 @@ fn unified_make_reads_parallel_py(
         remap_names_path,
     };
 
-    let stats =
-        unified_pipeline::unified_make_reads_parallel(bam_path, bed_path, out_r1, out_r2, &config)
-            .map_err(|e| {
-                PyRuntimeError::new_err(format!("Parallel unified pipeline failed: {}", e))
-            })?;
+    let run = || unified_pipeline::unified_make_reads_parallel(bam_path, bed_path, out_r1, out_r2, &config);
+
+    // Use a per-call Rayon thread pool so repeated calls can use different thread counts.
+    let stats = if threads > 0 {
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(threads)
+            .build()
+            .map_err(|e| PyRuntimeError::new_err(format!("Failed to build Rayon thread pool: {}", e)))?;
+        pool.install(run)
+    } else {
+        run()
+    }
+    .map_err(|e| PyRuntimeError::new_err(format!("Parallel unified pipeline failed: {}", e)))?;
 
     // Return stats as Python dict
     let py_dict = PyDict::new(py);

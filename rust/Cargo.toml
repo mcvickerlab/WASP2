@@ -5,7 +5,7 @@ edition = "2021"
 
 [lib]
 name = "wasp2_rust"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 pyo3 = { version = "0.20", features = ["extension-module"] }
@@ -21,6 +21,7 @@ coitrees = "0.4"  # Fast interval tree for BAM-BED intersection (15-30x faster t
 crossbeam-channel = "0.5"  # Fast MPMC channels for parallel FASTQ writing
 gzp = { version = "0.11", default-features = false, features = ["deflate_default"] }  # Parallel gzip compression
 itoa = "1.0" # Fast integer-to-ascii for FASTQ/sidecar writing
+smallvec = "1.13" # Reduce heap allocs for small overlap/span vectors
 
 # VCF/BCF parsing (noodles - pure Rust, no C dependencies)
 # Note: noodles-bcf depends on noodles-vcf, so we use compatible versions

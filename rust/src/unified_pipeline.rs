@@ -22,6 +22,7 @@ use itoa::Buffer as ItoaBuffer;
 use rust_htslib::bam::ext::BamRecordExtensions;
 use rust_htslib::{bam, bam::Read as BamRead};
 use rustc_hash::FxHashMap;
+use smallvec::SmallVec;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::sync::atomic::AtomicU64;
@@ -36,6 +37,8 @@ use crate::bam_remapper::{
     generate_haplotype_seqs_view, generate_trim_combinations, IndelConfig, RemapConfig,
     VariantLocation, VariantSpanView,
 };
+
+type Overlaps = SmallVec<[(u32, u32, u32); 4]>;
 
 // ============================================================================
 // Configuration and Statistics
@@ -344,12 +347,12 @@ enum CheckOverlapResult {
     NoOverlaps,
     /// Found overlapping variants - returns Vec of (variant_idx, var_start, var_stop)
     /// Caller must check if ALL are mappable - if ANY is unmappable, skip entire read
-    Found(Vec<(u32, u32, u32)>),
+    Found(Overlaps),
 }
 
 struct BufferedMate {
     record: bam::Record,
-    overlaps: Vec<(u32, u32, u32)>,
+    overlaps: Overlaps,
 }
 
 /// Check if a read overlaps any variants and return ALL of them
@@ -383,7 +386,7 @@ fn check_overlaps(
     let read_start = read.pos() as i32;
     let read_end = read.reference_end() as i32 - 1;
 
-    let mut overlapping: Vec<(u32, u32, u32)> = Vec::new();
+    let mut overlapping: Overlaps = SmallVec::new();
     querent.query(read_start, read_end, |node| {
         let variant_idx: u32 = u32::from(node.metadata.clone());
         let variant = &store.variants[variant_idx as usize];
@@ -485,7 +488,7 @@ fn generate_haplotypes_for_read(
     }
 
     // Overlaps are already sorted by genomic position in `check_overlaps`.
-    let mut spans: Vec<VariantSpanView<'_>> = Vec::with_capacity(overlaps.len());
+    let mut spans: SmallVec<[VariantSpanView<'_>; 4]> = SmallVec::with_capacity(overlaps.len());
 
     for (variant_idx, _, _) in overlaps {
         let variant = &store.variants[*variant_idx as usize];
@@ -1128,14 +1131,14 @@ pub fn unified_make_reads(
                     let t_overlap = Instant::now();
                     let v = match check_overlaps(&record, &mut querents_by_tid, &store) {
                         CheckOverlapResult::Found(v) => v,
-                        CheckOverlapResult::NoOverlaps => Vec::new(),
+                        CheckOverlapResult::NoOverlaps => Overlaps::new(),
                     };
                     overlap_query_ns += t_overlap.elapsed().as_nanos() as u64;
                     v
                 } else {
                     match check_overlaps(&record, &mut querents_by_tid, &store) {
                         CheckOverlapResult::Found(v) => v,
-                        CheckOverlapResult::NoOverlaps => Vec::new(),
+                        CheckOverlapResult::NoOverlaps => Overlaps::new(),
                     }
                 };
 
@@ -1395,8 +1398,17 @@ fn process_chromosome(
     // Fetch reads for this chromosome
     bam.fetch(chrom).context("Failed to fetch chromosome")?;
 
-    // Use a few threads for BAM decompression within this worker
-    bam.set_threads(2).ok();
+    // Use a few threads for BAM decompression within this worker.
+    //
+    // NOTE: This interacts with Rayon parallelism; use WASP2_BAM_THREADS to tune and
+    // avoid oversubscription (e.g., many per-chrom workers × many BAM threads).
+    let bam_threads = std::env::var("WASP2_BAM_THREADS")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(2);
+    if bam_threads > 0 {
+        bam.set_threads(bam_threads).ok();
+    }
 
     let header = bam.header().clone();
     let mut querents_by_tid = build_querents_by_tid(&header, &store.trees);
@@ -1427,14 +1439,14 @@ fn process_chromosome(
                     let t_overlap = Instant::now();
                     let v = match check_overlaps(&record, &mut querents_by_tid, store) {
                         CheckOverlapResult::Found(v) => v,
-                        CheckOverlapResult::NoOverlaps => Vec::new(),
+                        CheckOverlapResult::NoOverlaps => Overlaps::new(),
                     };
                     overlap_query_ns += t_overlap.elapsed().as_nanos() as u64;
                     v
                 } else {
                     match check_overlaps(&record, &mut querents_by_tid, store) {
                         CheckOverlapResult::Found(v) => v,
-                        CheckOverlapResult::NoOverlaps => Vec::new(),
+                        CheckOverlapResult::NoOverlaps => Overlaps::new(),
                     }
                 };
 

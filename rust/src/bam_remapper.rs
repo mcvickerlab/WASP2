@@ -1112,7 +1112,7 @@ pub fn generate_haplotype_seqs_view(
 /// Vector of TrimCombination structs
 ///
 /// # Examples
-/// ```
+/// ```ignore
 /// let combos = generate_trim_combinations(2, 51);
 /// assert_eq!(combos.len(), 3);  // (0,2), (1,1), (2,0)
 /// ```
