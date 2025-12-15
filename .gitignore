@@ -253,6 +253,7 @@ benchmarking/comprehensive_results/
 benchmarking/nature_methods_results/
 benchmarking/biastools_results/
 benchmarking/data/
+benchmarking/quickbench_out/
 
 # Comparison results
 comparison_results/

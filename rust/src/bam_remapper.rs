@@ -183,7 +183,7 @@ impl Default for IndelConfig {
 /// Parse intersection BED file into variant HashMap
 ///
 /// Replaces Python's `make_intersect_df()` with fast streaming parser.
-/// Matches Python's exact behavior: deduplicates on (chrom, read, mate, start, stop).
+/// Deduplicates exact duplicate overlaps on (chrom, read, mate, vcf_start, vcf_stop).
 ///
 /// # BED Format
 /// ```text
@@ -270,7 +270,7 @@ pub fn parse_intersect_bed<P: AsRef<Path>>(
         all_spans.push((read_name, span));
     }
 
-    // Deduplicate: Python does df.unique(["chrom", "read", "mate", "start", "stop"], keep="first")
+    // Deduplicate exact duplicates on the variant span for each read/mate.
     // We'll use a HashSet to track seen combinations
     let mut seen: std::collections::HashSet<(Vec<u8>, String, u32, u32, u8)> =
         std::collections::HashSet::new();
@@ -280,8 +280,8 @@ pub fn parse_intersect_bed<P: AsRef<Path>>(
         let key = (
             read_name.clone(),
             span.chrom.clone(),
-            span.start,
-            span.stop,
+            span.vcf_start,
+            span.vcf_stop,
             span.mate,
         );
 
@@ -381,7 +381,7 @@ pub fn parse_intersect_bed_by_chrom<P: AsRef<Path>>(
         all_spans.push((chrom, read_name, span));
     }
 
-    // Deduplicate
+    // Deduplicate exact duplicates on the variant span for each read/mate.
     let mut seen: std::collections::HashSet<(String, Vec<u8>, u32, u32, u8)> =
         std::collections::HashSet::new();
     let mut deduped_spans: Vec<(String, Vec<u8>, VariantSpan)> = Vec::new();
@@ -390,8 +390,8 @@ pub fn parse_intersect_bed_by_chrom<P: AsRef<Path>>(
         let key = (
             chrom.clone(),
             read_name.clone(),
-            span.start,
-            span.stop,
+            span.vcf_start,
+            span.vcf_stop,
             span.mate,
         );
 
@@ -1869,12 +1869,18 @@ mod tests {
             "chr10\t87392\t87440\tSRR891276.5620594/2\t60\t+\tchr10\t87400\t87401\tC\tT\tC|T"
         )
         .unwrap();
+        // Second distinct variant overlap for the same read/mate (should be preserved)
+        writeln!(
+            temp_file,
+            "chr10\t87392\t87440\tSRR891276.5620594/2\t60\t+\tchr10\t87401\t87402\tA\tG\tA|G"
+        )
+        .unwrap();
         writeln!(
             temp_file,
             "chr10\t87395\t87442\tSRR891276.5620594/1\t60\t-\tchr10\t87400\t87401\tC\tT\tC|T"
         )
         .unwrap();
-        // Duplicate that should be removed
+        // Duplicate that should be removed (same read/mate + same variant span)
         writeln!(
             temp_file,
             "chr10\t87392\t87440\tSRR891276.5620594/2\t60\t+\tchr10\t87401\t87402\tA\tG\tA|G"
@@ -1906,8 +1912,8 @@ mod tests {
         let read2_spans = result.get(&read2_name).unwrap();
         assert_eq!(
             read2_spans.len(),
-            2,
-            "Should have 2 spans after dedup (different mates)"
+            3,
+            "Should keep both variant overlaps for mate 2, plus mate 1"
         );
 
         // Verify mate 1
@@ -1917,12 +1923,11 @@ mod tests {
         assert_eq!(mate1.vcf_start, 87400);
         assert_eq!(mate1.vcf_stop, 87401);
 
-        // Verify mate 2 (should only have first occurrence, duplicate removed)
-        let mate2 = read2_spans.iter().find(|s| s.mate == 2).unwrap();
-        assert_eq!(mate2.start, 87392);
-        assert_eq!(mate2.stop, 87440);
-        assert_eq!(mate2.vcf_start, 87400);
-        assert_eq!(mate2.vcf_stop, 87401);
+        // Verify mate 2 (should have two distinct variant overlaps; duplicate removed)
+        let mate2: Vec<_> = read2_spans.iter().filter(|s| s.mate == 2).collect();
+        assert_eq!(mate2.len(), 2);
+        assert!(mate2.iter().any(|s| s.vcf_start == 87400 && s.vcf_stop == 87401));
+        assert!(mate2.iter().any(|s| s.vcf_start == 87401 && s.vcf_stop == 87402));
     }
 
     #[test]
