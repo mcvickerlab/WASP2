@@ -1460,14 +1460,22 @@ fn process_chromosome(
     // Fetch reads for this chromosome
     bam.fetch(chrom).context("Failed to fetch chromosome")?;
 
-    // Use a few threads for BAM decompression within this worker.
+    // BAM decompression threads per worker (htslib).
     //
-    // NOTE: This interacts with Rayon parallelism; use WASP2_BAM_THREADS to tune and
-    // avoid oversubscription (e.g., many per-chrom workers × many BAM threads).
+    // This interacts with Rayon parallelism: `threads=N` already opens up to N independent
+    // readers (one per active chromosome worker). Adding internal htslib threads on top of
+    // that can *oversubscribe* CPU cores and slow things down (especially at N=8/16).
+    //
+    // Heuristic default:
+    // - <=2 Rayon workers: allow some BAM threads (2) to help decompression
+    // - >2 Rayon workers: default to 0 (let parallel readers provide concurrency)
+    //
+    // Override explicitly via `WASP2_BAM_THREADS`.
+    let default_bam_threads = if config.read_threads <= 2 { 2 } else { 0 };
     let bam_threads = std::env::var("WASP2_BAM_THREADS")
         .ok()
         .and_then(|s| s.parse::<usize>().ok())
-        .unwrap_or(2);
+        .unwrap_or(default_bam_threads);
     if bam_threads > 0 {
         bam.set_threads(bam_threads).ok();
     }
