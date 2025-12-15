@@ -15,7 +15,8 @@
 #$ -o /iblm/netapp/data3/jjaureguy/gvl_files/wasp2/WASP2_extensive_evaluation/WASP2_current/cvpc/WASP2-exp/benchmarking/logs/
 #$ -cwd
 
-set -euo pipefail
+# NOTE: Avoid `set -u` here; conda activation scripts may reference unset vars.
+set -eo pipefail
 
 WASP2_DIR="/iblm/netapp/data3/jjaureguy/gvl_files/wasp2/WASP2_extensive_evaluation/WASP2_current/cvpc/WASP2-exp"
 DATA_DIR="${WASP2_DIR}/benchmarking/star_wasp_comparison/data"
@@ -67,4 +68,3 @@ fi
 
 ls -lh "${VCF_OUT}" "${VCF_TBI}"
 echo "Done."
-
