@@ -882,6 +882,62 @@ pub fn generate_haplotype_seqs_view(
         v.hap1.len() != ref_len || v.hap2.len() != ref_len
     });
 
+    // Fast path (common case): no INDEL variants AND the mapped query slice length matches allele length.
+    // This avoids splitting/allocating segment vectors for SNVs/MNPs.
+    if !has_indels {
+        // Precompute all query ranges; fall back to slow path if any mapping is odd (e.g., read CIGAR indel
+        // within the variant span causing query_len != ref_len).
+        let mut edits: Vec<(usize, usize, &[u8], &[u8])> = Vec::with_capacity(variants.len());
+        let mut prev_end: usize = 0;
+
+        let mut can_fast = true;
+        for v in variants {
+            if v.vcf_stop <= v.vcf_start {
+                can_fast = false;
+                break;
+            }
+            let start = match find_read_position(read, v.vcf_start) {
+                Some(pos) => pos,
+                None => return Ok(None),
+            };
+            let stop_inclusive = match find_read_position(read, v.vcf_stop - 1) {
+                Some(pos) => pos,
+                None => return Ok(None),
+            };
+            let stop = stop_inclusive + 1;
+
+            if start >= stop || stop > original_seq.len() {
+                return Ok(None);
+            }
+            if start < prev_end {
+                can_fast = false;
+                break;
+            }
+
+            let a1 = v.hap1.as_bytes();
+            let a2 = v.hap2.as_bytes();
+            let span_len = stop - start;
+            if a1.len() != span_len || a2.len() != span_len {
+                can_fast = false;
+                break;
+            }
+
+            edits.push((start, stop, a1, a2));
+            prev_end = stop;
+        }
+
+        if can_fast {
+            let mut hap1_seq = original_seq.to_vec();
+            let mut hap2_seq = original_seq.to_vec();
+            for (start, stop, a1, a2) in edits {
+                hap1_seq[start..stop].copy_from_slice(a1);
+                hap2_seq[start..stop].copy_from_slice(a2);
+            }
+            let qual = original_qual.to_vec();
+            return Ok(Some(vec![(hap1_seq, qual.clone()), (hap2_seq, qual)]));
+        }
+    }
+
     let (split_positions, split_qual_positions) = if has_indels {
         let mut seq_pos = vec![0];
         let mut qual_pos = vec![0];
