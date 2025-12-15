@@ -22,6 +22,8 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 
+use crate::seq_decode::{copy_qual_into, decode_seq_into};
+
 // ============================================================================
 // Data Structures
 // ============================================================================
@@ -868,14 +870,28 @@ pub fn generate_haplotype_seqs_view(
     variants: &[VariantSpanView<'_>],
     _config: &RemapConfig,
 ) -> Result<Option<Vec<(Vec<u8>, Vec<u8>)>>> {
+    // Compatibility wrapper: keep the old signature for tests/other callers.
+    // Hot-path callers should use `generate_haplotype_seqs_view_with_buffers`.
+    let mut seq_buf: Vec<u8> = Vec::new();
+    let mut qual_buf: Vec<u8> = Vec::new();
+    decode_seq_into(read, &mut seq_buf);
+    copy_qual_into(read, &mut qual_buf);
+
+    generate_haplotype_seqs_view_with_buffers(read, variants, _config, &seq_buf, &qual_buf)
+}
+
+pub fn generate_haplotype_seqs_view_with_buffers(
+    read: &bam::Record,
+    variants: &[VariantSpanView<'_>],
+    _config: &RemapConfig,
+    original_seq: &[u8],
+    original_qual: &[u8],
+) -> Result<Option<Vec<(Vec<u8>, Vec<u8>)>>> {
     if variants.is_empty() {
-        let seq = read.seq().as_bytes();
-        let qual = read.qual().to_vec();
+        let seq = original_seq.to_vec();
+        let qual = original_qual.to_vec();
         return Ok(Some(vec![(seq.clone(), qual.clone()), (seq, qual)]));
     }
-
-    let original_seq = read.seq().as_bytes();
-    let original_qual = read.qual();
 
     let has_indels = variants.iter().any(|v| {
         let ref_len = (v.vcf_stop - v.vcf_start) as usize;

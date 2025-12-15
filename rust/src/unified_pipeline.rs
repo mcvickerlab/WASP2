@@ -34,11 +34,25 @@ use std::time::Instant;
 use crate::bam_intersect::{build_variant_store, VariantStore};
 use crate::bam_remapper::{
     apply_trim_combination, calculate_indel_delta, classify_variant_location,
-    generate_haplotype_seqs_view, generate_trim_combinations, IndelConfig, RemapConfig,
+    generate_haplotype_seqs_view_with_buffers, generate_trim_combinations, IndelConfig, RemapConfig,
     VariantLocation, VariantSpanView,
 };
+use crate::seq_decode::{copy_qual_into, decode_seq_into};
 
 type Overlaps = SmallVec<[(u32, u32, u32); 4]>;
+
+#[derive(Default)]
+struct ReadScratch {
+    seq: Vec<u8>,
+    qual: Vec<u8>,
+}
+
+impl ReadScratch {
+    fn fill_from(&mut self, read: &bam::Record) {
+        decode_seq_into(read, &mut self.seq);
+        copy_qual_into(read, &mut self.qual);
+    }
+}
 
 // ============================================================================
 // Configuration and Statistics
@@ -478,12 +492,14 @@ fn generate_haplotypes_for_read(
     overlaps: &[(u32, u32, u32)], // (variant_idx, var_start, var_stop)
     store: &VariantStore,
     max_seqs: usize,
+    original_seq: &[u8],
+    original_qual: &[u8],
 ) -> Option<Vec<(Vec<u8>, Vec<u8>)>> {
     if overlaps.is_empty() {
         // No variants - return original sequence TWICE (matches baseline bam_remapper.rs)
         // This is needed for correct zip pairing with the other read's haplotypes
-        let seq = read.seq().as_bytes();
-        let qual = read.qual().to_vec();
+        let seq = original_seq.to_vec();
+        let qual = original_qual.to_vec();
         return Some(vec![(seq.clone(), qual.clone()), (seq, qual)]);
     }
 
@@ -508,7 +524,7 @@ fn generate_haplotypes_for_read(
         is_phased: true,
     };
 
-    match generate_haplotype_seqs_view(read, &spans, &remap_config) {
+    match generate_haplotype_seqs_view_with_buffers(read, &spans, &remap_config, original_seq, original_qual) {
         Ok(Some(haps)) => Some(haps),
         _ => None, // Unmappable or error: skip this read
     }
@@ -535,19 +551,35 @@ fn process_pair(
     store: &VariantStore,
     config: &UnifiedConfig,
     overlap_mask: u8,
+    r1_scratch: &ReadScratch,
+    r2_scratch: &ReadScratch,
 ) -> ProcessPairResult {
     // Original sequences for unchanged check
-    let r1_original = read1.seq().as_bytes();
-    let r2_original = read2.seq().as_bytes();
+    let r1_original = r1_scratch.seq.as_slice();
+    let r2_original = r2_scratch.seq.as_slice();
 
     // Generate haplotypes for each read independently
     // Returns None if read has variants but ALL are unmappable
     // Returns exactly 2 haplotypes: either (orig, orig) for no variants, or (hap1, hap2) for variants
-    let r1_haps = match generate_haplotypes_for_read(read1, r1_overlaps, store, config.max_seqs) {
+    let r1_haps = match generate_haplotypes_for_read(
+        read1,
+        r1_overlaps,
+        store,
+        config.max_seqs,
+        &r1_scratch.seq,
+        &r1_scratch.qual,
+    ) {
         Some(h) => h,
         None => return ProcessPairResult::Unmappable,
     };
-    let r2_haps = match generate_haplotypes_for_read(read2, r2_overlaps, store, config.max_seqs) {
+    let r2_haps = match generate_haplotypes_for_read(
+        read2,
+        r2_overlaps,
+        store,
+        config.max_seqs,
+        &r2_scratch.seq,
+        &r2_scratch.qual,
+    ) {
         Some(h) => h,
         None => return ProcessPairResult::Unmappable,
     };
@@ -648,22 +680,36 @@ fn process_pair_with_trims(
     config: &UnifiedConfig,
     indel_config: &IndelConfig,
     overlap_mask: u8,
+    r1_scratch: &ReadScratch,
+    r2_scratch: &ReadScratch,
 ) -> ProcessPairResult {
     let mut outputs = Vec::new();
 
-    let r1_original_len = read1.seq().len();
-    let r2_original_len = read2.seq().len();
-    let r1_original = read1.seq().as_bytes();
-    let r2_original = read2.seq().as_bytes();
+    let r1_original_len = r1_scratch.seq.len();
+    let r2_original_len = r2_scratch.seq.len();
+    let r1_original = r1_scratch.seq.as_slice();
+    let r2_original = r2_scratch.seq.as_slice();
 
     // Generate raw haplotypes for each read (may have different lengths due to INDELs)
-    let r1_haps = match generate_haplotypes_for_read(read1, r1_overlaps, store, config.max_seqs)
-    {
+    let r1_haps = match generate_haplotypes_for_read(
+        read1,
+        r1_overlaps,
+        store,
+        config.max_seqs,
+        &r1_scratch.seq,
+        &r1_scratch.qual,
+    ) {
         Some(h) => h,
         None => return ProcessPairResult::Unmappable,
     };
-    let r2_haps = match generate_haplotypes_for_read(read2, r2_overlaps, store, config.max_seqs)
-    {
+    let r2_haps = match generate_haplotypes_for_read(
+        read2,
+        r2_overlaps,
+        store,
+        config.max_seqs,
+        &r2_scratch.seq,
+        &r2_scratch.qual,
+    ) {
         Some(h) => h,
         None => return ProcessPairResult::Unmappable,
     };
@@ -1103,6 +1149,10 @@ pub fn unified_make_reads(
     // Pre-allocate a single record for reading - avoids per-read allocation
     let mut record = bam::Record::new();
 
+    // Reused per-pair buffers to avoid repeated `seq().as_bytes()` / `qual().to_vec()` allocations.
+    let mut scratch_r1 = ReadScratch::default();
+    let mut scratch_r2 = ReadScratch::default();
+
     // Use read() instead of records() iterator for ~10% speedup
     loop {
         match bam.read(&mut record) {
@@ -1175,6 +1225,8 @@ pub fn unified_make_reads(
                                 max_indel_size: config.max_indel_size,
                                 skip_large_indels: true,
                             };
+                            scratch_r1.fill_from(r1);
+                            scratch_r2.fill_from(r2);
                             match process_pair_with_trims(
                                 r1,
                                 r2,
@@ -1184,6 +1236,8 @@ pub fn unified_make_reads(
                                 config,
                                 &indel_config,
                                 overlap_mask,
+                                &scratch_r1,
+                                &scratch_r2,
                             ) {
                                 ProcessPairResult::NeedsRemap(pairs) => {
                                     stats.pairs_with_variants += 1;
@@ -1217,6 +1271,8 @@ pub fn unified_make_reads(
                             }
                         } else {
                             // SNV-only mode: use process_pair with ProcessPairResult
+                            scratch_r1.fill_from(r1);
+                            scratch_r2.fill_from(r2);
                             match process_pair(
                                 r1,
                                 r2,
@@ -1225,6 +1281,8 @@ pub fn unified_make_reads(
                                 &store,
                                 config,
                                 overlap_mask,
+                                &scratch_r1,
+                                &scratch_r2,
                             ) {
                                 ProcessPairResult::NeedsRemap(pairs) => {
                                     stats.pairs_with_variants += 1;
@@ -1419,6 +1477,8 @@ fn process_chromosome(
 
     // Pre-allocated record for reading
     let mut record = bam::Record::new();
+    let mut scratch_r1 = ReadScratch::default();
+    let mut scratch_r2 = ReadScratch::default();
 
     loop {
         match bam.read(&mut record) {
@@ -1477,6 +1537,8 @@ fn process_chromosome(
                                 max_indel_size: config.max_indel_size,
                                 skip_large_indels: true,
                             };
+                            scratch_r1.fill_from(r1);
+                            scratch_r2.fill_from(r2);
                             match process_pair_with_trims(
                                 r1,
                                 r2,
@@ -1486,6 +1548,8 @@ fn process_chromosome(
                                 config,
                                 &indel_config,
                                 overlap_mask,
+                                &scratch_r1,
+                                &scratch_r2,
                             ) {
                                 ProcessPairResult::NeedsRemap(pairs) => {
                                     stats.pairs_with_variants += 1;
@@ -1510,6 +1574,8 @@ fn process_chromosome(
                             }
                         } else {
                             // SNV-only mode: use process_pair with ProcessPairResult
+                            scratch_r1.fill_from(r1);
+                            scratch_r2.fill_from(r2);
                             match process_pair(
                                 r1,
                                 r2,
@@ -1518,6 +1584,8 @@ fn process_chromosome(
                                 store,
                                 config,
                                 overlap_mask,
+                                &scratch_r1,
+                                &scratch_r2,
                             ) {
                                 ProcessPairResult::NeedsRemap(pairs) => {
                                     stats.pairs_with_variants += 1;
