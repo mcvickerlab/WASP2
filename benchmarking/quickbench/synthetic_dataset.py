@@ -47,10 +47,15 @@ def _write_pair(
     r1_seq: str,
     r2_seq: str,
     mapq: int = 60,
+    r2_reverse: bool = False,
+    r2_quals: Sequence[int] | None = None,
 ) -> None:
     # Flags chosen to keep everything simple: paired, proper_pair, forward strand.
     r1_flag = 0x1 | 0x2 | 0x40
     r2_flag = 0x1 | 0x2 | 0x80
+    if r2_reverse:
+        r1_flag |= 0x20  # mate is reverse
+        r2_flag |= 0x10  # read is reverse
 
     r1 = pysam.AlignedSegment(header)
     r1.query_name = qname
@@ -76,7 +81,10 @@ def _write_pair(
     r2.next_reference_start = r1_start
     r2.template_length = -r1.template_length
     r2.query_sequence = r2_seq
-    r2.query_qualities = pysam.qualitystring_to_array("I" * len(r2_seq))
+    if r2_quals is None:
+        r2.query_qualities = pysam.qualitystring_to_array("I" * len(r2_seq))
+    else:
+        r2.query_qualities = r2_quals
 
     out.write(r1)
     out.write(r2)
@@ -144,6 +152,26 @@ def write_synthetic_bam(path: Path) -> None:
             r2_start=760,
             r1_seq=r1_c,
             r2_seq=r2_c,
+        )
+
+        # Pair R: R2 overlaps both variants but is marked reverse-strand.
+        #
+        # IMPORTANT: This mimics typical BAMs where reverse-strand reads store SEQ/QUAL
+        # in alignment orientation (rev-comp of original). The remap FASTQ output should
+        # reverse-complement again so it matches the original read orientation.
+        r1_r = "G" * 50
+        r2_r = _make_seq(50, {10: "A", 20: "C"})  # aligned orientation, matches hap1
+        r2_quals = list(range(len(r2_r)))  # non-palindromic qualities to catch reversal bugs
+        _write_pair(
+            out,
+            header=header,
+            qname="pairR",
+            r1_start=500,
+            r2_start=90,
+            r1_seq=r1_r,
+            r2_seq=r2_r,
+            r2_reverse=True,
+            r2_quals=r2_quals,
         )
 
     # Coordinate-sort + index for downstream convenience.

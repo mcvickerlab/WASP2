@@ -92,3 +92,19 @@ def test_quickbench_snv_parity(tmp_path: Path) -> None:
         f"Only in unified:  {only_unified[:5]}"
     )
 
+    # Strand sanity check: `pairR` has R2 flagged reverse in the BAM and should be
+    # written to FASTQ in the original read orientation (rev-comp + qual reversal).
+    from benchmarking.quickbench.fastq_utils import CanonicalFastqRecord
+
+    hap2_aligned = ["A"] * 50
+    hap2_aligned[10] = "G"
+    hap2_aligned[20] = "T"
+    hap2_aligned = "".join(hap2_aligned)
+
+    trans = str.maketrans("ACGTNacgtn", "TGCANtgcan")
+    expected_seq = hap2_aligned.translate(trans)[::-1]
+    expected_qual = "".join(chr(q + 33) for q in reversed(range(50)))
+
+    expected = CanonicalFastqRecord("pairR", 2, expected_seq, expected_qual)
+    assert baseline_counter[expected] == 1
+    assert unified_counter[expected] == 1

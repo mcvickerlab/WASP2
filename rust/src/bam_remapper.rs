@@ -26,6 +26,27 @@ use std::path::Path;
 // Data Structures
 // ============================================================================
 
+fn complement_base(b: u8) -> u8 {
+    match b {
+        b'A' => b'T',
+        b'C' => b'G',
+        b'G' => b'C',
+        b'T' => b'A',
+        b'a' => b't',
+        b'c' => b'g',
+        b'g' => b'c',
+        b't' => b'a',
+        _ => b'N',
+    }
+}
+
+fn reverse_complement_in_place(seq: &mut [u8]) {
+    seq.reverse();
+    for b in seq.iter_mut() {
+        *b = complement_base(*b);
+    }
+}
+
 /// Variant span for a read (matches Python's Polars DataFrame structure)
 ///
 /// Stores both READ span and VARIANT positions for proper allele swapping
@@ -581,20 +602,32 @@ fn process_read_pair(
 
         // Create R1 HaplotypeRead with indel-adjusted qualities
         let r1_name = [base_name.as_slice(), b"/1"].concat();
+        let mut r1_seq_out = r1_seq.clone();
+        let mut r1_qual_out = r1_qual.clone();
+        if read1.is_reverse() {
+            reverse_complement_in_place(&mut r1_seq_out);
+            r1_qual_out.reverse();
+        }
         haplotype_reads.push(HaplotypeRead {
             name: r1_name,
-            sequence: r1_seq.clone(),
-            quals: r1_qual.clone(), // NOW USES INDEL-ADJUSTED QUALITIES
+            sequence: r1_seq_out,
+            quals: r1_qual_out, // NOW USES INDEL-ADJUSTED QUALITIES
             original_pos: (r1_pos, r2_pos),
             haplotype: (hap_idx + 1) as u8,
         });
 
         // Create R2 HaplotypeRead with indel-adjusted qualities
         let r2_name = [base_name.as_slice(), b"/2"].concat();
+        let mut r2_seq_out = r2_seq.clone();
+        let mut r2_qual_out = r2_qual.clone();
+        if read2.is_reverse() {
+            reverse_complement_in_place(&mut r2_seq_out);
+            r2_qual_out.reverse();
+        }
         haplotype_reads.push(HaplotypeRead {
             name: r2_name,
-            sequence: r2_seq.clone(),
-            quals: r2_qual.clone(), // NOW USES INDEL-ADJUSTED QUALITIES
+            sequence: r2_seq_out,
+            quals: r2_qual_out, // NOW USES INDEL-ADJUSTED QUALITIES
             original_pos: (r1_pos, r2_pos),
             haplotype: (hap_idx + 1) as u8,
         });

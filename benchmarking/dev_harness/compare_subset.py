@@ -132,9 +132,8 @@ def main() -> int:
     region = _parse_region(args.region)
     args.out_dir.mkdir(parents=True, exist_ok=True)
 
-    work_dir = Path(
-        tempfile.mkdtemp(prefix="wasp2_dev_harness_", dir=str(args.out_dir if args.keep_tmp else None))
-    )
+    tmp_parent: Optional[str] = str(args.out_dir) if args.keep_tmp else None
+    work_dir = Path(tempfile.mkdtemp(prefix="wasp2_dev_harness_", dir=tmp_parent))
     try:
         subset_bam = work_dir / "subset.bam"
         subset_bed = work_dir / "subset.bed"
@@ -250,4 +249,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
