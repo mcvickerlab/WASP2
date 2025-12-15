@@ -40,6 +40,13 @@ REF_GENOME="/iblm/netapp/data1/aho/ref_genomes/index/Homo_sapiens/NCBI/GRCh38/Se
 # Sample
 SAMPLE="NA12878"
 THREADS=8
+# Prevent hidden oversubscription (numpy/BLAS) inside helper Python steps.
+export OMP_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+# For WASP2 parallel unified pipeline: disable per-worker htslib BAM threads unless explicitly overridden.
+export WASP2_BAM_THREADS="${WASP2_BAM_THREADS:-0}"
 ENABLE_WASP2_TIMING="${ENABLE_WASP2_TIMING:-0}"
 if [ -n "${WASP2_TIMING+x}" ]; then
     ENABLE_WASP2_TIMING=1
@@ -72,6 +79,7 @@ echo "Date: $(date)" >> ${PROFILE_LOG}
 echo "Sample: ${SAMPLE}" >> ${PROFILE_LOG}
 echo "Threads: ${THREADS}" >> ${PROFILE_LOG}
 echo "WASP2_TIMING enabled: ${ENABLE_WASP2_TIMING}" >> ${PROFILE_LOG}
+echo "WASP2_BAM_THREADS: ${WASP2_BAM_THREADS}" >> ${PROFILE_LOG}
 echo "" >> ${PROFILE_LOG}
 echo "FIXED PIPELINE: filter → unified → remap → filter → MERGE" >> ${PROFILE_LOG}
 echo "" >> ${PROFILE_LOG}
@@ -86,6 +94,7 @@ echo "Input BAM: ${INPUT_BAM}"
 echo "VCF: ${VCF}"
 echo "Threads: ${THREADS}"
 echo "WASP2_TIMING enabled: ${ENABLE_WASP2_TIMING}"
+echo "WASP2_BAM_THREADS: ${WASP2_BAM_THREADS}"
 echo ""
 
 # Verify Rust module
@@ -200,6 +209,7 @@ stats = unified_make_reads_parallel_py(
     '${OUTPUT_DIR}/remap_r2.fq',
     max_seqs=64,
     threads=${THREADS},
+    compress_output=False,
     keep_no_flip_names_path='${OUTPUT_DIR}/keep_no_flip_names.txt',
     remap_names_path='${OUTPUT_DIR}/remap_names.txt'
 )
