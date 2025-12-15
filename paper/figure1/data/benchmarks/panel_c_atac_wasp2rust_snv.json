@@ -9,7 +9,7 @@
     "step2b_extract_to_remap_actual_s": 19.406729232,
     "step3_bwa_remap_s": 255.159142117,
     "step4_filter_remapped_s": 33.119829912,
-    "step5_extract_keep_no_flip_s": .009609977,
+    "step5_extract_keep_no_flip_s": 0.009609977,
     "step6_merge_bams_s": 552.240504218,
     "wasp_only_s": 848.161609760,
     "total_s": 1154.641023713,
