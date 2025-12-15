@@ -11,7 +11,14 @@ RENAME_CHRS="${DATA_DIR}/chr_rename.txt"
 mkdir -p ${VCF_DIR}
 cd ${VCF_DIR}
 
-FTP_BASE="ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/data_collections/1000_genomes_project/release/20190312_biallelic_SNV_and_INDEL"
+VCF_BASE_URL="https://ftp.1000genomes.ebi.ac.uk/vol1/ftp/data_collections/1000_genomes_project/release/20190312_biallelic_SNV_and_INDEL"
+
+wget_retry() {
+    local url="${1}"
+    # Be conservative: these servers can be flaky on shared clusters.
+    wget -c --tries=10 --timeout=30 --read-timeout=30 --waitretry=5 --retry-connrefused \
+        --progress=dot:giga "${url}"
+}
 
 # Download all chromosomes (skip if already exists)
 for chr in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22; do
@@ -20,8 +27,8 @@ for chr in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22; do
 
     if [ ! -f "${VCF}" ]; then
         echo "Downloading ${VCF}..."
-        wget -c "${FTP_BASE}/${VCF}"
-        wget -c "${FTP_BASE}/${TBI}"
+        wget_retry "${VCF_BASE_URL}/${VCF}"
+        wget_retry "${VCF_BASE_URL}/${TBI}"
     else
         echo "${VCF} already exists, skipping..."
     fi
