@@ -33,7 +33,7 @@ def run_make_remap_reads_unified(
     max_indel_len: int = 10,
     max_seqs: int = 64,
     threads: int = 8,
-    compression_threads: int = 4,
+    compression_threads: int = 1,
     use_parallel: bool = True,
     compress_output: bool = True,
 ) -> dict:

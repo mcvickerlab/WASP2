@@ -511,7 +511,7 @@ fn filter_bam_by_variants_py(
 /// print(f"Processed {stats['pairs_processed']} pairs -> {stats['haplotypes_written']} haplotypes")
 /// ```
 #[pyfunction]
-#[pyo3(signature = (bam_path, bed_path, out_r1, out_r2, max_seqs=64, threads=8, channel_buffer=50000, compression_threads=4, compress_output=true, indel_mode=false, max_indel_size=50, keep_no_flip_names_path=None, remap_names_path=None, pair_buffer_reserve=100000))]
+#[pyo3(signature = (bam_path, bed_path, out_r1, out_r2, max_seqs=64, threads=8, channel_buffer=50000, compression_threads=1, compress_output=true, indel_mode=false, max_indel_size=50, keep_no_flip_names_path=None, remap_names_path=None, pair_buffer_reserve=100000))]
 fn unified_make_reads_py(
     py: Python,
     bam_path: &str,
@@ -609,7 +609,7 @@ fn unified_make_reads_py(
 /// print(f"Processed {stats['pairs_processed']} pairs -> {stats['haplotypes_written']} haplotypes")
 /// ```
 #[pyfunction]
-#[pyo3(signature = (bam_path, bed_path, out_r1, out_r2, max_seqs=64, threads=8, channel_buffer=50000, compression_threads=4, compress_output=true, indel_mode=false, max_indel_size=50, keep_no_flip_names_path=None, remap_names_path=None, pair_buffer_reserve=100000))]
+#[pyo3(signature = (bam_path, bed_path, out_r1, out_r2, max_seqs=64, threads=8, channel_buffer=50000, compression_threads=1, compress_output=true, indel_mode=false, max_indel_size=50, keep_no_flip_names_path=None, remap_names_path=None, pair_buffer_reserve=100000))]
 fn unified_make_reads_parallel_py(
     py: Python,
     bam_path: &str,
