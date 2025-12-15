@@ -19,6 +19,20 @@
 
 set -e
 
+# Ensure numeric strings are valid JSON numbers (e.g., avoid leading ".123").
+json_num() {
+    local v="${1}"
+    if [[ "${v}" == .* ]]; then
+        printf "0%s" "${v}"
+        return
+    fi
+    if [[ "${v}" == -.* ]]; then
+        printf -- "-0%s" "${v:1}"
+        return
+    fi
+    printf "%s" "${v}"
+}
+
 # Timestamp for this run
 TIMESTAMP=$(date +%Y-%m-%d_%H-%M-%S)
 echo "Benchmark timestamp: ${TIMESTAMP}"
@@ -402,6 +416,17 @@ PASS_RATE=$(echo "scale=2; ${FINAL_READS} * 100 / ${ORIGINAL_READS}" | bc)
 # WASP-only time (steps 1+2+2b+4+5+6, excluding BWA alignment)
 WASP_ONLY=$(echo "${STEP1_TIME} + ${STEP2_TIME} + ${STEP2B_TIME} + ${STEP4_TIME} + ${STEP5_TIME} + ${STEP6_TIME}" | bc)
 
+# JSON-safe numeric forms (bc can emit ".123" which is invalid JSON)
+STEP1_TIME_JSON=$(json_num "${STEP1_TIME}")
+STEP2_TIME_JSON=$(json_num "${STEP2_TIME}")
+STEP2B_TIME_JSON=$(json_num "${STEP2B_TIME}")
+STEP3_TIME_JSON=$(json_num "${STEP3_TIME}")
+STEP4_TIME_JSON=$(json_num "${STEP4_TIME}")
+STEP5_TIME_JSON=$(json_num "${STEP5_TIME}")
+STEP6_TIME_JSON=$(json_num "${STEP6_TIME}")
+WASP_ONLY_JSON=$(json_num "${WASP_ONLY}")
+TOTAL_TIME_JSON=$(json_num "${TOTAL_TIME}")
+
 echo "========================================"
 echo "BENCHMARK RESULTS (FIXED PIPELINE v3 - with correct to_remap reference)"
 echo "========================================"
@@ -438,15 +463,15 @@ cat > ${OUTPUT_DIR}/benchmark_results.json << EOF
     "sample": "${SAMPLE}",
     "data_type": "ATAC-seq",
     "threads": ${THREADS},
-    "step1_filter_bam_s": ${STEP1_TIME},
-    "step2_unified_make_reads_s": ${STEP2_TIME},
-    "step2b_extract_to_remap_actual_s": ${STEP2B_TIME},
-    "step3_bwa_remap_s": ${STEP3_TIME},
-    "step4_filter_remapped_s": ${STEP4_TIME},
-    "step5_extract_keep_no_flip_s": ${STEP5_TIME},
-    "step6_merge_bams_s": ${STEP6_TIME},
-    "wasp_only_s": ${WASP_ONLY},
-    "total_s": ${TOTAL_TIME},
+    "step1_filter_bam_s": ${STEP1_TIME_JSON},
+    "step2_unified_make_reads_s": ${STEP2_TIME_JSON},
+    "step2b_extract_to_remap_actual_s": ${STEP2B_TIME_JSON},
+    "step3_bwa_remap_s": ${STEP3_TIME_JSON},
+    "step4_filter_remapped_s": ${STEP4_TIME_JSON},
+    "step5_extract_keep_no_flip_s": ${STEP5_TIME_JSON},
+    "step6_merge_bams_s": ${STEP6_TIME_JSON},
+    "wasp_only_s": ${WASP_ONLY_JSON},
+    "total_s": ${TOTAL_TIME_JSON},
     "original_reads": ${ORIGINAL_READS},
     "keep_reads": ${KEEP_READS},
     "keep_no_flip_reads": ${KEEP_NO_FLIP_READS},
