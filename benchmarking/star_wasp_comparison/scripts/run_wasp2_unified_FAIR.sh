@@ -30,6 +30,9 @@ BENCHMARK_DIR="${WASP2_DIR}/benchmarking/star_wasp_comparison"
 DATA_DIR="${BENCHMARK_DIR}/data"
 FINAL_OUTPUT_DIR="${BENCHMARK_DIR}/results/wasp2rust_fair_${TIMESTAMP}"
 
+# Provenance
+GIT_SHA=$(git -C "${WASP2_DIR}" rev-parse HEAD 2>/dev/null || echo "unknown")
+
 # Data files
 FASTQ_R1="${DATA_DIR}/ERR1050079_1.fastq.gz"
 FASTQ_R2="${DATA_DIR}/ERR1050079_2.fastq.gz"
@@ -45,6 +48,13 @@ mkdir -p "${OUTPUT_DIR}"
 # Sample
 SAMPLE="HG00731"
 THREADS=8
+# Prevent hidden oversubscription (numpy/BLAS) inside helper Python steps.
+export OMP_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+# For WASP2 parallel unified pipeline: disable per-worker htslib BAM threads unless explicitly overridden.
+export WASP2_BAM_THREADS="${WASP2_BAM_THREADS:-0}"
 ENABLE_WASP2_TIMING="${ENABLE_WASP2_TIMING:-0}"
 if [ -n "${WASP2_TIMING+x}" ]; then
     ENABLE_WASP2_TIMING=1
@@ -77,6 +87,8 @@ echo "Date: $(date)" >> ${PROFILE_LOG}
 echo "Sample: ${SAMPLE}" >> ${PROFILE_LOG}
 echo "Threads: ${THREADS}" >> ${PROFILE_LOG}
 echo "WASP2_TIMING enabled: ${ENABLE_WASP2_TIMING}" >> ${PROFILE_LOG}
+echo "WASP2_BAM_THREADS: ${WASP2_BAM_THREADS}" >> ${PROFILE_LOG}
+echo "git_sha: ${GIT_SHA}" >> ${PROFILE_LOG}
 echo "" >> ${PROFILE_LOG}
 echo "FAIR COMPARISON METHODOLOGY:" >> ${PROFILE_LOG}
 echo "  - genomeLoad: LoadAndKeep (load once, reuse for remap)" >> ${PROFILE_LOG}
@@ -434,10 +446,12 @@ cat > ${OUTPUT_DIR}/benchmark_results.json << EOF
 {
     "timestamp": "${TIMESTAMP}",
     "pipeline": "wasp2rust_FAIR",
+    "git_sha": "${GIT_SHA}",
     "methodology": "LoadAndKeep genome caching, samtools index excluded from STAR timing",
     "sample": "${SAMPLE}",
     "data_type": "RNA-seq",
     "threads": ${THREADS},
+    "wasp2_bam_threads": ${WASP2_BAM_THREADS},
     "step1_star_initial_s": ${STEP1_TIME},
     "step1_bam_index_s": ${INDEX_TIME},
     "step2_filter_bam_s": ${STEP2_TIME},

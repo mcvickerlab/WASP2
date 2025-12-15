@@ -41,6 +41,13 @@ REF_GENOME="/iblm/netapp/data1/aho/ref_genomes/index/Homo_sapiens/NCBI/GRCh38/Se
 SAMPLE="NA12878"
 THREADS=8
 SAME_LOCUS_SLOP=10   # allow positional slop when comparing remap loci (needed for indels)
+# Prevent hidden oversubscription (numpy/BLAS) inside helper Python steps.
+export OMP_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+# For WASP2 parallel unified pipeline: disable per-worker htslib BAM threads unless explicitly overridden.
+export WASP2_BAM_THREADS="${WASP2_BAM_THREADS:-0}"
 ENABLE_WASP2_TIMING="${ENABLE_WASP2_TIMING:-0}"
 if [ -n "${WASP2_TIMING+x}" ]; then
     ENABLE_WASP2_TIMING=1
@@ -78,6 +85,7 @@ echo "Date: $(date)" >> ${PROFILE_LOG}
 echo "Sample: ${SAMPLE}" >> ${PROFILE_LOG}
 echo "Threads: ${THREADS}" >> ${PROFILE_LOG}
 echo "WASP2_TIMING enabled: ${ENABLE_WASP2_TIMING}" >> ${PROFILE_LOG}
+echo "WASP2_BAM_THREADS: ${WASP2_BAM_THREADS}" >> ${PROFILE_LOG}
 echo "" >> ${PROFILE_LOG}
 echo "FIXED PIPELINE: filter → unified → remap → filter → MERGE" >> ${PROFILE_LOG}
 echo "VARIANT MODE: SNPs + Indels (het-only)" >> ${PROFILE_LOG}

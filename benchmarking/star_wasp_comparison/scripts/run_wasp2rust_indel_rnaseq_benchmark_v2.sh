@@ -41,6 +41,13 @@ OUTPUT_DIR="${WORK_OUTPUT_DIR}"
 SAMPLE="HG00731"
 THREADS=8
 COMPRESSION_THREADS="${COMPRESSION_THREADS:-1}"
+# Prevent hidden oversubscription (numpy/BLAS) inside helper Python steps.
+export OMP_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+# For WASP2 parallel unified pipeline: disable per-worker htslib BAM threads unless explicitly overridden.
+export WASP2_BAM_THREADS="${WASP2_BAM_THREADS:-0}"
 MAX_INDEL_LEN=10  # Maximum INDEL length to include
 ENABLE_WASP2_TIMING="${ENABLE_WASP2_TIMING:-0}"
 if [ -n "${WASP2_TIMING+x}" ]; then
@@ -79,6 +86,8 @@ echo "Timestamp: ${TIMESTAMP}" >> ${PROFILE_LOG}
 echo "Threads: ${THREADS}" >> ${PROFILE_LOG}
 echo "Compression threads: ${COMPRESSION_THREADS}" >> ${PROFILE_LOG}
 echo "WASP2_TIMING enabled: ${ENABLE_WASP2_TIMING}" >> ${PROFILE_LOG}
+echo "WASP2_BAM_THREADS: ${WASP2_BAM_THREADS}" >> ${PROFILE_LOG}
+echo "compress_output: false" >> ${PROFILE_LOG}
 echo "INDEL Support: ENABLED (max ${MAX_INDEL_LEN}bp)" >> ${PROFILE_LOG}
 echo "Pipeline: run_make_remap_reads_unified with indel_mode=True" >> ${PROFILE_LOG}
 
@@ -195,6 +204,7 @@ stats = run_make_remap_reads_unified(
 	    max_indel_len=${MAX_INDEL_LEN},
 	    threads=${THREADS},
 	    compression_threads=${COMPRESSION_THREADS},
+	    compress_output=False,
 	    use_parallel=True
 	)
 
@@ -229,12 +239,20 @@ echo "  SNV-only pairs:   ${SNV_ONLY_PAIRS_PRE}"
 echo "  INDEL-only pairs: ${INDEL_ONLY_PAIRS_PRE}"
 echo "  BOTH pairs:       ${BOTH_PAIRS_PRE}"
 
-# Find FASTQ files (named *_remap_r1.fq.gz by run_make_remap_reads_unified)
-R1_READS=$(ls ${OUTPUT_DIR}/*_remap_r1.fq.gz 2>/dev/null | head -1)
-R2_READS=$(ls ${OUTPUT_DIR}/*_remap_r2.fq.gz 2>/dev/null | head -1)
+# Find remap FASTQ files (prefer uncompressed for benchmarking fairness)
+R1_READS=$(ls ${OUTPUT_DIR}/*_remap_r1.fq 2>/dev/null | head -1)
+R2_READS=$(ls ${OUTPUT_DIR}/*_remap_r2.fq 2>/dev/null | head -1)
+if [ -z "${R1_READS}" ] || [ -z "${R2_READS}" ]; then
+    R1_READS=$(ls ${OUTPUT_DIR}/*_remap_r1.fq.gz 2>/dev/null | head -1)
+    R2_READS=$(ls ${OUTPUT_DIR}/*_remap_r2.fq.gz 2>/dev/null | head -1)
+fi
 
 if [ -n "${R1_READS}" ]; then
-    REMAP_COUNT=$(zcat ${R1_READS} | wc -l)
+    if [[ "${R1_READS}" == *.gz ]]; then
+        REMAP_COUNT=$(zcat ${R1_READS} | wc -l)
+    else
+        REMAP_COUNT=$(wc -l < ${R1_READS})
+    fi
     REMAP_PAIRS=$((REMAP_COUNT / 4))
     echo "Reads to remap: ${REMAP_PAIRS} pairs"
     echo "SNV_READS_PRE: ${REMAP_PAIRS}"
@@ -270,11 +288,16 @@ STEP2_START=$(date +%s.%N)
 STAR_REMAP="${OUTPUT_DIR}/star_remap"
 mkdir -p ${STAR_REMAP}
 
+READ_CMD=""
+if [[ "${R1_READS}" == *.gz ]]; then
+    READ_CMD="--readFilesCommand zcat"
+fi
+
 ${TIME} -v ${STAR} \
     --runThreadN ${THREADS} \
     --genomeDir ${LOCAL_STAR_INDEX} \
     --readFilesIn ${R1_READS} ${R2_READS} \
-    --readFilesCommand zcat \
+    ${READ_CMD} \
     --outFileNamePrefix ${STAR_REMAP}/${SAMPLE}_remap_ \
     --outSAMtype BAM SortedByCoordinate \
     --outSAMattributes NH HI AS nM NM MD \
@@ -287,6 +310,9 @@ ${TIME} -v ${STAR} \
 
 REMAPPED_BAM="${STAR_REMAP}/${SAMPLE}_remap_Aligned.sortedByCoord.out.bam"
 ${SAMTOOLS} index ${REMAPPED_BAM}
+
+# Cleanup large remap FASTQs (keep sidecar)
+rm -f "${R1_READS}" "${R2_READS}" 2>/dev/null || true
 
 STEP2_END=$(date +%s.%N)
 STEP2_TIME=$(echo "${STEP2_END} - ${STEP2_START}" | bc)
@@ -455,6 +481,8 @@ cat > ${OUTPUT_DIR}/benchmark_results.json << EOF
     "data_type": "RNA-seq",
     "aligner": "STAR",
     "threads": ${THREADS},
+    "wasp2_bam_threads": ${WASP2_BAM_THREADS},
+    "compress_output": false,
     "include_indels": true,
     "indel_mode": true,
     "cigar_aware_expected_pos": true,

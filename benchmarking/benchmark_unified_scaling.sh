@@ -40,6 +40,13 @@ THREADS="${THREADS:-${NSLOTS:-8}}"
 COMPRESSION_THREADS="${COMPRESSION_THREADS:-1}"
 BWA_THREADS="${BWA_THREADS:-${THREADS}}"
 SAMTOOLS_SORT_THREADS="${SAMTOOLS_SORT_THREADS:-${THREADS}}"
+# Prevent hidden oversubscription (numpy/BLAS) inside helper Python steps.
+export OMP_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+# For WASP2 parallel unified pipeline: disable per-worker htslib BAM threads unless explicitly overridden.
+export WASP2_BAM_THREADS="${WASP2_BAM_THREADS:-0}"
 
 # Use a stable run ID shared across all array tasks.
 # Prefer RUN_TIMESTAMP if passed at qsub time, else fall back to JOB_ID (shared
@@ -126,6 +133,7 @@ stats = run_make_remap_reads_unified(
     out_dir='${dir}',
     threads=${THREADS},
     compression_threads=${COMPRESSION_THREADS},
+    compress_output=False,
     use_parallel=True
 )
 
@@ -142,8 +150,12 @@ unified_runtime=$((unified_end - step1_start))
 echo "Unified make-reads completed in ${unified_runtime}s"
 
 # Find output FASTQ files
-r1_reads=$(ls ${dir}/*_remap_r1.fq.gz 2>/dev/null | head -1)
-r2_reads=$(ls ${dir}/*_remap_r2.fq.gz 2>/dev/null | head -1)
+r1_reads=$(ls ${dir}/*_remap_r1.fq 2>/dev/null | head -1)
+r2_reads=$(ls ${dir}/*_remap_r2.fq 2>/dev/null | head -1)
+if [ -z "${r1_reads}" ] || [ -z "${r2_reads}" ]; then
+    r1_reads=$(ls ${dir}/*_remap_r1.fq.gz 2>/dev/null | head -1)
+    r2_reads=$(ls ${dir}/*_remap_r2.fq.gz 2>/dev/null | head -1)
+fi
 
 if [ -z "${r1_reads}" ] || [ -z "${r2_reads}" ]; then
     echo "ERROR: Remap FASTQ files not found"
@@ -158,20 +170,26 @@ echo ""
 echo "STEP 2: BWA remap..."
 step2_start=$(date +%s)
 
-# Decompress for BWA
-zcat ${r1_reads} > ${dir}/remap_r1.fq
-zcat ${r2_reads} > ${dir}/remap_r2.fq
+in_r1="${r1_reads}"
+in_r2="${r2_reads}"
+if [[ "${r1_reads}" == *.gz ]]; then
+    # Decompress for BWA
+    zcat ${r1_reads} > ${dir}/remap_r1.fq
+    zcat ${r2_reads} > ${dir}/remap_r2.fq
+    in_r1="${dir}/remap_r1.fq"
+    in_r2="${dir}/remap_r2.fq"
+fi
 
 remapped_bam="${dir}/${prefix}_remapped.bam"
 remapped_unsorted_bam="${dir}/${prefix}_remapped_unsorted.bam"
-bwa mem -t ${BWA_THREADS} -M ${genome_index} ${dir}/remap_r1.fq ${dir}/remap_r2.fq | \
+bwa mem -t ${BWA_THREADS} -M ${genome_index} ${in_r1} ${in_r2} | \
     samtools view -S -b -h -F 4 - > ${remapped_unsorted_bam}
 samtools sort -@ ${SAMTOOLS_SORT_THREADS} -o ${remapped_bam} ${remapped_unsorted_bam}
 rm -f ${remapped_unsorted_bam}
 samtools index ${remapped_bam}
 
 # Clean up uncompressed FASTQs
-rm -f ${dir}/remap_r1.fq ${dir}/remap_r2.fq
+rm -f ${dir}/remap_r1.fq ${dir}/remap_r2.fq 2>/dev/null || true
 
 remap_end=$(date +%s)
 remap_runtime=$((remap_end - step2_start))

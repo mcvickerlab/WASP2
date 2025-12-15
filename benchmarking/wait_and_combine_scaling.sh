@@ -1,11 +1,11 @@
 #!/bin/bash
-# Wait for an SGE array job to finish, then rebuild the INDEL scaling COMBINED.tsv.
+# Wait for an SGE array job to finish, then rebuild the SNV scaling COMBINED.tsv.
 #
 # Usage:
-#   benchmarking/wait_and_combine_indel_scaling.sh <JOB_ID> [SLEEP_SECONDS]
+#   benchmarking/wait_and_combine_scaling.sh <JOB_ID> [SLEEP_SECONDS]
 #
 # Example:
-#   benchmarking/wait_and_combine_indel_scaling.sh 8724785
+#   benchmarking/wait_and_combine_scaling.sh 8724785
 #
 # Defaults:
 #   SLEEP_SECONDS=60
@@ -31,7 +31,8 @@ while qstat 2>/dev/null | awk 'NR>2{print $1}' | grep -q "^${JOB_ID}$"; do
 done
 
 echo "$(date) job ${JOB_ID} finished; combining results"
-python "${SCRIPT_DIR}/combine_unified_indel_scaling.py" \
-  --out "${ROOT_DIR}/benchmarking/results/wasp2_unified_indel_scaling_COMBINED.tsv"
+python "${SCRIPT_DIR}/combine_unified_scaling.py" \
+  --out "${ROOT_DIR}/benchmarking/results/wasp2_unified_scaling_COMBINED.tsv"
 
 echo "Done."
+
