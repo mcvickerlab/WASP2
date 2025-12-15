@@ -914,8 +914,11 @@ fn write_fastq_record<W: Write>(
     // Sequence
     if hap.is_reverse {
         seq_buf.clear();
-        seq_buf.reserve(hap.sequence.len());
-        seq_buf.extend(hap.sequence.iter().rev().map(|&b| complement_base(b)));
+        seq_buf.resize(hap.sequence.len(), 0);
+        let len = hap.sequence.len();
+        for i in 0..len {
+            seq_buf[i] = complement_base(hap.sequence[len - 1 - i]);
+        }
         writer.write_all(seq_buf)?;
     } else {
         writer.write_all(&hap.sequence)?;
@@ -924,14 +927,15 @@ fn write_fastq_record<W: Write>(
 
     // Quals (+33, reverse if needed)
     qual_buf.clear();
-    qual_buf.reserve(hap.quals.len());
+    qual_buf.resize(hap.quals.len(), 0);
     if hap.is_reverse {
-        for &q in hap.quals.iter().rev() {
-            qual_buf.push(q + 33);
+        let len = hap.quals.len();
+        for i in 0..len {
+            qual_buf[i] = hap.quals[len - 1 - i] + 33;
         }
     } else {
-        for &q in &hap.quals {
-            qual_buf.push(q + 33);
+        for (dst, &q) in qual_buf.iter_mut().zip(&hap.quals) {
+            *dst = q + 33;
         }
     }
     writer.write_all(qual_buf)?;
