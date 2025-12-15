@@ -158,3 +158,58 @@ def quickbench_snv_variants() -> List[Variant]:
         Variant(chrom="chr1", start=110, ref="C", alt="T", genotype="C|T"),
     ]
 
+
+def quickbench_indel_variants() -> List[Variant]:
+    # Simple 2bp insertion represented with an anchor base (VCF-style):
+    # ref="A", alt="ACG" → +2 bp net insertion.
+    return [Variant(chrom="chr1", start=100, ref="A", alt="ACG", genotype="A|ACG")]
+
+
+def write_synthetic_bam_indel(path: Path) -> None:
+    """Write a tiny coordinate-sorted paired-end BAM for INDEL quickbench.
+
+    Includes:
+    - One pair overlapping a +2bp insertion (hap2 differs; hap1 matches original)
+    - One pair with no overlaps
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    header = pysam.AlignmentHeader.from_dict(
+        {
+            "HD": {"VN": "1.0", "SO": "coordinate"},
+            "SQ": [{"SN": "chr1", "LN": 1000}],
+        }
+    )
+
+    unsorted_path = path.with_suffix(".unsorted.bam")
+    with pysam.AlignmentFile(unsorted_path, "wb", header=header) as out:
+        # Pair I: R1 overlaps insertion at ref pos 100 (read starts at 90).
+        # Original sequence matches hap1 ("A" at the anchor base), so only hap2 differs.
+        r1_i = ("T" * 5) + ("A" * 40) + ("C" * 5)  # length 50, distinct ends
+        r2_i = "G" * 50
+        _write_pair(
+            out,
+            header=header,
+            qname="pairI",
+            r1_start=90,
+            r2_start=400,
+            r1_seq=r1_i,
+            r2_seq=r2_i,
+        )
+
+        # Pair N: no overlap with the variant.
+        r1_n = "C" * 50
+        r2_n = "A" * 50
+        _write_pair(
+            out,
+            header=header,
+            qname="pairN",
+            r1_start=700,
+            r2_start=760,
+            r1_seq=r1_n,
+            r2_seq=r2_n,
+        )
+
+    pysam.sort("-o", str(path), str(unsorted_path))
+    pysam.index(str(path))
+    unsorted_path.unlink(missing_ok=True)

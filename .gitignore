@@ -254,6 +254,7 @@ benchmarking/nature_methods_results/
 benchmarking/biastools_results/
 benchmarking/data/
 benchmarking/quickbench_out/
+benchmarking/dev_harness_out/
 
 # Comparison results
 comparison_results/

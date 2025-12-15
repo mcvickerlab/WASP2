@@ -30,3 +30,27 @@ To keep intermediate files for debugging:
 python benchmarking/quickbench/run_quickbench.py snv-parity --keep-tmp
 ```
 
+## INDEL Parity (No Trim)
+
+This validates that **allele substitution** (including indels) matches between:
+- multi-pass remap (`process_bam` → `intersect_reads` → `remap_all_chromosomes`)
+- unified remap (`unified_make_reads_py`) with `indel_mode=False`
+
+Run:
+
+```bash
+python benchmarking/quickbench/run_quickbench.py indel-parity
+```
+
+## INDEL Trim Invariants (PI-style combos)
+
+This validates the **N+1 trim-combo behavior** for a +2bp insertion, ensuring:
+- output reads stay at the original read length
+- exactly 3 trimmed alternates are emitted for the insertion haplotype
+- `_WASP_..._total_seqs` matches the actual emitted count
+
+Run:
+
+```bash
+python benchmarking/quickbench/run_quickbench.py indel-trim-invariants
+```
