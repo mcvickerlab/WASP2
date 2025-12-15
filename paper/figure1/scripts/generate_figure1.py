@@ -450,6 +450,7 @@ def panel_b_benchmark(ax):
         rust_snp = pd.read_csv(rust_snp_file, sep='\t')
         rust_snp_g = rust_snp.groupby('n_reads')['total_s'].agg(['mean', 'std']).reset_index()
         rust_snp_g['n_reads_m'] = rust_snp_g['n_reads'] / 1e6
+        rust_snp_g['mean_smooth'] = rust_snp_g['mean'].rolling(3, center=True, min_periods=1).mean()
 
         # WASP2-Rust SNV+INDEL (NEW unified pipeline with same_locus_slop=10)
         rust_indel = pd.read_csv(rust_indel_file, sep='\t')
@@ -471,12 +472,28 @@ def panel_b_benchmark(ax):
                        wasp2_py_g['mean']+wasp2_py_g['std'], color=python_blue, alpha=0.15)
 
         # Plot WASP2-Rust SNV (orange - distinct from Python blue)
-        ax.plot(rust_snp_g['n_reads_m'], rust_snp_g['mean'], '^-', color=C['rust_snv'],
+        ax.plot(rust_snp_g['n_reads_m'], rust_snp_g['mean_smooth'], '^-', color=C['rust_snv'],
                 label='WASP2-Rust (SNV)', lw=1.5, ms=2.5)
+        if not rust_snp_g['std'].isna().all():
+            ax.fill_between(
+                rust_snp_g['n_reads_m'],
+                rust_snp_g['mean'] - rust_snp_g['std'],
+                rust_snp_g['mean'] + rust_snp_g['std'],
+                color=C['rust_snv'],
+                alpha=0.15,
+            )
 
         # Plot WASP2-Rust SNV+INDEL (magenta)
         ax.plot(rust_indel_g['n_reads_m'], rust_indel_g['mean_smooth'], 's-', color=C['singlecell'],
                 label='WASP2-Rust (+INDEL)', lw=1.5, ms=2.5)
+        if not rust_indel_g['std'].isna().all():
+            ax.fill_between(
+                rust_indel_g['n_reads_m'],
+                rust_indel_g['mean'] - rust_indel_g['std'],
+                rust_indel_g['mean'] + rust_indel_g['std'],
+                color=C['singlecell'],
+                alpha=0.15,
+            )
 
         ax.set_xlabel('Reads (millions)', fontsize=6)
         ax.set_ylabel('Time (s)', fontsize=6)
