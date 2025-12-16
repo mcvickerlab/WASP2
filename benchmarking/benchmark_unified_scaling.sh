@@ -241,4 +241,3 @@ printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
 
 echo "Task ${SGE_TASK_ID} complete"
 echo "Results: ${log_file}"
-[[ -n "$JOB_ID" ]] && qstat -j "$JOB_ID"
