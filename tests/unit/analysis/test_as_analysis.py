@@ -16,8 +16,6 @@ Run with: pytest tests/unit/analysis/test_as_analysis.py -v
 import numpy as np
 import pandas as pd
 import pytest
-from numpy.typing import NDArray
-from scipy.stats import betabinom
 
 
 class TestOptLinear:
@@ -140,6 +138,21 @@ class TestOptProb:
         # 0.5 should give lower (better) negative log-likelihood
         assert ll_at_half < ll_at_low
         assert ll_at_half < ll_at_high
+
+    def test_near_zero_dispersion(self):
+        """Test that very small dispersion values don't cause NaN/inf."""
+        from analysis.as_analysis import opt_prob
+
+        # Very small rho can cause numerical instability
+        result = opt_prob(0.5, 1e-6, k=50, n=100, log=True)
+        assert np.isfinite(result), "Should handle near-zero dispersion"
+
+    def test_near_one_dispersion(self):
+        """Test behavior with dispersion approaching 1."""
+        from analysis.as_analysis import opt_prob
+
+        result = opt_prob(0.5, 0.99, k=50, n=100, log=True)
+        assert np.isfinite(result), "Should handle high dispersion"
 
 
 class TestOptPhasedNew:

@@ -185,16 +185,8 @@ def vcf_expected_het_sites_sample2() -> List[Dict]:
 # ============================================================================
 
 def pytest_configure(config):
-    """Register custom markers."""
-    config.addinivalue_line(
-        "markers", "slow: marks tests as slow (deselect with '-m \"not slow\"')"
-    )
-    config.addinivalue_line(
-        "markers", "rust: marks tests that require the Rust extension"
-    )
-    config.addinivalue_line(
-        "markers", "integration: marks tests as integration tests"
-    )
+    """Register custom markers not in pytest.ini."""
+    # Note: slow, rust, integration, unit, benchmark markers are in pytest.ini
     config.addinivalue_line(
         "markers", "requires_plink2: marks tests that require plink2"
     )
