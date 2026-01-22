@@ -68,11 +68,13 @@ def run_make_remap_reads_unified(
 
     Returns:
         Dictionary with pipeline statistics including output paths:
+
         - remap_fq1, remap_fq2: Output FASTQ paths
         - bed_file: BED file used (created or provided)
         - pairs_processed, pairs_with_variants, haplotypes_written, etc.
 
-    Example:
+    Example::
+
         # With VCF (converts to BED automatically)
         stats = run_make_remap_reads_unified(
             bam_file="input.bam",

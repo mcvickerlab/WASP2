@@ -1,0 +1,15 @@
+# Documentation build requirements for Read the Docs
+# These are separate from pyproject.toml [project.optional-dependencies.docs]
+# to support Read the Docs builds without the full package installation
+
+# Sphinx and extensions
+sphinx>=5.0
+pydata-sphinx-theme>=0.14
+sphinx-autodoc-typehints>=1.0
+
+# Required for autodoc to import modules
+numpy>=1.21.0
+pandas>=2.0.0
+scipy>=1.10.0
+typer>=0.9.0
+rich>=13.0.0

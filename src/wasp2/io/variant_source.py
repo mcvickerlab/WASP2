@@ -116,7 +116,8 @@ class VariantSource(ABC):
     - Abstract methods: iter_variants, get_genotype, query_region, to_bed
     - Optional: close() for cleanup
 
-    Usage:
+    Example::
+
         # Factory pattern with automatic format detection
         with VariantSource.open("variants.vcf.gz") as source:
             for vg in source.iter_variants(het_only=True):
@@ -128,7 +129,7 @@ class VariantSource(ABC):
         samples = source.samples
         source.close()
 
-    Registering a new format handler:
+        # Registering a new format handler
         @VariantSource.register("vcf", "bcf")
         class VCFSource(VariantSource):
             def __init__(self, path: str):
@@ -154,7 +155,8 @@ class VariantSource(ABC):
         Returns:
             Decorator function that registers the subclass and returns it unchanged.
 
-        Example:
+        Example::
+
             @VariantSource.register("vcf", "bcf")
             class VCFSource(VariantSource):
                 pass
