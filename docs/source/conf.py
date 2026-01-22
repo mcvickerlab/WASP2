@@ -20,9 +20,9 @@ copyright = '2025, Aaron Ho, Jeff Jaureguy, McVicker Lab'
 author = 'Aaron Ho, Jeff Jaureguy, McVicker Lab'
 
 # The short X.Y version
-version = '1.1'
+version = '1.2'
 # The full version, including alpha/beta/rc tags
-release = '1.1.0'
+release = '1.2.0'
 
 # -- General configuration ---------------------------------------------------
 
@@ -78,13 +78,13 @@ html_theme_options = {
         },
     ],
     'use_edit_page_button': True,
-    'announcement': 'WASP2 v1.1.0 with Rust acceleration is now available!',
+    'announcement': 'WASP2 v1.2.0 with PGEN support and enhanced documentation is now available!',
 }
 
 html_context = {
     'github_user': 'Jaureguy760',
     'github_repo': 'WASP2-exp',
-    'github_version': 'rust-optimization',
+    'github_version': 'master',
     'doc_path': 'docs/source',
 }
 
