@@ -1,4 +1,0 @@
-pipeline	total_s	wasp_only_s	reads
-star_wasp	532.61	0	112509428
-wasp2rust_snv	1883.75	469.79	112509428
-wasp1	2961.17	2405.00	112509428

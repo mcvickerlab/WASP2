@@ -1,4 +1,0 @@
-# Ignore generated artifacts from validation runs
-baseline/
-current_run/
-__pycache__/

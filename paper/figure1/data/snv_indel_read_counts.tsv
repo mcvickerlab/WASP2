@@ -1,5 +1,0 @@
-pipeline	variant_type	reads_pre	reads_post	pass_rate
-wasp1	SNV	4749406	4295134	90.4
-wasp2python	SNV	4749437	4312865	90.8
-wasp2rust_snp	SNV	4748962	4307579	90.7
-wasp2rust_indel	SNV	5316738	4819350	90.6
