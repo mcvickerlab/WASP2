@@ -6,12 +6,16 @@ Python Version: 3.9
 # Default Python package Imports
 from pathlib import Path
 from csv import DictReader, reader
+from typing import Optional, Union, Literal
 
 # External package imports
 import pandas as pd
 
-# Local script imports
-from as_analysis import get_imbalance
+# Rust analysis (required; no Python fallback)
+try:
+    from wasp2_rust import analyze_imbalance as rust_analyze_imbalance
+except ImportError:
+    rust_analyze_imbalance = None
 
 
 
@@ -19,46 +23,48 @@ from as_analysis import get_imbalance
 
 class WaspAnalysisData:
 
-    def __init__(self, count_file,
-                 min_count=None,
-                 pseudocount=None,
-                 phased=None,
-                 model=None,
-                 out_file=None,
-                 region_col=None,
-                 groupby=None,
-                ):
-        
+    def __init__(
+        self,
+        count_file: Union[str, Path],
+        min_count: Optional[int] = None,
+        pseudocount: Optional[int] = None,
+        phased: Optional[bool] = None,
+        model: Optional[str] = None,
+        out_file: Optional[str] = None,
+        region_col: Optional[str] = None,
+        groupby: Optional[str] = None,
+    ) -> None:
+
         # User input data
         self.count_file = count_file
-        self.min_count = min_count
-        self.pseudocount = pseudocount
-        self.phased = phased
-        self.model = model
-        self.out_file = out_file
-
-        # Group by feature by default
         self.region_col = region_col
         self.groupby = groupby # group by region or parent?
-        
-        # TODO parse vcf for phased instead of default unphased
-        if not self.phased:
-            self.phased = False
+        self.out_file = out_file
 
+        # TODO parse vcf for phased instead of default unphased
+        if not phased:
+            self.phased: bool = False
+        else:
+            self.phased = phased
 
         # Default to single dispersion model
-        if ((self.model is None) or 
-            (self.model not in {"single", "linear"})):
-            
-            self.model = "single"
-        
-        # Default min count of 10 
-        if self.min_count is None:
-            self.min_count = 10
+        if ((model is None) or
+            (model not in {"single", "linear"})):
+            self.model: Literal["single", "linear"] = "single"
+        else:
+            self.model = model  # type: ignore[assignment]
 
-        if self.pseudocount is None:
+        # Default min count of 10
+        if min_count is None:
+            self.min_count: int = 10
+        else:
+            self.min_count = min_count
+
+        if pseudocount is None:
             # self.pseudocount = 0 # either 0 or 1 for default
-            self.pseudocount = 1
+            self.pseudocount: int = 1
+        else:
+            self.pseudocount = pseudocount
         
         # Read header only for validation
         with open(self.count_file) as f:
@@ -106,75 +112,16 @@ class WaspAnalysisData:
             self.out_file = str(Path.cwd() / "ai_results.tsv") # do this after
 
 
-# class WaspAnalysisData:
-
-#     def __init__(self, count_file,
-#                  min_count=None,
-#                  model=None,
-#                  phased=None,
-#                  out_dir=None,
-#                  out_file=None,
-#                  region_col=None,
-#                  features=None):
-        
-#         # User input data
-#         self.count_file = count_file
-#         self.min_count = min_count
-#         self.model = model
-#         self.phased = phased # TODO
-#         self.out_file = out_file
-#         self.out_dir = out_dir  # should i replace this with out file???
-#         self.region_col = region_col
-#         self.features = features # TODO and also add rna-seq support back
-        
-#         # I need to also add other things for single cell back
-        
-
-#         # Default to single dispersion model
-#         if self.model is None:
-#             self.model = "single"
-        
-#         # Default min count of 10 
-#         if self.min_count is None:
-#             self.min_count = 10
-        
-        
-#         # Automatically parse region col
-#         # Should i do this after the df is created?
-#         if self.region_col is None:
-            
-#             # Read header only
-#             with open(self.count_file) as f:
-#                 count_cols = next(reader(f, delimiter = "\t"))
-            
-#             # Check region_col from file
-#             if "region" in count_cols:
-#                 self.region_col = "region" # default atac naming
-#             elif "peak" in count_cols:
-#                 self.region_col = "peak" # from previous implementation
-#             elif "genes" in count_cols:
-#                 self.region_col = "genes"
-#             else:
-#                 # SNPs only
-#                 # df["region"] = df["chrom"] + "_" + df["pos"].astype(str)
-#                 self.region_col = "region" # should i name as snp?
-
-                
-#         # Create default outfile 
-#         if self.out_file is None:
-#             self.out_file = str(Path.cwd() / "ai_results.tsv") # do this after
-
-
-
-
-def run_ai_analysis(count_file,
-                    min_count=None,
-                    pseudocount=None,
-                    phased=None,
-                    model=None,
-                    out_file=None,
-                    region_col=None,
-                    groupby=None):
+def run_ai_analysis(
+    count_file: Union[str, Path],
+    min_count: Optional[int] = None,
+    pseudocount: Optional[int] = None,
+    phased: Optional[bool] = None,
+    model: Optional[str] = None,
+    out_file: Optional[str] = None,
+    region_col: Optional[str] = None,
+    groupby: Optional[str] = None,
+) -> None:
     
     # Store analysis data and params
     ai_files = WaspAnalysisData(count_file,
@@ -187,18 +134,24 @@ def run_ai_analysis(count_file,
                                 groupby=groupby
                                 )
     
-    # Run analysis pipeline
-    ai_df = get_imbalance(ai_files.count_file,
-                          min_count=ai_files.min_count,
-                          pseudocount=ai_files.pseudocount,
-                          method=ai_files.model,
-                          phased=ai_files.phased,
-                          region_col=ai_files.region_col,
-                          groupby=ai_files.groupby
-                          )
+    # Run analysis pipeline (Rust only)
+    if rust_analyze_imbalance is None:
+        raise RuntimeError(
+            "Rust analysis extension not available. Build it with "
+            "`maturin develop --release` in the WASP2 env."
+        )
+
+    results = rust_analyze_imbalance(
+        str(ai_files.count_file),
+        min_count=ai_files.min_count,
+        pseudocount=ai_files.pseudocount,
+        method=ai_files.model,
+    )
+    ai_df = pd.DataFrame(results)
     
     # Maybe give option to sort or not sort by pval
-    ai_df = ai_df.sort_values(by="fdr_pval", ascending=True)
+    if "fdr_pval" in ai_df.columns:
+        ai_df = ai_df.sort_values(by="fdr_pval", ascending=True)
     
     # Write results
     ai_df.to_csv(ai_files.out_file, sep="\t", header=True, index=False)

@@ -6,7 +6,7 @@ import typer
 import sys
 
 # Local Imports
-from run_mapping import run_make_remap_reads, run_wasp_filt
+from .run_mapping import run_make_remap_reads, run_wasp_filt
 
 
 app = typer.Typer()
@@ -15,18 +15,17 @@ app = typer.Typer()
 
 @app.command()
 def make_reads(
-    bam: Annotated[str, typer.Argument(help="Bam File")],
-    vcf: Annotated[str, typer.Argument(help="VCF File")],
+    bam: Annotated[str, typer.Argument(help="BAM file")],
+    variants: Annotated[str, typer.Argument(help="Variant file (VCF, VCF.GZ, BCF, or PGEN)")],
     samples: Annotated[
         Optional[List[str]],
         typer.Option(
             "--samples",
             "--sample",
             "--samps",
-            "--samps",
             "-s",
             help=(
-                "One or more samples to use in VCF"
+                "One or more samples to use in variant file. "
                 "Accepts comma delimited string, "
                 "or file with one sample per line"
             )
@@ -75,28 +74,82 @@ def make_reads(
         Optional[bool],
         typer.Option("--phased/--unphased",
                      help=(
-                         "If VCF is phased/unphased"
+                         "If variant file is phased/unphased. "
                          "Will autoparse by default "
                          "(PHASED STRONGLY RECOMMENDED-SINGLE END NOT SUPPORTED YET)"
                          )
                      )] = None,
-    ):
-    
+    include_indels: Annotated[
+        bool,
+        typer.Option("--indels/--snps-only",
+                     help=(
+                         "Include indels in addition to SNPs. "
+                         "Default is SNPs only for backward compatibility. "
+                         "Indel support uses variable-length approach."
+                         )
+                     )] = False,
+    max_indel_len: Annotated[
+        int,
+        typer.Option("--max-indel-len",
+                     help=(
+                         "Maximum indel length to process (bp). "
+                         "Indels longer than this are skipped. "
+                         "Prevents excessive computational burden."
+                         ),
+                     min=1
+                     )] = 10,
+    insert_qual: Annotated[
+        int,
+        typer.Option("--insert-qual",
+                     help=(
+                         "Quality score for inserted bases (Phred scale). "
+                         "Used when creating alternate reads with insertions."
+                         ),
+                     min=0,
+                     max=60
+                     )] = 30,
+    max_seqs: Annotated[
+        int,
+        typer.Option("--max-seqs",
+                     help=(
+                         "Maximum number of alternate sequences per read. "
+                         "Reads with more variants are skipped. "
+                         "Prevents combinatorial explosion."
+                         ),
+                     min=1
+                     )] = 64,
+    threads: Annotated[
+        int,
+        typer.Option(
+            "--threads",
+            help="Threads for BAM I/O operations",
+            min=1
+        )
+    ] = 1,
+) -> None:
+    """Generate reads with swapped alleles for remapping."""
+
     # Parse sample string
-    if len(samples) > 0:
-        samples=samples[0]
+    sample_str: Optional[str]
+    if samples is not None and len(samples) > 0:
+        sample_str = samples[0]
     else:
-        samples=None
+        sample_str = None
 
     run_make_remap_reads(
         bam_file=bam,
-        vcf_file=vcf,
-        samples=samples,
+        variant_file=variants,
+        samples=sample_str,
         out_dir=out_dir,
         temp_loc=temp_loc,
         out_json=out_json,
         is_paired=is_paired,
-        is_phased=is_phased
+        is_phased=is_phased,
+        include_indels=include_indels,
+        max_indel_len=max_indel_len,
+        insert_qual=insert_qual,
+        max_seqs=max_seqs,
+        threads=threads
         )
 
 
@@ -149,9 +202,38 @@ def filter_remapped(
             help=(
                 "Also output txt file with kept read names"
                 )
-            )] = None
-    ):
-    
+            )] = None,
+    threads: Annotated[
+        int,
+        typer.Option(
+            "--threads",
+            help="Threads for BAM I/O (Rust filter supports >1)",
+            min=1
+        )
+    ] = 1,
+    use_rust: Annotated[
+        bool,
+        typer.Option(
+            "--use-rust/--no-rust",
+            help="Use Rust acceleration if available (respects WASP2_DISABLE_RUST)",
+        )
+    ] = True,
+    same_locus_slop: Annotated[
+        int,
+        typer.Option(
+            "--same-locus-slop",
+            help=(
+                "Tolerance (bp) for 'same locus' test. "
+                "Allows remapped reads to differ by this many bp. "
+                "Use 2-3 for indels to handle micro-homology shifts. "
+                "Use 0 for strict SNP-only matching."
+            ),
+            min=0
+        )
+    ] = 0,
+) -> None:
+    """Filter remapped reads using WASP algorithm."""
+
     # Checks
     # print(remapped_bam)
     # print(to_remap_bam)
@@ -169,7 +251,10 @@ def filter_remapped(
         wasp_out_bam=out_bam,
         remap_keep_bam=remap_keep_bam,
         remap_keep_file=remap_keep_file,
-        wasp_data_json=wasp_data_json
+        wasp_data_json=wasp_data_json,
+        threads=threads,
+        use_rust=use_rust,
+        same_locus_slop=same_locus_slop,
         )
     
 

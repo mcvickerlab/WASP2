@@ -1,0 +1,136 @@
+[build-system]
+requires = ["maturin>=1.4,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "wasp2"
+version = "1.2.1"
+description = "Allele-specific analysis of next-generation sequencing data with high-performance multi-format variant support (VCF/cyvcf2/PGEN)"
+readme = "README.md"
+authors = [
+    {name = "Aaron Ho"},
+    {name = "Jeff Jaureguy", email = "jeffpjaureguy@gmail.com"},
+    {name = "McVicker Lab"},
+]
+license = {text = "MIT"}
+requires-python = ">=3.10"
+keywords = [
+    "bioinformatics",
+    "genomics",
+    "allele-specific",
+    "ngs",
+    "sequencing",
+    "wasp",
+    "allelic-imbalance",
+    "plink2",
+    "pgen",
+    "vcf",
+    "cyvcf2",
+    "high-performance",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Typing :: Typed",
+]
+
+dependencies = [
+    "numpy>=1.21.0",
+    "pandas>=2.0.0",
+    "polars>=0.19.0",
+    "scipy>=1.10.0",
+    "pysam>=0.21.0",
+    "pybedtools>=0.9.0",
+    "anndata>=0.8.0",
+    "scanpy>=1.9.0",
+    "typer>=0.9.0",
+    "rich>=13.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "mypy>=1.0",
+    "black>=23.0",
+    "flake8>=6.0",
+    "pre-commit>=3.0",
+    "build>=0.10",
+    "twine>=4.0",
+    "maturin>=1.4",
+]
+docs = [
+    "sphinx>=5.0",
+    "pydata-sphinx-theme>=0.14",
+    "sphinx-autodoc-typehints>=1.0",
+]
+rust = [
+    "maturin>=1.0",
+]
+plink = [
+    "Pgenlib>=0.90",
+]
+cyvcf2 = [
+    "cyvcf2>=0.31.0",
+]
+
+[project.scripts]
+wasp2-count = "counting.__main__:app"
+wasp2-map = "mapping.__main__:app"
+wasp2-analyze = "analysis.__main__:app"
+
+[project.urls]
+Homepage = "https://github.com/Jaureguy760/WASP2-exp"
+Documentation = "https://Jaureguy760.github.io/WASP2-exp/"
+Repository = "https://github.com/Jaureguy760/WASP2-exp"
+Issues = "https://github.com/Jaureguy760/WASP2-exp/issues"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["counting*", "mapping*", "analysis*", "wasp2*"]
+
+[tool.maturin]
+manifest-path = "rust/Cargo.toml"
+python-source = "src"
+python-packages = ["counting", "mapping", "analysis", "wasp2"]
+bindings = "pyo3"
+strip = true
+include = ["LICENSE", "README.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = "-v --strict-markers --tb=short"
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+files = ["src"]
+
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311"]
+include = '\.pyi?$'
+
+[tool.coverage.run]
+source = ["src"]
+omit = ["*/tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
