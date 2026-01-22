@@ -189,6 +189,7 @@ pub fn filter_bam_wasp(
     let mut pos_map: FxHashMap<Vec<u8>, ExpectedPos> = FxHashMap::default();
     let mut remaining: FxHashMap<Vec<u8>, i64> = FxHashMap::default();
     let mut removed_moved: u64 = 0;
+    let mut read_errors: u64 = 0;  // Track BAM read errors
 
     // Buffer for incomplete pairs: keyed by full qname (with WASP suffix)
     // This mimics Python's paired_read_gen which buffers until both mates arrive
@@ -204,7 +205,13 @@ pub fn filter_bam_wasp(
     for rec_res in remapped_reader.records() {
         let rec = match rec_res {
             Ok(r) => r,
-            Err(_) => continue,
+            Err(e) => {
+                read_errors += 1;
+                if read_errors <= 5 {
+                    eprintln!("[WARN] BAM read error in remapped BAM: {}", e);
+                }
+                continue;
+            }
         };
         if rec.is_unmapped()
             || !rec.is_proper_pair()
@@ -395,10 +402,17 @@ pub fn filter_bam_wasp(
     }
 
     let mut kept_written: u64 = 0;
+    let mut to_remap_errors: u64 = 0;
     for rec_res in to_reader.records() {
         let rec = match rec_res {
             Ok(r) => r,
-            Err(_) => continue,
+            Err(e) => {
+                to_remap_errors += 1;
+                if to_remap_errors <= 5 {
+                    eprintln!("[WARN] BAM read error in to_remap BAM: {}", e);
+                }
+                continue;
+            }
         };
         if keep_set.contains(rec.qname()) {
             writer.write(&rec).map_err(|e| {
@@ -406,6 +420,20 @@ pub fn filter_bam_wasp(
             })?;
             kept_written += 1;
         }
+    }
+
+    // Log summary of read errors if any occurred
+    if read_errors > 0 {
+        eprintln!(
+            "[WARN] filter_bam_wasp: {} read errors in remapped BAM (first 5 logged above)",
+            read_errors
+        );
+    }
+    if to_remap_errors > 0 {
+        eprintln!(
+            "[WARN] filter_bam_wasp: {} read errors in to_remap BAM (first 5 logged above)",
+            to_remap_errors
+        );
     }
 
     Ok((kept_written, removed_moved, missing_count))

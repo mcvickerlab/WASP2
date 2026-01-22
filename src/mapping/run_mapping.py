@@ -388,7 +388,7 @@ def check_filt_input(func: Callable[..., Any]) -> Callable[..., Any]:
             try:
                 out_dir = json_dict["out_dir"]
                 bam_prefix = json_dict["bam_prefix"]
-            except:
+            except KeyError:
                 out_dir = Path(kwargs["keep_bam"]).parent
                 bam_prefix = Path(kwargs["keep_bam"]).name.rsplit("_keep.bam")[0]
             

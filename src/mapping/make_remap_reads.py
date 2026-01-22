@@ -1,10 +1,14 @@
+import logging
 import shutil
 import tempfile
+import warnings
 
 from pathlib import Path
 from typing import List
 
 import pysam
+
+logger = logging.getLogger(__name__)
 
 # Rust acceleration (required; no fallback)
 from wasp2_rust import remap_chromosome
@@ -88,6 +92,7 @@ def _write_remap_bam_rust(
     with tempfile.TemporaryDirectory() as tmpdir:
         total_pairs = 0
         total_haps = 0
+        failed_chroms: List[tuple] = []  # Track failures: (chrom, error)
 
         # Process each chromosome with Rust
         for chrom in chromosomes:
@@ -108,8 +113,18 @@ def _write_remap_bam_rust(
                 if pairs > 0:
                     print(f"  {chrom}: {pairs} pairs → {haps} haplotypes")
             except Exception as e:
+                logger.warning(f"Failed to process chromosome {chrom}: {e}")
                 print(f"  {chrom}: Error - {e}")
+                failed_chroms.append((chrom, str(e)))
                 continue
+
+        # Warn if any chromosomes failed
+        if failed_chroms:
+            msg = f"Failed to process {len(failed_chroms)}/{len(chromosomes)} chromosomes: {[c for c, _ in failed_chroms]}"
+            warnings.warn(msg, RuntimeWarning)
+            # Raise if majority failed (likely systemic issue)
+            if len(failed_chroms) > len(chromosomes) // 2:
+                raise RuntimeError(f"Majority of chromosomes failed ({len(failed_chroms)}/{len(chromosomes)}). First error: {failed_chroms[0][1]}")
 
         # Concatenate all R1 files
         r1_files = sorted(Path(tmpdir).glob("*_r1.fq"))

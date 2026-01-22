@@ -1406,7 +1406,9 @@ pub fn process_all_chromosomes_parallel(
         .par_iter()
         .map(|chrom| {
             // Get variants for this chromosome
-            let chrom_variants = variants_by_chrom.get(*chrom).unwrap();
+            let chrom_variants = variants_by_chrom
+                .get(*chrom)
+                .ok_or_else(|| anyhow::anyhow!("Missing variants for chromosome: {}", chrom))?;
 
             // Process this chromosome (opens its own BAM reader)
             swap_alleles_for_chrom(bam_path, chrom_variants, chrom, config)
@@ -1533,7 +1535,9 @@ pub fn process_and_write_parallel<P: AsRef<std::path::Path>>(
     let results: Vec<Result<RemapStats>> = chromosomes
         .par_iter()
         .map(|chrom| {
-            let chrom_variants = variants_by_chrom.get(*chrom).unwrap();
+            let chrom_variants = variants_by_chrom
+                .get(*chrom)
+                .ok_or_else(|| anyhow::anyhow!("Missing variants for chromosome: {}", chrom))?;
             let tx = tx.clone();
 
             // Process chromosome

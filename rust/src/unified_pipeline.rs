@@ -1120,18 +1120,26 @@ pub fn unified_make_reads(
     });
 
     // Optional: Set up keep-no-flip names output
-    let mut keep_no_flip_writer: Option<BufWriter<File>> =
-        config.keep_no_flip_names_path.as_ref().map(|path| {
-            let file = File::create(path).expect("Failed to create keep_no_flip_names file");
-            BufWriter::with_capacity(1024 * 1024, file)
-        });
+    let mut keep_no_flip_writer: Option<BufWriter<File>> = config
+        .keep_no_flip_names_path
+        .as_ref()
+        .map(|path| {
+            File::create(path)
+                .map(|file| BufWriter::with_capacity(1024 * 1024, file))
+                .context("Failed to create keep_no_flip_names file")
+        })
+        .transpose()?;
 
     // Optional: Set up remap names output (for creating correct reference BAM for filter)
-    let mut remap_names_writer: Option<BufWriter<File>> =
-        config.remap_names_path.as_ref().map(|path| {
-            let file = File::create(path).expect("Failed to create remap_names file");
-            BufWriter::with_capacity(1024 * 1024, file)
-        });
+    let mut remap_names_writer: Option<BufWriter<File>> = config
+        .remap_names_path
+        .as_ref()
+        .map(|path| {
+            File::create(path)
+                .map(|file| BufWriter::with_capacity(1024 * 1024, file))
+                .context("Failed to create remap_names file")
+        })
+        .transpose()?;
 
     // Phase 3: Stream BAM and process pairs
     // OPTIMIZATION: Use pre-allocated Record with bam.read() instead of .records() iterator

@@ -62,11 +62,15 @@ impl BamCounter {
             let ref_base: String = tuple.get_item(2)?.extract()?;
             let alt_base: String = tuple.get_item(3)?.extract()?;
 
+            // Use 'N' as fallback for empty/invalid allele strings to avoid panic
+            let ref_char = ref_base.chars().next().unwrap_or('N');
+            let alt_char = alt_base.chars().next().unwrap_or('N');
+
             rust_regions.push(Region {
                 chrom,
                 pos,
-                ref_base: ref_base.chars().next().unwrap(),
-                alt_base: alt_base.chars().next().unwrap(),
+                ref_base: ref_char,
+                alt_base: alt_char,
             });
         }
 
