@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WASP2 Paper Figures - Nature Methods</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-weight: 600;
+        }
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 30px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .figure-card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            overflow: hidden;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .figure-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+        }
+        .figure-card h2 {
+            background: #2c3e50;
+            color: white;
+            padding: 15px 20px;
+            font-size: 16px;
+            font-weight: 500;
+        }
+        .figure-card img {
+            width: 100%;
+            height: auto;
+            display: block;
+            cursor: zoom-in;
+        }
+        .figure-card .info {
+            padding: 15px 20px;
+            background: #fafafa;
+            border-top: 1px solid #eee;
+            font-size: 13px;
+            color: #666;
+        }
+        .status {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+        .status.pass { background: #d4edda; color: #155724; }
+        .compliance { margin-top: 10px; font-size: 12px; }
+        .compliance span {
+            display: inline-block;
+            margin-right: 15px;
+            color: #28a745;
+        }
+        /* Modal for full-size view */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9);
+            z-index: 1000;
+            cursor: zoom-out;
+        }
+        .modal img {
+            max-width: 95%;
+            max-height: 95%;
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        .modal.active { display: block; }
+    </style>
+</head>
+<body>
+    <h1>WASP2 Paper Figures — Nature Methods Submission</h1>
+
+    <div class="gallery">
+        <div class="figure-card">
+            <h2>Figure 1: Read Mapping Pipeline <span class="status pass">✓ PASS</span></h2>
+            <img src="figure1/plots/figure1_outline.png" alt="Figure 1" onclick="openModal(this.src)">
+            <div class="info">
+                Pipeline overview, speed benchmarks (8 threads), read retention
+                <div class="compliance">
+                    <span>✓ 177.8mm width</span>
+                    <span>✓ 300 DPI</span>
+                    <span>✓ Colorblind-safe</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="figure-card">
+            <h2>Figure 2: Allele Counting Benchmarks <span class="status pass">✓ PASS</span></h2>
+            <img src="figure2/plots/figure2.png" alt="Figure 2" onclick="openModal(this.src)">
+            <div class="info">
+                GATK/phASER comparison, correlation, bias reduction
+                <div class="compliance">
+                    <span>✓ 180mm width</span>
+                    <span>✓ 300 DPI</span>
+                    <span>✓ 8pt labels</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="figure-card">
+            <h2>Figure 3: Statistical Analysis <span class="status pass">✓ PASS</span></h2>
+            <img src="figure3/plots/figure3.png" alt="Figure 3" onclick="openModal(this.src)">
+            <div class="info">
+                Methods schematic, QQ plots (6 of 14+ methods, λ per method), volcano, imprinting (+5 genes), QTL replication (RNA 45.4%, ATAC 41.9%)
+                <div class="compliance">
+                    <span>✓ 180mm width</span>
+                    <span>✓ 300 DPI</span>
+                    <span>✓ λ per method</span>
+                    <span>✓ 137 RNA + 137 ATAC samples</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="figure-card">
+            <h2>Figure 4: Single-Cell ATAC Analysis <span class="status pass">✓ PASS</span></h2>
+            <img src="figure4/plots/figure4.png" alt="Figure 4" onclick="openModal(this.src)">
+            <div class="info">
+                Cell QC, TSS enrichment, allelic ratio (median=0.500), coverage
+                <div class="compliance">
+                    <span>✓ 177.8mm width</span>
+                    <span>✓ 300 DPI</span>
+                    <span>✓ Median reported</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="modal" onclick="closeModal()">
+        <img id="modal-img" src="" alt="Full size">
+    </div>
+
+    <script>
+        function openModal(src) {
+            document.getElementById('modal-img').src = src;
+            document.getElementById('modal').classList.add('active');
+        }
+        function closeModal() {
+            document.getElementById('modal').classList.remove('active');
+        }
+        document.addEventListener('keydown', e => { if(e.key === 'Escape') closeModal(); });
+    </script>
+</body>
+</html>

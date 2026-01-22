@@ -274,3 +274,11 @@ benchmarking/wasp1_source/
 test_gatk_output.table
 *.table
 .serena/
+results/atac_analysis/
+
+# Large benchmark data (regenerated from scripts)
+paper/figure2/data/hg00731/
+paper/figure2/data/gm12878/
+!paper/figure2/data/timing_results.json
+results/atac_analysis/
+paper/figure2/tools/STAR-2.7.4a/

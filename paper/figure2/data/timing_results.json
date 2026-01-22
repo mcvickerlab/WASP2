@@ -1,0 +1,18 @@
+{
+  "timestamp": "2025-12-17T19:58:28-08:00",
+  "threads": 8,
+  "host": "iblm-cluster-1.salk.edu",
+  "datasets": {
+    "hg00731_rnaseq": {
+      "description": "HG00731 RNA-seq, 56M reads",
+      "bam": "/iblm/netapp/data3/jjaureguy/gvl_files/wasp2/WASP2_extensive_evaluation/WASP2_current/cvpc/WASP2-exp/benchmarking/star_wasp_comparison/results/wasp2rust_fair_snv_2025-12-16_21-52-27/wasp_filtered.bam",
+      "vcf": "/iblm/netapp/data3/jjaureguy/gvl_files/wasp2/WASP2_extensive_evaluation/WASP2_current/cvpc/WASP2-exp/paper/figure2/data/hg00731/HG00731_het_only_chr.vcf.v4.2.gz",
+      "sample": "HG00731",
+      "timing": {
+        "wasp2_rust_s": 35.130416825,
+        "gatk_s": 762.880353298,
+        "phaser_s": 90.151221730
+      }
+    }
+  }
+}
