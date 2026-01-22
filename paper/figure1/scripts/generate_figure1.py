@@ -408,8 +408,8 @@ def panel_a_architecture(ax):
     ax.text(out3_x + output_w/2, out_y + output_h/2, 'AI\nResults', ha='center', va='center',
             fontsize=5, fontweight='bold', color=C['text'], linespacing=0.85)
 
-    # Panel label
-    ax.text(-0.02, 1.02, 'a', transform=ax.transAxes, fontsize=8, fontweight='bold')
+    # Panel label (uppercase per Nature Methods)
+    ax.text(-0.02, 1.02, 'A', transform=ax.transAxes, fontsize=8, fontweight='bold')
 
 
 def panel_b_benchmark(ax):
@@ -497,13 +497,13 @@ def panel_b_benchmark(ax):
 
         ax.set_xlabel('Reads (millions)', fontsize=6)
         ax.set_ylabel('Time (s)', fontsize=6)
-        ax.legend(loc='upper left', fontsize=4.5, framealpha=0.95)
+        ax.legend(loc='upper left', fontsize=5, framealpha=0.95)
         ax.set_xlim(left=0)
         ax.set_ylim(bottom=0)
         ax.grid(True, alpha=0.15, lw=0.3)
         ax.set_title('ATAC-seq (GM12878)', fontsize=6, fontweight='bold')
 
-    ax.text(-0.15, 1.05, 'b', transform=ax.transAxes, fontsize=8, fontweight='bold')
+    ax.text(-0.15, 1.05, 'B', transform=ax.transAxes, fontsize=8, fontweight='bold')
 
 
 def panel_c_filtering(ax):
@@ -606,10 +606,10 @@ def panel_c_filtering(ax):
 
     if len(results) >= 2:
         pipeline_order = ['wasp2python', 'wasp2rust_snp']
-        pipeline_labels = ['WASP2-\nPython', 'WASP2-Rust\n(SNV)']
+        pipeline_labels = ['Python', 'Rust\n(SNV)']
         if 'wasp2rust_indel' in results:
             pipeline_order.append('wasp2rust_indel')
-            pipeline_labels.append('WASP2-Rust\n(+INDEL)')
+            pipeline_labels.append('Rust\n(+INDEL)')
 
         x = np.arange(len(pipeline_order))
         width = 0.35
@@ -665,17 +665,17 @@ def panel_c_filtering(ax):
 
         for i, (post_val, rate) in enumerate(zip(post_totals / 1e6, pass_rates)):
             ax.text(i + width/2, post_val + 0.15, f"{rate:.1f}%",
-                    ha='center', fontsize=4.5, color=C['text'], fontweight='bold')
+                    ha='center', fontsize=5, color=C['text'], fontweight='bold')
 
         ax.set_xticks(x)
-        ax.set_xticklabels(pipeline_labels, fontsize=4.5)
+        ax.set_xticklabels(pipeline_labels, fontsize=5)
         ax.set_ylabel('Variant-overlapping\nreads (M)', fontsize=5)
         type_handles = [
             Patch(facecolor=type_colors['snv_only'], label='SNV-only'),
             Patch(facecolor=type_colors['indel_only'], label='INDEL-only'),
             Patch(facecolor=type_colors['both'], label='SNV+INDEL'),
         ]
-        ax.legend(handles=type_handles, fontsize=3.8, loc='upper right', framealpha=0.95)
+        ax.legend(handles=type_handles, fontsize=5, loc='upper right', framealpha=0.95)
         ax.text(
             0.02,
             0.98,
@@ -683,13 +683,13 @@ def panel_c_filtering(ax):
             transform=ax.transAxes,
             ha='left',
             va='top',
-            fontsize=3.6,
+            fontsize=5,
             color=C['text_light'],
         )
         ax.set_ylim(bottom=0, top=max(pre_totals / 1e6) * 1.25)
         ax.set_title('ATAC-seq (GM12878)', fontsize=6, fontweight='bold')
 
-    ax.text(-0.15, 1.05, 'c', transform=ax.transAxes, fontsize=8, fontweight='bold')
+    ax.text(-0.15, 1.05, 'C', transform=ax.transAxes, fontsize=8, fontweight='bold')
 
 
 def panel_d_rnaseq_benchmark(ax):
@@ -766,12 +766,12 @@ def panel_d_rnaseq_benchmark(ax):
 
     if len(times) >= 3:
         pipeline_order = ['star_wasp', 'wasp2rust_snv', 'wasp2rust_indel', 'wasp2python', 'wasp1']
-        # Use 3-line Rust labels to reduce horizontal crowding in narrow panels
+        # Concise 2-line labels for readability at 5pt minimum
         pipeline_labels = [
-            'STAR+\nWASP',
-            'WASP2-\nRust\n(SNV)',
-            'WASP2-\nRust\n(+INDEL)',
-            'WASP2-\nPython',
+            'STAR\nWASP',
+            'Rust\n(SNV)',
+            'Rust\n(+INDEL)',
+            'Python',
             'WASP1',
         ]
         colors = ['#56B4E9', C['rust_snv'], C['singlecell'], '#3776AB', C['wasp1']]
@@ -793,15 +793,15 @@ def panel_d_rnaseq_benchmark(ax):
         for i, (bar, time_min) in enumerate(zip(bars, times_min)):
             ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.5,
                    f'{time_min:.1f}m',
-                   ha='center', fontsize=4.5, color=C['text'], fontweight='bold')
+                   ha='center', fontsize=5, color=C['text'], fontweight='bold')
 
         ax.set_xticks(x)
-        ax.set_xticklabels(valid_labels, fontsize=4.5)
+        ax.set_xticklabels(valid_labels, fontsize=5)
         ax.set_ylabel('Time (min)', fontsize=5)
         ax.set_ylim(bottom=0, top=max(times_min) * 1.15)
         ax.set_title('RNA-seq (HG00731)', fontsize=6, fontweight='bold')
 
-    ax.text(-0.15, 1.05, 'd', transform=ax.transAxes, fontsize=8, fontweight='bold')
+    ax.text(-0.15, 1.05, 'D', transform=ax.transAxes, fontsize=8, fontweight='bold')
 
 
 def panel_e_rnaseq_filtering(ax):
@@ -907,16 +907,16 @@ def panel_e_rnaseq_filtering(ax):
         pipeline_labels = []
         if 'star_wasp' in results:
             pipeline_order.append('star_wasp')
-            pipeline_labels.append('STAR+\nWASP')
+            pipeline_labels.append('STAR\nWASP')
         if 'wasp2rust_snv' in results:
             pipeline_order.append('wasp2rust_snv')
-            pipeline_labels.append('WASP2-\nRust\n(SNV)')
+            pipeline_labels.append('Rust\n(SNV)')
         if 'wasp2rust_indel' in results:
             pipeline_order.append('wasp2rust_indel')
-            pipeline_labels.append('WASP2-\nRust\n(+INDEL)')
+            pipeline_labels.append('Rust\n(+INDEL)')
         if 'wasp2python' in results:
             pipeline_order.append('wasp2python')
-            pipeline_labels.append('WASP2-\nPython')
+            pipeline_labels.append('Python')
 
         x = np.arange(len(pipeline_order))
         width = 0.35
@@ -965,17 +965,17 @@ def panel_e_rnaseq_filtering(ax):
 
         for i, (post_val, rate) in enumerate(zip(post_totals / 1e6, pass_rates)):
             ax.text(i + width/2, post_val + 0.10, f"{rate:.1f}%",
-                    ha='center', fontsize=4.5, color=C['text'], fontweight='bold')
+                    ha='center', fontsize=5, color=C['text'], fontweight='bold')
 
         ax.set_xticks(x)
-        ax.set_xticklabels(pipeline_labels, fontsize=4.5)
+        ax.set_xticklabels(pipeline_labels, fontsize=5)
         ax.set_ylabel('Variant-overlapping\nread pairs (M)', fontsize=5)
         type_handles = [
             Patch(facecolor=type_colors['snv_only'], label='SNV-only'),
             Patch(facecolor=type_colors['indel_only'], label='INDEL-only'),
             Patch(facecolor=type_colors['both'], label='SNV+INDEL'),
         ]
-        ax.legend(handles=type_handles, fontsize=3.8, loc='upper right', framealpha=0.95)
+        ax.legend(handles=type_handles, fontsize=5, loc='upper right', framealpha=0.95)
         ax.text(
             0.02,
             0.98,
@@ -983,13 +983,13 @@ def panel_e_rnaseq_filtering(ax):
             transform=ax.transAxes,
             ha='left',
             va='top',
-            fontsize=3.6,
+            fontsize=5,
             color=C['text_light'],
         )
         ax.set_ylim(bottom=0, top=max(pre_totals / 1e6) * 1.25)
         ax.set_title('RNA-seq (HG00731)', fontsize=6, fontweight='bold')
 
-    ax.text(-0.15, 1.05, 'e', transform=ax.transAxes, fontsize=8, fontweight='bold')
+    ax.text(-0.15, 1.05, 'E', transform=ax.transAxes, fontsize=8, fontweight='bold')
 
 
 def generate_figure1():

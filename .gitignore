@@ -273,3 +273,4 @@ benchmarking/wasp1_source/
 # Temporary test files
 test_gatk_output.table
 *.table
+.serena/
