@@ -1,0 +1,122 @@
+# Security Dependency Scanning Workflow
+# Scans Python and Rust dependencies for known vulnerabilities
+
+name: Security
+
+on:
+  push:
+    branches: [master, main, develop]
+    paths:
+      - 'pyproject.toml'
+      - 'requirements.txt'
+      - 'rust/Cargo.toml'
+      - 'rust/Cargo.lock'
+      - '.github/workflows/security.yml'
+  pull_request:
+    branches: [master, main]
+  schedule:
+    - cron: '0 9 * * 1'  # Weekly on Mondays at 9:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  python-audit:
+    name: Python Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install pip-audit
+          pip install -e ".[dev]" || pip install numpy pandas polars scipy pysam pybedtools anndata scanpy typer rich
+
+      - name: Run pip-audit
+        continue-on-error: true
+        run: |
+          pip-audit --desc --format markdown --output pip-audit-report.md
+          echo "## Python Dependency Audit Results" >> $GITHUB_STEP_SUMMARY
+          cat pip-audit-report.md >> $GITHUB_STEP_SUMMARY || echo "No vulnerabilities found." >> $GITHUB_STEP_SUMMARY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: python-audit-report
+          path: pip-audit-report.md
+          retention-days: 30
+          if-no-files-found: warn
+
+  rust-audit:
+    name: Rust Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cargo/bin/cargo-audit
+          key: ${{ runner.os }}-cargo-audit-${{ hashFiles('rust/Cargo.lock') }}
+
+      - name: Install and run cargo-audit
+        continue-on-error: true
+        working-directory: rust
+        run: |
+          cargo install cargo-audit --quiet
+          cargo audit --json > cargo-audit-report.json
+          echo "## Rust Dependency Audit Results" >> $GITHUB_STEP_SUMMARY
+          cargo audit 2>&1 | head -100 >> $GITHUB_STEP_SUMMARY || echo "No vulnerabilities found." >> $GITHUB_STEP_SUMMARY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rust-audit-report
+          path: rust/cargo-audit-report.json
+          retention-days: 30
+          if-no-files-found: warn
+
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          allow-licenses: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, PSF-2.0, LGPL-2.1, LGPL-3.0
+          comment-summary-in-pr: always
+
+  codeql:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: python
+          queries: security-and-quality
+
+      - uses: github/codeql-action/autobuild@v3
+
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:python"
