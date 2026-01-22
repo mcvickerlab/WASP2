@@ -4,14 +4,53 @@ from typing_extensions import Annotated
 
 import typer
 import sys
+from rich.console import Console
 
 # Local Imports
 from .run_mapping import run_make_remap_reads, run_wasp_filt
 
+# Version import for --version flag
+try:
+    from wasp2 import __version__
+except ImportError:
+    __version__ = "unknown"
 
-app = typer.Typer()
-# app = typer.Typer(pretty_exceptions_show_locals=False)
-# app = typer.Typer(pretty_exceptions_short=False)
+console = Console()
+
+
+def version_callback(value: bool) -> None:
+    """Display version information and exit."""
+    if value:
+        console.print(f"wasp2-map version {__version__}")
+        raise typer.Exit()
+
+
+app = typer.Typer(
+    name="wasp2-map",
+    help="WASP mapping pipeline for bias correction",
+    rich_markup_mode="rich",
+    no_args_is_help=True,
+    pretty_exceptions_short=False,
+)
+
+
+@app.callback()
+def main(
+    version: Optional[bool] = typer.Option(
+        None,
+        "--version",
+        "-V",
+        callback=version_callback,
+        is_eager=True,
+        help="Show version and exit.",
+    ),
+) -> None:
+    """
+    [bold magenta]WASP2 Map[/bold magenta]: Unbiased allele-specific read mapping.
+
+    Corrects mapping biases by re-mapping reads with swapped alleles.
+    """
+    pass
 
 @app.command()
 def make_reads(

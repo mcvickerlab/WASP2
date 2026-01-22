@@ -1,38 +1,18 @@
 #!/usr/bin/env python
+"""
+WASP2: Allele-Specific Pipeline for Unbiased Read Mapping.
+
+This is the main entry point for the WASP2 command-line interface.
+"""
 
 from pathlib import Path
 import sys
-import argparse
 
-#TODO MAIN EXECUTABLE 
+# Ensure src directory is in path for development installs
+root_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(root_dir / "src"))
 
+from wasp2.cli import cli
 
-def show_help():
-    print(f"WASP2: Toolkit for allele-specific analysis, and unbiased read-mapping\n")
-    print(f"Code:\thttps://github.com/mcvickerlab/WASP2\n")
-    print(f"Usage:\t WASP2 <command> [options]\n")
-
-    print(f"--Commands--\n")
-    print(f"\tcount:\tCount alleles across reads containing heterozygous snp's")
-    print(f"\tanalysis:\tMeasure allelic-imbalance across genomic regions")
-
-
-def main():
-    root_dir = Path(__file__).parent.parent
-
-    cmd_list = ["count", "analysis"]
-
-    if (len(sys.argv) < 2) or (sys.argv[1] not in cmd_list):
-        show_help()
-        sys.exit()
-    
-    if (sys.argv[1] == "count") or (sys.argv[1] == "analysis"):
-        sys.path.append(str(root_dir / "src" / "analysis"))
-
-        from run_analysis import parse_cmd, run
-        args = parse_cmd()
-        run(args)
-
-
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    cli()

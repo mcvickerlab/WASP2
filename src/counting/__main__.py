@@ -4,16 +4,54 @@ from typing_extensions import Annotated
 
 import typer
 import sys
+from rich.console import Console
 
 # Local Imports
 from .run_counting import run_count_variants
 from .run_counting_sc import run_count_variants_sc
 
-# app = typer.Typer()
-# app = typer.Typer(pretty_exceptions_show_locals=False)
-app = typer.Typer(pretty_exceptions_short=False)
+# Version import for --version flag
+try:
+    from wasp2 import __version__
+except ImportError:
+    __version__ = "unknown"
 
-# TODO GOTTA TEST THIS
+console = Console()
+
+
+def version_callback(value: bool) -> None:
+    """Display version information and exit."""
+    if value:
+        console.print(f"wasp2-count version {__version__}")
+        raise typer.Exit()
+
+
+app = typer.Typer(
+    name="wasp2-count",
+    help="Count alleles in sequencing data (bulk and single-cell)",
+    rich_markup_mode="rich",
+    no_args_is_help=True,
+    pretty_exceptions_short=False,
+)
+
+
+@app.callback()
+def main(
+    version: Optional[bool] = typer.Option(
+        None,
+        "--version",
+        "-V",
+        callback=version_callback,
+        is_eager=True,
+        help="Show version and exit.",
+    ),
+) -> None:
+    """
+    [bold green]WASP2 Count[/bold green]: Process allele-specific read counts.
+
+    Supports both bulk and single-cell workflows with heterozygous SNP filtering.
+    """
+    pass
 
 @app.command()
 def count_variants(
