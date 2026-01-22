@@ -31,25 +31,16 @@ cd "${ROOT_DIR}"
 
 snv_scaling_dir="$(ls -d benchmarking/results/unified_scaling_* 2>/dev/null | sort | tail -1)"
 indel_scaling_dir="$(ls -d benchmarking/results/unified_indel_scaling_* 2>/dev/null | sort | tail -1)"
+echo "Latest SNV scaling dir:   ${snv_scaling_dir}"
+echo "Latest INDEL scaling dir: ${indel_scaling_dir}"
 
-if [ -z "${snv_scaling_dir}" ] || [ ! -f "${snv_scaling_dir}/wasp2_unified_scaling.tsv" ]; then
-  echo "ERROR: missing unified scaling TSV under ${snv_scaling_dir}" >&2
-  exit 1
-fi
-if [ -z "${indel_scaling_dir}" ] || [ ! -f "${indel_scaling_dir}/wasp2_unified_indel_scaling.tsv" ]; then
-  echo "ERROR: missing unified INDEL scaling TSV under ${indel_scaling_dir}" >&2
-  exit 1
-fi
-
-echo "SNV scaling dir:   ${snv_scaling_dir}"
-echo "INDEL scaling dir: ${indel_scaling_dir}"
-
+# Combine across ALL runs, keeping only the latest record per n_reads.
+# This lets us do partial reruns (e.g., a handful of missing/outlier tasks) and
+# have them override older points without requiring a full 1..150 rerun.
 python benchmarking/combine_unified_scaling.py \
-  --pattern "${snv_scaling_dir}/wasp2_unified_scaling.tsv" \
   --out benchmarking/results/wasp2_unified_scaling_COMBINED.tsv
 
 python benchmarking/combine_unified_indel_scaling.py \
-  --pattern "${indel_scaling_dir}/wasp2_unified_indel_scaling.tsv" \
   --out benchmarking/results/wasp2_unified_indel_scaling_COMBINED.tsv
 
 mkdir -p "${FIG_BENCH_DIR}"
@@ -60,8 +51,16 @@ echo "Updated Panel B benchmarks:"
 ls -lh "${FIG_BENCH_DIR}/panel_b_wasp2rust_snv_scaling.tsv" "${FIG_BENCH_DIR}/panel_b_wasp2rust_indel_scaling.tsv"
 
 rnaseq_dir_base="benchmarking/star_wasp_comparison/results"
-rnaseq_snv_dir="$(ls -d ${rnaseq_dir_base}/wasp2rust_fair_* 2>/dev/null | sort | tail -1)"
-rnaseq_indel_dir="$(ls -d ${rnaseq_dir_base}/wasp2rust_indel_rnaseq_v2_* 2>/dev/null | sort | tail -1)"
+rnaseq_snv_dir="$(ls -d ${rnaseq_dir_base}/wasp2rust_fair_snv_* 2>/dev/null | sort | tail -1)"
+if [ -z "${rnaseq_snv_dir}" ]; then
+  # Legacy naming (pre split): wasp2rust_fair_<timestamp>
+  rnaseq_snv_dir="$(ls -d ${rnaseq_dir_base}/wasp2rust_fair_20* 2>/dev/null | sort | tail -1)"
+fi
+
+rnaseq_indel_dir="$(ls -d ${rnaseq_dir_base}/wasp2rust_fair_indel_* 2>/dev/null | sort | tail -1)"
+if [ -z "${rnaseq_indel_dir}" ]; then
+  rnaseq_indel_dir="$(ls -d ${rnaseq_dir_base}/wasp2rust_indel_rnaseq_v2_* 2>/dev/null | sort | tail -1)"
+fi
 
 if [ -z "${rnaseq_snv_dir}" ] || [ ! -f "${rnaseq_snv_dir}/benchmark_results.json" ]; then
   echo "ERROR: missing RNA-seq SNV benchmark_results.json under ${rnaseq_snv_dir}" >&2
@@ -83,4 +82,3 @@ python paper/figure1/scripts/generate_figure1.py
 
 echo "Done. Outputs:"
 ls -lh paper/figure1/plots/figure1.png paper/figure1/plots/figure1.pdf 2>/dev/null || true
-

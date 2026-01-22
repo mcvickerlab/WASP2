@@ -79,12 +79,15 @@ sample="NA12878"
 n_subset=$(($SGE_TASK_ID * 1000000))
 bam_reads=159133307
 bam_prop=$(echo "scale=7; ${n_subset}/${bam_reads}" | bc)
-# Deterministic subsample seeding (publication-friendly).
-# - Default: seed = SGE_TASK_ID (same across SNV vs INDEL runs for fair A/B).
-# - For replicates: pass SEED_BASE at qsub time (e.g. 1000/2000/3000) so each
-#   replicate uses a different but still deterministic subsample.
-SEED_BASE="${SEED_BASE:-0}"
-seed=$((SEED_BASE + SGE_TASK_ID))
+# Deterministic subsample seeding (publication-friendly, reduces squiggles).
+# Use a CONSTANT seed across all read counts so subsamples are nested as N increases:
+#   samtools keeps a read iff hash(qname, seed) < fraction
+# so with fixed seed: fraction=0.4 is a subset of fraction=0.5, etc.
+#
+# For technical replicates: re-run the same array with a different SEED_BASE (and optionally
+# the same RUN_TIMESTAMP so all replicates land in one results TSV for easy mean±std).
+SEED_BASE="${SEED_BASE:-42}"
+seed="${SEED_BASE}"
 
 dir=$(mktemp -d)
 trap 'rm -rf "$dir"' EXIT
