@@ -198,10 +198,17 @@ impl BamCounter {
 
         // For each read, assign to the earliest SNP in encounter order that it overlaps
         let mut read_iter = bam.records();
+        let mut bam_read_errors: u64 = 0;
         while let Some(res) = read_iter.next() {
             let record = match res {
                 Ok(r) => r,
-                Err(_) => continue,
+                Err(e) => {
+                    bam_read_errors += 1;
+                    if bam_read_errors <= 5 {
+                        eprintln!("[WARN] BAM read error #{} on {}: {}", bam_read_errors, chrom, e);
+                    }
+                    continue;
+                }
             };
             if record.is_unmapped()
                 || record.is_secondary()
@@ -283,6 +290,12 @@ impl BamCounter {
                     }
                 }
             }
+        }
+        if bam_read_errors > 0 {
+            eprintln!(
+                "[WARN] {} total BAM read errors encountered on chromosome {}",
+                bam_read_errors, chrom
+            );
         }
 
         Ok(counts)

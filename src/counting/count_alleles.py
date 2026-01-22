@@ -1,9 +1,12 @@
+import logging
 import os
 import timeit
 from pathlib import Path
 from typing import Optional
 
 import polars as pl
+
+logger = logging.getLogger(__name__)
 
 # Try to import Rust acceleration (required; no Python fallback)
 try:
@@ -79,6 +82,7 @@ def make_count_df(bam_file, df, use_rust=True):
     print(f"Using Rust acceleration for BAM counting 🦀 (threads={rust_threads})")
 
     total_start = timeit.default_timer()
+    errors = []
 
     for chrom in chrom_list:
         chrom_df = df.filter(pl.col("chrom") == chrom)
@@ -92,12 +96,16 @@ def make_count_df(bam_file, df, use_rust=True):
         try:
             count_list.extend(count_snp_alleles_rust(bam_file, chrom, snp_list, threads=rust_threads))
         except Exception as e:
-            print(f"Skipping {chrom}: {e}\n")
+            logger.error(f"Failed to count alleles for {chrom}: {e}")
+            errors.append((chrom, str(e)))
         else:
             print(f"{chrom}: Counted {chrom_df.height} SNP's in {timeit.default_timer() - start:.2f} seconds!")
 
     total_end = timeit.default_timer()
     print(f"Counted all SNP's in {total_end - total_start:.2f} seconds!")
+
+    if errors:
+        logger.warning(f"Encountered {len(errors)} error(s) during allele counting: {errors}")
 
     # Previously used str as chrom instead of cat
     chrom_enum = pl.Enum(df.get_column("chrom").cat.get_categories())
