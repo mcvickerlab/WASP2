@@ -1,8 +1,9 @@
 name: Release
 
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - 'v*.*.*'
   workflow_dispatch:
     inputs:
       dry_run:
@@ -12,7 +13,7 @@ on:
         type: boolean
 
 permissions:
-  contents: read
+  contents: write
   id-token: write  # Required for OIDC trusted publishing
 
 env:
@@ -42,11 +43,23 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
+          cache: 'pip'
 
       - name: Set up Rust toolchain
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
-          target: ${{ matrix.target }}
+          targets: ${{ matrix.target }}
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-release-
 
       - name: Install maturin
         run: pip install maturin
@@ -83,6 +96,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
+          cache: 'pip'
 
       - name: Install build dependencies
         run: pip install maturin build
@@ -116,7 +130,7 @@ jobs:
       - name: List distribution files
         run: ls -la dist/
 
-      - name: Publish to PyPI (OIDC)
+      - name: Publish to PyPI (Trusted Publishing)
         if: github.event.inputs.dry_run != 'true'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
@@ -130,22 +144,33 @@ jobs:
           echo "Would have uploaded:"
           ls -la dist/
 
-  publish-github-release:
-    name: Upload to GitHub Release
+  create-github-release:
+    name: Create GitHub Release
     needs: [build-wheels, build-sdist]
     runs-on: ubuntu-latest
-    if: github.event_name == 'release'
+    if: startsWith(github.ref, 'refs/tags/')
     permissions:
       contents: write
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
 
-      - name: Upload release assets
-        uses: softprops/action-gh-release@v1
+      - name: List release files
+        run: ls -la dist/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
           files: dist/*
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

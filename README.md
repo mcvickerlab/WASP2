@@ -6,6 +6,9 @@
   <a href="https://github.com/mcvickerlab/WASP2/actions/workflows/ci.yml">
     <img src="https://github.com/mcvickerlab/WASP2/actions/workflows/ci.yml/badge.svg" alt="CI Status">
   </a>
+  <a href="https://github.com/mcvickerlab/WASP2/actions/workflows/release.yml">
+    <img src="https://github.com/mcvickerlab/WASP2/actions/workflows/release.yml/badge.svg" alt="Release Status">
+  </a>
   <a href="https://codecov.io/gh/mcvickerlab/WASP2">
     <img src="https://codecov.io/gh/mcvickerlab/WASP2/branch/master/graph/badge.svg" alt="codecov">
   </a>
