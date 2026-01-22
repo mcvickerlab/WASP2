@@ -105,13 +105,16 @@ jobs:
           pip install black flake8 mypy
 
       - name: Check formatting with Black
-        run: black --check --diff src/ tests/ || echo "::warning::Black formatting check failed"
+        run: black --check --diff --line-length 100 src/ tests/
+        continue-on-error: true
 
       - name: Lint with Flake8
-        run: flake8 src/ tests/ --max-line-length=100 --ignore=E501,W503,E203 --count --statistics || echo "::warning::Flake8 linting issues found"
+        run: flake8 src/ tests/ --max-line-length=100 --ignore=E501,W503,E203 --count --statistics
+        continue-on-error: true
 
       - name: Type check with mypy
-        run: mypy src/counting/ src/mapping/ src/analysis/ --ignore-missing-imports || echo "::warning::mypy issues found"
+        run: mypy src/counting/ src/mapping/ src/analysis/ --ignore-missing-imports
+        continue-on-error: true
 
   rust-check:
     name: Rust Check
@@ -141,11 +144,13 @@ jobs:
 
       - name: Clippy lints
         working-directory: rust
-        run: cargo clippy --all-targets -- -D warnings || echo "::warning::Clippy warnings found"
+        run: cargo clippy --all-targets -- -D warnings
+        continue-on-error: true
 
       - name: Check Rust formatting
         working-directory: rust
-        run: cargo fmt --check || echo "::warning::Rust formatting issues found"
+        run: cargo fmt --check
+        continue-on-error: true
 
   build:
     name: Build Package
