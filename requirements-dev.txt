@@ -1,0 +1,36 @@
+# WASP2 Development Dependencies
+# Install with: pip install -r requirements-dev.txt
+# Note: Install requirements.txt first
+
+# Include base requirements
+-r requirements.txt
+
+# Testing
+pytest>=7.0
+pytest-cov>=4.0
+
+# Type checking
+mypy>=1.0
+
+# Code formatting
+black>=23.0
+flake8>=6.0
+
+# Pre-commit hooks
+pre-commit>=3.0
+
+# Build tools
+build>=0.10
+twine>=4.0
+maturin>=1.4,<2.0
+
+# Documentation
+sphinx>=5.0
+pydata-sphinx-theme>=0.14
+sphinx-autodoc-typehints>=1.0
+
+# Optional: PGEN format support
+Pgenlib>=0.90
+
+# Optional: cyvcf2 backend (requires htslib)
+# cyvcf2>=0.31.0

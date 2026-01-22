@@ -1,25 +1,26 @@
 # WASP2 Python Dependencies
 # Install with: pip install -r requirements.txt
-# Note: System dependencies (bcftools, samtools, bedtools) must be installed separately
+# Note: System dependencies (bcftools, samtools, bedtools, bwa, plink2) must be installed separately
+# For full environment setup, use: conda env create -f environment.yml
 
 # Data processing
 numpy>=1.21.0
 pandas>=2.0.0
 polars>=0.19.0
-scipy>=1.9.0
+scipy>=1.10.0
+statsmodels>=0.14.0
 
 # Bioinformatics
 pysam>=0.21.0
 pybedtools>=0.9.0
-anndata>=0.9.0
+anndata>=0.10.0,<0.12.0
+scanpy>=1.9.0
+
+# Data formats
+pyarrow>=12.0.0
+h5py>=3.8.0
 
 # CLI
 typer>=0.9.0
+rich>=13.0.0
 typing-extensions>=4.0.0
-
-# Testing
-pytest>=7.0.0
-pytest-cov>=4.0.0
-
-# Type checking
-mypy>=1.0.0

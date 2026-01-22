@@ -6,15 +6,10 @@
 # WASP2: Allele-specific pipeline for unbiased read mapping and allelic-imbalance analysis
 
 ## Requirements
-- Python >= 3.7
-- numpy
-- pandas
-- polars
-- scipy
-- pysam
-- pybedtools
-- typer
-- anndata
+- Python >= 3.10
+- See `environment.yml` for full conda environment
+- See `requirements.txt` for pip dependencies
+- System tools: samtools, bcftools, bedtools, bwa, htslib (via conda)
 
 
 ## Installation

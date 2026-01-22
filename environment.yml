@@ -4,45 +4,53 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  # Core Python
-  - python=3.11.*
+  # Core Python (supports 3.10, 3.11, 3.12)
+  - python>=3.10,<3.13
 
   # Data processing
-  - numpy
-  - pandas
-  - polars
-  - scipy
+  - numpy>=1.21.0
+  - pandas>=2.0.0
+  - polars>=0.19.0
+  - scipy>=1.10.0
+  - statsmodels>=0.14.0
 
-  # Bioinformatics
-  - pysam
-  - pybedtools
-  - bedtools
-  - bcftools
+  # Bioinformatics tools (conda-only)
   - samtools>=1.10  # Required for collate -T option (indel processing)
-  - htslib>=1.10
-  - bwa  # Required for remapping step
-  - anndata
-  - plink2  # For PGEN file format support
+  - bcftools>=1.10
+  - htslib>=1.10    # Includes tabix
+  - bedtools>=2.30.0
+  - bwa             # Required for remapping step
+  - plink2          # For PGEN file format support
+
+  # Bioinformatics Python libraries
+  - pysam>=0.21.0
+  - pybedtools>=0.9.0
+  - anndata>=0.10.0,<0.12.0
+  - scanpy>=1.9.0
+
+  # Data formats
+  - pyarrow>=12.0.0
+  - h5py>=3.8.0
 
   # CLI
-  - typer
-  - rich
-  - typing_extensions
+  - typer>=0.9.0
+  - rich>=13.0.0
+  - typing-extensions>=4.0.0
 
   # Testing
   - pytest>=7.0
-  - pytest-cov
+  - pytest-cov>=4.0
 
   # Type checking
-  - mypy
+  - mypy>=1.0
 
   # Rust build tools
-  - rust
+  - rust>=1.70.0
   - libclang
   - clang
 
-  # Pip dependencies
+  # Pip dependencies (not available on conda)
   - pip
   - pip:
     - Pgenlib>=0.90  # Python bindings for PGEN format
-    - maturin>=1.4
+    - maturin>=1.4,<2.0
