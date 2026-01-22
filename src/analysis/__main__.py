@@ -4,18 +4,55 @@ from typing_extensions import Annotated
 
 import typer
 import sys
+from rich.console import Console
 
 # Local Imports
 from .run_analysis import run_ai_analysis
 from .run_analysis_sc import run_ai_analysis_sc
 from .run_compare_ai import run_ai_comparison
 
-# app = typer.Typer()
-# app = typer.Typer(pretty_exceptions_show_locals=False)
-app = typer.Typer(pretty_exceptions_short=False)
+# Version import for --version flag
+try:
+    from wasp2 import __version__
+except ImportError:
+    __version__ = "unknown"
+
+console = Console()
 
 
-# TODO GOTTA TEST THIS
+def version_callback(value: bool) -> None:
+    """Display version information and exit."""
+    if value:
+        console.print(f"wasp2-analyze version {__version__}")
+        raise typer.Exit()
+
+
+app = typer.Typer(
+    name="wasp2-analyze",
+    help="Analyze allelic imbalance across genomic regions",
+    rich_markup_mode="rich",
+    no_args_is_help=True,
+    pretty_exceptions_short=False,
+)
+
+
+@app.callback()
+def main(
+    version: Optional[bool] = typer.Option(
+        None,
+        "--version",
+        "-V",
+        callback=version_callback,
+        is_eager=True,
+        help="Show version and exit.",
+    ),
+) -> None:
+    """
+    [bold cyan]WASP2 Analyze[/bold cyan]: Measure allelic imbalance.
+
+    Supports bulk analysis, single-cell analysis, and comparative imbalance between groups.
+    """
+    pass
 
 # What should i name this?
 @app.command()

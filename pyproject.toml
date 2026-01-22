@@ -82,6 +82,7 @@ cyvcf2 = [
 ]
 
 [project.scripts]
+wasp2 = "wasp2.cli:cli"
 wasp2-count = "counting.__main__:app"
 wasp2-map = "mapping.__main__:app"
 wasp2-analyze = "analysis.__main__:app"
