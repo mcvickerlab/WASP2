@@ -1,6 +1,25 @@
 <h1 align="center">
 <img src="doc/wasp2_hex_logo_v1.png" width="300">
 </h1>
+
+<p align="center">
+  <a href="https://github.com/mcvickerlab/WASP2/actions/workflows/ci.yml">
+    <img src="https://github.com/mcvickerlab/WASP2/actions/workflows/ci.yml/badge.svg" alt="CI Status">
+  </a>
+  <a href="https://codecov.io/gh/mcvickerlab/WASP2">
+    <img src="https://codecov.io/gh/mcvickerlab/WASP2/branch/master/graph/badge.svg" alt="codecov">
+  </a>
+  <a href="https://pypi.org/project/wasp2/">
+    <img src="https://img.shields.io/pypi/v/wasp2.svg" alt="PyPI version">
+  </a>
+  <a href="https://pypi.org/project/wasp2/">
+    <img src="https://img.shields.io/pypi/pyversions/wasp2.svg" alt="Python versions">
+  </a>
+  <a href="https://github.com/mcvickerlab/WASP2/blob/master/LICENSE">
+    <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License">
+  </a>
+</p>
+
 &nbsp;
 
 # WASP2: Allele-specific pipeline for unbiased read mapping and allelic-imbalance analysis
