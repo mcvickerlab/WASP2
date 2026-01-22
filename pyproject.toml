@@ -69,7 +69,7 @@ dev = [
     "pre-commit>=3.0",
     "build>=0.10",
     "twine>=4.0",
-    "maturin>=1.4",
+    "maturin>=1.4,<2.0",
 ]
 docs = [
     "sphinx>=5.0",
