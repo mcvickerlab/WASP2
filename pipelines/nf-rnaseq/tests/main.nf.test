@@ -1,0 +1,56 @@
+nextflow_pipeline {
+
+    name "Test Pipeline RNASEQ_ASE"
+    script "../main.nf"
+
+    tag "pipeline"
+    tag "wasp2"
+    tag "rnaseq_ase"
+
+    test("RNASEQ_ASE - stub run - paired end") {
+
+        options "-stub"
+
+        when {
+            params {
+                input      = "${projectDir}/assets/samplesheet_test.csv"
+                vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
+                star_index = "${projectDir}/tests/data/star_index"
+                gtf        = "${projectDir}/tests/data/test.gtf"
+                outdir     = "${outputDir}/results"
+            }
+        }
+
+        then {
+            assertAll(
+                // Pipeline completes successfully
+                { assert workflow.success },
+
+                // Workflow emits expected channels (stub mode creates empty channels)
+                { assert workflow.out.wasp_bam != null },
+                { assert workflow.out.counts != null },
+                { assert workflow.out.results != null },
+                { assert workflow.out.versions != null }
+            )
+        }
+    }
+
+    test("RNASEQ_ASE - fails without required params") {
+
+        options "-stub"
+
+        when {
+            params {
+                // Missing required input parameter
+                vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
+                star_index = "${projectDir}/tests/data/star_index"
+                outdir     = "${outputDir}/results_fail"
+            }
+        }
+
+        then {
+            assert workflow.failed
+            assert workflow.exitStatus == 1
+        }
+    }
+}
