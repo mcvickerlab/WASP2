@@ -1,0 +1,57 @@
+name: scatac_count_alleles
+description: Count fragment overlaps at heterozygous SNP positions from scATAC-seq fragments
+keywords:
+  - scatac
+  - single-cell
+  - allelic imbalance
+  - fragments
+  - wasp2
+tools:
+  - bedtools:
+      description: A powerful toolset for genome arithmetic
+      homepage: https://bedtools.readthedocs.io/
+      documentation: https://bedtools.readthedocs.io/
+      licence: ["MIT"]
+  - wasp2:
+      description: WASP2 allelic imbalance analysis tools
+      homepage: https://github.com/Jaureguy760/WASP2
+      licence: ["MIT"]
+
+input:
+  - meta:
+      type: map
+      description: |
+        Groovy Map containing sample information
+        e.g. [ id:'test', single_end:false, cell_barcode_tag:'CB' ]
+  - fragments:
+      type: file
+      description: 10x-compatible fragments.tsv.gz file
+      pattern: "*.tsv.gz"
+  - fragments_tbi:
+      type: file
+      description: Tabix index for fragments file
+      pattern: "*.tsv.gz.tbi"
+  - snp_bed:
+      type: file
+      description: BED file with heterozygous SNP positions (chrom, start, end, ref, alt)
+      pattern: "*.bed"
+
+output:
+  - meta:
+      type: map
+      description: |
+        Groovy Map containing sample information
+        e.g. [ id:'test', single_end:false, cell_barcode_tag:'CB' ]
+  - counts:
+      type: file
+      description: Per-cell fragment overlap counts at SNP positions (barcode, chrom, pos, ref, alt, overlap_count)
+      pattern: "*_allele_counts.tsv"
+  - versions:
+      type: file
+      description: File containing software versions
+      pattern: "versions.yml"
+
+authors:
+  - "@Jaureguy760"
+maintainers:
+  - "@Jaureguy760"

@@ -20,7 +20,7 @@ nextflow_pipeline {
             assertAll(
                 { assert workflow.success },
                 { assert workflow.out.allele_counts != null },
-                { assert workflow.out.pseudobulk != null },
+                { assert workflow.out.imbalance != null },
                 { assert snapshot(
                     workflow.trace.tasks().size(),
                     workflow.trace.tasks()*.name.sort()
@@ -37,6 +37,7 @@ nextflow_workflow {
     workflow "SCATAC"
 
     tag "scatac"
+    tag "workflow"
 
     test("SCATAC workflow - stub run") {
 
@@ -50,7 +51,12 @@ nextflow_workflow {
             workflow {
                 """
                 input[0] = Channel.of([
-                    [ id: 'test_sample' ],
+                    [
+                        id: 'test_sample',
+                        single_end: false,
+                        cell_barcode_tag: 'CB',
+                        chemistry: '10x-atac-v2'
+                    ],
                     file("${projectDir}/tests/stub/fragments.tsv.gz"),
                     file("${projectDir}/tests/stub/fragments.tsv.gz.tbi")
                 ])
@@ -62,9 +68,39 @@ nextflow_workflow {
             assertAll(
                 { assert workflow.success },
                 { assert workflow.out.allele_counts.size() == 1 },
-                { assert workflow.out.pseudobulk.size() == 1 },
+                { assert workflow.out.imbalance.size() == 1 },
                 { assert snapshot(workflow.out.versions).match("scatac_versions") }
             )
+        }
+    }
+
+    test("SCATAC workflow - fails without required vcf param") {
+
+        options "-stub"
+
+        when {
+            params {
+                vcf = null
+                outdir = "$outputDir"
+            }
+            workflow {
+                """
+                input[0] = Channel.of([
+                    [
+                        id: 'test_sample',
+                        single_end: false,
+                        cell_barcode_tag: 'CB',
+                        chemistry: '10x-atac-v2'
+                    ],
+                    file("${projectDir}/tests/stub/fragments.tsv.gz"),
+                    file("${projectDir}/tests/stub/fragments.tsv.gz.tbi")
+                ])
+                """
+            }
+        }
+
+        then {
+            assert workflow.failed
         }
     }
 }
@@ -72,10 +108,12 @@ nextflow_workflow {
 nextflow_process {
 
     name "Test Process SCATAC_COUNT_ALLELES"
-    script "../workflows/scatac.nf"
+    script "../modules/local/scatac_count_alleles/main.nf"
     process "SCATAC_COUNT_ALLELES"
 
     tag "scatac"
+    tag "module"
+    tag "scatac_count_alleles"
 
     test("SCATAC_COUNT_ALLELES - stub") {
 
@@ -88,7 +126,12 @@ nextflow_process {
             process {
                 """
                 input[0] = [
-                    [ id: 'test_cell' ],
+                    [
+                        id: 'test_cell',
+                        single_end: false,
+                        cell_barcode_tag: 'CB',
+                        chemistry: '10x-atac-v2'
+                    ],
                     file("${projectDir}/tests/stub/fragments.tsv.gz"),
                     file("${projectDir}/tests/stub/fragments.tsv.gz.tbi"),
                     file("${projectDir}/tests/stub/variants.bed")

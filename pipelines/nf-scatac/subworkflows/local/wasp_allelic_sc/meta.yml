@@ -1,0 +1,46 @@
+name: wasp_allelic_sc
+description: |
+  WASP2 single-cell allelic imbalance analysis for scATAC-seq data.
+  Converts VCF to BED, counts alleles per cell from fragments,
+  aggregates to pseudo-bulk, and analyzes allelic imbalance.
+keywords:
+  - wasp2
+  - scatac
+  - single-cell
+  - allelic imbalance
+  - fragments
+
+components:
+  - wasp2/vcf_to_bed
+  - local/scatac_count_alleles
+  - wasp2/analyze_imbalance
+
+input:
+  - ch_fragments:
+      description: |
+        Channel containing scATAC fragment files with tabix index.
+        Structure: [ val(meta), path(fragments.tsv.gz), path(fragments.tbi) ]
+  - ch_vcf:
+      description: |
+        Channel containing VCF file with heterozygous SNPs.
+        Structure: [ val(meta), path(vcf), path(tbi) ]
+
+output:
+  - cell_counts:
+      description: |
+        Per-cell fragment overlap counts at heterozygous SNP positions.
+        Note: These are overlap counts, not allele-specific counts.
+        Structure: [ val(meta), path(counts.tsv) ]
+  - imbalance:
+      description: |
+        Allelic imbalance analysis results (uses pseudo-bulk aggregation internally).
+        Structure: [ val(meta), path(results.tsv) ]
+  - versions:
+      description: |
+        File containing software versions.
+        Structure: [ path(versions.yml) ]
+
+authors:
+  - "@Jaureguy760"
+maintainers:
+  - "@Jaureguy760"

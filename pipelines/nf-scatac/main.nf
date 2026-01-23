@@ -3,9 +3,6 @@
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     nf-scatac: Single-Cell ATAC-seq Allelic Imbalance Pipeline
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    Github : https://github.com/Jaureguy760/WASP2-final
-    Issue  : #32
-----------------------------------------------------------------------------------------
 */
 
 nextflow.enable.dsl = 2
@@ -16,15 +13,15 @@ include { PIPELINE_COMPLETION     } from './subworkflows/local/utils_nfscatac_pi
 
 workflow NFSCATAC {
     take:
-    samplesheet
+    samplesheet  // channel: [ val(meta), path(fragments), path(fragments_tbi) ]
 
     main:
     SCATAC ( samplesheet )
 
     emit:
-    allele_counts = SCATAC.out.allele_counts
-    pseudobulk    = SCATAC.out.pseudobulk
-    versions      = SCATAC.out.versions
+    allele_counts = SCATAC.out.allele_counts  // channel: [ val(meta), path(counts.tsv) ]
+    imbalance     = SCATAC.out.imbalance      // channel: [ val(meta), path(results.tsv) ]
+    versions      = SCATAC.out.versions       // channel: [ path(versions.yml) ]
 }
 
 workflow {
@@ -40,6 +37,6 @@ workflow {
 
     PIPELINE_COMPLETION (
         params.outdir,
-        Channel.empty()  // MultiQC not implemented
+        Channel.empty()
     )
 }

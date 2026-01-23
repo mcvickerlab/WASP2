@@ -1,0 +1,87 @@
+nextflow_workflow {
+
+    name "Test Workflow GENERATE_FRAGMENTS"
+    script "../../subworkflows/local/generate_fragments/main.nf"
+    workflow "GENERATE_FRAGMENTS"
+
+    tag "scatac"
+    tag "subworkflow"
+    tag "generate_fragments"
+
+    test("GENERATE_FRAGMENTS - stub: Should generate 10x-compatible fragments") {
+
+        options "-stub"
+
+        when {
+            workflow {
+                """
+                input[0] = Channel.of([
+                    [
+                        id: 'test_sample',
+                        single_end: false,
+                        cell_barcode_tag: 'CB',
+                        chemistry: '10x-atac-v2'
+                    ],
+                    file("${projectDir}/tests/stub/fragments.tsv.gz"),  // Using as placeholder BAM
+                    file("${projectDir}/tests/stub/fragments.tsv.gz.tbi")  // Using as placeholder BAI
+                ])
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert workflow.success },
+                { assert workflow.out.fragments },
+                { assert workflow.out.versions },
+                // Verify output structure: fragments.tsv.gz and .tbi
+                { assert workflow.out.fragments[0][1].name.endsWith('.fragments.tsv.gz') },
+                { assert workflow.out.fragments[0][2].name.endsWith('.tbi') },
+                // Verify meta map preserved
+                { assert workflow.out.fragments[0][0].cell_barcode_tag == 'CB' },
+                { assert snapshot(workflow.out.versions).match("generate_fragments_versions") }
+            )
+        }
+    }
+}
+
+nextflow_process {
+
+    name "Test Process SINTO_FRAGMENTS"
+    script "../../subworkflows/local/generate_fragments/main.nf"
+    process "SINTO_FRAGMENTS"
+
+    tag "scatac"
+    tag "process"
+    tag "sinto_fragments"
+
+    test("SINTO_FRAGMENTS - stub") {
+
+        options "-stub"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [
+                        id: 'test_sample',
+                        single_end: false,
+                        cell_barcode_tag: 'CB'
+                    ],
+                    file("${projectDir}/tests/stub/fragments.tsv.gz"),
+                    file("${projectDir}/tests/stub/fragments.tsv.gz.tbi")
+                ]
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert process.success },
+                { assert process.out.fragments },
+                { assert process.out.versions },
+                { assert snapshot(process.out.versions).match("sinto_versions") }
+            )
+        }
+    }
+}

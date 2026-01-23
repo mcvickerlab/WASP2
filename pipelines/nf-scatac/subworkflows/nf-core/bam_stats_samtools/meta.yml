@@ -1,0 +1,43 @@
+name: bam_stats_samtools
+description: |
+  Run samtools stats and flagstat on BAM files.
+  Produces standard alignment QC metrics.
+keywords:
+  - bam
+  - stats
+  - flagstat
+  - samtools
+  - qc
+
+components:
+  - samtools/stats
+  - samtools/flagstat
+
+input:
+  - ch_bam_bai:
+      description: |
+        Channel containing BAM files with index.
+        Structure: [ val(meta), path(bam), path(bai) ]
+  - ch_fasta:
+      description: |
+        Reference FASTA file for samtools stats.
+        Structure: path(fasta)
+
+output:
+  - stats:
+      description: |
+        Samtools stats output.
+        Structure: [ val(meta), path(stats) ]
+  - flagstat:
+      description: |
+        Samtools flagstat output.
+        Structure: [ val(meta), path(flagstat) ]
+  - versions:
+      description: |
+        File containing software versions.
+        Structure: [ path(versions.yml) ]
+
+authors:
+  - "@nf-core"
+maintainers:
+  - "@Jaureguy760"
