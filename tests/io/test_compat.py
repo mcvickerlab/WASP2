@@ -5,10 +5,15 @@ Verifies that the new VariantSource-based interface produces
 equivalent output to the legacy bcftools-based approach.
 """
 
+import shutil
+
 import pytest
 from pathlib import Path
 
 from wasp2.io.compat import variants_to_bed, vcf_to_bed
+
+# Check if bcftools is available for legacy tests
+BCFTOOLS_AVAILABLE = shutil.which("bcftools") is not None
 
 
 class TestVariantsToBed:
@@ -70,6 +75,7 @@ class TestLegacyVcfToBed:
         """Test that legacy function is available."""
         assert callable(vcf_to_bed)
 
+    @pytest.mark.skipif(not BCFTOOLS_AVAILABLE, reason="bcftools not available")
     def test_legacy_basic_usage(self, sample_vcf, tmp_output_dir):
         """Test basic legacy function usage."""
         output = tmp_output_dir / "legacy.bed"
