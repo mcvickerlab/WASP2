@@ -8,23 +8,25 @@ import warnings
 from pathlib import Path
 
 # local imports
-from filter_variant_data import vcf_to_bed, intersect_vcf_region, parse_intersect_region, parse_intersect_region_new
-from parse_gene_data import make_gene_data, parse_intersect_genes, parse_intersect_genes_new
-from count_alleles import make_count_df
+from .filter_variant_data import vcf_to_bed, intersect_vcf_region, parse_intersect_region, parse_intersect_region_new
+from .parse_gene_data import make_gene_data, parse_intersect_genes, parse_intersect_genes_new
+from .count_alleles import make_count_df
 
 # Should I put this in separate file?
 class WaspCountFiles:
 
-    def __init__(self, bam_file, vcf_file,
+    def __init__(self, bam_file, variant_file,
                  region_file=None, samples=None,
                  use_region_names=False,
                  out_file=None,
-                 temp_loc=None
+                 temp_loc=None,
+                 precomputed_vcf_bed=None,
+                 precomputed_intersect=None
                  ):
-        
+
         # User input files
         self.bam_file = bam_file
-        self.vcf_file = vcf_file
+        self.variant_file = variant_file
         self.region_file = region_file
         self.samples = samples
         self.use_region_names = use_region_names
@@ -57,12 +59,19 @@ class WaspCountFiles:
         if self.temp_loc is None:
             self.temp_loc = str(Path.cwd())
         
-        # Parse vcf and intersect
-        vcf_prefix = re.split(r'.vcf|.bcf', Path(self.vcf_file).name)[0]
-        self.vcf_prefix = vcf_prefix
-        
-        # Filtered vcf output
-        self.vcf_bed = str(Path(self.temp_loc) / f"{vcf_prefix}.bed")
+        # Parse variant file prefix (handle VCF, BCF, PGEN)
+        variant_name = Path(self.variant_file).name
+        if variant_name.endswith('.vcf.gz'):
+            variant_prefix = variant_name[:-7]  # Remove .vcf.gz
+        elif variant_name.endswith('.pgen'):
+            variant_prefix = variant_name[:-5]  # Remove .pgen
+        else:
+            variant_prefix = re.split(r'\.vcf|\.bcf', variant_name)[0]
+        self.variant_prefix = variant_prefix
+
+        # Filtered variant output (or precomputed)
+        self.vcf_bed = precomputed_vcf_bed if precomputed_vcf_bed is not None else str(Path(self.temp_loc) / f"{variant_prefix}.bed")
+        self.skip_vcf_to_bed = precomputed_vcf_bed is not None
         
         # Parse region file
         self.region_type = None # maybe use a boolean flag instead
@@ -72,28 +81,29 @@ class WaspCountFiles:
             
             if re.search(r'\.(.*Peak|bed)(?:\.gz)?$', f_ext, re.I):
                 self.region_type = "regions"
-                self.intersect_file = str(Path(self.temp_loc) / f"{vcf_prefix}_intersect_regions.bed")
+                self.intersect_file = precomputed_intersect if precomputed_intersect is not None else str(Path(self.temp_loc) / f"{variant_prefix}_intersect_regions.bed")
                 self.is_gene_file = False
             elif re.search(r'\.g[tf]f(?:\.gz)?$', f_ext, re.I):
                 self.region_type = "genes"
-                self.intersect_file = str(Path(self.temp_loc) / f"{vcf_prefix}_intersect_genes.bed")
+                self.intersect_file = precomputed_intersect if precomputed_intersect is not None else str(Path(self.temp_loc) / f"{variant_prefix}_intersect_genes.bed")
                 self.is_gene_file = True
                 gtf_prefix = re.split(r'.g[tf]f', Path(self.region_file).name)[0]
                 self.gtf_bed = str(Path(self.temp_loc) / f"{gtf_prefix}.bed")
                 self.use_region_names = True # Use feature attributes as region names
             elif re.search(r'\.gff3(?:\.gz)?$', f_ext, re.I):
                 self.region_type = "genes"
-                self.intersect_file = str(Path(self.temp_loc) / f"{vcf_prefix}_intersect_genes.bed")
+                self.intersect_file = precomputed_intersect if precomputed_intersect is not None else str(Path(self.temp_loc) / f"{variant_prefix}_intersect_genes.bed")
                 self.is_gene_file = True
                 gtf_prefix = re.split(r'.gff3', Path(self.region_file).name)[0]
                 self.gtf_bed = str(Path(self.temp_loc) / f"{gtf_prefix}.bed")
                 self.use_region_names = True # Use feature attributes as region names
             else:
-                self.region_file = None
-                print("invalid ftype") # Make this raise an error later
+                raise ValueError(f"Invalid region file type. Expected .bed, .gtf, or .gff3, got: {self.region_file}")
 
         else:
-            self.intersect_file = self.vcf_bed
+            # No region file: intersect file defaults to vcf_bed (or provided precomputed)
+            self.intersect_file = precomputed_intersect if precomputed_intersect is not None else self.vcf_bed
+        self.skip_intersect = precomputed_intersect is not None
         
         # TODO UPDATE THIS WHEN I ADD AUTOPARSERS
         if self.is_gene_file:
@@ -122,7 +132,7 @@ def tempdir_decorator(func):
 
 
 @tempdir_decorator
-def run_count_variants(bam_file, vcf_file,
+def run_count_variants(bam_file, variant_file,
                        region_file=None,
                        samples=None,
                        use_region_names=None,
@@ -130,17 +140,23 @@ def run_count_variants(bam_file, vcf_file,
                        temp_loc=None,
                        gene_feature=None,
                        gene_attribute=None,
-                       gene_parent=None
+                       gene_parent=None,
+                       use_rust=True,
+                       precomputed_vcf_bed=None,
+                       precomputed_intersect=None,
+                       include_indels=False
                        ):
-    
-    
+
+
     # call the data class
-    count_files = WaspCountFiles(bam_file, vcf_file,
+    count_files = WaspCountFiles(bam_file, variant_file,
                                  region_file=region_file,
                                  samples=samples,
                                  use_region_names=use_region_names,
                                  out_file=out_file,
-                                 temp_loc=temp_loc
+                                 temp_loc=temp_loc,
+                                 precomputed_vcf_bed=precomputed_vcf_bed,
+                                 precomputed_intersect=precomputed_intersect
                                 )
     
     # print(*vars(count_files).items(), sep="\n") # For debugging
@@ -154,11 +170,13 @@ def run_count_variants(bam_file, vcf_file,
             
     
     # Create Intermediary Files
-    vcf_to_bed(vcf_file=count_files.vcf_file,
-               out_bed=count_files.vcf_bed,
-               samples=count_files.samples,
-               include_gt=with_gt
-              )
+    if not count_files.skip_vcf_to_bed:
+        vcf_to_bed(vcf_file=count_files.variant_file,
+                   out_bed=count_files.vcf_bed,
+                   samples=count_files.samples,
+                   include_gt=with_gt,
+                   include_indels=include_indels
+                  )
     
     
     # TODO PARSE GENE FEATURES AND ATTRIBUTES
@@ -187,9 +205,10 @@ def run_count_variants(bam_file, vcf_file,
             regions_to_intersect = count_files.region_file
             region_col_name = None # Defaults to 'region' as region name
         
-        intersect_vcf_region(vcf_file=count_files.vcf_bed,
-                             region_file=regions_to_intersect,
-                             out_file=count_files.intersect_file)
+        if not count_files.skip_intersect:
+            intersect_vcf_region(vcf_file=count_files.vcf_bed,
+                                 region_file=regions_to_intersect,
+                                 out_file=count_files.intersect_file)
     
 
     # Create Variant Dataframe
@@ -222,10 +241,11 @@ def run_count_variants(bam_file, vcf_file,
     
     # Count
     count_df = make_count_df(bam_file=count_files.bam_file,
-                             df=df)
+                             df=df,
+                             use_rust=use_rust)
     
     # Write counts
-    count_df.write_csv(count_files.out_file, has_header=True, separator="\t")
+    count_df.write_csv(count_files.out_file, include_header=True, separator="\t")
     
     # Should i return for use in analysis pipeline?
     # return count_df

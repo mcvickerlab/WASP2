@@ -1,12 +1,28 @@
 <h1 align="center">
 <img src="doc/wasp2_hex_logo_v1.png" width="300">
 </h1>
-&nbsp;
+
+<p align="center">
+  <a href="https://github.com/Jaureguy760/WASP2-exp/actions/workflows/docs.yml">
+    <img src="https://github.com/Jaureguy760/WASP2-exp/actions/workflows/docs.yml/badge.svg" alt="Docs">
+  </a>
+  <a href="https://jaureguy760.github.io/WASP2-exp/">
+    <img src="https://img.shields.io/badge/docs-GitHub%20Pages-blue" alt="Documentation">
+  </a>
+  <a href="https://test.pypi.org/project/wasp2-rust/">
+    <img src="https://img.shields.io/badge/PyPI-v1.1.0-orange" alt="PyPI">
+  </a>
+  <a href="https://github.com/Jaureguy760/WASP2-exp/blob/master/LICENSE">
+    <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
+  </a>
+  <img src="https://img.shields.io/badge/python-3.9+-blue" alt="Python">
+  <img src="https://img.shields.io/badge/rust-1.70+-orange" alt="Rust">
+</p>
 
 # WASP2: Allele-specific pipeline for unbiased read mapping and allelic-imbalance analysis
 
 ## Requirements
-- Python >= 3.7
+- Python >= 3.10
 - numpy
 - pandas
 - polars
@@ -15,12 +31,158 @@
 - pybedtools
 - typer
 - anndata
+- **Optional**: cyvcf2 (for high-performance VCF parsing - ~7x faster)
+- **Optional**: Pgenlib (for PLINK2 PGEN format support - ~25x faster variant I/O)
+- Rust extension (PyO3) built locally; the Python CLI now routes counting, mapping, and analysis through Rust. Build it after creating the conda env:
+  ```bash
+  conda activate WASP2
+  export LIBCLANG_PATH=$CONDA_PREFIX/lib
+  export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH
+  export BINDGEN_EXTRA_CLANG_ARGS="-I/usr/include"
+  (cd rust && maturin develop --release)
+  ```
 
 
 ## Installation
+
+### Quick Start: GitHub Codespaces ☁️
+Get started in seconds with a fully configured cloud development environment:
+1. Click **"Code"** → **"Codespaces"** → **"Create codespace"**
+2. Wait 2-3 minutes for setup
+3. Start using WASP2 - all dependencies pre-installed!
+
+See [`.devcontainer/README.md`](.devcontainer/README.md) for details.
+
+### Local Installation
 Recommended installation through conda, and given environment
 ```shell script
 conda env create -f environment.yml
+```
+
+## Build the Rust extension (required)
+```bash
+conda activate WASP2
+export LIBCLANG_PATH=$CONDA_PREFIX/lib
+export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH
+export BINDGEN_EXTRA_CLANG_ARGS="-I/usr/include"
+maturin develop --release -m rust/Cargo.toml
+```
+
+## Supported Variant File Formats
+
+WASP2 supports multiple variant file formats through a unified interface:
+
+| Format | Extensions | Notes | Performance |
+|--------|------------|-------|-------------|
+| VCF (pysam) | `.vcf`, `.vcf.gz`, `.vcf.bgz` | Standard text format | Baseline |
+| **VCF (cyvcf2)** | `.vcf`, `.vcf.gz`, `.vcf.bgz` | High-performance parser | **~7x faster** |
+| **BCF** | `.bcf`, `.bcf.gz` | Binary VCF format | **5-8x faster** |
+| **PGEN** | `.pgen` | PLINK2 binary format | **~25x faster** |
+
+### Performance Recommendations
+
+Choose your variant format based on your workflow:
+
+1. **PGEN (Fastest - ~25x)** - Best for large variant datasets, genotype-only workflows
+2. **cyvcf2 (Fast - ~7x)** - High-performance VCF parsing, drop-in replacement for pysam
+3. **BCF (Fast - 5-8x)** - Good balance of speed and compatibility, preserves all VCF fields
+4. **VCF.gz (pysam)** - Most compatible, use when sharing data or using other tools
+
+### cyvcf2 Support (High-Performance VCF Parsing)
+
+For faster VCF parsing without changing file formats:
+
+```bash
+# Install cyvcf2 (optional dependency)
+pip install wasp2[cyvcf2]
+# or: pip install cyvcf2
+
+# Use same VCF files - automatically uses cyvcf2 if installed
+wasp2-count count-variants reads.bam variants.vcf.gz -s sample1 -r regions.bed
+
+# Explicit usage in Python
+from wasp2.io.cyvcf2_source import CyVCF2Source
+with CyVCF2Source("variants.vcf.gz") as source:
+    for variant in source.iter_variants(het_only=True):
+        ...  # ~7x faster than pysam!
+```
+
+Benchmark results show **~7x speedup** for VCF parsing with cyvcf2 vs pysam on large files.
+
+**📖 See [docs/VCF_PERFORMANCE.md](docs/VCF_PERFORMANCE.md) for detailed benchmarks and usage guide.**
+
+### BCF Support (Recommended for Standard Workflows)
+
+BCF (binary VCF) provides 5-8x faster parsing than compressed VCF with no loss of information:
+
+```bash
+# Convert VCF to BCF using bcftools
+bcftools view variants.vcf.gz -Ob -o variants.bcf
+bcftools index variants.bcf
+
+# Use BCF directly in WASP2
+wasp2-count count-variants reads.bam variants.bcf -s sample1 -r regions.bed
+```
+
+### PGEN Support (Recommended for Large Datasets)
+
+For optimal performance with large variant datasets, use PLINK2's PGEN format:
+
+```bash
+# Install pgenlib (optional dependency)
+pip install wasp2[plink]
+# or: pip install Pgenlib
+
+# Convert VCF to PGEN using plink2
+plink2 --vcf variants.vcf.gz --make-pgen --out variants
+
+# Use PGEN directly in WASP2
+wasp2-count count-variants reads.bam variants.pgen -s sample1 -r regions.bed
+```
+
+Benchmark results show **~25x speedup** for variant I/O operations with PGEN vs VCF.
+
+## Quick CLI usage
+- Count: `wasp2-count count-variants BAM VARIANTS --regions BED --out_file counts.tsv`
+- Map filter: `wasp2-map filter-remapped ORIGINAL.bam REMAPPED.bam OUT.bam`
+- Analyze: `wasp2-analyze find-imbalance counts.tsv --out_file ai_results.tsv`
+
+## Minimal API (Rust-backed)
+```python
+from counting.run_counting import run_count_variants
+from mapping.filter_remap_reads import filt_remapped_reads
+from analysis.run_analysis import run_ai_analysis
+
+# Supports VCF, BCF, or PGEN variant files
+run_count_variants(bam_file="sample.bam", variant_file="variants.pgen", region_file="regions.bed")
+filt_remapped_reads("orig.bam", "remap.bam", "keep.bam", threads=4)
+run_ai_analysis("counts.tsv", out_file="ai_results.tsv")
+```
+
+## Validation
+Baselines are generated on-demand. With the extension built:
+```bash
+export PYTHONPATH=$PWD
+python validation/generate_baselines.py
+python validation/compare_to_baseline.py
+```
+This runs counting, mapping, and analysis on the small chr10 test bundle and checks parity.
+
+## Publish to private index (example)
+```bash
+maturin build --release -m rust/Cargo.toml
+pip install twine
+twine upload --repository-url https://<private-index>/simple dist/*.whl
+# Install:
+pip install --index-url https://<private-index>/simple wasp2
+```
+
+## API Documentation
+Build Sphinx docs locally:
+```bash
+pip install sphinx sphinx-rtd-theme sphinx-autodoc-typehints
+cd docs && make html
+# Open docs/build/html/index.html in a browser
 ```
 
 &nbsp;
@@ -36,12 +198,12 @@ Providing samples and regions is highly recommended for allelic-imbalance analys
 
 **Usage**
 ```shell script
-python WASP2/src/counting count-variants [BAM] [VCF] {OPTIONS}
+wasp2-count count-variants [BAM] [VARIANTS] {OPTIONS}
 ```
 
 **Required Arguments**
 - BAM file containing aligned reads.
-- VCF file containing SNP info
+- VARIANTS file containing SNP info (VCF, BCF, or PGEN format)
 
 
 **Optional Arguments**
@@ -64,7 +226,7 @@ Analyzes Allelic Imbalance per ATAC peak given allelic count data
 
 **Usage**
 ```shell script
-python WASP2/src/analysis find-imbalance [COUNTS] {OPTIONS}
+wasp2-analyze find-imbalance [COUNTS] {OPTIONS}
 ```
 **Required Arguments**
 - COUNTS: Output data from count tool
@@ -89,14 +251,13 @@ This step identifies reads that overlap snps and creates reads with swapped alle
 
 **Usage**
 ```shell script
-
-python WASP2/src/mapping make-reads [BAM] [VCF] {OPTIONS}
+wasp2-map make-reads [BAM] [VARIANTS] {OPTIONS}
 ```
 
 
 **Required Arguments**
 - BAM file containing aligned reads.
-- VCF file containing SNP info
+- VARIANTS file containing SNP info (VCF, BCF, or PGEN format)
 
 
 **Optional Arguments**
@@ -124,13 +285,13 @@ Identify and remove reads that failed to remap to the same position. Creates all
 
 **Usage**
 ```shell script
-python WASP2/src/mapping filter-remapped "${prefix}_remapped.bam" --json "${prefix}_wasp_data_files.json"
+wasp2-map filter-remapped "${prefix}_remapped.bam" --json "${prefix}_wasp_data_files.json"
 ```
 
 OR
 
 ```shell script
-python WASP2/src/mapping filter-remapped "${prefix}_remapped.bam" "${prefix}_to_remap.bam" "${prefix}_keep.bam"
+wasp2-map filter-remapped "${prefix}_remapped.bam" "${prefix}_to_remap.bam" "${prefix}_keep.bam"
 ```
 
 **Required Arguments**
@@ -155,12 +316,12 @@ Output counts as anndata containing cell x SNP count matrix.
 
 **Usage**
 ```shell script
-python WASP2/src/counting count-variants-sc [BAM] [VCF] [BARCODES] {OPTIONS}
+wasp2-count count-variants-sc [BAM] [VARIANTS] [BARCODES] {OPTIONS}
 ```
 
 **Required Arguments**
 - BAM file containing aligned reads.
-- VCF file containing SNP info
+- VARIANTS file containing SNP info (VCF, BCF, or PGEN format)
 - BARCODE file used as index, contains one cell barcode per line
 
 **Optional Arguments**
@@ -178,7 +339,7 @@ Allelic-Imbalance is estimated on a per-celltype basis.
 
 **Usage**
 ```shell script
-python WASP2/src/counting find-imbalance-sc [COUNTS] [BARCODE_MAP] {OPTIONS}
+wasp2-analyze find-imbalance-sc [COUNTS] [BARCODE_MAP] {OPTIONS}
 ```
 
 **Required Arguments**
@@ -203,7 +364,7 @@ Compare differential allelic-imbalance between celltypes/groups.
 
 **Usage**
 ```shell script
-python WASP2/src/counting compare-imbalance [COUNTS] [BARCODE_MAP] {OPTIONS}
+wasp2-analyze compare-imbalance [COUNTS] [BARCODE_MAP] {OPTIONS}
 ```
 
 **Required Arguments**
