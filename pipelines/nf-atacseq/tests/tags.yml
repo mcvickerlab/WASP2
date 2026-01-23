@@ -1,0 +1,29 @@
+# nf-test tags for CI/CD organization
+# Usage: nf-test test --tag <tag_name>
+
+# Pipeline-level tests
+pipeline:
+  - tests/main.nf.test
+
+# Workflow tests
+workflows:
+  - tests/workflows/**/*.nf.test
+
+# Module tests (local WASP2 modules)
+wasp2:
+  - tests/modules/local/wasp2_make_reads.nf.test
+  - tests/modules/local/wasp2_filter_remapped.nf.test
+  - tests/modules/local/wasp2_count_variants.nf.test
+  - tests/modules/local/wasp2_find_imbalance.nf.test
+
+# nf-core module tests
+nf-core:
+  - tests/modules/nf-core/**/*.nf.test
+
+# Quick stub tests for CI
+ci_stub:
+  - tests/main.nf.test#"Should run stub-run mode for workflow validation"
+
+# Full integration tests
+integration:
+  - tests/main.nf.test#"Should run with minimal test data"
