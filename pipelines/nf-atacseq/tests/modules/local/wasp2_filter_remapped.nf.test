@@ -1,0 +1,39 @@
+nextflow_process {
+
+    name "Test Process WASP2_FILTER_REMAPPED"
+    script "../../../modules/local/wasp2_filter_remapped.nf"
+    process "WASP2_FILTER_REMAPPED"
+
+    tag "modules"
+    tag "modules_local"
+    tag "wasp2"
+
+    test("Should filter remapped reads and produce WASP-corrected BAM - stub") {
+
+        options "-stub-run"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id:'test_sample', single_end:false ],
+                    file('remapped.bam'),
+                    file('remapped.bam.bai'),
+                    file('to_remap.bam'),
+                    file('keep.bam'),
+                    file('wasp_data.json')
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            // Verify filtered BAM and stats outputs
+            assert process.out.bam
+            assert process.out.stats
+            assert process.out.versions
+            assert snapshot(process.out).match()
+        }
+    }
+}
