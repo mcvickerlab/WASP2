@@ -98,10 +98,10 @@ wasp2-map = "mapping.__main__:app"
 wasp2-analyze = "analysis.__main__:app"
 
 [project.urls]
-Homepage = "https://github.com/Jaureguy760/WASP2-exp"
-Documentation = "https://Jaureguy760.github.io/WASP2-exp/"
-Repository = "https://github.com/Jaureguy760/WASP2-exp"
-Issues = "https://github.com/Jaureguy760/WASP2-exp/issues"
+Homepage = "https://github.com/Jaureguy760/WASP2-final"
+Documentation = "https://Jaureguy760.github.io/WASP2-final/"
+Repository = "https://github.com/Jaureguy760/WASP2-final"
+Issues = "https://github.com/Jaureguy760/WASP2-final/issues"
 
 # Note: [tool.setuptools] is not used when building with maturin
 # Maturin handles package discovery via [tool.maturin.python-packages]
