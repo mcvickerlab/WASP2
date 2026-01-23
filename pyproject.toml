@@ -207,5 +207,6 @@ skips = [
     "B101",  # assert_used - OK in tests and CLI validation
     "B404",  # import_subprocess - needed for external tool calls
     "B603",  # subprocess_without_shell_equals_true - intentional for safety
+    "B607",  # start_process_with_partial_path - expected for samtools/bcftools CLI calls
 ]
 targets = ["src"]
