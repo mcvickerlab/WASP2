@@ -1,0 +1,36 @@
+nextflow_process {
+
+    name "Test Process WASP2_ANALYZE_IMBALANCE"
+    script "../main.nf"
+    process "WASP2_ANALYZE_IMBALANCE"
+
+    tag "modules"
+    tag "modules_nfcore"
+    tag "wasp2"
+    tag "wasp2/analyze_imbalance"
+
+    test("wasp2_analyze_imbalance - counts - stub") {
+
+        options "-stub"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id:'test' ],
+                    file("${projectDir}/tests/data/sample.counts.tsv")
+                ]
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert process.success },
+                { assert snapshot(process.out.versions).match("versions_stub") },
+                { assert process.out.results.size() == 1 },
+                { assert file(process.out.results[0][1]).exists() }
+            )
+        }
+    }
+}
