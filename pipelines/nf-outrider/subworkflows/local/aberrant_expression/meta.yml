@@ -1,0 +1,67 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/subworkflows/meta-schema.json
+name: "aberrant_expression"
+description: OUTRIDER-based aberrant expression detection with autoencoder modeling
+keywords:
+  - outrider
+  - aberrant-expression
+  - outlier-detection
+  - rna-seq
+  - autoencoder
+
+components:
+  - merge_counts
+  - outrider_fit
+
+input:
+  - ch_gene_counts:
+      description: |
+        Channel containing gene count files per sample
+        Structure: [ val(meta), path(gene_counts) ]
+        meta: Groovy Map containing sample information
+  - padj_cutoff:
+      description: |
+        Adjusted p-value cutoff for outlier calling
+        Value: float (default: 0.05)
+  - zscore_cutoff:
+      description: |
+        Z-score cutoff for outlier calling
+        Value: float (default: 0)
+  - encoding_dim:
+      description: |
+        Encoding dimension for OUTRIDER autoencoder (null for auto-selection)
+        Value: integer or null
+  - max_iterations:
+      description: |
+        Maximum iterations for OUTRIDER fitting
+        Value: integer (default: 15)
+  - convergence:
+      description: |
+        Convergence threshold for OUTRIDER
+        Value: float (default: 1e-5)
+
+output:
+  - count_matrix:
+      description: |
+        Merged count matrix across all samples
+        Structure: path(count_matrix)
+  - model:
+      description: |
+        Fitted OUTRIDER model object
+        Structure: path(model.rds)
+  - results:
+      description: |
+        Outlier detection results with p-values
+        Structure: path(results.tsv)
+  - summary:
+      description: |
+        HTML summary report
+        Structure: path(summary.html)
+  - versions:
+      description: |
+        Software versions
+        Structure: path(versions.yml)
+
+authors:
+  - "@Jaureguy760"
+maintainers:
+  - "@Jaureguy760"

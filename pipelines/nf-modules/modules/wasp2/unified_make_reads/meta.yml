@@ -1,0 +1,95 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/meta-schema.json
+name: "wasp2_unified_make_reads"
+description: Generate FASTQ files with swapped alleles for remapping to correct mapping bias
+keywords:
+  - wasp
+  - mapping-bias
+  - allele-specific
+  - remapping
+  - fastq
+
+tools:
+  - wasp2:
+      description: |
+        WASP2 is a tool for allele-specific analysis of next-generation sequencing data.
+        The unified_make_reads module generates synthetic FASTQ files where reads overlapping
+        heterozygous variants have their alleles swapped, enabling detection of mapping bias
+        through remapping.
+      homepage: https://github.com/Jaureguy760/WASP2-exp
+      documentation: https://Jaureguy760.github.io/WASP2-exp/
+      tool_dev_url: https://github.com/Jaureguy760/WASP2-exp
+      licence: ["MIT"]
+
+input:
+  - - meta:
+        type: map
+        description: |
+          Groovy Map containing sample information.
+          e.g. `[ id:'sample1', sample:'NA12878' ]`
+    - bam:
+        type: file
+        description: Coordinate-sorted BAM file with aligned reads
+        pattern: "*.{bam}"
+    - bai:
+        type: file
+        description: BAM index file
+        pattern: "*.{bai}"
+  - - meta2:
+        type: map
+        description: Groovy Map containing VCF information
+    - vcf:
+        type: file
+        description: VCF file with phased genotypes
+        pattern: "*.{vcf,vcf.gz,bcf,pgen}"
+    - vcf_index:
+        type: file
+        description: VCF index file
+        pattern: "*.{tbi,csi}"
+
+output:
+  - remap_fastq:
+      - meta:
+          type: map
+          description: Groovy Map containing sample information
+      - "*_remap_r1.fq.gz":
+          type: file
+          description: Forward reads FASTQ with swapped alleles for remapping
+          pattern: "*_remap_r1.fq.gz"
+      - "*_remap_r2.fq.gz":
+          type: file
+          description: Reverse reads FASTQ with swapped alleles for remapping
+          pattern: "*_remap_r2.fq.gz"
+  - to_remap_bam:
+      - meta:
+          type: map
+          description: Groovy Map containing sample information
+      - "*_to_remap.bam":
+          type: file
+          description: BAM file containing reads that need remapping (overlap variants)
+          pattern: "*_to_remap.bam"
+  - keep_bam:
+      - meta:
+          type: map
+          description: Groovy Map containing sample information
+      - "*_keep.bam":
+          type: file
+          description: BAM file containing reads without variant overlap (kept as-is)
+          pattern: "*_keep.bam"
+  - wasp_json:
+      - meta:
+          type: map
+          description: Groovy Map containing sample information
+      - "*_wasp_data.json":
+          type: file
+          description: JSON metadata file containing read tracking information for downstream filter step
+          pattern: "*_wasp_data.json"
+  - versions:
+      - versions.yml:
+          type: file
+          description: File containing software versions
+          pattern: "versions.yml"
+
+authors:
+  - "@Jaureguy760"
+maintainers:
+  - "@Jaureguy760"

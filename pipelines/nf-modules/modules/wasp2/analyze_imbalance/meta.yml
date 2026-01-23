@@ -1,0 +1,56 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/meta-schema.json
+name: "wasp2_analyze_imbalance"
+description: Detect allelic imbalance using beta-binomial statistical modeling
+keywords:
+  - allelic-imbalance
+  - beta-binomial
+  - statistical-analysis
+  - ase
+  - wasp
+
+tools:
+  - wasp2:
+      description: |
+        WASP2 is a tool for allele-specific analysis of next-generation sequencing data.
+        The analyze_imbalance module performs beta-binomial statistical modeling to detect
+        significant allelic imbalance from allele count data, using likelihood ratio tests
+        to identify regions with significant deviation from expected 50:50 allele ratios.
+      homepage: https://github.com/Jaureguy760/WASP2-exp
+      documentation: https://Jaureguy760.github.io/WASP2-exp/
+      tool_dev_url: https://github.com/Jaureguy760/WASP2-exp
+      licence: ["MIT"]
+
+input:
+  - - meta:
+        type: map
+        description: |
+          Groovy Map containing sample information.
+          e.g. `[ id:'sample1' ]`
+    - counts:
+        type: file
+        description: |
+          TSV file with allele counts from WASP2_COUNT or WASP2_COUNT_ALLELES.
+          Must contain columns: chrom, pos, ref, alt, ref_count, alt_count
+        pattern: "*.counts.tsv"
+
+output:
+  - results:
+      - meta:
+          type: map
+          description: Groovy Map containing sample information
+      - "*_ai_results.tsv":
+          type: file
+          description: |
+            TSV file with allelic imbalance statistics.
+            Columns: region, snp_count, ref_sum, alt_sum, mu, null_ll, alt_ll, LRT, pvalue, fdr
+          pattern: "*_ai_results.tsv"
+  - versions:
+      - versions.yml:
+          type: file
+          description: File containing software versions
+          pattern: "versions.yml"
+
+authors:
+  - "@Jaureguy760"
+maintainers:
+  - "@Jaureguy760"

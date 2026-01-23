@@ -1,0 +1,57 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/subworkflows/meta-schema.json
+name: "fastq_align_bwa"
+description: Align reads to genome using BWA-MEM with standardized post-processing
+keywords:
+  - alignment
+  - bwa
+  - bam
+  - fastq
+  - mapping
+
+components:
+  - bwa/mem
+  - samtools/index
+  - bam_stats_samtools
+
+input:
+  - ch_reads:
+      description: |
+        Channel containing sample reads
+        Structure: [ val(meta), path(reads) ]
+        meta: Groovy Map containing sample information (e.g., [ id:'sample1' ])
+        reads: FASTQ files (paired or single-end)
+  - ch_index:
+      description: |
+        Channel containing BWA index
+        Structure: path(index)
+  - ch_fasta:
+      description: |
+        Channel containing reference FASTA
+        Structure: path(fasta)
+
+output:
+  - bam:
+      description: |
+        Sorted BAM files from alignment
+        Structure: [ val(meta), path(bam) ]
+  - bai:
+      description: |
+        BAM index files
+        Structure: [ val(meta), path(bai) ]
+  - stats:
+      description: |
+        Samtools stats output
+        Structure: [ val(meta), path(stats) ]
+  - flagstat:
+      description: |
+        Samtools flagstat output
+        Structure: [ val(meta), path(flagstat) ]
+  - versions:
+      description: |
+        Software versions
+        Structure: [ path(versions.yml) ]
+
+authors:
+  - "@Jaureguy760"
+maintainers:
+  - "@Jaureguy760"

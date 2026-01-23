@@ -1,0 +1,52 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/subworkflows/meta-schema.json
+name: "bam_sort_stats_samtools"
+description: Sort and index BAM files, then generate statistics
+keywords:
+  - bam
+  - sorting
+  - indexing
+  - statistics
+  - samtools
+
+components:
+  - samtools/sort
+  - samtools/index
+  - bam_stats_samtools
+
+input:
+  - ch_bam:
+      description: |
+        Channel containing unsorted BAM files
+        Structure: [ val(meta), path(bam) ]
+        meta: Groovy Map containing sample information
+  - ch_fasta:
+      description: |
+        Channel containing reference FASTA
+        Structure: path(fasta)
+
+output:
+  - bam:
+      description: |
+        Coordinate-sorted BAM files
+        Structure: [ val(meta), path(bam) ]
+  - bai:
+      description: |
+        BAM index files
+        Structure: [ val(meta), path(bai) ]
+  - stats:
+      description: |
+        Samtools stats output
+        Structure: [ val(meta), path(stats) ]
+  - flagstat:
+      description: |
+        Samtools flagstat output
+        Structure: [ val(meta), path(flagstat) ]
+  - versions:
+      description: |
+        Software versions
+        Structure: [ path(versions.yml) ]
+
+authors:
+  - "@Jaureguy760"
+maintainers:
+  - "@Jaureguy760"

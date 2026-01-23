@@ -1,0 +1,42 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/subworkflows/meta-schema.json
+name: "bam_stats_samtools"
+description: Generate BAM statistics using samtools stats and flagstat
+keywords:
+  - bam
+  - statistics
+  - quality-control
+  - samtools
+
+components:
+  - samtools/stats
+  - samtools/flagstat
+
+input:
+  - ch_bam_bai:
+      description: |
+        Channel containing BAM and index files
+        Structure: [ val(meta), path(bam), path(bai) ]
+        meta: Groovy Map containing sample information
+  - ch_fasta:
+      description: |
+        Channel containing reference FASTA for accurate statistics
+        Structure: path(fasta)
+
+output:
+  - stats:
+      description: |
+        Samtools stats output with comprehensive alignment statistics
+        Structure: [ val(meta), path(stats) ]
+  - flagstat:
+      description: |
+        Samtools flagstat output with flag-based read counts
+        Structure: [ val(meta), path(flagstat) ]
+  - versions:
+      description: |
+        Software versions
+        Structure: [ path(versions.yml) ]
+
+authors:
+  - "@Jaureguy760"
+maintainers:
+  - "@Jaureguy760"
