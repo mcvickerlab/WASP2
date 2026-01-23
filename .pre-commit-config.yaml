@@ -24,7 +24,24 @@ repos:
       - id: check-added-large-files
         args: ['--maxkb=1000']
       - id: check-merge-conflict
+      - id: detect-private-key
+      - id: check-ast
+
+  # Security: Bandit - Python security linter
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.8.3
+    hooks:
+      - id: bandit
+        args: ["-c", "pyproject.toml", "-r", "src/"]
+        additional_dependencies: ["bandit[toml]"]
+
+  # Security: Gitleaks - secret detection
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.24.0
+    hooks:
+      - id: gitleaks
 
 ci:
   autofix_prs: true
   autofix_commit_msg: 'style: auto-fix linting issues [pre-commit.ci]'
+  skip: [gitleaks]  # Gitleaks needs full git history, skip in pre-commit.ci
