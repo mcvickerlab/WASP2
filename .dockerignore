@@ -1,0 +1,40 @@
+# Git
+.git
+.gitignore
+
+# GitHub
+.github
+
+# Documentation
+docs
+*.md
+!README.md
+
+# Tests
+tests
+.pytest_cache
+.nf-test
+
+# Python cache
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+.eggs
+dist
+build
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Nextflow
+.nextflow*
+work
+results
+
+# Other
+*.log
+.DS_Store

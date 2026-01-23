@@ -1,0 +1,63 @@
+nextflow_process {
+
+    name "Test Process WASP2_VCF_TO_BED"
+    script "../main.nf"
+    process "WASP2_VCF_TO_BED"
+
+    tag "modules"
+    tag "modules_nfcore"
+    tag "wasp2"
+    tag "wasp2/vcf_to_bed"
+
+    test("wasp2_vcf_to_bed - vcf - stub") {
+
+        options "-stub"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id:'test' ],
+                    file("${projectDir}/tests/data/sample.vcf.gz"),
+                    file("${projectDir}/tests/data/sample.vcf.gz.tbi")
+                ]
+                input[1] = 'sample1'
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert process.success },
+                { assert snapshot(process.out.versions).match("versions_stub") },
+                { assert process.out.bed.size() == 1 },
+                { assert file(process.out.bed[0][1]).exists() }
+            )
+        }
+    }
+
+    test("wasp2_vcf_to_bed - vcf no samples - stub") {
+
+        options "-stub"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id:'test_all' ],
+                    file("${projectDir}/tests/data/sample.vcf.gz"),
+                    file("${projectDir}/tests/data/sample.vcf.gz.tbi")
+                ]
+                input[1] = ''
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert process.success },
+                { assert snapshot(process.out).match("no_samples_stub") }
+            )
+        }
+    }
+}

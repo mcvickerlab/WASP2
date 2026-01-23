@@ -1,0 +1,3 @@
+chr1	test	exon	90	150	.	+	.	gene_id "GENE1"; transcript_id "TX1";
+chr1	test	exon	380	450	.	+	.	gene_id "GENE2"; transcript_id "TX2";
+chr2	test	exon	80	160	.	-	.	gene_id "GENE3"; transcript_id "TX3";

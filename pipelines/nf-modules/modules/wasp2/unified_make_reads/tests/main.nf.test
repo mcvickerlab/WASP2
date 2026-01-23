@@ -1,0 +1,44 @@
+nextflow_process {
+
+    name "Test Process WASP2_UNIFIED_MAKE_READS"
+    script "../main.nf"
+    process "WASP2_UNIFIED_MAKE_READS"
+
+    tag "modules"
+    tag "modules_nfcore"
+    tag "wasp2"
+    tag "wasp2/unified_make_reads"
+
+    test("wasp2_unified_make_reads - paired_end - stub") {
+
+        options "-stub"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id:'test', sample:'sample1' ],
+                    file("${projectDir}/tests/data/minimal.bam"),
+                    file("${projectDir}/tests/data/minimal.bam.bai")
+                ]
+                input[1] = [
+                    [ id:'test_vcf' ],
+                    file("${projectDir}/tests/data/sample.vcf.gz"),
+                    file("${projectDir}/tests/data/sample.vcf.gz.tbi")
+                ]
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert process.success },
+                { assert snapshot(process.out.versions).match("versions_stub") },
+                { assert process.out.remap_fastq.size() == 1 },
+                { assert process.out.to_remap_bam.size() == 1 },
+                { assert process.out.keep_bam.size() == 1 },
+                { assert process.out.wasp_json.size() == 1 }
+            )
+        }
+    }
+}
