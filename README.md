@@ -207,7 +207,7 @@ wasp2-count count-variants [BAM] [VARIANTS] {OPTIONS}
 
 
 **Optional Arguments**
-- -s/--samples: Filter SNPs whose genotypes are heterozygous in one or more samples. Accepts comma delimited string, or file with one sample per line. 
+- -s/--samples: Filter SNPs whose genotypes are heterozygous in one or more samples. Accepts comma delimited string, or file with one sample per line.
 - -r/--region: Filter SNPs that overlap peaks/regions of interest. Accepts files in narrowPeak, BED, gtf and gff3 format.
 - -o/--out_file: Output file for counts. Defaults to counts.tsv
 - -t/--temp_loc: Write intermediary files to a directory instead of deleting. Useful for debugging issues.
@@ -262,7 +262,7 @@ wasp2-map make-reads [BAM] [VARIANTS] {OPTIONS}
 
 **Optional Arguments**
 - --threads: Threads to allocate.
-- -s/--samples: Filter Polymorphic SNPs in one or more samples. Accepts comma delimited string, or file with one sample per line. 
+- -s/--samples: Filter Polymorphic SNPs in one or more samples. Accepts comma delimited string, or file with one sample per line.
 - -o/--out_dir: Output directory for data to be remapped
 - -t/--temp_loc: Write intermediary files to a directory instead of deleting. Useful for debugging issues.
 - -j/--out_json: Output json containing wasp file info to this file instead of default. Defaults to [BAM_PREFIX]_wasp_data_files.json

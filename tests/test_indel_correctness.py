@@ -8,6 +8,7 @@ by comparing against known ground truth examples.
 
 import sys
 from pathlib import Path
+
 import numpy as np
 import pysam
 
@@ -17,9 +18,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from mapping.remap_utils import (
     _build_ref2read_maps,
     _fill_insertion_quals,
+    make_multi_seqs_with_qual,
     make_phased_seqs,
     make_phased_seqs_with_qual,
-    make_multi_seqs_with_qual
 )
 
 
@@ -28,10 +29,9 @@ def test_position_mapping_simple_match():
     print("Test 1: Position mapping - simple match")
 
     # Create a simple aligned read with no indels
-    header = pysam.AlignmentHeader.from_dict({
-        'HD': {'VN': '1.0'},
-        'SQ': [{'SN': 'chr1', 'LN': 1000}]
-    })
+    header = pysam.AlignmentHeader.from_dict(
+        {"HD": {"VN": "1.0"}, "SQ": [{"SN": "chr1", "LN": 1000}]}
+    )
 
     read = pysam.AlignedSegment(header)
     read.query_sequence = "ATCGATCG"
@@ -53,10 +53,9 @@ def test_position_mapping_with_deletion():
     print("Test 2: Position mapping - deletion")
 
     # Create read with 2bp deletion: ATCG--CG (-- = deleted from read)
-    header = pysam.AlignmentHeader.from_dict({
-        'HD': {'VN': '1.0'},
-        'SQ': [{'SN': 'chr1', 'LN': 1000}]
-    })
+    header = pysam.AlignmentHeader.from_dict(
+        {"HD": {"VN": "1.0"}, "SQ": [{"SN": "chr1", "LN": 1000}]}
+    )
 
     read = pysam.AlignedSegment(header)
     read.query_sequence = "ATCGCG"  # 6 bases
@@ -81,10 +80,9 @@ def test_position_mapping_with_insertion():
     print("Test 3: Position mapping - insertion")
 
     # Create read with 2bp insertion: ATCGAACG (AA = inserted in read)
-    header = pysam.AlignmentHeader.from_dict({
-        'HD': {'VN': '1.0'},
-        'SQ': [{'SN': 'chr1', 'LN': 1000}]
-    })
+    header = pysam.AlignmentHeader.from_dict(
+        {"HD": {"VN": "1.0"}, "SQ": [{"SN": "chr1", "LN": 1000}]}
+    )
 
     read = pysam.AlignedSegment(header)
     read.query_sequence = "ATCGAACG"  # 8 bases

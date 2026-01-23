@@ -4,17 +4,18 @@ This module contains performance-optimized versions that pre-allocate
 arrays instead of using np.concatenate, providing ~10x speedup.
 """
 
-from typing import List, Tuple, Any
+from typing import Any
+
 import numpy as np
 
 
 def make_phased_seqs_with_qual_fast(
-    split_seq: List[str],
-    split_qual: List[np.ndarray],
+    split_seq: list[str],
+    split_qual: list[np.ndarray],
     hap1_alleles: Any,
     hap2_alleles: Any,
-    insert_qual: int = 30
-) -> Tuple[Tuple[str, np.ndarray], Tuple[str, np.ndarray]]:
+    insert_qual: int = 30,
+) -> tuple[tuple[str, np.ndarray], tuple[str, np.ndarray]]:
     """Optimized version with pre-allocation (10x faster).
 
     Args:
@@ -60,8 +61,8 @@ def make_phased_seqs_with_qual_fast(
 
             # Copy qualities using array slicing (fast)
             qual_len = len(qual_part)
-            hap1_qual[hap1_offset:hap1_offset + qual_len] = qual_part
-            hap2_qual[hap2_offset:hap2_offset + qual_len] = qual_part
+            hap1_qual[hap1_offset : hap1_offset + qual_len] = qual_part
+            hap2_qual[hap2_offset : hap2_offset + qual_len] = qual_part
             hap1_offset += qual_len
             hap2_offset += qual_len
 
@@ -80,34 +81,40 @@ def make_phased_seqs_with_qual_fast(
             hap2_len = len(hap2_allele)
 
             # Get flanking qualities for insertion inference
-            left_qual = split_qual[i-1] if i > 0 else np.array([], dtype=np.uint8)
-            right_qual = split_qual[i+1] if i < len(split_qual) - 1 else np.array([], dtype=np.uint8)
+            left_qual = split_qual[i - 1] if i > 0 else np.array([], dtype=np.uint8)
+            right_qual = (
+                split_qual[i + 1] if i < len(split_qual) - 1 else np.array([], dtype=np.uint8)
+            )
 
             # Haplotype 1 quality handling
             if hap1_len == orig_len:
                 # Same length - copy original
-                hap1_qual[hap1_offset:hap1_offset + hap1_len] = qual_part
+                hap1_qual[hap1_offset : hap1_offset + hap1_len] = qual_part
             elif hap1_len < orig_len:
                 # Deletion - truncate
-                hap1_qual[hap1_offset:hap1_offset + hap1_len] = qual_part[:hap1_len]
+                hap1_qual[hap1_offset : hap1_offset + hap1_len] = qual_part[:hap1_len]
             else:
                 # Insertion - copy original + fill extra
-                hap1_qual[hap1_offset:hap1_offset + orig_len] = qual_part
+                hap1_qual[hap1_offset : hap1_offset + orig_len] = qual_part
                 extra_len = hap1_len - orig_len
-                extra_quals = _fill_insertion_quals_inline(extra_len, left_qual, right_qual, insert_qual)
-                hap1_qual[hap1_offset + orig_len:hap1_offset + hap1_len] = extra_quals
+                extra_quals = _fill_insertion_quals_inline(
+                    extra_len, left_qual, right_qual, insert_qual
+                )
+                hap1_qual[hap1_offset + orig_len : hap1_offset + hap1_len] = extra_quals
             hap1_offset += hap1_len
 
             # Haplotype 2 quality handling
             if hap2_len == orig_len:
-                hap2_qual[hap2_offset:hap2_offset + hap2_len] = qual_part
+                hap2_qual[hap2_offset : hap2_offset + hap2_len] = qual_part
             elif hap2_len < orig_len:
-                hap2_qual[hap2_offset:hap2_offset + hap2_len] = qual_part[:hap2_len]
+                hap2_qual[hap2_offset : hap2_offset + hap2_len] = qual_part[:hap2_len]
             else:
-                hap2_qual[hap2_offset:hap2_offset + orig_len] = qual_part
+                hap2_qual[hap2_offset : hap2_offset + orig_len] = qual_part
                 extra_len = hap2_len - orig_len
-                extra_quals = _fill_insertion_quals_inline(extra_len, left_qual, right_qual, insert_qual)
-                hap2_qual[hap2_offset + orig_len:hap2_offset + hap2_len] = extra_quals
+                extra_quals = _fill_insertion_quals_inline(
+                    extra_len, left_qual, right_qual, insert_qual
+                )
+                hap2_qual[hap2_offset + orig_len : hap2_offset + hap2_len] = extra_quals
             hap2_offset += hap2_len
 
     hap1_seq = "".join(hap1_seq_parts)
@@ -116,8 +123,9 @@ def make_phased_seqs_with_qual_fast(
     return (hap1_seq, hap1_qual), (hap2_seq, hap2_qual)
 
 
-def _fill_insertion_quals_inline(insert_len: int, left_qual: np.ndarray,
-                                  right_qual: np.ndarray, insert_qual: int = 30) -> np.ndarray:
+def _fill_insertion_quals_inline(
+    insert_len: int, left_qual: np.ndarray, right_qual: np.ndarray, insert_qual: int = 30
+) -> np.ndarray:
     """Inline version of quality filling (avoids function call overhead)."""
     if len(left_qual) == 0 and len(right_qual) == 0:
         return np.full(insert_len, insert_qual, dtype=np.uint8)
@@ -128,11 +136,8 @@ def _fill_insertion_quals_inline(insert_len: int, left_qual: np.ndarray,
 
 
 def make_multi_seqs_with_qual_fast(
-    split_seq: List[str],
-    split_qual: List[np.ndarray],
-    allele_combos: Any,
-    insert_qual: int = 30
-) -> List[Tuple[str, np.ndarray]]:
+    split_seq: list[str], split_qual: list[np.ndarray], allele_combos: Any, insert_qual: int = 30
+) -> list[tuple[str, np.ndarray]]:
     """Optimized multi-sample version with pre-allocation.
 
     Args:
@@ -166,7 +171,7 @@ def make_multi_seqs_with_qual_fast(
                 # Non-variant
                 seq_parts.append(seq_part)
                 qual_len = len(qual_part)
-                hap_qual[offset:offset + qual_len] = qual_part
+                hap_qual[offset : offset + qual_len] = qual_part
                 offset += qual_len
             else:
                 # Variant
@@ -177,18 +182,22 @@ def make_multi_seqs_with_qual_fast(
                 orig_len = len(seq_part)
                 allele_len = len(allele)
 
-                left_qual = split_qual[i-1] if i > 0 else np.array([], dtype=np.uint8)
-                right_qual = split_qual[i+1] if i < len(split_qual) - 1 else np.array([], dtype=np.uint8)
+                left_qual = split_qual[i - 1] if i > 0 else np.array([], dtype=np.uint8)
+                right_qual = (
+                    split_qual[i + 1] if i < len(split_qual) - 1 else np.array([], dtype=np.uint8)
+                )
 
                 if allele_len == orig_len:
-                    hap_qual[offset:offset + allele_len] = qual_part
+                    hap_qual[offset : offset + allele_len] = qual_part
                 elif allele_len < orig_len:
-                    hap_qual[offset:offset + allele_len] = qual_part[:allele_len]
+                    hap_qual[offset : offset + allele_len] = qual_part[:allele_len]
                 else:
-                    hap_qual[offset:offset + orig_len] = qual_part
+                    hap_qual[offset : offset + orig_len] = qual_part
                     extra_len = allele_len - orig_len
-                    extra_quals = _fill_insertion_quals_inline(extra_len, left_qual, right_qual, insert_qual)
-                    hap_qual[offset + orig_len:offset + allele_len] = extra_quals
+                    extra_quals = _fill_insertion_quals_inline(
+                        extra_len, left_qual, right_qual, insert_qual
+                    )
+                    hap_qual[offset + orig_len : offset + allele_len] = extra_quals
                 offset += allele_len
 
         hap_seq = "".join(seq_parts)

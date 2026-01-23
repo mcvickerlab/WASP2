@@ -1,6 +1,5 @@
 import subprocess
 import timeit
-from typing import Optional
 
 # Rust acceleration (required; no fallback)
 from wasp2_rust import filter_bam_wasp
@@ -10,7 +9,7 @@ def filt_remapped_reads(
     to_remap_bam: str,
     remapped_bam: str,
     filt_out_bam: str,
-    keep_read_file: Optional[str] = None,
+    keep_read_file: str | None = None,
     threads: int = 1,
     same_locus_slop: int = 0,
 ) -> None:
@@ -36,12 +35,7 @@ def filt_remapped_reads(
     )
 
 
-def merge_filt_bam(
-    keep_bam: str,
-    remapped_filt_bam: str,
-    out_bam: str,
-    threads: int = 1
-) -> None:
+def merge_filt_bam(keep_bam: str, remapped_filt_bam: str, out_bam: str, threads: int = 1) -> None:
     """Merge filtered BAM files using samtools (faster than pysam).
 
     Both input BAMs are already coordinate-sorted, so samtools merge
@@ -57,14 +51,12 @@ def merge_filt_bam(
 
     # Merge using samtools (faster than pysam, inputs are already sorted)
     subprocess.run(
-        ["samtools", "merge", "-@", str(threads),
-         "-f", "-o", out_bam, keep_bam, remapped_filt_bam],
-        check=True)
+        ["samtools", "merge", "-@", str(threads), "-f", "-o", out_bam, keep_bam, remapped_filt_bam],
+        check=True,
+    )
     print(f"Merged BAM in {timeit.default_timer() - start_time:.2f} seconds")
 
     # Index the merged BAM (no sort needed - inputs were already sorted)
     start_index = timeit.default_timer()
-    subprocess.run(
-        ["samtools", "index", "-@", str(threads), out_bam],
-        check=True)
+    subprocess.run(["samtools", "index", "-@", str(threads), out_bam], check=True)
     print(f"Indexed BAM in {timeit.default_timer() - start_index:.2f} seconds")
