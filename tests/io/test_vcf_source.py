@@ -6,9 +6,8 @@ Run with: pytest tests/io/test_vcf_source.py -v
 """
 
 import pytest
-from pathlib import Path
 
-from wasp2.io.variant_source import VariantSource, Variant, Genotype, VariantGenotype
+from wasp2.io.variant_source import Genotype, VariantSource
 from wasp2.io.vcf_source import VCFSource
 
 
@@ -86,11 +85,11 @@ class TestVCFSourceIteration:
             # rs4: 0/1 (HET), rs5: 0/0 (HOM_REF), rs6: 0/1 (HET)
             genotypes = [v.genotype for v in variants]
             assert genotypes[0] == Genotype.HOM_REF  # rs1
-            assert genotypes[1] == Genotype.HET      # rs2
+            assert genotypes[1] == Genotype.HET  # rs2
             assert genotypes[2] == Genotype.HOM_ALT  # rs3
-            assert genotypes[3] == Genotype.HET      # rs4
+            assert genotypes[3] == Genotype.HET  # rs4
             assert genotypes[4] == Genotype.HOM_REF  # rs5
-            assert genotypes[5] == Genotype.HET      # rs6
+            assert genotypes[5] == Genotype.HET  # rs6
 
     def test_get_sample_idx(self, sample_vcf):
         """Test getting sample index."""
@@ -118,13 +117,13 @@ class TestVCFSourceToBed:
         assert result == output
         assert output.exists()
 
-        lines = output.read_text().strip().split('\n')
+        lines = output.read_text().strip().split("\n")
         assert len(lines) == 6
 
         # Check format of first line
-        fields = lines[0].split('\t')
+        fields = lines[0].split("\t")
         assert fields[0] == "chr1"
-        assert fields[1] == "99"   # 0-based start
+        assert fields[1] == "99"  # 0-based start
         assert fields[2] == "100"  # 1-based end
         assert fields[3] == "A"
         assert fields[4] == "G"
@@ -136,7 +135,7 @@ class TestVCFSourceToBed:
         with VariantSource.open(sample_vcf) as source:
             source.to_bed(output, samples=["sample1"], het_only=True)
 
-        lines = output.read_text().strip().split('\n')
+        lines = output.read_text().strip().split("\n")
         # sample1 has het at rs1, rs4, rs5
         assert len(lines) == 3
 
@@ -145,15 +144,10 @@ class TestVCFSourceToBed:
         output = tmp_output_dir / "with_gt.bed"
 
         with VariantSource.open(sample_vcf) as source:
-            source.to_bed(
-                output,
-                samples=["sample1"],
-                het_only=False,
-                include_genotypes=True
-            )
+            source.to_bed(output, samples=["sample1"], het_only=False, include_genotypes=True)
 
-        lines = output.read_text().strip().split('\n')
-        fields = lines[0].split('\t')
+        lines = output.read_text().strip().split("\n")
+        fields = lines[0].split("\t")
 
         # Should have at least 6 columns with genotype
         assert len(fields) >= 6

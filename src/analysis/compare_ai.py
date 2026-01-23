@@ -1,30 +1,26 @@
-import sys
-import warnings
-from pathlib import Path
-
 from collections import namedtuple
+from collections.abc import Callable
 from itertools import combinations
-from typing import Optional, Union, Callable, Any, Literal
+from typing import Any
 
 import numpy as np
-from numpy.typing import NDArray
 import pandas as pd
-
-from scipy.stats import betabinom, chi2, false_discovery_control
-from scipy.optimize import minimize_scalar, OptimizeResult
 
 # AnnData for single-cell analysis
 from anndata import AnnData
+from numpy.typing import NDArray
+from scipy.optimize import OptimizeResult, minimize_scalar
+from scipy.stats import betabinom, chi2, false_discovery_control
 
 # Local imports
-from .as_analysis import opt_prob, opt_unphased_dp, opt_phased_new
+from .as_analysis import opt_phased_new, opt_prob, opt_unphased_dp
 
 
 # Use these functions to figure out how to optimize per group
 def get_imbalance_func(
     ref_count: NDArray[np.integer[Any]],
     n_count: NDArray[np.integer[Any]],
-    phase_array: Optional[NDArray[np.integer[Any]]] = None
+    phase_array: NDArray[np.integer[Any]] | None = None,
 ) -> tuple[Callable[..., float], tuple[Any, ...]]:
     """
     Determine which imbalance function to use based on data characteristics.
@@ -43,8 +39,12 @@ def get_imbalance_func(
     elif phase_array is None:
         # Do unphased
         like_func = opt_unphased_dp  # type: ignore[assignment]
-        like_func_args = (ref_count[:1], n_count[:1],  # type: ignore[assignment]
-                          ref_count[1:], n_count[1:])
+        like_func_args = (
+            ref_count[:1],
+            n_count[:1],  # type: ignore[assignment]
+            ref_count[1:],
+            n_count[1:],
+        )
     else:
         # Do phased
         like_func = opt_phased_new  # type: ignore[assignment]
@@ -59,7 +59,7 @@ def opt_combined_imbalance(
     like_func1: Callable[..., float],
     like_func1_args: tuple[Any, ...],
     like_func2: Callable[..., float],
-    like_func2_args: tuple[Any, ...]
+    like_func2_args: tuple[Any, ...],
 ) -> float:
     """
     Optimize combined imbalance likelihood for two groups.
@@ -72,8 +72,7 @@ def opt_combined_imbalance(
     :param like_func2_args: Arguments for group 2 likelihood function
     :return: Combined negative log-likelihood
     """
-    return (like_func1(prob, disp, *like_func1_args) +
-            like_func2(prob, disp, *like_func2_args))
+    return like_func1(prob, disp, *like_func1_args) + like_func2(prob, disp, *like_func2_args)
 
 
 # Current version that uses shared snps
@@ -82,8 +81,8 @@ def get_compared_imbalance(
     min_count: int = 10,
     pseudocount: int = 1,
     phased: bool = False,
-    sample: Optional[str] = None,
-    groups: Optional[list[str]] = None
+    sample: str | None = None,
+    groups: list[str] | None = None,
 ) -> dict[tuple[str, str], pd.DataFrame]:
     """
     Compare allelic imbalance between groups using shared SNPs.
@@ -107,28 +106,35 @@ def get_compared_imbalance(
     elif len(groups) == 1:
         raise ValueError("Please provide 2 or more groups to compare.")
 
-
     # Process initial minimums for whole data dispersion
-    region_cutoff: int = min_count + (2 * pseudocount)
-    snp_cutoff: int = (2 * pseudocount)
+    min_count + (2 * pseudocount)
+    snp_cutoff: int = 2 * pseudocount
 
-    ref_counts: NDArray[np.uint16] = adata.layers["ref"].sum(axis=1, dtype=np.uint16).T.A1 + pseudocount
-    alt_counts: NDArray[np.uint16] = adata.layers["alt"].sum(axis=1, dtype=np.uint16).T.A1 + pseudocount
+    ref_counts: NDArray[np.uint16] = (
+        adata.layers["ref"].sum(axis=1, dtype=np.uint16).T.A1 + pseudocount
+    )
+    alt_counts: NDArray[np.uint16] = (
+        adata.layers["alt"].sum(axis=1, dtype=np.uint16).T.A1 + pseudocount
+    )
     n_counts: NDArray[np.uint16] = ref_counts + alt_counts
 
-
     # Calculate dispersion across dataset
-    opt_disp: Callable[[float, NDArray[np.uint16], NDArray[np.uint16]], float] = lambda rho, ref_data, n_data: -np.sum(
-        betabinom.logpmf(ref_data, n_data, (0.5 * (1 - rho) / rho), (0.5 * (1 - rho) / rho))
+    opt_disp: Callable[[float, NDArray[np.uint16], NDArray[np.uint16]], float] = (
+        lambda rho, ref_data, n_data: -np.sum(
+            betabinom.logpmf(ref_data, n_data, (0.5 * (1 - rho) / rho), (0.5 * (1 - rho) / rho))
+        )
     )
 
-    disp: float = minimize_scalar(opt_disp, args=(ref_counts, n_counts), method="bounded", bounds=(0,1))["x"]
+    disp: float = minimize_scalar(
+        opt_disp, args=(ref_counts, n_counts), method="bounded", bounds=(0, 1)
+    )["x"]
 
     if phased:
-        gt_array: Optional[NDArray[np.uint8]] = adata.obs[sample].str.split("|", n=1).str[0].to_numpy(dtype=np.uint8)
+        gt_array: NDArray[np.uint8] | None = (
+            adata.obs[sample].str.split("|", n=1).str[0].to_numpy(dtype=np.uint8)
+        )
     else:
         gt_array = None
-
 
     # process counts on a per group basis to avoid recalculating
     group_dict: dict[str, Any] = {}
@@ -136,7 +142,6 @@ def get_compared_imbalance(
     group_data = namedtuple("group_data", ["ref_counts", "n_counts", "region_snp_df"])
 
     for group_name in groups:
-
         # Subset by group
         adata_sub = adata[:, adata.var["group"] == group_name]
 
@@ -145,49 +150,50 @@ def get_compared_imbalance(
         alt_counts_group = adata_sub.layers["alt"].sum(axis=1, dtype=np.uint16).T.A1 + pseudocount
         n_counts_group = ref_counts_group + alt_counts_group
 
-        nonzero_idx = np.where(n_counts_group > snp_cutoff) # Get indices where no counts were found
+        nonzero_idx = np.where(
+            n_counts_group > snp_cutoff
+        )  # Get indices where no counts were found
 
         if nonzero_idx[0].size == 0:
             print(f"Skipping {group_name}: No SNP counts found")
             continue
 
         # Remove snps with 0 counts from regions
-        idx_df = pd.DataFrame({"index": nonzero_idx[0]}, dtype=np.uint32).reset_index(names="filt_index")
+        idx_df = pd.DataFrame({"index": nonzero_idx[0]}, dtype=np.uint32).reset_index(
+            names="filt_index"
+        )
         region_idx_df = adata.uns["feature"].merge(idx_df, on="index")
-
 
         # Check total allele counts/N per region
         region_n_df = region_idx_df.merge(
-            pd.DataFrame(n_counts_group, columns=["N"]).reset_index(names="index"),
-            on="index")
+            pd.DataFrame(n_counts_group, columns=["N"]).reset_index(names="index"), on="index"
+        )
 
         group_dict[group_name] = group_data(ref_counts_group, n_counts_group, region_n_df)
-
 
     # Create group combinations and process shared snps
     group_combos: list[tuple[str, str]] = list(combinations(group_dict.keys(), r=2))
 
     df_dict: dict[tuple[str, str], pd.DataFrame] = {}
     for group1, group2 in group_combos:
-
         # Get relevant counts and nonzero snps
         ref_counts1, n_counts1, region_snp_df1 = group_dict[group1]
         ref_counts2, n_counts2, region_snp_df2 = group_dict[group2]
 
-
         # Get shared snps -> get regions that meet cutoff
         shared_df = region_snp_df1[["region", "index", "N"]].merge(
-            region_snp_df2[["index", "N"]], on="index", suffixes=("1", "2"))
-
+            region_snp_df2[["index", "N"]], on="index", suffixes=("1", "2")
+        )
 
         # Take into account pseudocounts added to total N
         region_agg_df = shared_df.groupby("region", sort=False).agg(
-            snp_idx=("index", tuple), num_snps=("index", "size"),
-            N1=("N1", np.sum), N2=("N2", np.sum)
+            snp_idx=("index", tuple),
+            num_snps=("index", "size"),
+            N1=("N1", np.sum),
+            N2=("N2", np.sum),
         )
 
         region_agg_df["region_cutoff"] = (region_agg_df["num_snps"] * snp_cutoff) + min_count
-
 
         # Find regions where N is satisfied for both
         # region_agg_df = shared_df.groupby("region", sort=False).agg(
@@ -197,10 +203,11 @@ def get_compared_imbalance(
         # Per group snp_dict
         region_snp_dict = region_agg_df.loc[
             (
-                (region_agg_df["N1"] >= region_agg_df["region_cutoff"]) &
-                (region_agg_df["N2"] >= region_agg_df["region_cutoff"])
-                ),
-            "snp_idx"].to_dict()
+                (region_agg_df["N1"] >= region_agg_df["region_cutoff"])
+                & (region_agg_df["N2"] >= region_agg_df["region_cutoff"])
+            ),
+            "snp_idx",
+        ].to_dict()
 
         # region_snp_dict = region_agg_df.loc[
         #     (region_agg_df["N1"] >= region_cutoff) & (region_agg_df["N2"] >= region_cutoff),
@@ -208,23 +215,16 @@ def get_compared_imbalance(
 
         if not region_snp_dict:
             print(
-                (f"Skipping {group1}-{group2} Comparison: "
-                 f"No shared regions with allele counts >= {min_count}"
-                )
+                f"Skipping {group1}-{group2} Comparison: "
+                f"No shared regions with allele counts >= {min_count}"
             )
 
             continue
 
-
         # This sub function name kinda long...find better name maybe?
-        df = compare_imbalance_between_groups(disp,
-                                              ref_counts1,
-                                              n_counts1,
-                                              ref_counts2,
-                                              n_counts2,
-                                              region_snp_dict,
-                                              gt_array
-                                              )
+        df = compare_imbalance_between_groups(
+            disp, ref_counts1, n_counts1, ref_counts2, n_counts2, region_snp_dict, gt_array
+        )
 
         # Using a tuple as key
         df_dict[(group1, group2)] = df
@@ -239,7 +239,7 @@ def compare_imbalance_between_groups(
     ref_counts2: NDArray[np.uint16],
     n_counts2: NDArray[np.uint16],
     region_snp_dict: dict[str, tuple[int, ...]],
-    gt_array: Optional[NDArray[np.uint8]] = None
+    gt_array: NDArray[np.uint8] | None = None,
 ) -> pd.DataFrame:
     """
     Compare allelic imbalance between two groups for shared regions.
@@ -255,18 +255,18 @@ def compare_imbalance_between_groups(
     """
     # Helper func called by get_compared_imbalance()
 
-    group_results: list[tuple[str, int, float, float, float, float, float, float]] = [] # Store imbalance results
+    group_results: list[
+        tuple[str, int, float, float, float, float, float, float]
+    ] = []  # Store imbalance results
 
     # Compare allelic imbalance difference per region
     for region, snp_list in region_snp_dict.items():
-
         # Get per region snps and counts
         region_ref1 = ref_counts1[snp_list,]
         region_n1 = n_counts1[snp_list,]
 
         region_ref2 = ref_counts2[snp_list,]
         region_n2 = n_counts2[snp_list,]
-
 
         # Process which model we'll use to process likelihood per group
         if len(snp_list) == 1:
@@ -281,11 +281,19 @@ def compare_imbalance_between_groups(
             # Do unphased
             like_func = opt_unphased_dp  # type: ignore[assignment]
 
-            like_func_args1 = (region_ref1[:1], region_n1[:1],  # type: ignore[assignment]
-                               region_ref1[1:], region_n1[1:])
+            like_func_args1 = (
+                region_ref1[:1],
+                region_n1[:1],  # type: ignore[assignment]
+                region_ref1[1:],
+                region_n1[1:],
+            )
 
-            like_func_args2 = (region_ref2[:1], region_n2[:1],  # type: ignore[assignment]
-                               region_ref2[1:], region_n2[1:])
+            like_func_args2 = (
+                region_ref2[:1],
+                region_n2[:1],  # type: ignore[assignment]
+                region_ref2[1:],
+                region_n2[1:],
+            )
 
         else:
             # Do phased
@@ -302,26 +310,25 @@ def compare_imbalance_between_groups(
             like_func_args1 = (region_ref1, region_n1, region_gt)  # type: ignore[assignment]
             like_func_args2 = (region_ref2, region_n2, region_gt)  # type: ignore[assignment]
 
-
         # Null Hypothesis: Imbalance is the same
-        null_res: OptimizeResult = minimize_scalar(opt_combined_imbalance,
-                                   args=(disp,
-                                         like_func, like_func_args1,
-                                         like_func, like_func_args2),
-                                   method="bounded", bounds=(0, 1))
+        null_res: OptimizeResult = minimize_scalar(
+            opt_combined_imbalance,
+            args=(disp, like_func, like_func_args1, like_func, like_func_args2),
+            method="bounded",
+            bounds=(0, 1),
+        )
 
         combined_mu: float = null_res["x"]
         null_ll: float = -1 * null_res["fun"]
 
-
         # Alt Hypothesis: Imbalance is different between groups
-        alt_res1: OptimizeResult = minimize_scalar(like_func,
-                                   args=(disp, *like_func_args1),
-                                   method="bounded", bounds=(0, 1))
+        alt_res1: OptimizeResult = minimize_scalar(
+            like_func, args=(disp, *like_func_args1), method="bounded", bounds=(0, 1)
+        )
 
-        alt_res2: OptimizeResult = minimize_scalar(like_func,
-                                   args=(disp, *like_func_args2),
-                                   method="bounded", bounds=(0, 1))
+        alt_res2: OptimizeResult = minimize_scalar(
+            like_func, args=(disp, *like_func_args2), method="bounded", bounds=(0, 1)
+        )
 
         # Get separate mu
         alt_mu1: float = alt_res1["x"]
@@ -347,15 +354,10 @@ def compare_imbalance_between_groups(
     # Create allelic imbalance df
 
     # Polars implementation might be more performant
-    df: pd.DataFrame = pd.DataFrame(group_results,
-                      columns=["region",
-                               "num_snps",
-                               "combined_mu",
-                               "mu1", "mu2",
-                               "null_ll",
-                               "alt_ll",
-                               "pval"]
-                     )
+    df: pd.DataFrame = pd.DataFrame(
+        group_results,
+        columns=["region", "num_snps", "combined_mu", "mu1", "mu2", "null_ll", "alt_ll", "pval"],
+    )
 
     # fdr correction
     df["fdr_pval"] = false_discovery_control(df["pval"], method="bh")
@@ -370,8 +372,8 @@ def get_compared_imbalance_diff_snps(
     min_count: int = 10,
     pseudocount: int = 1,
     phased: bool = False,
-    sample: Optional[str] = None,
-    groups: Optional[list[str]] = None
+    sample: str | None = None,
+    groups: list[str] | None = None,
 ) -> dict[tuple[str, str], pd.DataFrame]:
     """
     Compare allelic imbalance between groups (V0 version without shared SNPs).
@@ -395,33 +397,43 @@ def get_compared_imbalance_diff_snps(
     elif len(groups) == 1:
         raise ValueError("Please provide 2 or more groups to compare.")
 
-
     # Process initial minimums for whole data dispersion
-    cutoff: int = min_count + (2*pseudocount)
+    cutoff: int = min_count + (2 * pseudocount)
 
-    ref_counts: NDArray[np.uint16] = adata.layers["ref"].sum(axis=1, dtype=np.uint16).T.A1 + pseudocount
-    alt_counts: NDArray[np.uint16] = adata.layers["alt"].sum(axis=1, dtype=np.uint16).T.A1 + pseudocount
+    ref_counts: NDArray[np.uint16] = (
+        adata.layers["ref"].sum(axis=1, dtype=np.uint16).T.A1 + pseudocount
+    )
+    alt_counts: NDArray[np.uint16] = (
+        adata.layers["alt"].sum(axis=1, dtype=np.uint16).T.A1 + pseudocount
+    )
 
     n_counts: NDArray[np.uint16] = ref_counts + alt_counts
-    min_idx: tuple[NDArray[np.intp], ...] = np.where(n_counts >= cutoff) # Get indices for min_count
+    min_idx: tuple[NDArray[np.intp], ...] = np.where(
+        n_counts >= cutoff
+    )  # Get indices for min_count
 
     ref_counts_filt: NDArray[np.uint16]
     n_counts_filt: NDArray[np.uint16]
     ref_counts_filt, n_counts_filt = ref_counts[min_idx], n_counts[min_idx]
 
     # Calculate dispersion across dataset
-    opt_disp: Callable[[float, NDArray[np.uint16], NDArray[np.uint16]], float] = lambda rho, ref_data, n_data: -np.sum(
-        betabinom.logpmf(ref_data, n_data, (0.5 * (1 - rho) / rho), (0.5 * (1 - rho) / rho))
+    opt_disp: Callable[[float, NDArray[np.uint16], NDArray[np.uint16]], float] = (
+        lambda rho, ref_data, n_data: -np.sum(
+            betabinom.logpmf(ref_data, n_data, (0.5 * (1 - rho) / rho), (0.5 * (1 - rho) / rho))
+        )
     )
 
-    disp: float = minimize_scalar(opt_disp, args=(ref_counts_filt, n_counts_filt), method="bounded", bounds=(0,1))["x"]
+    disp: float = minimize_scalar(
+        opt_disp, args=(ref_counts_filt, n_counts_filt), method="bounded", bounds=(0, 1)
+    )["x"]
 
     # process counts on a per group basis to avoid recalculating
     group_dict: dict[str, Any] = {}
-    group_data = namedtuple("group_data", ["ref_counts", "n_counts", "phase_data", "region_snp_dict"]) # Maybe include the gt_array instead of min_idx
+    group_data = namedtuple(
+        "group_data", ["ref_counts", "n_counts", "phase_data", "region_snp_dict"]
+    )  # Maybe include the gt_array instead of min_idx
 
     for group_name in groups:
-
         # Subset by group
         adata_sub = adata[:, adata.var["group"] == group_name]
 
@@ -430,44 +442,56 @@ def get_compared_imbalance_diff_snps(
         alt_counts_group = adata_sub.layers["alt"].sum(axis=1, dtype=np.uint16).T.A1 + pseudocount
         n_counts_group = ref_counts_group + alt_counts_group
 
-        min_idx_group = np.where(n_counts_group >= cutoff) # Get indices for min_count
+        min_idx_group = np.where(n_counts_group >= cutoff)  # Get indices for min_count
 
-        ref_counts_group_filt, n_counts_group_filt = ref_counts_group[min_idx_group], n_counts_group[min_idx_group]
+        ref_counts_group_filt, n_counts_group_filt = (
+            ref_counts_group[min_idx_group],
+            n_counts_group[min_idx_group],
+        )
 
         if phased:
-            phase_array = adata.obs.iloc[min_idx_group][sample].str.split("|", n=1).str[0].to_numpy(dtype=np.uint8)
+            phase_array = (
+                adata.obs.iloc[min_idx_group][sample]
+                .str.split("|", n=1)
+                .str[0]
+                .to_numpy(dtype=np.uint8)
+            )
         else:
             phase_array = None
 
         # Create region_snp_dict but for each group
-        idx_df = pd.DataFrame({"index": min_idx_group[0]}, dtype=np.uint32).reset_index(names="filt_index")
+        idx_df = pd.DataFrame({"index": min_idx_group[0]}, dtype=np.uint32).reset_index(
+            names="filt_index"
+        )
 
-        region_snp_dict = adata.uns["feature"].merge(
-            idx_df, on="index")[["region", "filt_index"]].groupby(
-            "region", sort=False).agg(tuple)["filt_index"].to_dict()
+        region_snp_dict = (
+            adata.uns["feature"]
+            .merge(idx_df, on="index")[["region", "filt_index"]]
+            .groupby("region", sort=False)
+            .agg(tuple)["filt_index"]
+            .to_dict()
+        )
 
-        group_dict[group_name] = group_data(ref_counts_group_filt, n_counts_group_filt,
-                                            phase_array, region_snp_dict)
+        group_dict[group_name] = group_data(
+            ref_counts_group_filt, n_counts_group_filt, phase_array, region_snp_dict
+        )
 
     # Create group combinations and process shared snps
     group_combos: list[tuple[str, str]] = list(combinations(group_dict.keys(), r=2))
 
     df_dict: dict[tuple[str, str], pd.DataFrame] = {}
     for group1, group2 in group_combos:
-
         # Might be smart to create a cache to prevent repeating calculations
         # This sub function name kinda long...find better name maybe?
-        df = compare_imbalance_between_groups_diff_snps(disp,
-                                              *group_dict[group1],
-                                              *group_dict[group2]
-                                             )
+        df = compare_imbalance_between_groups_diff_snps(
+            disp, *group_dict[group1], *group_dict[group2]
+        )
 
         if df.empty:
             print(f"Skipping {group1} - {group2} comparison. No shared regions.")
         else:
             # Using a tuple as key
             df_dict[(group1, group2)] = df
-
 
     return df_dict
 
@@ -476,12 +500,12 @@ def compare_imbalance_between_groups_diff_snps(
     disp: float,
     ref_counts1: NDArray[np.uint16],
     n_counts1: NDArray[np.uint16],
-    phase_array1: Optional[NDArray[np.uint8]],
+    phase_array1: NDArray[np.uint8] | None,
     region_snp_dict1: dict[str, tuple[int, ...]],
     ref_counts2: NDArray[np.uint16],
     n_counts2: NDArray[np.uint16],
-    phase_array2: Optional[NDArray[np.uint8]],
-    region_snp_dict2: dict[str, tuple[int, ...]]
+    phase_array2: NDArray[np.uint8] | None,
+    region_snp_dict2: dict[str, tuple[int, ...]],
 ) -> pd.DataFrame:
     """
     Compare allelic imbalance between two groups with different SNPs per region.
@@ -501,19 +525,17 @@ def compare_imbalance_between_groups_diff_snps(
     # Helper func called by get_compared_imbalance()
 
     # Check if phasing info available
-    phased: bool = ((phase_array1 is not None) and
-              (phase_array2 is not None))
+    phased: bool = (phase_array1 is not None) and (phase_array2 is not None)
 
     # Get shared regions
-    shared_regions: list[str] = [i for i in region_snp_dict1.keys()
-                      if i in region_snp_dict2]
+    shared_regions: list[str] = [i for i in region_snp_dict1 if i in region_snp_dict2]
 
-
-    group_results: list[tuple[str, int, int, float, float, float, float, float, float]] = [] # Store imbalance results
+    group_results: list[
+        tuple[str, int, int, float, float, float, float, float, float]
+    ] = []  # Store imbalance results
 
     # Compare allelic imbalance difference per region
     for region in shared_regions:
-
         # Get per region snps and counts
         snp_list1 = region_snp_dict1[region]
         region_ref1 = ref_counts1[snp_list1,]
@@ -532,33 +554,32 @@ def compare_imbalance_between_groups_diff_snps(
 
         # Process which model we'll use to process likelihood per group
         like_func1, like_func_inputs1 = get_imbalance_func(
-            region_ref1, region_n1, phase_array=region_phasing1)
+            region_ref1, region_n1, phase_array=region_phasing1
+        )
 
         like_func2, like_func_inputs2 = get_imbalance_func(
-            region_ref2, region_n2, phase_array=region_phasing2)
-
+            region_ref2, region_n2, phase_array=region_phasing2
+        )
 
         # Null Hypothesis: Imbalance is the same
-        null_res: OptimizeResult = minimize_scalar(opt_combined_imbalance,
-                                   args=(disp,
-                                         like_func1, like_func_inputs1,
-                                         like_func2, like_func_inputs2),
-                                   method="bounded", bounds=(0, 1))
+        null_res: OptimizeResult = minimize_scalar(
+            opt_combined_imbalance,
+            args=(disp, like_func1, like_func_inputs1, like_func2, like_func_inputs2),
+            method="bounded",
+            bounds=(0, 1),
+        )
 
         combined_mu: float = null_res["x"]
         null_ll: float = -1 * null_res["fun"]
 
-
         # Alt Hypothesis: Imbalance is different between groups
-        alt_res1: OptimizeResult = minimize_scalar(like_func1,
-                                   args=(disp, *like_func_inputs1),
-                                   method="bounded", bounds=(0, 1))
+        alt_res1: OptimizeResult = minimize_scalar(
+            like_func1, args=(disp, *like_func_inputs1), method="bounded", bounds=(0, 1)
+        )
 
-
-        alt_res2: OptimizeResult = minimize_scalar(like_func2,
-                                   args=(disp, *like_func_inputs2),
-                                   method="bounded", bounds=(0, 1))
-
+        alt_res2: OptimizeResult = minimize_scalar(
+            like_func2, args=(disp, *like_func_inputs2), method="bounded", bounds=(0, 1)
+        )
 
         # Get separate mu
         alt_mu1: float = alt_res1["x"]
@@ -566,7 +587,6 @@ def compare_imbalance_between_groups_diff_snps(
 
         # get Alternative likelihood
         alt_ll: float = -1 * (alt_res1["fun"] + alt_res2["fun"])
-
 
         # Log ratio ttest
         lrt: float = -2 * (null_ll - alt_ll)
@@ -576,21 +596,38 @@ def compare_imbalance_between_groups_diff_snps(
 
         # How should i format this, lots of possible outputs
         group_results.append(
-            (region, len(snp_list1), len(snp_list2), combined_mu, alt_mu1, alt_mu2, null_ll, alt_ll, pval)
+            (
+                region,
+                len(snp_list1),
+                len(snp_list2),
+                combined_mu,
+                alt_mu1,
+                alt_mu2,
+                null_ll,
+                alt_ll,
+                pval,
+            )
         )
 
     # Create allelic imbalance df
 
     # Polars implementation might be more performant
-    df: pd.DataFrame = pd.DataFrame(group_results,
-                      columns=["region",
-                               "num_snps_group1", "num_snps_group2",
-                               "combined_mu", "mu1", "mu2",
-                               "null_ll", "alt_ll", "pval"]
-                     )
+    df: pd.DataFrame = pd.DataFrame(
+        group_results,
+        columns=[
+            "region",
+            "num_snps_group1",
+            "num_snps_group2",
+            "combined_mu",
+            "mu1",
+            "mu2",
+            "null_ll",
+            "alt_ll",
+            "pval",
+        ],
+    )
 
     # fdr correction
     df["fdr_pval"] = false_discovery_control(df["pval"], method="bh")
 
     return df
-

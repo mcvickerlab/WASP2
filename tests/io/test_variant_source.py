@@ -8,18 +8,17 @@ Run with: pytest tests/io/test_variant_source.py -v
 """
 
 import pytest
-from pathlib import Path
-from typing import List
 
 # These imports will fail until we implement the module
 # That's expected in TDD - tests are written first!
 try:
     from wasp2.io.variant_source import (
-        VariantSource,
+        Genotype,
         Variant,
         VariantGenotype,
-        Genotype,
+        VariantSource,
     )
+
     IMPORTS_AVAILABLE = True
 except ImportError:
     IMPORTS_AVAILABLE = False
@@ -31,14 +30,14 @@ except ImportError:
 
 
 pytestmark = pytest.mark.skipif(
-    not IMPORTS_AVAILABLE,
-    reason="wasp2.io.variant_source not yet implemented"
+    not IMPORTS_AVAILABLE, reason="wasp2.io.variant_source not yet implemented"
 )
 
 
 # ============================================================================
 # Tests for Variant dataclass
 # ============================================================================
+
 
 class TestVariant:
     """Tests for the Variant data class."""
@@ -91,6 +90,7 @@ class TestVariant:
 # Tests for Genotype enum
 # ============================================================================
 
+
 class TestGenotype:
     """Tests for the Genotype enum."""
 
@@ -113,18 +113,14 @@ class TestGenotype:
 # Tests for VariantGenotype dataclass
 # ============================================================================
 
+
 class TestVariantGenotype:
     """Tests for VariantGenotype data class."""
 
     def test_variant_genotype_creation(self):
         """Test creating a VariantGenotype object."""
         v = Variant(chrom="chr1", pos=100, ref="A", alt="G")
-        vg = VariantGenotype(
-            variant=v,
-            genotype=Genotype.HET,
-            allele1="A",
-            allele2="G"
-        )
+        vg = VariantGenotype(variant=v, genotype=Genotype.HET, allele1="A", allele2="G")
         assert vg.variant == v
         assert vg.genotype == Genotype.HET
         assert vg.allele1 == "A"
@@ -148,6 +144,7 @@ class TestVariantGenotype:
 # Tests for VariantSource ABC and Factory
 # ============================================================================
 
+
 class TestVariantSourceFactory:
     """Tests for VariantSource factory/registry pattern."""
 
@@ -163,7 +160,7 @@ class TestVariantSourceFactory:
 
     def test_format_detection_pgen(self, sample_pgen_files):
         """Test auto-detection of PGEN format."""
-        ext = VariantSource._detect_format(sample_pgen_files['pgen'])
+        ext = VariantSource._detect_format(sample_pgen_files["pgen"])
         assert ext == "pgen"
 
     def test_open_vcf_returns_correct_type(self, sample_vcf):
@@ -173,7 +170,7 @@ class TestVariantSourceFactory:
 
     def test_open_pgen_returns_correct_type(self, sample_pgen_files):
         """Test that opening PGEN returns PGENSource."""
-        with VariantSource.open(sample_pgen_files['pgen']) as source:
+        with VariantSource.open(sample_pgen_files["pgen"]) as source:
             assert source.__class__.__name__ == "PGENSource"
 
     def test_open_unsupported_format_raises(self, tmp_path):
@@ -200,6 +197,7 @@ class TestVariantSourceFactory:
 # These tests verify behavior across ALL implementations
 # ============================================================================
 
+
 class TestVariantSourceInterface:
     """Tests for VariantSource interface contract.
 
@@ -212,7 +210,7 @@ class TestVariantSourceInterface:
         if request.param == "vcf":
             return VariantSource.open(sample_vcf)
         else:
-            return VariantSource.open(sample_pgen_files['pgen'])
+            return VariantSource.open(sample_pgen_files["pgen"])
 
     def test_samples_property(self, variant_source):
         """Test samples property returns list of sample IDs."""
@@ -286,6 +284,7 @@ class TestVariantSourceInterface:
 # Tests for to_bed() method
 # ============================================================================
 
+
 class TestToBed:
     """Tests for the to_bed() method."""
 
@@ -295,7 +294,7 @@ class TestToBed:
         if request.param == "vcf":
             return VariantSource.open(sample_vcf)
         else:
-            return VariantSource.open(sample_pgen_files['pgen'])
+            return VariantSource.open(sample_pgen_files["pgen"])
 
     def test_to_bed_creates_file(self, variant_source, tmp_output_dir):
         """Test that to_bed creates output file."""
@@ -310,19 +309,19 @@ class TestToBed:
         output = tmp_output_dir / "output.bed"
         variant_source.to_bed(output, het_only=False, include_genotypes=False)
 
-        lines = output.read_text().strip().split('\n')
+        lines = output.read_text().strip().split("\n")
 
         # Should have 6 variants
         assert len(lines) == 6
 
         # Check first line format: chrom, start (0-based), end, ref, alt
-        fields = lines[0].split('\t')
+        fields = lines[0].split("\t")
         assert len(fields) >= 5
         assert fields[0] == "chr1"
-        assert fields[1] == "99"   # 0-based start
+        assert fields[1] == "99"  # 0-based start
         assert fields[2] == "100"  # 1-based end
-        assert fields[3] == "A"    # ref
-        assert fields[4] == "G"    # alt
+        assert fields[3] == "A"  # ref
+        assert fields[4] == "G"  # alt
 
     def test_to_bed_het_only(self, variant_source, tmp_output_dir):
         """Test het_only filtering."""
@@ -330,13 +329,9 @@ class TestToBed:
         samples = variant_source.samples
 
         # Get het sites for first sample
-        variant_source.to_bed(
-            output,
-            samples=[samples[0]],
-            het_only=True
-        )
+        variant_source.to_bed(output, samples=[samples[0]], het_only=True)
 
-        lines = output.read_text().strip().split('\n')
+        lines = output.read_text().strip().split("\n")
         # sample1 has 3 het sites
         # (may vary slightly due to format differences)
         assert len(lines) >= 2  # At least some het sites
@@ -346,15 +341,10 @@ class TestToBed:
         output = tmp_output_dir / "with_gt.bed"
         samples = variant_source.samples
 
-        variant_source.to_bed(
-            output,
-            samples=[samples[0]],
-            het_only=False,
-            include_genotypes=True
-        )
+        variant_source.to_bed(output, samples=[samples[0]], het_only=False, include_genotypes=True)
 
-        lines = output.read_text().strip().split('\n')
-        fields = lines[0].split('\t')
+        lines = output.read_text().strip().split("\n")
+        fields = lines[0].split("\t")
 
         # Should have genotype column(s) after ref/alt
         assert len(fields) >= 6
@@ -363,6 +353,7 @@ class TestToBed:
 # ============================================================================
 # Tests for query_region() method
 # ============================================================================
+
 
 class TestQueryRegion:
     """Tests for region queries."""
@@ -373,7 +364,7 @@ class TestQueryRegion:
         if request.param == "vcf":
             return VariantSource.open(sample_vcf_gz)
         else:
-            return VariantSource.open(sample_pgen_files['pgen'])
+            return VariantSource.open(sample_pgen_files["pgen"])
 
     def test_query_region_returns_variants(self, variant_source):
         """Test querying a region returns expected variants."""
@@ -401,15 +392,14 @@ class TestQueryRegion:
 # Output equivalence tests
 # ============================================================================
 
+
 class TestOutputEquivalence:
     """Tests ensuring VCF and PGEN produce equivalent outputs."""
 
-    def test_bed_output_equivalence(
-        self, sample_vcf, sample_pgen_files, tmp_output_dir
-    ):
+    def test_bed_output_equivalence(self, sample_vcf, sample_pgen_files, tmp_output_dir):
         """Test that VCF and PGEN produce equivalent BED output."""
         vcf_source = VariantSource.open(sample_vcf)
-        pgen_source = VariantSource.open(sample_pgen_files['pgen'])
+        pgen_source = VariantSource.open(sample_pgen_files["pgen"])
 
         vcf_bed = tmp_output_dir / "vcf.bed"
         pgen_bed = tmp_output_dir / "pgen.bed"
@@ -419,8 +409,8 @@ class TestOutputEquivalence:
         pgen_source.to_bed(pgen_bed, het_only=False, include_genotypes=False)
 
         # Compare content
-        vcf_lines = set(vcf_bed.read_text().strip().split('\n'))
-        pgen_lines = set(pgen_bed.read_text().strip().split('\n'))
+        vcf_lines = set(vcf_bed.read_text().strip().split("\n"))
+        pgen_lines = set(pgen_bed.read_text().strip().split("\n"))
 
         assert vcf_lines == pgen_lines, (
             f"BED outputs differ!\n"
@@ -431,13 +421,13 @@ class TestOutputEquivalence:
     def test_variant_count_equivalence(self, sample_vcf, sample_pgen_files):
         """Test VCF and PGEN report same variant count."""
         vcf_source = VariantSource.open(sample_vcf)
-        pgen_source = VariantSource.open(sample_pgen_files['pgen'])
+        pgen_source = VariantSource.open(sample_pgen_files["pgen"])
 
         assert vcf_source.variant_count == pgen_source.variant_count
 
     def test_sample_count_equivalence(self, sample_vcf, sample_pgen_files):
         """Test VCF and PGEN report same sample count."""
         vcf_source = VariantSource.open(sample_vcf)
-        pgen_source = VariantSource.open(sample_pgen_files['pgen'])
+        pgen_source = VariantSource.open(sample_pgen_files["pgen"])
 
         assert vcf_source.sample_count == pgen_source.sample_count

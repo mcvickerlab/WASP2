@@ -11,12 +11,9 @@ Run with: pytest tests/regression/test_pipeline_regression.py -v
 """
 
 import hashlib
-import subprocess
-import tempfile
-import time
-from pathlib import Path
-from typing import Dict, Tuple
 import shutil
+import subprocess
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -33,21 +30,21 @@ BASELINE_EXPECTATIONS = {
         "memory_mb": 639,
         "output_rows": 111455,  # header + 111454 SNPs
         "total_alleles": 3041,
-        "md5": "612330f6ce767e5d014d1acb82159564"
+        "md5": "612330f6ce767e5d014d1acb82159564",
     },
     "analysis": {
         "time_seconds": 2.97,
         "memory_mb": 340,
         "output_rows": 44,  # header + 43 regions
         "significant_regions": 0,
-        "md5": "fcba7e57c583d91a6909d41035e8a694"
+        "md5": "fcba7e57c583d91a6909d41035e8a694",
     },
     "mapping": {
         "time_seconds": 8.0,
         "memory_mb": 488,
         "wasp_filtered_reads": 125387,
-        "original_reads": 126061
-    }
+        "original_reads": 126061,
+    },
 }
 
 # Tolerance for performance regression
@@ -64,32 +61,32 @@ def md5_file(filepath: Path) -> str:
     return hash_md5.hexdigest()
 
 
-def parse_memory_profile(profile_file: Path) -> Dict[str, float]:
+def parse_memory_profile(profile_file: Path) -> dict[str, float]:
     """Parse /usr/bin/time -v output to extract metrics."""
     with open(profile_file) as f:
         content = f.read()
 
     metrics = {}
-    for line in content.split('\n'):
-        if 'Maximum resident set size' in line:
-            kb = int(line.split(':')[1].strip())
-            metrics['memory_mb'] = kb / 1024
-        elif 'Elapsed (wall clock) time' in line:
+    for line in content.split("\n"):
+        if "Maximum resident set size" in line:
+            kb = int(line.split(":")[1].strip())
+            metrics["memory_mb"] = kb / 1024
+        elif "Elapsed (wall clock) time" in line:
             # Format: "Elapsed (wall clock) time (h:mm:ss or m:ss): 0:09.26"
             # Take last part after splitting on ':'
-            time_str = line.split(':')[-1].strip()
+            time_str = line.split(":")[-1].strip()
             # Parse m:ss.ms format
-            if ':' in time_str:
-                parts = time_str.split(':')
+            if ":" in time_str:
+                parts = time_str.split(":")
                 if len(parts) == 2:
                     mins, secs = parts
-                    metrics['time_seconds'] = int(mins) * 60 + float(secs)
+                    metrics["time_seconds"] = int(mins) * 60 + float(secs)
                 elif len(parts) == 3:
                     hours, mins, secs = parts
-                    metrics['time_seconds'] = int(hours) * 3600 + int(mins) * 60 + float(secs)
+                    metrics["time_seconds"] = int(hours) * 3600 + int(mins) * 60 + float(secs)
             else:
                 # Just seconds
-                metrics['time_seconds'] = float(time_str)
+                metrics["time_seconds"] = float(time_str)
 
     return metrics
 
@@ -121,25 +118,32 @@ class TestCountingRegression:
         if not baseline_counts.exists():
             pytest.skip("Baseline counting output not found")
 
-        df = pd.read_csv(baseline_counts, sep='\t')
+        df = pd.read_csv(baseline_counts, sep="\t")
 
         # Check columns
-        expected_cols = ['chrom', 'pos', 'ref', 'alt', 'GT', 'region',
-                        'ref_count', 'alt_count', 'other_count']
+        expected_cols = [
+            "chrom",
+            "pos",
+            "ref",
+            "alt",
+            "GT",
+            "region",
+            "ref_count",
+            "alt_count",
+            "other_count",
+        ]
         assert list(df.columns) == expected_cols, f"Column mismatch: {list(df.columns)}"
 
         # Check row count
         assert len(df) == BASELINE_EXPECTATIONS["counting"]["output_rows"] - 1  # minus header
 
         # Check data types
-        assert df['ref_count'].dtype in [int, 'int64', 'uint16']
-        assert df['alt_count'].dtype in [int, 'int64', 'uint16']
-        assert df['other_count'].dtype in [int, 'int64', 'uint16']
+        assert df["ref_count"].dtype in [int, "int64", "uint16"]
+        assert df["alt_count"].dtype in [int, "int64", "uint16"]
+        assert df["other_count"].dtype in [int, "int64", "uint16"]
 
         # Check total alleles
-        total_alleles = (df['ref_count'].sum() +
-                        df['alt_count'].sum() +
-                        df['other_count'].sum())
+        total_alleles = df["ref_count"].sum() + df["alt_count"].sum() + df["other_count"].sum()
         assert total_alleles == BASELINE_EXPECTATIONS["counting"]["total_alleles"]
 
     def test_counting_memory_regression(self):
@@ -150,7 +154,7 @@ class TestCountingRegression:
             pytest.skip("Baseline memory profile not found")
 
         metrics = parse_memory_profile(memory_profile)
-        actual_mb = metrics['memory_mb']
+        actual_mb = metrics["memory_mb"]
         expected_mb = BASELINE_EXPECTATIONS["counting"]["memory_mb"]
         max_allowed_mb = expected_mb * MEMORY_TOLERANCE
 
@@ -170,7 +174,7 @@ class TestCountingRegression:
             pytest.skip("Baseline memory profile not found")
 
         metrics = parse_memory_profile(memory_profile)
-        actual_seconds = metrics['time_seconds']
+        actual_seconds = metrics["time_seconds"]
         expected_seconds = BASELINE_EXPECTATIONS["counting"]["time_seconds"]
         max_allowed_seconds = expected_seconds * TIME_TOLERANCE
 
@@ -210,25 +214,36 @@ class TestAnalysisRegression:
         if not baseline_analysis.exists():
             pytest.skip("Baseline analysis output not found")
 
-        df = pd.read_csv(baseline_analysis, sep='\t')
+        df = pd.read_csv(baseline_analysis, sep="\t")
 
         # Check columns
-        expected_cols = ['region', 'ref_count', 'alt_count', 'N', 'snp_count',
-                        'null_ll', 'alt_ll', 'mu', 'lrt', 'pval', 'fdr_pval']
+        expected_cols = [
+            "region",
+            "ref_count",
+            "alt_count",
+            "N",
+            "snp_count",
+            "null_ll",
+            "alt_ll",
+            "mu",
+            "lrt",
+            "pval",
+            "fdr_pval",
+        ]
         assert list(df.columns) == expected_cols, f"Column mismatch: {list(df.columns)}"
 
         # Check row count
         assert len(df) == BASELINE_EXPECTATIONS["analysis"]["output_rows"] - 1  # minus header
 
         # Check significant regions
-        significant = (df['fdr_pval'] < 0.05).sum()
+        significant = (df["fdr_pval"] < 0.05).sum()
         assert significant == BASELINE_EXPECTATIONS["analysis"]["significant_regions"]
 
         # Validate statistical properties
-        assert (df['mu'] >= 0).all() and (df['mu'] <= 1).all(), "mu should be probability [0,1]"
-        assert (df['pval'] >= 0).all() and (df['pval'] <= 1).all(), "pval should be [0,1]"
+        assert (df["mu"] >= 0).all() and (df["mu"] <= 1).all(), "mu should be probability [0,1]"
+        assert (df["pval"] >= 0).all() and (df["pval"] <= 1).all(), "pval should be [0,1]"
         # LRT should be non-negative (allow tiny negative values from floating point errors)
-        assert (df['lrt'] >= -1e-10).all(), f"LRT should be non-negative (found: {df['lrt'].min()})"
+        assert (df["lrt"] >= -1e-10).all(), f"LRT should be non-negative (found: {df['lrt'].min()})"
 
     def test_analysis_memory_regression(self):
         """Verify analysis memory usage hasn't regressed."""
@@ -238,7 +253,7 @@ class TestAnalysisRegression:
             pytest.skip("Baseline memory profile not found")
 
         metrics = parse_memory_profile(memory_profile)
-        actual_mb = metrics['memory_mb']
+        actual_mb = metrics["memory_mb"]
         expected_mb = BASELINE_EXPECTATIONS["analysis"]["memory_mb"]
         max_allowed_mb = expected_mb * MEMORY_TOLERANCE
 
@@ -257,7 +272,7 @@ class TestAnalysisRegression:
             pytest.skip("Baseline memory profile not found")
 
         metrics = parse_memory_profile(memory_profile)
-        actual_seconds = metrics['time_seconds']
+        actual_seconds = metrics["time_seconds"]
         expected_seconds = BASELINE_EXPECTATIONS["analysis"]["time_seconds"]
         max_allowed_seconds = expected_seconds * TIME_TOLERANCE
 
@@ -286,10 +301,10 @@ class TestMappingRegression:
         original = None
         filtered = None
         for line in content.splitlines():
-            if 'Original reads:' in line:
-                original = int(line.split(':')[1].strip().split()[0])
-            elif 'WASP filtered reads:' in line:
-                filtered = int(line.split(':')[1].strip().split()[0])
+            if "Original reads:" in line:
+                original = int(line.split(":")[1].strip().split()[0])
+            elif "WASP filtered reads:" in line:
+                filtered = int(line.split(":")[1].strip().split()[0])
 
         if original is None or filtered is None:
             pytest.skip(
@@ -303,8 +318,7 @@ class TestMappingRegression:
         # Check filter rate is reasonable (should keep >95%)
         filter_rate = filtered / original
         assert filter_rate > 0.95, (
-            f"WASP filter rate too aggressive: {filter_rate:.1%}\n"
-            f"Kept {filtered}/{original} reads"
+            f"WASP filter rate too aggressive: {filter_rate:.1%}\nKept {filtered}/{original} reads"
         )
 
 
@@ -328,18 +342,15 @@ class TestFullPipelineIntegration:
             pytest.skip("Pipeline script not found")
 
         # Require external deps that the script needs; skip if unavailable
-        missing = [
-            cmd for cmd in ["bcftools", "bedtools", "samtools"]
-            if shutil.which(cmd) is None
-        ]
+        missing = [cmd for cmd in ["bcftools", "bedtools", "samtools"] if shutil.which(cmd) is None]
         if missing:
             pytest.skip(f"Pipeline prerequisites missing: {', '.join(missing)}")
 
         env = dict(subprocess.os.environ)
         env_prefix = env.get("CONDA_PREFIX_2", env.get("CONDA_PREFIX", ""))
         env["PYTHONPATH"] = str(ROOT / "src")
-        env["PATH"] = f"{Path(env_prefix)/ 'bin'}:{env.get('PATH','')}"
-        env["LD_LIBRARY_PATH"] = f"{Path(env_prefix)/ 'lib'}:{env.get('LD_LIBRARY_PATH','')}"
+        env["PATH"] = f"{Path(env_prefix) / 'bin'}:{env.get('PATH', '')}"
+        env["LD_LIBRARY_PATH"] = f"{Path(env_prefix) / 'lib'}:{env.get('LD_LIBRARY_PATH', '')}"
 
         # Ensure test data exists
         required_files = [
@@ -357,7 +368,7 @@ class TestFullPipelineIntegration:
             env={**env, "BASELINE_DIR": str(temp_baseline)},
             cwd=str(ROOT),
             capture_output=True,
-            text=True
+            text=True,
         )
 
         if result.returncode != 0:

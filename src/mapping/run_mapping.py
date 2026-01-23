@@ -1,23 +1,24 @@
-import timeit
 import functools
-import tempfile
 import json
-import warnings
 import os
+import tempfile
+import warnings
+from collections.abc import Callable
 from pathlib import Path
-from typing import Optional, Union, List, Callable, Any
+from typing import Any
+
+from .filter_remap_reads import filt_remapped_reads, merge_filt_bam
+from .intersect_variant_data import intersect_reads, process_bam, vcf_to_bed
+from .make_remap_reads import write_remap_bam
 
 # Import from local scripts
 from .wasp_data_files import WaspDataFiles
-from .intersect_variant_data import vcf_to_bed, process_bam, intersect_reads
-
-from .make_remap_reads import write_remap_bam
-from .filter_remap_reads import filt_remapped_reads, merge_filt_bam
 
 # Unified pipeline - single-pass (3-9x faster than multi-pass)
 try:
     from wasp2_rust import unified_make_reads_parallel_py as _unified_parallel
     from wasp2_rust import unified_make_reads_py as _unified_sequential
+
     UNIFIED_AVAILABLE = True
 except ImportError:
     UNIFIED_AVAILABLE = False
@@ -25,10 +26,10 @@ except ImportError:
 
 def run_make_remap_reads_unified(
     bam_file: str,
-    variant_file: Optional[str] = None,
-    bed_file: Optional[str] = None,
-    samples: Optional[Union[str, List[str]]] = None,
-    out_dir: Optional[str] = None,
+    variant_file: str | None = None,
+    bed_file: str | None = None,
+    samples: str | list[str] | None = None,
+    out_dir: str | None = None,
     include_indels: bool = False,
     max_indel_len: int = 10,
     max_seqs: int = 64,
@@ -102,8 +103,10 @@ def run_make_remap_reads_unified(
         if isinstance(samples, str):
             samples = [samples]
         if len(samples) > 1:
-            raise ValueError("Unified pipeline currently supports single sample only. "
-                            "Use run_make_remap_reads() for multi-sample.")
+            raise ValueError(
+                "Unified pipeline currently supports single sample only. "
+                "Use run_make_remap_reads() for multi-sample."
+            )
 
     # Setup output paths
     if out_dir is None:
@@ -116,13 +119,13 @@ def run_make_remap_reads_unified(
     if bed_file is None:
         # Create BED from VCF
         bed_file = f"{out_dir}/{bam_prefix}_{samples[0]}_het_only.bed"
-        print(f"Step 1/2: Converting variants to BED...")
+        print("Step 1/2: Converting variants to BED...")
         vcf_to_bed(
             vcf_file=variant_file,
             out_bed=bed_file,
             samples=samples,
             include_indels=include_indels,
-            max_indel_len=max_indel_len
+            max_indel_len=max_indel_len,
         )
         step_prefix = "Step 2/2"
     else:
@@ -140,7 +143,9 @@ def run_make_remap_reads_unified(
     # Run unified single-pass BAM processing
     compress_str = "compressed" if compress_output else "uncompressed"
     indel_str = f", INDEL mode (max {max_indel_len}bp)" if include_indels else ""
-    print(f"{step_prefix}: Running unified pipeline ({'parallel' if use_parallel else 'sequential'}, {compress_str}{indel_str})...")
+    print(
+        f"{step_prefix}: Running unified pipeline ({'parallel' if use_parallel else 'sequential'}, {compress_str}{indel_str})..."
+    )
 
     # Check for BAM index for parallel mode
     bai_path = f"{bam_file}.bai"
@@ -150,26 +155,32 @@ def run_make_remap_reads_unified(
 
     if use_parallel:
         stats = _unified_parallel(
-            bam_file, bed_file, remap_fq1, remap_fq2,
+            bam_file,
+            bed_file,
+            remap_fq1,
+            remap_fq2,
             max_seqs=max_seqs,
             threads=threads,
             compression_threads=compression_threads,
             compress_output=compress_output,
             indel_mode=include_indels,
-            max_indel_size=max_indel_len
+            max_indel_size=max_indel_len,
         )
     else:
         stats = _unified_sequential(
-            bam_file, bed_file, remap_fq1, remap_fq2,
+            bam_file,
+            bed_file,
+            remap_fq1,
+            remap_fq2,
             max_seqs=max_seqs,
             threads=threads,
             compression_threads=compression_threads,
             compress_output=compress_output,
             indel_mode=include_indels,
-            max_indel_size=max_indel_len
+            max_indel_size=max_indel_len,
         )
 
-    print(f"\nUnified pipeline complete:")
+    print("\nUnified pipeline complete:")
     print(f"  Pairs processed: {stats['pairs_processed']:,}")
     print(f"  Pairs with variants: {stats['pairs_with_variants']:,}")
     print(f"  Pairs kept (no variants): {stats['pairs_kept']:,}")
@@ -178,10 +189,10 @@ def run_make_remap_reads_unified(
     print(f"          {remap_fq2}")
 
     # Add output paths to stats
-    stats['remap_fq1'] = remap_fq1
-    stats['remap_fq2'] = remap_fq2
-    stats['bed_file'] = bed_file
-    stats['bam_file'] = bam_file
+    stats["remap_fq1"] = remap_fq1
+    stats["remap_fq2"] = remap_fq2
+    stats["bed_file"] = bed_file
+    stats["bam_file"] = bam_file
 
     return stats
 
@@ -194,8 +205,7 @@ def tempdir_decorator(func: Callable[..., Any]) -> Callable[..., Any]:
 
     @functools.wraps(func)
     def tempdir_wrapper(*args: Any, **kwargs: Any) -> Any:
-
-        if kwargs.get("temp_loc", None) is not None:
+        if kwargs.get("temp_loc") is not None:
             return func(*args, **kwargs)
         else:
             with tempfile.TemporaryDirectory() as tmpdir:
@@ -209,17 +219,17 @@ def tempdir_decorator(func: Callable[..., Any]) -> Callable[..., Any]:
 def run_make_remap_reads(
     bam_file: str,
     variant_file: str,
-    is_paired: Optional[bool] = None,
-    samples: Optional[Union[str, List[str]]] = None,
-    is_phased: Optional[bool] = None,
-    out_dir: Optional[str] = None,
-    temp_loc: Optional[str] = None,
-    out_json: Optional[str] = None,
+    is_paired: bool | None = None,
+    samples: str | list[str] | None = None,
+    is_phased: bool | None = None,
+    out_dir: str | None = None,
+    temp_loc: str | None = None,
+    out_json: str | None = None,
     include_indels: bool = False,
     max_indel_len: int = 10,
     insert_qual: int = 30,
     max_seqs: int = 64,
-    threads: int = 1
+    threads: int = 1,
 ) -> None:
     """
     Parser that parses initial input.
@@ -255,17 +265,19 @@ def run_make_remap_reads(
     :type threads: int, optional
     """
 
-
     # Create Data Files
-    wasp_files = WaspDataFiles(bam_file, variant_file,
-                               is_paired=is_paired,
-                               samples=samples,
-                               is_phased=is_phased,
-                               out_dir=out_dir,
-                               temp_loc=temp_loc)
-    
+    wasp_files = WaspDataFiles(
+        bam_file,
+        variant_file,
+        is_paired=is_paired,
+        samples=samples,
+        is_phased=is_phased,
+        out_dir=out_dir,
+        temp_loc=temp_loc,
+    )
+
     # print(*vars(wasp_files).items(), sep="\n")
-    
+
     # Create Checks for not integrated options
     if not wasp_files.is_paired:
         raise ValueError("Single-End not Implemented")
@@ -285,49 +297,51 @@ def run_make_remap_reads(
     # Should I create cache that checks for premade files??
     Path(str(wasp_files.out_dir)).mkdir(parents=True, exist_ok=True)
 
-
     # Create Intermediary Files
-    vcf_to_bed(vcf_file=str(wasp_files.variant_file),
-               out_bed=wasp_files.vcf_bed,
-               samples=wasp_files.samples,
-               include_indels=include_indels,
-               max_indel_len=max_indel_len)
+    vcf_to_bed(
+        vcf_file=str(wasp_files.variant_file),
+        out_bed=wasp_files.vcf_bed,
+        samples=wasp_files.samples,
+        include_indels=include_indels,
+        max_indel_len=max_indel_len,
+    )
 
+    process_bam(
+        bam_file=str(wasp_files.bam_file),
+        vcf_bed=wasp_files.vcf_bed,
+        remap_bam=wasp_files.to_remap_bam,
+        remap_reads=wasp_files.remap_reads,
+        keep_bam=wasp_files.keep_bam,
+        is_paired=wasp_files.is_paired,
+        threads=threads,
+    )
 
-    process_bam(bam_file=str(wasp_files.bam_file),
-                vcf_bed=wasp_files.vcf_bed,
-                remap_bam=wasp_files.to_remap_bam,
-                remap_reads=wasp_files.remap_reads,
-                keep_bam=wasp_files.keep_bam,
-                is_paired=wasp_files.is_paired,
-                threads=threads)
-
-
-    intersect_reads(remap_bam=wasp_files.to_remap_bam,
-                    vcf_bed=wasp_files.vcf_bed,
-                    out_bed=wasp_files.intersect_file,
-                    num_samples=len(wasp_files.samples))
-
+    intersect_reads(
+        remap_bam=wasp_files.to_remap_bam,
+        vcf_bed=wasp_files.vcf_bed,
+        out_bed=wasp_files.intersect_file,
+        num_samples=len(wasp_files.samples),
+    )
 
     # print("INTERSECTION COMPLETE")
 
     # If a tempdir already exists??
 
     # Create remap fq
-    write_remap_bam(wasp_files.to_remap_bam,
-                    wasp_files.intersect_file,
-                    wasp_files.remap_fq1,
-                    wasp_files.remap_fq2,
-                    wasp_files.samples,
-                    include_indels=include_indels,
-                    insert_qual=insert_qual,
-                    max_seqs=max_seqs)
-    
-    
+    write_remap_bam(
+        wasp_files.to_remap_bam,
+        wasp_files.intersect_file,
+        wasp_files.remap_fq1,
+        wasp_files.remap_fq2,
+        wasp_files.samples,
+        include_indels=include_indels,
+        insert_qual=insert_qual,
+        max_seqs=max_seqs,
+    )
+
     # print("WROTE READS TO BE REMAPPED")
-    
-    
-    wasp_files.write_data(out_file=out_json) # export json
+
+    wasp_files.write_data(out_file=out_json)  # export json
     # print(f"File Data written to JSON...\n{out_json}")
 
 
@@ -345,56 +359,47 @@ def check_filt_input(func: Callable[..., Any]) -> Callable[..., Any]:
 
     @functools.wraps(func)
     def filt_wrapper(*args: Any, **kwargs: Any) -> Any:
-
         # Check if to_remap and keep bam given
-        bam_input = all(
-            (kwargs.get("to_remap_bam", None),
-             kwargs.get("keep_bam", None))
-        )
-        
+        bam_input = all((kwargs.get("to_remap_bam"), kwargs.get("keep_bam")))
+
         # If json used instead of bams
-        if kwargs.get("wasp_data_json", None) is not None:
-            
-            with open(kwargs.pop("wasp_data_json"), "r") as json_file:
+        if kwargs.get("wasp_data_json") is not None:
+            with open(kwargs.pop("wasp_data_json")) as json_file:
                 json_dict = json.load(json_file)
-            
-            if bam_input or any((kwargs.get("to_remap_bam", None),
-                                 kwargs.get("keep_bam", None))):
-                
+
+            if bam_input or any((kwargs.get("to_remap_bam"), kwargs.get("keep_bam"))):
                 # Raise warning if json and bams given
                 warnings.warn(
-                    ("Provided to_remap_bam+keep_bam ignored, using json input\n"
-                     "Recommended Input of EITHER:\n"
-                     "1. wasp_data_json\n2. to_remap_bam AND keep_bam")
+                    "Provided to_remap_bam+keep_bam ignored, using json input\n"
+                    "Recommended Input of EITHER:\n"
+                    "1. wasp_data_json\n2. to_remap_bam AND keep_bam",
+                    stacklevel=2,
                 )
-            
+
             # Set json inputs to bams
             kwargs["to_remap_bam"] = json_dict["to_remap_bam"]
             kwargs["keep_bam"] = json_dict["keep_bam"]
-            
+
         elif not bam_input:
-            raise ValueError(
-                "Must provide either wasp_data_json OR BOTH to_remap_bam + keep_bam")
-        
+            raise ValueError("Must provide either wasp_data_json OR BOTH to_remap_bam + keep_bam")
+
         elif "wasp_data_json" in kwargs:
             # remove if None, but key exists in kwargs
             kwargs.pop("wasp_data_json")
-            
-        
+
         # Create default name if wasp_out_bam not given
-        if kwargs.get("wasp_out_bam", None) is None:
-            
+        if kwargs.get("wasp_out_bam") is None:
             # If data included in json
             try:
                 out_dir = json_dict["out_dir"]
                 bam_prefix = json_dict["bam_prefix"]
-            except:
+            except KeyError:
                 out_dir = Path(kwargs["keep_bam"]).parent
                 bam_prefix = Path(kwargs["keep_bam"]).name.rsplit("_keep.bam")[0]
-            
+
             # create output file
             kwargs["wasp_out_bam"] = f"{out_dir}/{bam_prefix}_wasp_filt.bam"
-            
+
         return func(*args, **kwargs)
 
     return filt_wrapper
@@ -406,8 +411,8 @@ def run_wasp_filt(
     to_remap_bam: str,
     keep_bam: str,
     wasp_out_bam: str,
-    remap_keep_bam: Optional[str] = None,
-    remap_keep_file: Optional[str] = None,
+    remap_keep_bam: str | None = None,
+    remap_keep_file: str | None = None,
     threads: int = 1,
     use_rust: bool = True,
     same_locus_slop: int = 0,
@@ -436,28 +441,37 @@ def run_wasp_filt(
     :param same_locus_slop: Tolerance (bp) for same locus test, defaults to 0
     :type same_locus_slop: int, optional
     """
-    
+
     # Handle temp
     if remap_keep_bam is None:
-
         with tempfile.TemporaryDirectory() as tmpdir:
             remap_keep_bam = f"{tmpdir}/wasp_remap_filt.bam"
 
-            filt_remapped_reads(to_remap_bam, remapped_bam,
-                                remap_keep_bam, keep_read_file=remap_keep_file,
-                                use_rust=use_rust, threads=threads,
-                                same_locus_slop=same_locus_slop)
+            filt_remapped_reads(
+                to_remap_bam,
+                remapped_bam,
+                remap_keep_bam,
+                keep_read_file=remap_keep_file,
+                use_rust=use_rust,
+                threads=threads,
+                same_locus_slop=same_locus_slop,
+            )
 
             merge_filt_bam(keep_bam, remap_keep_bam, wasp_out_bam, threads=threads)
     else:
-
-        filt_remapped_reads(to_remap_bam, remapped_bam, remap_keep_bam,
-                            keep_read_file=remap_keep_file, use_rust=use_rust, threads=threads,
-                            same_locus_slop=same_locus_slop)
+        filt_remapped_reads(
+            to_remap_bam,
+            remapped_bam,
+            remap_keep_bam,
+            keep_read_file=remap_keep_file,
+            use_rust=use_rust,
+            threads=threads,
+            same_locus_slop=same_locus_slop,
+        )
 
         print(f"\nWrote remapped bam with filtered reads to...\n{remap_keep_bam}\n")
 
         merge_filt_bam(keep_bam, remap_keep_bam, wasp_out_bam, threads=threads)
-    
+
     # Finished
     print(f"\nWASP filtered Bam written to...\n{wasp_out_bam}\n")

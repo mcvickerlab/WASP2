@@ -7,14 +7,10 @@ This module provides:
 - Mock objects for testing
 """
 
-import gzip
 import shutil
 import subprocess
-import tempfile
 from pathlib import Path
-from typing import Dict, List, Tuple
 
-import numpy as np
 import pytest
 
 # Project root
@@ -25,6 +21,7 @@ TEST_DATA_DIR = ROOT / "tests" / "data"
 # ============================================================================
 # Session-scoped fixtures (created once per test session)
 # ============================================================================
+
 
 @pytest.fixture(scope="session")
 def test_data_dir() -> Path:
@@ -79,65 +76,69 @@ def sample_vcf_gz(test_data_dir, sample_vcf) -> Path:
     try:
         subprocess.run(
             ["bcftools", "view", "-Oz", "-o", str(vcf_gz_path), str(sample_vcf)],
-            check=True, capture_output=True
+            check=True,
+            capture_output=True,
         )
         # Create tabix index
         subprocess.run(
-            ["bcftools", "index", "-t", str(vcf_gz_path)],
-            check=True, capture_output=True
+            ["bcftools", "index", "-t", str(vcf_gz_path)], check=True, capture_output=True
         )
-    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+    except (subprocess.CalledProcessError, FileNotFoundError):
         # Fall back to bgzip if bcftools fails
         try:
             subprocess.run(
-                ["bgzip", "-c", str(sample_vcf)],
-                stdout=open(vcf_gz_path, 'wb'),
-                check=True
+                ["bgzip", "-c", str(sample_vcf)], stdout=open(vcf_gz_path, "wb"), check=True
             )
             subprocess.run(
-                ["tabix", "-p", "vcf", str(vcf_gz_path)],
-                check=True, capture_output=True
+                ["tabix", "-p", "vcf", str(vcf_gz_path)], check=True, capture_output=True
             )
         except (subprocess.CalledProcessError, FileNotFoundError):
-            pytest.skip(f"bcftools/bgzip not available for bgzip compression")
+            pytest.skip("bcftools/bgzip not available for bgzip compression")
 
     return vcf_gz_path
 
 
 @pytest.fixture(scope="session")
-def sample_pgen_files(test_data_dir, sample_vcf) -> Dict[str, Path]:
+def sample_pgen_files(test_data_dir, sample_vcf) -> dict[str, Path]:
     """Create sample PGEN/PVAR/PSAM files for testing.
 
     Returns dict with 'pgen', 'pvar', 'psam' keys.
     """
     pgen_prefix = test_data_dir / "sample"
-    pgen_path = pgen_prefix.with_suffix('.pgen')
-    pvar_path = pgen_prefix.with_suffix('.pvar')
-    psam_path = pgen_prefix.with_suffix('.psam')
+    pgen_path = pgen_prefix.with_suffix(".pgen")
+    pvar_path = pgen_prefix.with_suffix(".pvar")
+    psam_path = pgen_prefix.with_suffix(".psam")
 
     # Try to convert VCF to PGEN using plink2
     try:
-        subprocess.run([
-            "plink2",
-            "--vcf", str(sample_vcf),
-            "--make-pgen",
-            "--out", str(pgen_prefix),
-            "--allow-extra-chr",
-        ], check=True, capture_output=True)
+        subprocess.run(
+            [
+                "plink2",
+                "--vcf",
+                str(sample_vcf),
+                "--make-pgen",
+                "--out",
+                str(pgen_prefix),
+                "--allow-extra-chr",
+            ],
+            check=True,
+            capture_output=True,
+        )
     except (subprocess.CalledProcessError, FileNotFoundError) as e:
         pytest.skip(f"plink2 not available or conversion failed: {e}")
 
     return {
-        'pgen': pgen_path,
-        'pvar': pvar_path,
-        'psam': psam_path,
-        'prefix': pgen_prefix,
+        "pgen": pgen_path,
+        "pvar": pvar_path,
+        "psam": psam_path,
+        "prefix": pgen_prefix,
     }
 
 
 # ============================================================================
 # Function-scoped fixtures (created per test)
 # ============================================================================
+
 
 @pytest.fixture
 def tmp_output_dir(tmp_path) -> Path:
@@ -148,7 +149,7 @@ def tmp_output_dir(tmp_path) -> Path:
 
 
 @pytest.fixture
-def vcf_expected_variants() -> List[Dict]:
+def vcf_expected_variants() -> list[dict]:
     """Expected variant data from sample VCF."""
     return [
         {"chrom": "chr1", "pos": 100, "ref": "A", "alt": "G", "id": "rs1"},
@@ -161,7 +162,7 @@ def vcf_expected_variants() -> List[Dict]:
 
 
 @pytest.fixture
-def vcf_expected_het_sites_sample1() -> List[Dict]:
+def vcf_expected_het_sites_sample1() -> list[dict]:
     """Expected heterozygous sites for sample1."""
     return [
         {"chrom": "chr1", "pos": 100, "ref": "A", "alt": "G"},  # 0/1
@@ -171,7 +172,7 @@ def vcf_expected_het_sites_sample1() -> List[Dict]:
 
 
 @pytest.fixture
-def vcf_expected_het_sites_sample2() -> List[Dict]:
+def vcf_expected_het_sites_sample2() -> list[dict]:
     """Expected heterozygous sites for sample2."""
     return [
         {"chrom": "chr1", "pos": 200, "ref": "C", "alt": "T"},  # 0/1
@@ -184,25 +185,21 @@ def vcf_expected_het_sites_sample2() -> List[Dict]:
 # Markers
 # ============================================================================
 
+
 def pytest_configure(config):
     """Register custom markers."""
     config.addinivalue_line(
         "markers", "slow: marks tests as slow (deselect with '-m \"not slow\"')"
     )
-    config.addinivalue_line(
-        "markers", "integration: marks tests as integration tests"
-    )
-    config.addinivalue_line(
-        "markers", "requires_plink2: marks tests that require plink2"
-    )
-    config.addinivalue_line(
-        "markers", "requires_bcftools: marks tests that require bcftools"
-    )
+    config.addinivalue_line("markers", "integration: marks tests as integration tests")
+    config.addinivalue_line("markers", "requires_plink2: marks tests that require plink2")
+    config.addinivalue_line("markers", "requires_bcftools: marks tests that require bcftools")
 
 
 # ============================================================================
 # Helper functions (not fixtures)
 # ============================================================================
+
 
 def has_command(cmd: str) -> bool:
     """Check if a command is available in PATH."""
@@ -223,7 +220,7 @@ def skip_without_bcftools():
 
 def skip_without_pgenlib():
     """Skip test if pgenlib is not available."""
-    try:
-        import pgenlib
-    except ImportError:
+    import importlib.util
+
+    if importlib.util.find_spec("pgenlib") is None:
         pytest.skip("pgenlib not available")

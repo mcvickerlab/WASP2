@@ -6,10 +6,10 @@ variant data from different file formats (VCF, PGEN).
 """
 
 from abc import ABC, abstractmethod
+from collections.abc import Iterator
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Dict, Iterator, List, Optional
 
 
 class Genotype(Enum):
@@ -21,6 +21,7 @@ class Genotype(Enum):
     - HOM_ALT: Homozygous alternate (1/1)
     - MISSING: Missing genotype (./.)
     """
+
     HOM_REF = 0
     HET = 1
     HOM_ALT = 2
@@ -41,11 +42,12 @@ class Variant:
         alt: Alternate allele sequence
         id: Optional variant ID (e.g., rsID)
     """
+
     chrom: str
     pos: int
     ref: str
     alt: str
-    id: Optional[str] = None
+    id: str | None = None
 
     @property
     def pos0(self) -> int:
@@ -81,10 +83,11 @@ class VariantGenotype:
         allele1: Optional first allele sequence
         allele2: Optional second allele sequence
     """
+
     variant: Variant
     genotype: Genotype
-    allele1: Optional[str] = None
-    allele2: Optional[str] = None
+    allele1: str | None = None
+    allele2: str | None = None
 
     @property
     def is_het(self) -> bool:
@@ -136,7 +139,7 @@ class VariantSource(ABC):
             # ... implement abstract methods
     """
 
-    _registry: Dict[str, type] = {}
+    _registry: dict[str, type] = {}
 
     @classmethod
     def register(cls, *extensions: str):
@@ -163,10 +166,12 @@ class VariantSource(ABC):
             class PGENSource(VariantSource):
                 pass
         """
+
         def decorator(subclass):
             for ext in extensions:
-                cls._registry[ext.lower().lstrip('.')] = subclass
+                cls._registry[ext.lower().lstrip(".")] = subclass
             return subclass
+
         return decorator
 
     @classmethod
@@ -193,16 +198,16 @@ class VariantSource(ABC):
         """
         suffixes = path.suffixes
         # Compression extensions to skip
-        compression_exts = {'.gz', '.bgz', '.zst'}
+        compression_exts = {".gz", ".bgz", ".zst"}
 
         if not suffixes:
             raise ValueError(f"Cannot detect format: no extension in {path}")
 
         # If last suffix is compression, use second-to-last
         if len(suffixes) >= 2 and suffixes[-1] in compression_exts:
-            return suffixes[-2].lstrip('.').lower()
+            return suffixes[-2].lstrip(".").lower()
         else:
-            return suffixes[-1].lstrip('.').lower()
+            return suffixes[-1].lstrip(".").lower()
 
     @classmethod
     def open(cls, path: str, **kwargs) -> "VariantSource":
@@ -245,8 +250,7 @@ class VariantSource(ABC):
         if format_ext not in cls._registry:
             supported = ", ".join(sorted(cls._registry.keys()))
             raise ValueError(
-                f"Unsupported variant file format: '{format_ext}'. "
-                f"Supported formats: {supported}"
+                f"Unsupported variant file format: '{format_ext}'. Supported formats: {supported}"
             )
 
         # Instantiate the appropriate handler
@@ -255,7 +259,7 @@ class VariantSource(ABC):
 
     @property
     @abstractmethod
-    def samples(self) -> List[str]:
+    def samples(self) -> list[str]:
         """Get list of sample IDs in the variant file.
 
         Returns:
@@ -288,9 +292,7 @@ class VariantSource(ABC):
 
     @abstractmethod
     def iter_variants(
-        self,
-        samples: Optional[List[str]] = None,
-        het_only: bool = False
+        self, samples: list[str] | None = None, het_only: bool = False
     ) -> Iterator[VariantGenotype]:
         """Iterate over variants with optional filtering.
 
@@ -327,11 +329,7 @@ class VariantSource(ABC):
 
     @abstractmethod
     def query_region(
-        self,
-        chrom: str,
-        start: int,
-        end: int,
-        samples: Optional[List[str]] = None
+        self, chrom: str, start: int, end: int, samples: list[str] | None = None
     ) -> Iterator[VariantGenotype]:
         """Query variants in a genomic region.
 
@@ -356,9 +354,9 @@ class VariantSource(ABC):
     def to_bed(
         self,
         output: Path,
-        samples: Optional[List[str]] = None,
+        samples: list[str] | None = None,
         het_only: bool = True,
-        include_genotypes: bool = True
+        include_genotypes: bool = True,
     ) -> Path:
         """Export variants to BED format file.
 
@@ -395,11 +393,10 @@ class VariantSource(ABC):
         """
         try:
             return self.samples.index(sample_id)
-        except ValueError:
+        except ValueError as e:
             raise ValueError(
-                f"Sample '{sample_id}' not found. "
-                f"Available samples: {', '.join(self.samples)}"
-            )
+                f"Sample '{sample_id}' not found. Available samples: {', '.join(self.samples)}"
+            ) from e
 
     def validate(self) -> bool:
         """Validate that the variant source can be accessed.
@@ -419,7 +416,7 @@ class VariantSource(ABC):
         except Exception:
             return False
 
-    def close(self):
+    def close(self):  # noqa: B027
         """Close the variant source and release resources.
 
         Default implementation does nothing. Subclasses should override

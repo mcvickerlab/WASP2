@@ -3,7 +3,6 @@ Author: Aaron Ho
 Python Version: 3.8
 """
 
-
 # Default Python package Imports
 import time
 from collections import Counter
@@ -22,7 +21,7 @@ def pileup_pos(bam, chrom, snp_pos):
     :return: List of read names and alleles at snp pos
     :rtype: Tuple of (list of str, list of str)
     """
-    pile = bam.pileup(chrom, snp_pos-1, snp_pos, truncate=True)
+    pile = bam.pileup(chrom, snp_pos - 1, snp_pos, truncate=True)
 
     try:
         pile_col = next(pile)
@@ -56,7 +55,6 @@ def count_snp_alleles(bam_file, chrom, snp_list):
             count_list = []
 
             for read_id, allele in zip(read_names, read_alleles):
-
                 if read_id not in counted_reads:
                     counted_reads.add(read_id)
                     count_list.append(allele.upper())
@@ -98,8 +96,7 @@ def make_count_df(bam_file, df):
     for chrom in chrom_list:
         print(f"Counting Alleles for {chrom}")
 
-        snp_list = df.loc[df["chrom"] == chrom][
-            ["pos", "ref", "alt"]].to_records(index=False)
+        snp_list = df.loc[df["chrom"] == chrom][["pos", "ref", "alt"]].to_records(index=False)
 
         start = time.time()
 
@@ -115,7 +112,7 @@ def make_count_df(bam_file, df):
     print(f"Counted all SNP's in {total_end - total_start} seconds!")
 
     if skip_chrom:
-        df = df.loc[df["chrom"].isin(skip_chrom) == False]
+        df = df.loc[not df["chrom"].isin(skip_chrom)]
 
     df[["ref_count", "alt_count", "other_count"]] = count_list
     return df
