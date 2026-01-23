@@ -15,11 +15,12 @@ Requirements:
 """
 
 import subprocess
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator, List, Optional, Tuple
 
 try:
     import cyvcf2
+
     CYVCF2_AVAILABLE = True
 except ImportError:
     CYVCF2_AVAILABLE = False
@@ -31,10 +32,12 @@ from .variant_source import (
     VariantSource,
 )
 
-
 # Only register if cyvcf2 is available
 if CYVCF2_AVAILABLE:
-    @VariantSource.register('cyvcf2.vcf', 'cyvcf2.vcf.gz', 'cyvcf2.vcf.bgz', 'cyvcf2.bcf', 'cyvcf2.bcf.gz')
+
+    @VariantSource.register(
+        "cyvcf2.vcf", "cyvcf2.vcf.gz", "cyvcf2.vcf.bgz", "cyvcf2.bcf", "cyvcf2.bcf.gz"
+    )
     class CyVCF2Source(VariantSource):
         """High-performance VariantSource implementation using cyvcf2.
 
@@ -62,7 +65,7 @@ if CYVCF2_AVAILABLE:
             ...         print(f"{vg.variant.chrom}:{vg.variant.pos}")
         """
 
-        def __init__(self, path: str, **kwargs):
+        def __init__(self, path: str, **kwargs) -> None:
             """Initialize CyVCF2 source.
 
             Args:
@@ -85,19 +88,19 @@ if CYVCF2_AVAILABLE:
             try:
                 self.vcf = cyvcf2.VCF(str(self.path))
             except Exception as e:
-                raise ValueError(f"Failed to open VCF file {self.path}: {e}")
+                raise ValueError(f"Failed to open VCF file {self.path}: {e}") from e
 
             # Cache samples from header
             self._samples = self.vcf.samples
 
             # Lazy-computed variant count
-            self._variant_count: Optional[int] = None
+            self._variant_count: int | None = None
 
             # Track if iterator has been used (cyvcf2 doesn't support seek)
             self._iterator_used = False
 
         @property
-        def samples(self) -> List[str]:
+        def samples(self) -> list[str]:
             """Get list of sample IDs from VCF header.
 
             Returns:
@@ -140,9 +143,7 @@ if CYVCF2_AVAILABLE:
             return len(self._samples)
 
         def iter_variants(
-            self,
-            samples: Optional[List[str]] = None,
-            het_only: bool = False
+            self, samples: list[str] | None = None, het_only: bool = False
         ) -> Iterator[VariantGenotype]:
             """Iterate over variants with optional filtering.
 
@@ -214,28 +215,25 @@ if CYVCF2_AVAILABLE:
                     pos=variant.POS,
                     ref=variant.REF,
                     alt=alt,
-                    id=variant.ID if variant.ID else None
+                    id=variant.ID if variant.ID else None,
                 )
 
                 # Get allele sequences from genotype array
                 # gt_bases gives actual allele sequences for each sample
                 gt_bases = variant.gt_bases[sample_idx]
-                if gt_bases and '/' in gt_bases:
-                    alleles = gt_bases.split('/')
-                    allele1 = alleles[0] if alleles[0] != '.' else None
-                    allele2 = alleles[1] if len(alleles) > 1 and alleles[1] != '.' else None
-                elif gt_bases and '|' in gt_bases:
-                    alleles = gt_bases.split('|')
-                    allele1 = alleles[0] if alleles[0] != '.' else None
-                    allele2 = alleles[1] if len(alleles) > 1 and alleles[1] != '.' else None
+                if gt_bases and "/" in gt_bases:
+                    alleles = gt_bases.split("/")
+                    allele1 = alleles[0] if alleles[0] != "." else None
+                    allele2 = alleles[1] if len(alleles) > 1 and alleles[1] != "." else None
+                elif gt_bases and "|" in gt_bases:
+                    alleles = gt_bases.split("|")
+                    allele1 = alleles[0] if alleles[0] != "." else None
+                    allele2 = alleles[1] if len(alleles) > 1 and alleles[1] != "." else None
                 else:
                     allele1, allele2 = None, None
 
                 yield VariantGenotype(
-                    variant=var,
-                    genotype=genotype,
-                    allele1=allele1,
-                    allele2=allele2
+                    variant=var, genotype=genotype, allele1=allele1, allele2=allele2
                 )
 
         def get_genotype(self, sample: str, chrom: str, pos: int) -> Genotype:
@@ -264,7 +262,7 @@ if CYVCF2_AVAILABLE:
                 region = f"{chrom}:{pos}-{pos}"
                 records = list(self.vcf(region))
             except Exception as e:
-                raise ValueError(f"Failed to query position {chrom}:{pos}: {e}")
+                raise ValueError(f"Failed to query position {chrom}:{pos}: {e}") from e
 
             if not records:
                 raise ValueError(f"No variant found at {chrom}:{pos}")
@@ -284,11 +282,7 @@ if CYVCF2_AVAILABLE:
                 return Genotype.MISSING
 
         def query_region(
-            self,
-            chrom: str,
-            start: int,
-            end: int,
-            samples: Optional[List[str]] = None
+            self, chrom: str, start: int, end: int, samples: list[str] | None = None
         ) -> Iterator[VariantGenotype]:
             """Query variants in a genomic region.
 
@@ -328,9 +322,8 @@ if CYVCF2_AVAILABLE:
                 records = self.vcf(region)
             except Exception as e:
                 raise ValueError(
-                    f"Failed to query region {chrom}:{start}-{end}. "
-                    f"File may not be indexed: {e}"
-                )
+                    f"Failed to query region {chrom}:{start}-{end}. File may not be indexed: {e}"
+                ) from e
 
             # Yield VariantGenotype for each record
             for variant in records:
@@ -353,35 +346,32 @@ if CYVCF2_AVAILABLE:
                     pos=variant.POS,
                     ref=variant.REF,
                     alt=alt,
-                    id=variant.ID if variant.ID else None
+                    id=variant.ID if variant.ID else None,
                 )
 
                 # Get allele sequences
                 gt_bases = variant.gt_bases[sample_idx]
-                if gt_bases and '/' in gt_bases:
-                    alleles = gt_bases.split('/')
-                    allele1 = alleles[0] if alleles[0] != '.' else None
-                    allele2 = alleles[1] if len(alleles) > 1 and alleles[1] != '.' else None
-                elif gt_bases and '|' in gt_bases:
-                    alleles = gt_bases.split('|')
-                    allele1 = alleles[0] if alleles[0] != '.' else None
-                    allele2 = alleles[1] if len(alleles) > 1 and alleles[1] != '.' else None
+                if gt_bases and "/" in gt_bases:
+                    alleles = gt_bases.split("/")
+                    allele1 = alleles[0] if alleles[0] != "." else None
+                    allele2 = alleles[1] if len(alleles) > 1 and alleles[1] != "." else None
+                elif gt_bases and "|" in gt_bases:
+                    alleles = gt_bases.split("|")
+                    allele1 = alleles[0] if alleles[0] != "." else None
+                    allele2 = alleles[1] if len(alleles) > 1 and alleles[1] != "." else None
                 else:
                     allele1, allele2 = None, None
 
                 yield VariantGenotype(
-                    variant=var,
-                    genotype=genotype,
-                    allele1=allele1,
-                    allele2=allele2
+                    variant=var, genotype=genotype, allele1=allele1, allele2=allele2
                 )
 
         def to_bed(
             self,
             output: Path,
-            samples: Optional[List[str]] = None,
+            samples: list[str] | None = None,
             het_only: bool = True,
-            include_genotypes: bool = True
+            include_genotypes: bool = True,
         ) -> Path:
             """Export variants to BED format file.
 
@@ -416,18 +406,18 @@ if CYVCF2_AVAILABLE:
 
             # Base view command: filter to biallelic SNPs
             view_cmd = [
-                "bcftools", "view", str(self.path),
-                "-m2", "-M2",  # min/max alleles
-                "-v", "snps",  # SNPs only
-                "-Ou"  # uncompressed BCF output
+                "bcftools",
+                "view",
+                str(self.path),
+                "-m2",
+                "-M2",  # min/max alleles
+                "-v",
+                "snps",  # SNPs only
+                "-Ou",  # uncompressed BCF output
             ]
 
             # Build query command
-            query_cmd = [
-                "bcftools", "query",
-                "-o", str(output),
-                "-f"
-            ]
+            query_cmd = ["bcftools", "query", "-o", str(output), "-f"]
 
             # Configure based on samples and het_only
             if samples is None:
@@ -435,29 +425,21 @@ if CYVCF2_AVAILABLE:
                 view_cmd.append("--drop-genotypes")
                 query_cmd.append("%CHROM\t%POS0\t%END\t%REF\t%ALT\n")
 
-                view_process = subprocess.run(
-                    view_cmd, stdout=subprocess.PIPE, check=True
-                )
+                view_process = subprocess.run(view_cmd, stdout=subprocess.PIPE, check=True)
             else:
                 samples_arg = ",".join(samples)
                 num_samples = len(samples)
 
                 if num_samples > 1:
                     # Multi-sample: filter to variants with at least one non-ref allele
-                    view_cmd.extend([
-                        "-s", samples_arg,
-                        "--min-ac", "1",
-                        "--max-ac", str((num_samples * 2) - 1)
-                    ])
-                    view_process = subprocess.run(
-                        view_cmd, stdout=subprocess.PIPE, check=True
+                    view_cmd.extend(
+                        ["-s", samples_arg, "--min-ac", "1", "--max-ac", str((num_samples * 2) - 1)]
                     )
+                    view_process = subprocess.run(view_cmd, stdout=subprocess.PIPE, check=True)
                 else:
                     # Single sample
                     view_cmd.extend(["-s", samples_arg])
-                    subset_process = subprocess.run(
-                        view_cmd, stdout=subprocess.PIPE, check=True
-                    )
+                    subset_process = subprocess.run(view_cmd, stdout=subprocess.PIPE, check=True)
 
                     if het_only:
                         # Filter to het genotypes
@@ -466,7 +448,7 @@ if CYVCF2_AVAILABLE:
                             het_view_cmd,
                             input=subset_process.stdout,
                             stdout=subprocess.PIPE,
-                            check=True
+                            check=True,
                         )
                     else:
                         view_process = subset_process
@@ -479,29 +461,24 @@ if CYVCF2_AVAILABLE:
 
             # Run query command
             try:
-                subprocess.run(
-                    query_cmd,
-                    input=view_process.stdout,
-                    check=True
-                )
+                subprocess.run(query_cmd, input=view_process.stdout, check=True)
             except subprocess.CalledProcessError as e:
-                raise IOError(f"bcftools failed: {e}")
+                raise OSError(f"bcftools failed: {e}") from e
 
             return output
 
-        def close(self):
+        def close(self) -> None:
             """Close the cyvcf2.VCF handle.
 
             Releases file resources. Should be called when done with the source,
             or use context manager protocol.
             """
-            if hasattr(self, 'vcf') and self.vcf is not None:
+            if hasattr(self, "vcf") and self.vcf is not None:
                 self.vcf.close()
 else:
     # Create dummy class if cyvcf2 not available (for documentation/type checking)
     class CyVCF2Source:
         """Placeholder class when cyvcf2 is not installed."""
+
         def __init__(self, *args, **kwargs):
-            raise ImportError(
-                "cyvcf2 is not installed. Install with: pip install wasp2[cyvcf2]"
-            )
+            raise ImportError("cyvcf2 is not installed. Install with: pip install wasp2[cyvcf2]")

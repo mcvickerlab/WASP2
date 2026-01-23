@@ -1,27 +1,24 @@
-from typing import Optional, Generator, Tuple, Dict, List, Any
+from collections.abc import Generator
+from typing import Any
+
 import numpy as np
-
 import polars as pl
+from pysam import AlignedSegment, AlignmentFile
 
-import pysam
-from pysam import AlignmentFile, AlignedSegment
 
 # Generator for iterating through bam
 def paired_read_gen(
-    bam: AlignmentFile,
-    chrom: Optional[str] = None
-) -> Generator[Tuple[AlignedSegment, AlignedSegment], None, None]:
-
+    bam: AlignmentFile, chrom: str | None = None
+) -> Generator[tuple[AlignedSegment, AlignedSegment], None, None]:
     read_dict = {}
     for read in bam.fetch(chrom):
-        
         if not read.is_proper_pair or read.is_secondary or read.is_supplementary:
             continue
-        
+
         if read.query_name not in read_dict:
             read_dict[read.query_name] = read
             continue
-        
+
         if read.is_read1:
             yield read, read_dict.pop(read.query_name)
         else:
@@ -29,17 +26,13 @@ def paired_read_gen(
 
 
 def paired_read_gen_stat(
-    bam: AlignmentFile,
-    read_stats: Any,
-    chrom: Optional[str] = None
-) -> Generator[Tuple[AlignedSegment, AlignedSegment], None, None]:
-
+    bam: AlignmentFile, read_stats: Any, chrom: str | None = None
+) -> Generator[tuple[AlignedSegment, AlignedSegment], None, None]:
     read_dict = {}
     discard_set = set()
-    
+
     # DO I need multiple iterators???
     for read in bam.fetch(chrom, multiple_iterators=False):
-        
         if not read.is_proper_pair:
             discard_set.add(read.query_name)
             read_stats.discard_improper_pair += 1
@@ -56,37 +49,34 @@ def paired_read_gen_stat(
         if read.query_name not in read_dict:
             read_dict[read.query_name] = read
             continue
-        
+
         if read.is_read1:
             yield read, read_dict.pop(read.query_name)
         else:
             yield read_dict.pop(read.query_name), read
-    
+
     # Process missing pairs
     read_stats.discard_missing_pair += len(set(read_dict.keys()) - discard_set)
 
 
 def align_pos_gen(
-    read: AlignedSegment,
-    align_dict: Dict[int, int],
-    pos_list: List[Tuple[int, int]]
+    read: AlignedSegment, align_dict: dict[int, int], pos_list: list[tuple[int, int]]
 ) -> Generator[int, None, None]:
-
-    yield 0 # yield initial index
+    yield 0  # yield initial index
 
     for start, stop in pos_list:
         align_start = align_dict[start]
-        
+
         # for snps, may need to change for indel
         align_stop = align_start + (stop - start)
-        
+
         yield align_start
         yield align_stop
-    
+
     yield len(read.query_sequence)
 
 
-def _build_ref2read_maps(read: AlignedSegment) -> Tuple[Dict[int, int], Dict[int, int]]:
+def _build_ref2read_maps(read: AlignedSegment) -> tuple[dict[int, int], dict[int, int]]:
     """Build reference position to read position mappings for indel support.
 
     Args:
@@ -101,7 +91,7 @@ def _build_ref2read_maps(read: AlignedSegment) -> Tuple[Dict[int, int], Dict[int
     # Returns list of (query_pos, ref_pos) tuples, with None for gaps
     pairs = read.get_aligned_pairs(matches_only=False)
 
-    ref2q_left = {}   # Maps ref pos to nearest left query pos
+    ref2q_left = {}  # Maps ref pos to nearest left query pos
     ref2q_right = {}  # Maps ref pos to nearest right query pos
 
     last_query_pos = None
@@ -135,11 +125,11 @@ def _build_ref2read_maps(read: AlignedSegment) -> Tuple[Dict[int, int], Dict[int
 def get_read_het_data(
     read_df: pl.DataFrame,
     read: AlignedSegment,
-    col_list: List[str],
-    max_seqs: Optional[int] = None,
+    col_list: list[str],
+    max_seqs: int | None = None,
     include_indels: bool = False,
-    insert_qual: int = 30
-) -> Optional[Tuple[List[str], List[str], List[pl.Series]]]:
+    insert_qual: int = 30,
+) -> tuple[list[str], list[str], list[pl.Series]] | None:
     """Extract heterozygous variant data from read with indel support.
 
     Args:
@@ -185,13 +175,20 @@ def get_read_het_data(
 
         else:
             # Original SNP-only logic (backward compatible)
-            align_dict = {ref_i: read_i for read_i, ref_i in read.get_aligned_pairs(matches_only=True)}
-            split_pos = [i for i in align_pos_gen(read, align_dict, pos_list)]
+            align_dict = {
+                ref_i: read_i for read_i, ref_i in read.get_aligned_pairs(matches_only=True)
+            }
+            split_pos = list(align_pos_gen(read, align_dict, pos_list))
             split_qual_pos = split_pos.copy()
 
         # Extract sequence and quality segments
-        split_seq = [read.query_sequence[start:stop] for start, stop in zip(split_pos[:-1], split_pos[1:])]
-        split_qual = [read.query_qualities[start:stop] for start, stop in zip(split_qual_pos[:-1], split_qual_pos[1:])]
+        split_seq = [
+            read.query_sequence[start:stop] for start, stop in zip(split_pos[:-1], split_pos[1:])
+        ]
+        split_qual = [
+            read.query_qualities[start:stop]
+            for start, stop in zip(split_qual_pos[:-1], split_qual_pos[1:])
+        ]
 
         return split_seq, split_qual, read_df.select(pl.col(col_list)).get_columns()
 
@@ -200,8 +197,9 @@ def get_read_het_data(
         return None
 
 
-
-def _fill_insertion_quals(insert_len: int, left_qual: np.ndarray, right_qual: np.ndarray, insert_qual: int = 30) -> np.ndarray:
+def _fill_insertion_quals(
+    insert_len: int, left_qual: np.ndarray, right_qual: np.ndarray, insert_qual: int = 30
+) -> np.ndarray:
     """Generate quality scores for inserted bases.
 
     Args:
@@ -223,7 +221,7 @@ def _fill_insertion_quals(insert_len: int, left_qual: np.ndarray, right_qual: np
     return np.full(insert_len, mean_qual, dtype=np.uint8)
 
 
-def make_phased_seqs(split_seq: List[str], hap1_alleles: Any, hap2_alleles: Any) -> Tuple[str, str]:
+def make_phased_seqs(split_seq: list[str], hap1_alleles: Any, hap2_alleles: Any) -> tuple[str, str]:
     """Create phased sequences by swapping alleles (SNP-only version).
 
     Args:
@@ -244,12 +242,12 @@ def make_phased_seqs(split_seq: List[str], hap1_alleles: Any, hap2_alleles: Any)
 
 
 def make_phased_seqs_with_qual(
-    split_seq: List[str],
-    split_qual: List[np.ndarray],
+    split_seq: list[str],
+    split_qual: list[np.ndarray],
     hap1_alleles: Any,
     hap2_alleles: Any,
-    insert_qual: int = 30
-) -> Tuple[Tuple[str, np.ndarray], Tuple[str, np.ndarray]]:
+    insert_qual: int = 30,
+) -> tuple[tuple[str, np.ndarray], tuple[str, np.ndarray]]:
     """Create phased sequences with quality scores (indel-aware version).
 
     Args:
@@ -289,8 +287,10 @@ def make_phased_seqs_with_qual(
             hap2_len = len(hap2_allele)
 
             # Get flanking quality scores for insertion quality inference
-            left_qual = split_qual[i-1] if i > 0 else np.array([], dtype=np.uint8)
-            right_qual = split_qual[i+1] if i < len(split_qual) - 1 else np.array([], dtype=np.uint8)
+            left_qual = split_qual[i - 1] if i > 0 else np.array([], dtype=np.uint8)
+            right_qual = (
+                split_qual[i + 1] if i < len(split_qual) - 1 else np.array([], dtype=np.uint8)
+            )
 
             # Haplotype 1 quality handling
             if hap1_len == orig_len:
@@ -323,7 +323,7 @@ def make_phased_seqs_with_qual(
     return (hap1_seq, hap1_qual), (hap2_seq, hap2_qual)
 
 
-def make_multi_seqs(split_seq: List[str], allele_combos: Any) -> List[str]:
+def make_multi_seqs(split_seq: list[str], allele_combos: Any) -> list[str]:
     """Create multiple sequences for multi-sample analysis (SNP-only version).
 
     Args:
@@ -335,7 +335,6 @@ def make_multi_seqs(split_seq: List[str], allele_combos: Any) -> List[str]:
     """
     seq_list = []
     for phased_alleles in allele_combos:
-
         hap_split = split_seq.copy()
         hap_split[1::2] = phased_alleles
         seq_list.append("".join(hap_split))
@@ -344,11 +343,8 @@ def make_multi_seqs(split_seq: List[str], allele_combos: Any) -> List[str]:
 
 
 def make_multi_seqs_with_qual(
-    split_seq: List[str],
-    split_qual: List[np.ndarray],
-    allele_combos: Any,
-    insert_qual: int = 30
-) -> List[Tuple[str, np.ndarray]]:
+    split_seq: list[str], split_qual: list[np.ndarray], allele_combos: Any, insert_qual: int = 30
+) -> list[tuple[str, np.ndarray]]:
     """Create multiple sequences with quality scores for multi-sample indel support.
 
     Args:
@@ -382,8 +378,10 @@ def make_multi_seqs_with_qual(
                 allele_len = len(allele)
 
                 # Get flanking qualities
-                left_qual = split_qual[i-1] if i > 0 else np.array([], dtype=np.uint8)
-                right_qual = split_qual[i+1] if i < len(split_qual) - 1 else np.array([], dtype=np.uint8)
+                left_qual = split_qual[i - 1] if i > 0 else np.array([], dtype=np.uint8)
+                right_qual = (
+                    split_qual[i + 1] if i < len(split_qual) - 1 else np.array([], dtype=np.uint8)
+                )
 
                 if allele_len == orig_len:
                     # Same length - use original qualities
@@ -394,7 +392,9 @@ def make_multi_seqs_with_qual(
                 else:
                     # Insertion - fill extra qualities
                     extra_len = allele_len - orig_len
-                    extra_quals = _fill_insertion_quals(extra_len, left_qual, right_qual, insert_qual)
+                    extra_quals = _fill_insertion_quals(
+                        extra_len, left_qual, right_qual, insert_qual
+                    )
                     qual_parts.append(np.concatenate([qual_part, extra_quals]))
 
         hap_seq = "".join(seq_parts)
@@ -404,7 +404,13 @@ def make_multi_seqs_with_qual(
     return result_list
 
 
-def write_read(out_bam: AlignmentFile, read: AlignedSegment, new_seq: str, new_name: str, new_qual: Optional[np.ndarray] = None) -> None:
+def write_read(
+    out_bam: AlignmentFile,
+    read: AlignedSegment,
+    new_seq: str,
+    new_name: str,
+    new_qual: np.ndarray | None = None,
+) -> None:
     """Write a modified read to output BAM.
 
     Args:

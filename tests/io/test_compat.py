@@ -6,9 +6,9 @@ equivalent output to the legacy bcftools-based approach.
 """
 
 import shutil
+from pathlib import Path
 
 import pytest
-from pathlib import Path
 
 from wasp2.io.compat import variants_to_bed, vcf_to_bed
 
@@ -34,14 +34,14 @@ class TestVariantsToBed:
         assert result == output
         assert output.exists()
 
-        lines = output.read_text().strip().split('\n')
+        lines = output.read_text().strip().split("\n")
         assert len(lines) == 6  # 6 variants in test VCF
 
     def test_vcf_single_sample_het(self, sample_vcf, tmp_output_dir):
         """Test extracting het sites for single sample."""
         output = tmp_output_dir / "sample1_het.bed"
 
-        result = variants_to_bed(
+        variants_to_bed(
             variant_file=sample_vcf,
             out_bed=output,
             samples=["sample1"],
@@ -49,7 +49,7 @@ class TestVariantsToBed:
             het_only=True,
         )
 
-        lines = output.read_text().strip().split('\n')
+        lines = output.read_text().strip().split("\n")
         # sample1 has 3 het sites
         assert len(lines) == 3
 
@@ -57,7 +57,7 @@ class TestVariantsToBed:
         """Test with multiple samples."""
         output = tmp_output_dir / "multi_sample.bed"
 
-        result = variants_to_bed(
+        variants_to_bed(
             variant_file=sample_vcf,
             out_bed=output,
             samples=["sample1", "sample2"],
@@ -109,7 +109,7 @@ class TestModuleIntegration:
         assert output.exists()
 
         # Should have het sites only when sample specified
-        lines = output.read_text().strip().split('\n')
+        lines = output.read_text().strip().split("\n")
         assert len(lines) == 3  # sample1 has 3 het sites
 
     def test_counting_module_vcf_to_bed(self, sample_vcf, tmp_output_dir):
@@ -128,5 +128,5 @@ class TestModuleIntegration:
         assert Path(result) == output
         assert output.exists()
 
-        lines = output.read_text().strip().split('\n')
+        lines = output.read_text().strip().split("\n")
         assert len(lines) == 3

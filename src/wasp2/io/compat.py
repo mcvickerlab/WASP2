@@ -11,15 +11,14 @@ modules, making it a drop-in replacement.
 
 import subprocess
 from pathlib import Path
-from typing import Optional, List, Union
 
 from .variant_source import VariantSource
 
 
 def variants_to_bed(
-    variant_file: Union[str, Path],
-    out_bed: Union[str, Path],
-    samples: Optional[List[str]] = None,
+    variant_file: str | Path,
+    out_bed: str | Path,
+    samples: list[str] | None = None,
     include_gt: bool = True,
     het_only: bool = True,
     use_legacy: bool = False,
@@ -54,15 +53,15 @@ def variants_to_bed(
 
     # Detect format
     suffix = variant_file.suffix.lower()
-    if suffix == '.gz':
+    if suffix == ".gz":
         # Check for .vcf.gz
-        if variant_file.stem.lower().endswith('.vcf'):
-            suffix = '.vcf.gz'
+        if variant_file.stem.lower().endswith(".vcf"):
+            suffix = ".vcf.gz"
         else:
-            suffix = '.gz'
+            suffix = ".gz"
 
     # Use legacy for VCF when explicitly requested
-    if use_legacy and suffix in ('.vcf', '.vcf.gz', '.bcf'):
+    if use_legacy and suffix in (".vcf", ".vcf.gz", ".bcf"):
         return _vcf_to_bed_bcftools(
             vcf_file=variant_file,
             out_bed=out_bed,
@@ -87,9 +86,9 @@ def variants_to_bed(
 
 
 def _vcf_to_bed_bcftools(
-    vcf_file: Union[str, Path],
-    out_bed: Union[str, Path],
-    samples: Optional[List[str]] = None,
+    vcf_file: str | Path,
+    out_bed: str | Path,
+    samples: list[str] | None = None,
     include_gt: bool = True,
     include_indels: bool = False,
     max_indel_len: int = 10,
@@ -118,24 +117,27 @@ def _vcf_to_bed_bcftools(
 
     # Base commands - NOTE: Removed -m2 -M2 to include multi-allelic het sites
     view_cmd = [
-        "bcftools", "view", str(vcf_file),
+        "bcftools",
+        "view",
+        str(vcf_file),
     ]
 
     # Add variant type filter
     if include_indels:
         view_cmd.extend(["-v", "snps,indels"])
         # Add indel length filter
-        view_cmd.extend(["-i", f'strlen(REF)-strlen(ALT)<={max_indel_len} && strlen(ALT)-strlen(REF)<={max_indel_len}'])
+        view_cmd.extend(
+            [
+                "-i",
+                f"strlen(REF)-strlen(ALT)<={max_indel_len} && strlen(ALT)-strlen(REF)<={max_indel_len}",
+            ]
+        )
     else:
         view_cmd.extend(["-v", "snps"])
 
     view_cmd.append("-Ou")
 
-    query_cmd = [
-        "bcftools", "query",
-        "-o", str(out_bed),
-        "-f"
-    ]
+    query_cmd = ["bcftools", "query", "-o", str(out_bed), "-f"]
 
     # Parse based on num samples
     if samples is None:
@@ -150,11 +152,9 @@ def _vcf_to_bed_bcftools(
 
         if num_samples > 1:
             # Multi-sample: filter to sites with at least one het
-            view_cmd.extend([
-                "-s", samples_arg,
-                "--min-ac", "1",
-                "--max-ac", str((num_samples * 2) - 1)
-            ])
+            view_cmd.extend(
+                ["-s", samples_arg, "--min-ac", "1", "--max-ac", str((num_samples * 2) - 1)]
+            )
             view_process = subprocess.run(view_cmd, stdout=subprocess.PIPE, check=True)
         else:
             # Single sample: subset then filter to het
@@ -164,10 +164,7 @@ def _vcf_to_bed_bcftools(
             # Get het genotypes only
             het_cmd = ["bcftools", "view", "--genotype", "het", "-Ou"]
             view_process = subprocess.run(
-                het_cmd,
-                input=subset_process.stdout,
-                stdout=subprocess.PIPE,
-                check=True
+                het_cmd, input=subset_process.stdout, stdout=subprocess.PIPE, check=True
             )
 
         # Format string based on include_gt

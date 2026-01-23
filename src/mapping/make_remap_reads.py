@@ -1,15 +1,11 @@
 import shutil
 import tempfile
-
 from pathlib import Path
-from typing import List
 
 import pysam
 
 # Rust acceleration (required; no fallback)
-from wasp2_rust import remap_chromosome
-from wasp2_rust import remap_chromosome_multi
-from wasp2_rust import remap_all_chromosomes
+from wasp2_rust import remap_all_chromosomes, remap_chromosome, remap_chromosome_multi
 
 
 def _write_remap_bam_rust_optimized(
@@ -18,7 +14,7 @@ def _write_remap_bam_rust_optimized(
     r1_out: str,
     r2_out: str,
     max_seqs: int = 64,
-    parallel: bool = True
+    parallel: bool = True,
 ) -> None:
     """
     Optimized Rust remapping - parses intersect file ONCE, processes chromosomes in parallel.
@@ -30,31 +26,24 @@ def _write_remap_bam_rust_optimized(
     """
     import inspect
 
-    print(f"Using optimized Rust remapper (parse-once, {'parallel' if parallel else 'sequential'})...")
+    print(
+        f"Using optimized Rust remapper (parse-once, {'parallel' if parallel else 'sequential'})..."
+    )
 
     # Check if the Rust function accepts 'parallel' parameter (backward compatibility)
     sig = inspect.signature(remap_all_chromosomes)
-    has_parallel_param = 'parallel' in sig.parameters
+    has_parallel_param = "parallel" in sig.parameters
 
     if has_parallel_param:
         # New version with parallel parameter
         pairs, haps = remap_all_chromosomes(
-            bam_file,
-            intersect_file,
-            r1_out,
-            r2_out,
-            max_seqs=max_seqs,
-            parallel=parallel
+            bam_file, intersect_file, r1_out, r2_out, max_seqs=max_seqs, parallel=parallel
         )
     else:
         # Old version without parallel parameter (always runs in parallel)
         print("  Note: Using Rust version without 'parallel' parameter (parallel by default)")
         pairs, haps = remap_all_chromosomes(
-            bam_file,
-            intersect_file,
-            r1_out,
-            r2_out,
-            max_seqs=max_seqs
+            bam_file, intersect_file, r1_out, r2_out, max_seqs=max_seqs
         )
 
     print(f"\n✅ Rust remapper (optimized): {pairs} pairs → {haps} haplotypes")
@@ -62,27 +51,25 @@ def _write_remap_bam_rust_optimized(
 
 
 def _write_remap_bam_rust(
-    bam_file: str,
-    intersect_file: str,
-    r1_out: str,
-    r2_out: str,
-    max_seqs: int = 64
+    bam_file: str, intersect_file: str, r1_out: str, r2_out: str, max_seqs: int = 64
 ) -> None:
     """Rust-accelerated remapping implementation (5-7x faster than Python) - LEGACY per-chromosome version"""
 
     # Get chromosomes that have variants in the intersect file
     # This avoids processing ~170 empty chromosomes (major speedup!)
     intersect_chroms = set()
-    with open(intersect_file, 'r') as f:
+    with open(intersect_file) as f:
         for line in f:
-            chrom = line.split('\t')[0]
+            chrom = line.split("\t")[0]
             intersect_chroms.add(chrom)
 
     # Filter BAM chromosomes to only those with variants
     with pysam.AlignmentFile(bam_file, "rb") as bam:
         chromosomes = [c for c in bam.header.references if c in intersect_chroms]
 
-    print(f"Processing {len(chromosomes)} chromosomes with variants (filtered from {len(intersect_chroms)} in intersect)")
+    print(
+        f"Processing {len(chromosomes)} chromosomes with variants (filtered from {len(intersect_chroms)} in intersect)"
+    )
 
     # Create temp directory for per-chromosome outputs
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -96,12 +83,7 @@ def _write_remap_bam_rust(
 
             try:
                 pairs, haps = remap_chromosome(
-                    bam_file,
-                    intersect_file,
-                    chrom,
-                    chrom_r1,
-                    chrom_r2,
-                    max_seqs=max_seqs
+                    bam_file, intersect_file, chrom, chrom_r1, chrom_r2, max_seqs=max_seqs
                 )
                 total_pairs += pairs
                 total_haps += haps
@@ -135,15 +117,15 @@ def _write_remap_bam_rust_multi(
     r1_out: str,
     r2_out: str,
     num_samples: int,
-    max_seqs: int = 64
+    max_seqs: int = 64,
 ) -> None:
     """Rust-accelerated multi-sample remapping implementation"""
 
     # Get chromosomes that have variants in the intersect file
     intersect_chroms = set()
-    with open(intersect_file, 'r') as f:
+    with open(intersect_file) as f:
         for line in f:
-            chrom = line.split('\t')[0]
+            chrom = line.split("\t")[0]
             intersect_chroms.add(chrom)
 
     # Filter BAM chromosomes to only those with variants
@@ -170,7 +152,7 @@ def _write_remap_bam_rust_multi(
                     chrom_r1,
                     chrom_r2,
                     num_samples=num_samples,
-                    max_seqs=max_seqs
+                    max_seqs=max_seqs,
                 )
                 total_pairs += pairs
                 total_haps += haps
@@ -203,10 +185,10 @@ def write_remap_bam(
     intersect_file: str,
     r1_out: str,
     r2_out: str,
-    samples: List[str],
+    samples: list[str],
     max_seqs: int = 64,
     include_indels: bool = False,
-    insert_qual: int = 30
+    insert_qual: int = 30,
 ) -> None:
     """Rust-accelerated remapping - parses intersect file once, processes chromosomes in parallel.
 
@@ -226,7 +208,9 @@ def write_remap_bam(
 
     if num_samples == 1:
         # Single sample: use optimized all-chromosome Rust
-        _write_remap_bam_rust_optimized(bam_file, intersect_file, r1_out, r2_out, max_seqs, parallel=True)
+        _write_remap_bam_rust_optimized(
+            bam_file, intersect_file, r1_out, r2_out, max_seqs, parallel=True
+        )
     else:
         # Multi-sample: use per-chromosome Rust
         _write_remap_bam_rust_multi(bam_file, intersect_file, r1_out, r2_out, num_samples, max_seqs)

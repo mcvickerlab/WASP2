@@ -7,22 +7,20 @@ Tests are skipped if cyvcf2 is not installed.
 Run with: pytest tests/io/test_cyvcf2_source.py -v
 """
 
-import pytest
-from pathlib import Path
-
-from wasp2.io.variant_source import VariantSource, Variant, Genotype, VariantGenotype
-
 # Check if cyvcf2 is available
-try:
-    import cyvcf2
+import importlib.util
+
+import pytest
+
+from wasp2.io.variant_source import Genotype
+
+CYVCF2_AVAILABLE = importlib.util.find_spec("cyvcf2") is not None
+
+if CYVCF2_AVAILABLE:
     from wasp2.io.cyvcf2_source import CyVCF2Source
-    CYVCF2_AVAILABLE = True
-except ImportError:
-    CYVCF2_AVAILABLE = False
 
 pytestmark = pytest.mark.skipif(
-    not CYVCF2_AVAILABLE,
-    reason="cyvcf2 not installed - install with: pip install wasp2[cyvcf2]"
+    not CYVCF2_AVAILABLE, reason="cyvcf2 not installed - install with: pip install wasp2[cyvcf2]"
 )
 
 
@@ -113,11 +111,11 @@ class TestCyVCF2SourceIteration:
             # rs4: 0/1 (HET), rs5: 0/0 (HOM_REF), rs6: 0/1 (HET)
             genotypes = [v.genotype for v in variants]
             assert genotypes[0] == Genotype.HOM_REF  # rs1
-            assert genotypes[1] == Genotype.HET      # rs2
+            assert genotypes[1] == Genotype.HET  # rs2
             assert genotypes[2] == Genotype.HOM_ALT  # rs3
-            assert genotypes[3] == Genotype.HET      # rs4
+            assert genotypes[3] == Genotype.HET  # rs4
             assert genotypes[4] == Genotype.HOM_REF  # rs5
-            assert genotypes[5] == Genotype.HET      # rs6
+            assert genotypes[5] == Genotype.HET  # rs6
 
     def test_allele_extraction(self, sample_vcf_gz):
         """Test that alleles are correctly extracted."""
@@ -204,10 +202,7 @@ class TestCyVCF2SourceBED:
         with CyVCF2Source(sample_vcf_gz) as source:
             bed_path = tmp_path / "test.bed"
             result = source.to_bed(
-                bed_path,
-                samples=["sample1"],
-                het_only=False,
-                include_genotypes=False
+                bed_path, samples=["sample1"], het_only=False, include_genotypes=False
             )
 
             assert result.exists()
@@ -221,12 +216,7 @@ class TestCyVCF2SourceBED:
         """Test BED export with het_only filter."""
         with CyVCF2Source(sample_vcf_gz) as source:
             bed_path = tmp_path / "test_het.bed"
-            source.to_bed(
-                bed_path,
-                samples=["sample1"],
-                het_only=True,
-                include_genotypes=True
-            )
+            source.to_bed(bed_path, samples=["sample1"], het_only=True, include_genotypes=True)
 
             assert bed_path.exists()
 
@@ -302,6 +292,5 @@ class TestCyVCF2SourceErrors:
 
     def test_invalid_position(self, sample_vcf_gz):
         """Test error when querying invalid position."""
-        with CyVCF2Source(sample_vcf_gz) as source:
-            with pytest.raises(ValueError):
-                source.get_genotype("sample1", "chrNONE", 999999)
+        with CyVCF2Source(sample_vcf_gz) as source, pytest.raises(ValueError):
+            source.get_genotype("sample1", "chrNONE", 999999)

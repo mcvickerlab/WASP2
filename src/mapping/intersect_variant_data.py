@@ -1,28 +1,26 @@
 import os
 import subprocess
 from pathlib import Path
-from typing import Optional, List, Union
 
 import numpy as np
 import polars as pl
-
 import pysam
-
-# Import from new wasp2.io module for multi-format support
-from wasp2.io import variants_to_bed as _variants_to_bed
+from wasp2_rust import filter_bam_by_variants_py as _rust_filter_bam
 
 # Rust acceleration (required; no fallback)
 from wasp2_rust import intersect_bam_bed as _rust_intersect
 from wasp2_rust import intersect_bam_bed_multi as _rust_intersect_multi
-from wasp2_rust import filter_bam_by_variants_py as _rust_filter_bam
+
+# Import from new wasp2.io module for multi-format support
+from wasp2.io import variants_to_bed as _variants_to_bed
 
 
 def vcf_to_bed(
-    vcf_file: Union[str, Path],
-    out_bed: Union[str, Path],
-    samples: Optional[List[str]] = None,
+    vcf_file: str | Path,
+    out_bed: str | Path,
+    samples: list[str] | None = None,
     include_indels: bool = False,
-    max_indel_len: int = 10
+    max_indel_len: int = 10,
 ) -> str:
     """Convert variant file to BED format.
 
@@ -48,7 +46,7 @@ def vcf_to_bed(
         out_bed=out_bed,
         samples=samples,
         include_gt=True,
-        het_only=True if samples else False,
+        het_only=bool(samples),
         include_indels=include_indels,
         max_indel_len=max_indel_len,
         use_legacy=False,  # Use Rust VCF parser (5-6x faster than bcftools)
@@ -63,7 +61,7 @@ def process_bam(
     remap_reads: str,
     keep_bam: str,
     is_paired: bool = True,
-    threads: int = 1
+    threads: int = 1,
 ) -> str:
     """Filter BAM by variant overlap, splitting into remap/keep BAMs.
 
@@ -85,7 +83,9 @@ def process_bam(
     remap_count, keep_count, unique_names = _rust_filter_bam(
         bam_file, vcf_bed, remap_bam, keep_bam, is_paired, threads
     )
-    print(f"✅ Rust filter: {remap_count:,} remap, {keep_count:,} keep, {unique_names:,} unique names")
+    print(
+        f"✅ Rust filter: {remap_count:,} remap, {keep_count:,} keep, {unique_names:,} unique names"
+    )
 
     # Write read names file for compatibility
     with pysam.AlignmentFile(remap_bam, "rb") as bam, open(remap_reads, "w") as f:
@@ -95,23 +95,16 @@ def process_bam(
     # Sort the remap BAM (Rust outputs unsorted)
     remap_bam_tmp = remap_bam + ".sorting.tmp"
     subprocess.run(
-        ["samtools", "sort", "-@", str(threads), "-o", remap_bam_tmp, remap_bam],
-        check=True)
+        ["samtools", "sort", "-@", str(threads), "-o", remap_bam_tmp, remap_bam], check=True
+    )
     os.rename(remap_bam_tmp, remap_bam)
 
-    subprocess.run(
-        ["samtools", "index", "-@", str(threads), str(remap_bam)],
-        check=True)
+    subprocess.run(["samtools", "index", "-@", str(threads), str(remap_bam)], check=True)
 
     return remap_bam
 
 
-def intersect_reads(
-    remap_bam: str,
-    vcf_bed: str,
-    out_bed: str,
-    num_samples: int = 1
-) -> str:
+def intersect_reads(remap_bam: str, vcf_bed: str, out_bed: str, num_samples: int = 1) -> str:
     """Intersect BAM reads with variant BED file.
 
     Uses Rust/coitrees (15-30x faster than pybedtools).
@@ -135,14 +128,11 @@ def intersect_reads(
     return out_bed
 
 
-def make_intersect_df(intersect_file: str, samples: List[str], is_paired: bool = True) -> pl.DataFrame:
-
+def make_intersect_df(
+    intersect_file: str, samples: list[str], is_paired: bool = True
+) -> pl.DataFrame:
     # Create Dataframe
-    df = pl.scan_csv(intersect_file,
-                     separator="\t",
-                     has_header=False,
-                     infer_schema_length=0
-                    )
+    df = pl.scan_csv(intersect_file, separator="\t", has_header=False, infer_schema_length=0)
 
     # Parse sample data
     num_samps = len(samples)
@@ -150,20 +140,17 @@ def make_intersect_df(intersect_file: str, samples: List[str], is_paired: bool =
     subset_cols = [df.columns[i] for i in np.r_[0, 3, 1, 2, -num_samps:0]]
     new_cols = ["chrom", "read", "start", "stop", *samples]
 
-
-
-    rename_cols = {old_col: new_col for old_col, new_col in zip(subset_cols, new_cols)}
+    rename_cols = dict(zip(subset_cols, new_cols))
 
     base_schema = [
         pl.col("chrom").cast(pl.Categorical),
         pl.col("read").cast(pl.Utf8),
         pl.col("start").cast(pl.UInt32),
-        pl.col("stop").cast(pl.UInt32)
+        pl.col("stop").cast(pl.UInt32),
     ]
 
     sample_schema = [pl.col(samp).cast(pl.Utf8) for samp in samples]
     col_schema = [*base_schema, *sample_schema]
-
 
     # Make sure types are correct
     df = df.select(subset_cols).rename(rename_cols).with_columns(col_schema)
@@ -176,10 +163,7 @@ def make_intersect_df(intersect_file: str, samples: List[str], is_paired: bool =
         a2 = f"{s}_a2"
 
         # Add split per sample
-        expr_list.append(
-            pl.col(s).str.split_exact(
-                by="|", n=1).struct.rename_fields([a1, a2])
-        )
+        expr_list.append(pl.col(s).str.split_exact(by="|", n=1).struct.rename_fields([a1, a2]))
 
         # cast new gt cols
         cast_list.append(pl.col(a1).cast(pl.Categorical))
@@ -187,19 +171,16 @@ def make_intersect_df(intersect_file: str, samples: List[str], is_paired: bool =
 
     # Split mate expr
     expr_list.append(
-        pl.col("read").str.split_exact(
-            by="/", n=1).struct.rename_fields(["read", "mate"])
+        pl.col("read").str.split_exact(by="/", n=1).struct.rename_fields(["read", "mate"])
     )
 
     cast_list.append(pl.col("mate").cast(pl.UInt8))
 
-    df = df.with_columns(expr_list).unnest(
-        [*samples, "read"]).with_columns(
-        cast_list
-    )
-
+    df = df.with_columns(expr_list).unnest([*samples, "read"]).with_columns(cast_list)
 
     # should i remove instead of keep first?
-    df = df.unique(["chrom", "read", "mate", "start", "stop"], keep="first") # Doesnt remove dup snp in pair?
+    df = df.unique(
+        ["chrom", "read", "mate", "start", "stop"], keep="first"
+    )  # Doesnt remove dup snp in pair?
 
     return df.collect()

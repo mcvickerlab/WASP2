@@ -4,15 +4,14 @@ I/O module for WASP2.
 Provides data structures and readers for variant files (VCF, PGEN).
 """
 
+# Import format handlers to register them with factory
+from . import vcf_source  # noqa: F401
 from .variant_source import (
     Genotype,
     Variant,
     VariantGenotype,
     VariantSource,
 )
-
-# Import format handlers to register them with factory
-from . import vcf_source  # noqa: F401
 
 # Import PGEN handler if pgenlib is available
 try:

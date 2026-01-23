@@ -37,6 +37,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
     "Typing :: Typed",
 ]
@@ -59,8 +60,7 @@ dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
     "mypy>=1.0",
-    "black>=23.0",
-    "flake8>=6.0",
+    "ruff>=0.9.0",
     "pre-commit>=3.0",
     "build>=0.10",
     "twine>=4.0",
@@ -128,10 +128,55 @@ disallow_untyped_defs = false
 ignore_missing_imports = true
 files = ["src"]
 
-[tool.black]
+[tool.ruff]
 line-length = 100
-target-version = ["py310", "py311"]
-include = '\.pyi?$'
+target-version = "py310"
+src = ["src", "tests"]
+exclude = [
+    ".git",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "*.egg-info",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # Pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "C4",   # flake8-comprehensions
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "E712",   # comparison to True/False (pandas boolean indexing style)
+    "E722",   # bare except (reviewed case-by-case)
+    "E731",   # lambda assignment (sometimes clearer)
+    "E741",   # ambiguous variable name (l, O, I) - common in math/bio code
+    "B008",   # function calls in argument defaults (needed for typer)
+    "B905",   # zip without strict (would break existing logic)
+    "SIM102", # collapsible-if (sometimes less readable)
+    "SIM105", # suppressible-exception (contextlib.suppress less explicit)
+    "SIM108", # ternary instead of if-else (sometimes less readable)
+    "SIM115", # context manager for open (already handled in most cases)
+    "SIM116", # dict lookup instead of if-else (case-dependent)
+    "SIM117", # nested with statements (pytest context managers)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["F841"]  # unused variables OK in tests
+
+[tool.ruff.lint.isort]
+known-first-party = ["wasp2", "counting", "mapping", "analysis"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
 
 [tool.coverage.run]
 source = ["src"]
