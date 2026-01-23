@@ -1,0 +1,21 @@
+name: wasp2
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - python>=3.10
+  - pip
+  - numpy
+  - pandas
+  - polars
+  - scipy
+  - pysam
+  - pybedtools
+  - samtools
+  - bcftools
+  - bedtools
+  - typer
+  - rich
+  - pip:
+    - wasp2

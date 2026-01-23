@@ -1,0 +1,37 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema",
+    "$id": "https://raw.githubusercontent.com/Jaureguy760/WASP2-exp/main/pipelines/nf-rnaseq/assets/samplesheet_schema.json",
+    "title": "WASP2 RNA-seq ASE Pipeline - Samplesheet Schema",
+    "description": "Schema for the samplesheet used as input to the WASP2 RNA-seq ASE pipeline",
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "sample": {
+                "type": "string",
+                "pattern": "^\\S+$",
+                "description": "Sample identifier. Must be unique and cannot contain spaces.",
+                "errorMessage": "Sample name must be provided and cannot contain spaces"
+            },
+            "fastq_1": {
+                "type": "string",
+                "pattern": "^\\S+\\.f(ast)?q\\.gz$",
+                "description": "Path to FASTQ file for read 1 (gzipped)",
+                "errorMessage": "FastQ file for reads 1 must be provided, cannot contain spaces and must have extension '.fq.gz' or '.fastq.gz'"
+            },
+            "fastq_2": {
+                "type": "string",
+                "pattern": "^\\S+\\.f(ast)?q\\.gz$",
+                "description": "Path to FASTQ file for read 2 (gzipped). Optional for single-end data.",
+                "errorMessage": "FastQ file for reads 2 cannot contain spaces and must have extension '.fq.gz' or '.fastq.gz'"
+            },
+            "strandedness": {
+                "type": "string",
+                "enum": ["forward", "reverse", "unstranded"],
+                "default": "unstranded",
+                "description": "Library strandedness. Options: forward, reverse, unstranded"
+            }
+        },
+        "required": ["sample", "fastq_1"]
+    }
+}

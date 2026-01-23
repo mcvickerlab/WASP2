@@ -1,0 +1,139 @@
+name: "wasp2_map"
+description: WASP2 mapping bias correction - generate swapped allele reads and filter remapped reads
+keywords:
+  - wasp
+  - mapping-bias
+  - allele-specific
+  - remapping
+  - reference-bias
+
+tools:
+  - wasp2:
+      description: |
+        WASP2 is a tool for allele-specific analysis of next-generation sequencing data.
+        The mapping module corrects for reference mapping bias by generating reads with
+        swapped alleles, remapping them, and filtering reads that don't map to the same location.
+      homepage: https://github.com/Jaureguy760/WASP2-exp
+      documentation: https://Jaureguy760.github.io/WASP2-exp/
+      tool_dev_url: https://github.com/Jaureguy760/WASP2-exp
+      licence: ["MIT"]
+
+components:
+  - name: WASP2_MAP_MAKE_READS
+    description: Generate FASTQ files with swapped alleles for remapping
+    input:
+      - meta:
+          type: map
+          description: |
+            Groovy Map containing sample information.
+            e.g. `[ id:'sample1', sample:'NA12878' ]`
+      - bam:
+          type: file
+          description: Coordinate-sorted BAM file with aligned reads
+          pattern: "*.{bam}"
+      - bai:
+          type: file
+          description: BAM index file
+          pattern: "*.{bai}"
+      - meta2:
+          type: map
+          description: Groovy Map containing VCF information
+      - vcf:
+          type: file
+          description: VCF file with phased genotypes
+          pattern: "*.{vcf,vcf.gz,bcf,pgen}"
+      - vcf_index:
+          type: file
+          description: VCF index file
+          pattern: "*.{tbi,csi}"
+    output:
+      - meta:
+          type: map
+          description: Groovy Map containing sample information
+      - fastq:
+          type: file
+          description: Paired-end FASTQ files with swapped alleles for remapping
+          pattern: "*.remap_r{1,2}.fq.gz"
+      - to_remap_bam:
+          type: file
+          description: BAM file containing reads that need remapping
+          pattern: "*.to_remap.bam"
+      - keep_bam:
+          type: file
+          description: BAM file containing reads without variant overlap (kept as-is)
+          pattern: "*.keep.bam"
+      - wasp_json:
+          type: file
+          description: JSON metadata file for downstream filter step
+          pattern: "*.wasp_data.json"
+      - versions:
+          type: file
+          description: File containing software versions
+          pattern: "versions.yml"
+
+  - name: WASP2_MAP_FILTER
+    description: Filter remapped reads using WASP algorithm
+    input:
+      - meta:
+          type: map
+          description: Groovy Map containing sample information
+      - remapped_bam:
+          type: file
+          description: BAM file from user's remapping step (e.g., BWA, STAR)
+          pattern: "*.{bam}"
+      - remapped_bai:
+          type: file
+          description: Index for remapped BAM
+          pattern: "*.{bai}"
+      - meta2:
+          type: map
+          description: Groovy Map (matches meta from make_reads)
+      - to_remap_bam:
+          type: file
+          description: Original to_remap BAM from make_reads step
+          pattern: "*.to_remap.bam"
+      - meta3:
+          type: map
+          description: Groovy Map (matches meta from make_reads)
+      - keep_bam:
+          type: file
+          description: Keep BAM from make_reads step
+          pattern: "*.keep.bam"
+      - meta4:
+          type: map
+          description: Groovy Map (matches meta from make_reads)
+      - wasp_json:
+          type: file
+          description: JSON metadata from make_reads step
+          pattern: "*.wasp_data.json"
+    output:
+      - meta:
+          type: map
+          description: Groovy Map containing sample information
+      - bam:
+          type: file
+          description: |
+            Final WASP-filtered BAM file, sorted and indexed.
+            Contains reads that passed the mapping bias filter merged with reads
+            that didn't overlap variants.
+          pattern: "*.wasp_filt.bam"
+      - bai:
+          type: file
+          description: BAM index file
+          pattern: "*.wasp_filt.bam.bai"
+      - versions:
+          type: file
+          description: File containing software versions
+          pattern: "versions.yml"
+
+workflow:
+  description: |
+    WASP2 mapping workflow consists of three steps:
+    1. WASP2_MAP_MAKE_READS: Generate swapped allele FASTQs
+    2. User remapping step (external): Remap FASTQs with aligner of choice (BWA, STAR, etc.)
+    3. WASP2_MAP_FILTER: Filter remapped reads and merge with kept reads
+
+authors:
+  - "@Jaureguy760"
+maintainers:
+  - "@Jaureguy760"
