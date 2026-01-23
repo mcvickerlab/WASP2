@@ -22,10 +22,9 @@ workflow NFSCATAC {
     SCATAC ( samplesheet )
 
     emit:
-    allele_counts  = SCATAC.out.allele_counts
-    pseudobulk     = SCATAC.out.pseudobulk
-    cell_clusters  = SCATAC.out.cell_clusters
-    multiqc_report = SCATAC.out.multiqc_report
+    allele_counts = SCATAC.out.allele_counts
+    pseudobulk    = SCATAC.out.pseudobulk
+    versions      = SCATAC.out.versions
 }
 
 workflow {
@@ -41,6 +40,6 @@ workflow {
 
     PIPELINE_COMPLETION (
         params.outdir,
-        NFSCATAC.out.multiqc_report
+        Channel.empty()  // MultiQC not implemented
     )
 }

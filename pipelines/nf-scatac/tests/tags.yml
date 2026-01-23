@@ -1,0 +1,7 @@
+# nf-scatac test tags
+scatac:
+  - tests/main.nf.test
+
+wasp2:
+  - tests/main.nf.test
+  - ../nf-modules/modules/wasp2/**/tests/main.nf.test

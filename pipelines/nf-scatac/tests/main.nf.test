@@ -1,0 +1,110 @@
+nextflow_pipeline {
+
+    name "Test Pipeline nf-scatac"
+    script "../main.nf"
+
+    tag "pipeline"
+    tag "scatac"
+
+    test("nf-scatac - stub run") {
+
+        options "-stub -profile test_stub"
+
+        when {
+            params {
+                outdir = "$outputDir"
+            }
+        }
+
+        then {
+            assertAll(
+                { assert workflow.success },
+                { assert workflow.out.allele_counts != null },
+                { assert workflow.out.pseudobulk != null },
+                { assert snapshot(
+                    workflow.trace.tasks().size(),
+                    workflow.trace.tasks()*.name.sort()
+                ).match("stub_workflow_tasks") }
+            )
+        }
+    }
+}
+
+nextflow_workflow {
+
+    name "Test Workflow SCATAC"
+    script "../workflows/scatac.nf"
+    workflow "SCATAC"
+
+    tag "scatac"
+
+    test("SCATAC workflow - stub run") {
+
+        options "-stub"
+
+        when {
+            params {
+                vcf = "${projectDir}/tests/stub/variants.vcf.gz"
+                outdir = "$outputDir"
+            }
+            workflow {
+                """
+                input[0] = Channel.of([
+                    [ id: 'test_sample' ],
+                    file("${projectDir}/tests/stub/fragments.tsv.gz"),
+                    file("${projectDir}/tests/stub/fragments.tsv.gz.tbi")
+                ])
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert workflow.success },
+                { assert workflow.out.allele_counts.size() == 1 },
+                { assert workflow.out.pseudobulk.size() == 1 },
+                { assert snapshot(workflow.out.versions).match("scatac_versions") }
+            )
+        }
+    }
+}
+
+nextflow_process {
+
+    name "Test Process SCATAC_COUNT_ALLELES"
+    script "../workflows/scatac.nf"
+    process "SCATAC_COUNT_ALLELES"
+
+    tag "scatac"
+
+    test("SCATAC_COUNT_ALLELES - stub") {
+
+        options "-stub"
+
+        when {
+            params {
+                min_fragments_per_cell = 100
+            }
+            process {
+                """
+                input[0] = [
+                    [ id: 'test_cell' ],
+                    file("${projectDir}/tests/stub/fragments.tsv.gz"),
+                    file("${projectDir}/tests/stub/fragments.tsv.gz.tbi"),
+                    file("${projectDir}/tests/stub/variants.bed")
+                ]
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert process.success },
+                { assert snapshot(process.out.versions).match("count_alleles_versions") },
+                { assert process.out.counts.size() == 1 },
+                { assert file(process.out.counts[0][1]).exists() },
+                { assert file(process.out.counts[0][1]).text.contains("barcode") }
+            )
+        }
+    }
+}

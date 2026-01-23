@@ -20,12 +20,22 @@ workflow PIPELINE_INITIALISATION {
         System.exit(0)
     }
 
-    ch_samplesheet = Channel.fromPath(input)
+    ch_samplesheet = Channel.fromPath(input, checkIfExists: true)
         .splitCsv(header: true, strip: true)
         .map { row ->
+            // Validate required column
+            if (!row.sample) {
+                error "Samplesheet error: 'sample' column is required. Found columns: ${row.keySet()}"
+            }
+            // Validate path source
+            if (!row.fragments && !row.cellranger_dir) {
+                error "Samplesheet error for '${row.sample}': provide 'fragments' or 'cellranger_dir'"
+            }
             def meta = [id: row.sample]
-            def fragments = row.fragments ? file(row.fragments) : file("${row.cellranger_dir}/outs/fragments.tsv.gz")
-            def fragments_tbi = file("${fragments}.tbi")
+            def fragments = row.fragments ?
+                file(row.fragments, checkIfExists: true) :
+                file("${row.cellranger_dir}/outs/fragments.tsv.gz", checkIfExists: true)
+            def fragments_tbi = file("${fragments}.tbi", checkIfExists: true)
             [ meta, fragments, fragments_tbi ]
         }
 

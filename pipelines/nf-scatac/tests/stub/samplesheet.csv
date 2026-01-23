@@ -1,0 +1,2 @@
+sample,fragments,cellranger_dir
+test_sample,tests/stub/fragments.tsv.gz,
