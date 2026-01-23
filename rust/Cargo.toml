@@ -1,0 +1,43 @@
+[package]
+name = "wasp2"
+version = "1.3.0"
+edition = "2021"
+
+[lib]
+name = "wasp2_rust"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+pyo3 = { version = "0.20", features = ["extension-module"] }
+rust-htslib = { version = "0.44", default-features = false }  # Keep stable version (0.47+ has NFS build issues)
+rayon = "1.8"
+anyhow = "1.0"
+rustc-hash = "1.1"
+statrs = "0.17"
+rv = "0.19"
+argmin = "0.10"
+argmin-math = "0.4"
+coitrees = "0.4"  # Fast interval tree for BAM-BED intersection (15-30x faster than pybedtools)
+crossbeam-channel = "0.5"  # Fast MPMC channels for parallel FASTQ writing
+gzp = { version = "0.11", default-features = false, features = ["deflate_default"] }  # Parallel gzip compression
+itoa = "1.0" # Fast integer-to-ascii for FASTQ/sidecar writing
+smallvec = "1.13" # Reduce heap allocs for small overlap/span vectors
+
+# VCF/BCF parsing (noodles - pure Rust, no C dependencies)
+# Note: noodles-bcf depends on noodles-vcf, so we use compatible versions
+noodles-vcf = "0.72"   # Match version used by noodles-bcf
+noodles-bcf = "0.68"
+noodles-core = "0.15"
+noodles-bgzf = "0.33"  # For compressed VCF (.vcf.gz)
+flate2 = "1.0"         # For gzip decompression
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+tempfile = "3.8"
+
+[[bench]]
+name = "mapping_filter_bench"
+harness = false
+
+[profile.release]
+debug = true  # Enable debug symbols for profiling

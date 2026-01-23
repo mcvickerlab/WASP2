@@ -2,30 +2,33 @@
 import sys
 import warnings
 
-from collections import namedtuple
 from pathlib import Path
+from typing import Optional, List, Dict, Union, Any, NamedTuple
 
 import numpy as np
 import pandas as pd
 import anndata as ad
+from anndata import AnnData
 
 # local imports
-from as_analysis_sc import get_imbalance_sc, adata_count_qc
+from .as_analysis_sc import get_imbalance_sc, adata_count_qc
 
 # Class that stores relevant data
 class WaspAnalysisSC:
 
-    def __init__(self, adata_file,
-                 bc_map,
-                 min_count=None,
-                 pseudocount=None,
-                 phased=None,
-                 sample=None,
-                 groups=None,
-                 model=None,
-                 out_file=None,
-                 z_cutoff=None
-                ):
+    def __init__(
+        self,
+        adata_file: Union[str, Path],
+        bc_map: Union[str, Path],
+        min_count: Optional[int] = None,
+        pseudocount: Optional[int] = None,
+        phased: Optional[bool] = None,
+        sample: Optional[str] = None,
+        groups: Optional[Union[str, List[str]]] = None,
+        model: Optional[str] = None,
+        out_file: Optional[Union[str, Path]] = None,
+        z_cutoff: Optional[float] = None
+    ) -> None:
         
         # User input data
         self.adata_file = adata_file
@@ -84,9 +87,9 @@ class WaspAnalysisSC:
         self.out_dir = Path(self.out_file).parent
         self.prefix = Path(self.out_file).stem
 
-    
-    def update_data(self, data):
-        
+
+    def update_data(self, data: NamedTuple) -> None:
+
         # Update attributes with namedtuple after parsing
         # Only updates matching keys
         for key in data._fields:
@@ -96,13 +99,29 @@ class WaspAnalysisSC:
                        )
 
 
-# Process adata inputs 
-def process_adata_inputs(adata, ai_files=None, bc_map=None, sample=None, groups=None, phased=None):
+# Define namedtuple for adata inputs
+class AdataInputs(NamedTuple):
+    adata: AnnData
+    sample: str
+    groups: List[str]
+    phased: bool
+
+
+# Process adata inputs
+def process_adata_inputs(
+    adata: AnnData,
+    ai_files: Optional[WaspAnalysisSC] = None,
+    bc_map: Optional[Union[str, Path]] = None,
+    sample: Optional[str] = None,
+    groups: Optional[List[str]] = None,
+    phased: Optional[bool] = None
+) -> AdataInputs:
 
     if ai_files is not None:
         bc_map = ai_files.bc_map
         sample = ai_files.sample
-        groups = ai_files.groups
+        # ai_files.groups is already converted to List[str] in __init__ if it was a string
+        groups = ai_files.groups if isinstance(ai_files.groups, list) else None
         phased = ai_files.phased
     
     # Check genotype and phasing input 
@@ -194,23 +213,27 @@ def process_adata_inputs(adata, ai_files=None, bc_map=None, sample=None, groups=
     else:
         groups = list(adata.var["group"].dropna().unique())
 
-    # how should i return and update data?
-    adata_inputs = namedtuple("adata_inputs", ["adata", "sample", "groups", "phased"])
-    
-    return adata_inputs(adata, sample, groups, phased)
+    # Ensure all required values are set (type narrowing for mypy)
+    assert sample is not None, "sample must be set by this point"
+    assert groups is not None, "groups must be set by this point"
+    assert phased is not None, "phased must be set by this point"
+
+    # Return properly typed namedtuple
+    return AdataInputs(adata, sample, groups, phased)
 
 
 # Parse user inputs and run entire pipeline
-def run_ai_analysis_sc(count_file,
-                       bc_map,
-                       min_count=None,
-                       pseudocount=None,
-                       phase=None,
-                       sample=None,
-                       groups=None,
-                       out_file=None,
-                       z_cutoff=None
-                       ):
+def run_ai_analysis_sc(
+    count_file: Union[str, Path],
+    bc_map: Union[str, Path],
+    min_count: Optional[int] = None,
+    pseudocount: Optional[int] = None,
+    phase: Optional[bool] = None,
+    sample: Optional[str] = None,
+    groups: Optional[Union[str, List[str]]] = None,
+    out_file: Optional[Union[str, Path]] = None,
+    z_cutoff: Optional[float] = None
+) -> None:
     
     # Create data class that holds input data
     ai_files = WaspAnalysisSC(adata_file=count_file,
@@ -241,7 +264,13 @@ def run_ai_analysis_sc(count_file,
                            z_cutoff=ai_files.z_cutoff,
                            gt_error=None
                            )
-    
+
+    # Type narrowing: after update_data, these values should be properly set
+    assert ai_files.min_count is not None, "min_count should be set in __init__"
+    assert ai_files.pseudocount is not None, "pseudocount should be set in __init__"
+    assert ai_files.phased is not None, "phased should be set by process_adata_inputs"
+    assert isinstance(ai_files.groups, list), "groups should be a list after update_data"
+
     # Create dictionary of resulting dataframes
     df_dict = get_imbalance_sc(adata,
                                min_count=ai_files.min_count,

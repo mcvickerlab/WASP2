@@ -11,7 +11,7 @@ from scipy.sparse import csr_matrix
 from pysam.libcalignmentfile import AlignmentFile
 
 # Local imports
-from count_alleles import find_read_aln_pos
+from .count_alleles import find_read_aln_pos
 
 
 # Create class that holds mutable and persistent stats

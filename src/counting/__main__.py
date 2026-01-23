@@ -6,8 +6,8 @@ import typer
 import sys
 
 # Local Imports
-from run_counting import run_count_variants
-from run_counting_sc import run_count_variants_sc
+from .run_counting import run_count_variants
+from .run_counting_sc import run_count_variants_sc
 
 # app = typer.Typer()
 # app = typer.Typer(pretty_exceptions_show_locals=False)
@@ -17,18 +17,17 @@ app = typer.Typer(pretty_exceptions_short=False)
 
 @app.command()
 def count_variants(
-    bam: Annotated[str, typer.Argument(help="Bam File")],
-    vcf: Annotated[str, typer.Argument(help="VCF File")],
+    bam: Annotated[str, typer.Argument(help="BAM file")],
+    variants: Annotated[str, typer.Argument(help="Variant file (VCF, VCF.GZ, BCF, or PGEN)")],
     samples: Annotated[
         Optional[List[str]],
         typer.Option(
             "--samples",
             "--sample",
             "--samps",
-            "--samps",
             "-s",
             help=(
-                "One or more samples to use in VCF. "
+                "One or more samples to use in variant file. "
                 "Accepts comma delimited string "
                 "or file with one sample per line"
             )
@@ -110,29 +109,66 @@ def count_variants(
                 "Parent attribute in gtf/gff3 for feature used in counting"
                 "Defaults to 'transcript_id' in gtf and 'Parent' in gff3")
             )] = None,
-    
-):
-    
+    use_rust: Annotated[
+        bool,
+        typer.Option(
+            "--use-rust/--no-rust",
+            help=(
+                "Use Rust acceleration for BAM counting (requires wasp2_rust extension). "
+                "Defaults to True if extension is available.")
+            )] = True,
+    vcf_bed: Annotated[
+        Optional[str],
+        typer.Option(
+            "--vcf-bed",
+            help="Optional precomputed VCF bed file to skip vcf_to_bed."
+        )
+    ] = None,
+    intersect_bed: Annotated[
+        Optional[str],
+        typer.Option(
+            "--intersect-bed",
+            help="Optional precomputed intersect bed file to skip bedtools intersect."
+        )
+    ] = None,
+    include_indels: Annotated[
+        bool,
+        typer.Option(
+            "--include-indels/--no-indels",
+            help=(
+                "Include indels in addition to SNPs for variant processing. "
+                "Default is SNPs only."
+            )
+        )
+    ] = False,
+
+) -> None:
+
     # Parse sample string
     # print(samples)
-    if len(samples) > 0:
-        samples=samples[0]
+    sample_str: Optional[str]
+    if samples is not None and len(samples) > 0:
+        sample_str = samples[0]
     else:
-        samples=None
-    
-    # print(samples)
-    
+        sample_str = None
+
+    # print(sample_str)
+
     # run
     run_count_variants(bam_file=bam,
-                       vcf_file=vcf,
+                       variant_file=variants,
                        region_file=region_file,
-                       samples=samples,
+                       samples=sample_str,
                        use_region_names=use_region_names,
                        out_file=out_file,
                        temp_loc=temp_loc,
                        gene_feature=gene_feature,
                        gene_attribute=gene_attribute,
-                       gene_parent=gene_parent
+                       gene_parent=gene_parent,
+                       use_rust=use_rust,
+                       precomputed_vcf_bed=vcf_bed,
+                       precomputed_intersect=intersect_bed,
+                       include_indels=include_indels
                        )
     
     # TODO TEST CASES FOR TYPER
@@ -141,8 +177,8 @@ def count_variants(
 
 @app.command()
 def count_variants_sc(
-    bam: Annotated[str, typer.Argument(help="Bam File")],
-    vcf: Annotated[str, typer.Argument(help="VCF File")],
+    bam: Annotated[str, typer.Argument(help="BAM file")],
+    variants: Annotated[str, typer.Argument(help="Variant file (VCF, VCF.GZ, BCF, or PGEN)")],
     barcodes: Annotated[str, typer.Argument(
         help="File with one barcode per line. Used as index")],
     samples: Annotated[
@@ -151,10 +187,9 @@ def count_variants_sc(
             "--samples",
             "--sample",
             "--samps",
-            "--samps",
             "-s",
             help=(
-                "One or more samples to use in VCF. "
+                "One or more samples to use in variant file. "
                 "Accepts comma delimited string "
                 "or file with one sample per line. "
                 "RECOMMENDED TO USE ONE SAMPLE AT A TIME."
@@ -197,20 +232,21 @@ def count_variants_sc(
                 "Directory for keeping intermediary files. "
                 "Defaults to removing intermediary files using temp directory")
             )] = None
-):
-    
+) -> None:
+
     # Parse sample string
-    if len(samples) > 0:
-        samples=samples[0]
+    sample_str: Optional[str]
+    if samples is not None and len(samples) > 0:
+        sample_str = samples[0]
     else:
-        samples=None
+        sample_str = None
 
     # run
     run_count_variants_sc(bam_file=bam,
-                          vcf_file=vcf,
+                          variant_file=variants,
                           barcode_file=barcodes,
                           feature_file=feature_file,
-                          samples=samples,
+                          samples=sample_str,
                           out_file=out_file,
                           temp_loc=temp_loc
                           )

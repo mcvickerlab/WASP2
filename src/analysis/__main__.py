@@ -6,9 +6,9 @@ import typer
 import sys
 
 # Local Imports
-from run_analysis import run_ai_analysis
-from run_analysis_sc import run_ai_analysis_sc
-from run_compare_ai import run_ai_comparison
+from .run_analysis import run_ai_analysis
+from .run_analysis_sc import run_ai_analysis_sc
+from .run_compare_ai import run_ai_comparison
 
 # app = typer.Typer()
 # app = typer.Typer(pretty_exceptions_show_locals=False)
@@ -83,7 +83,7 @@ def find_imbalance(
             "--region_col",
             help=(
                 "Name of region column for current data..."
-                "'region' for ATAC-seq. " 
+                "'region' for ATAC-seq. "
                 "Attribute name for RNA-seq."
                 "(Default: Auto-parses if none provided)"
                 ),
@@ -101,8 +101,8 @@ def find_imbalance(
                 "(Default: Report by feature level instead of parent level)"
                 ),
             )] = None,
-    
-):
+
+) -> None:
     
     # Run
     run_ai_analysis(count_file=counts,
@@ -211,13 +211,14 @@ def find_imbalance_sc(
                   )
             )
         ] = None,
-):
-    
-    if len(groups) > 0:
-        groups=groups[0]
+) -> None:
+
+    groups_value: str | list[str] | None
+    if groups is not None and len(groups) > 0:
+        groups_value = groups[0]
     else:
-        groups=None
-    
+        groups_value = None
+
     # Run single cell analysis
     run_ai_analysis_sc(count_file=counts,
                        bc_map=bc_map,
@@ -225,7 +226,7 @@ def find_imbalance_sc(
                        pseudocount=pseudocount,
                        phase=phased,
                        sample=sample,
-                       groups=groups,
+                       groups=groups_value,
                        out_file=out_file,
                        z_cutoff=z_cutoff
                        )
@@ -326,13 +327,14 @@ def compare_imbalance(
                   )
             )
         ] = None,
-):
-    
-    if len(groups) > 0:
-        groups=groups[0]
+) -> None:
+
+    groups_value: str | list[str] | None
+    if groups is not None and len(groups) > 0:
+        groups_value = groups[0]
     else:
-        groups=None
-    
+        groups_value = None
+
     # Run comparison
     run_ai_comparison(count_file=counts,
                       bc_map=bc_map,
@@ -340,7 +342,7 @@ def compare_imbalance(
                       pseudocount=pseudocount,
                       phase=phased,
                       sample=sample,
-                      groups=groups,
+                      groups=groups_value,
                       out_file=out_file,
                       z_cutoff=z_cutoff
                       )

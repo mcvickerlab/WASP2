@@ -5,71 +5,53 @@ import warnings
 
 
 from pathlib import Path
+from typing import Optional, List, Union
 
 import numpy as np
 import polars as pl
 
-# same as in mapping...should create unified utils
-def vcf_to_bed(vcf_file, out_bed, samples=None, include_gt=True):
-    
-    # Maybe change this later?
-    # out_bed = f"{out_dir}/filt_variants.bed"
-    
-    # Base commands
-    view_cmd = ["bcftools", "view", str(vcf_file),
-                "-m2", "-M2", "-v", "snps", "-Ou"
-               ]
+# Import from new wasp2.io module for multi-format support
+from wasp2.io import variants_to_bed as _variants_to_bed
 
-    query_cmd = ["bcftools", "query",
-                 "-o", str(out_bed),
-                 "-f"]
-    
-    # Parse based on num samps
-    if samples is None:
-        
-        # 0 samps, no GTs
-        view_cmd.append("--drop-genotypes")
-        query_cmd.append("%CHROM\t%POS0\t%END\t%REF\t%ALT\n")
-        
-        view_process = subprocess.run(view_cmd, stdout=subprocess.PIPE, check=True)
-        
-    else:
-        
-        # Samples
-        samples_arg = ",".join(samples)
-        num_samples = len(samples)
-        
-        if num_samples > 1:
-            # Multisamp
-            view_cmd.extend(["-s", samples_arg,
-                             "--min-ac", "1",
-                             "--max-ac", str((num_samples * 2) - 1)])
-            
-            view_process = subprocess.run(view_cmd, stdout=subprocess.PIPE, check=True)
-                    
-        else:
 
-            # Single Samp subset
-            view_cmd.extend(["-s", samples_arg])
-            subset_process = subprocess.run(view_cmd, stdout=subprocess.PIPE, check=True)
-            
-            # Get het genotypes
-            new_view_cmd = ["bcftools", "view", "--genotype", "het", "-Ou"]
-            view_process = subprocess.run(new_view_cmd, input=subset_process.stdout,
-                                          stdout=subprocess.PIPE, check=True)
-        
-        # If we include GT
-        if include_gt:
-            # Changed %TGT to GT, ref/alt -> 0/1
-            query_cmd.append("%CHROM\t%POS0\t%END\t%REF\t%ALT[\t%GT]\n")
-        else:
-            query_cmd.append("%CHROM\t%POS0\t%END\t%REF\t%ALT\n")
+def vcf_to_bed(
+    vcf_file: Union[str, Path],
+    out_bed: Union[str, Path],
+    samples: Optional[List[str]] = None,
+    include_gt: bool = True,
+    include_indels: bool = False,
+    max_indel_len: int = 10
+) -> str:
+    """Convert variant file to BED format.
 
-    
-    # Run Subprocess
-    query_process = subprocess.run(query_cmd, input=view_process.stdout, check=True)
-    
-    return out_bed
+    Supports VCF, VCF.GZ, BCF, and PGEN formats via the VariantSource API.
+    This is the unified version that replaces the duplicate implementation.
+
+    Note: Parameter name 'vcf_file' is kept for backward compatibility,
+    but accepts any supported variant format (VCF, BCF, PGEN).
+
+    Args:
+        vcf_file: Path to variant file (VCF, VCF.GZ, BCF, or PGEN)
+        out_bed: Output BED file path
+        samples: Optional list of sample IDs. If provided, filters to het sites.
+        include_gt: Include genotype column in output (default True)
+        include_indels: Include indels in addition to SNPs (default False)
+        max_indel_len: Maximum indel length in bp (default 10)
+
+    Returns:
+        Path to output BED file as string
+    """
+    # Use new unified interface
+    result = _variants_to_bed(
+        variant_file=vcf_file,
+        out_bed=out_bed,
+        samples=samples,
+        include_gt=include_gt,
+        het_only=True if samples else False,
+        include_indels=include_indels,
+        max_indel_len=max_indel_len,
+    )
+    return str(result)
 
 
 def gtf_to_bed(gtf_file, out_bed, feature, attribute):
@@ -148,7 +130,8 @@ def parse_intersect_region_new(intersect_file, samples=None, use_region_names=Fa
 
     # Check how many region columns
     subset_cols = [vcf_cols[0], *vcf_cols[2:]] # skip pos0
-    intersect_ncols = len(df.columns)
+    schema = df.collect_schema()
+    intersect_ncols = len(schema.names())
 
 
     # Intersected with peak, check if region col needs to be made
@@ -165,7 +148,7 @@ def parse_intersect_region_new(intersect_file, samples=None, use_region_names=Fa
             df = df.with_columns(
                 pl.concat_str(
                     [
-                        pl.col(i) for i in df.columns[vcf_ncols:vcf_ncols+3]
+                        pl.col(i) for i in schema.names()[vcf_ncols:vcf_ncols+3]
                     ],
                     separator="_"
                 ).alias(region_col)
@@ -207,10 +190,8 @@ def parse_intersect_region(intersect_file, use_region_names=False, region_col=No
         use_coords = True
 
     else:
-        # CHANGE TO RAISE ERROR
-        print("COULD NOT RECOGNIZE FORMAT OR WRONG NUMBER OF COLS")
-        return
-    
+        raise ValueError(f"Could not recognize BED format. Expected 3-6 columns, got {len(df.columns)} columns")
+
     # Parse dataframe columns
     rename_cols = {old_col: new_col for old_col, new_col in zip(subset_cols, new_cols)}
     df = df.select(subset_cols).rename(

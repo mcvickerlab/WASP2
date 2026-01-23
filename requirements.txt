@@ -1,0 +1,25 @@
+# WASP2 Python Dependencies
+# Install with: pip install -r requirements.txt
+# Note: System dependencies (bcftools, samtools, bedtools) must be installed separately
+
+# Data processing
+numpy>=1.21.0
+pandas>=2.0.0
+polars>=0.19.0
+scipy>=1.9.0
+
+# Bioinformatics
+pysam>=0.21.0
+pybedtools>=0.9.0
+anndata>=0.9.0
+
+# CLI
+typer>=0.9.0
+typing-extensions>=4.0.0
+
+# Testing
+pytest>=7.0.0
+pytest-cov>=4.0.0
+
+# Type checking
+mypy>=1.0.0
