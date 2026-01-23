@@ -1,0 +1,59 @@
+nextflow_process {
+
+    name "Test Process WASP2_ANALYZE"
+    script "../main.nf"
+    process "WASP2_ANALYZE"
+
+    tag "modules"
+    tag "modules_nfcore"
+    tag "wasp2"
+    tag "wasp2/analyze"
+
+    test("wasp2_analyze - counts - stub") {
+
+        options "-stub"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id:'test', phased:false ],
+                    file("${projectDir}/tests/data/sample.counts.tsv")
+                ]
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert process.success },
+                { assert snapshot(process.out.versions).match("versions_stub") },
+                { assert process.out.stats.size() == 1 },
+                { assert file(process.out.stats[0][1]).exists() }
+            )
+        }
+    }
+
+    test("wasp2_analyze - phased - stub") {
+
+        options "-stub"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id:'test_phased', phased:true ],
+                    file("${projectDir}/tests/data/sample.counts.tsv")
+                ]
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert process.success },
+                { assert snapshot(process.out).match("phased_stub") }
+            )
+        }
+    }
+}

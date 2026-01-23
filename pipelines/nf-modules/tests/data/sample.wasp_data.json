@@ -1,0 +1,23 @@
+{
+  "bam_file": "minimal.bam",
+  "variant_file": "sample.vcf.gz",
+  "sample": "sample1",
+  "phased": false,
+  "read_mappings": {
+    "read001": {
+      "original_pos": 90,
+      "chrom": "chr1",
+      "variants": [{"pos": 100, "ref": "A", "alt": "G"}]
+    },
+    "read002": {
+      "original_pos": 390,
+      "chrom": "chr1",
+      "variants": [{"pos": 400, "ref": "T", "alt": "C"}]
+    },
+    "read003": {
+      "original_pos": 90,
+      "chrom": "chr2",
+      "variants": [{"pos": 100, "ref": "A", "alt": "T"}]
+    }
+  }
+}

@@ -1,0 +1,25 @@
+name: wasp2_count
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11.*
+  - numpy
+  - pandas>=2.0.0
+  - polars>=0.19
+  - scipy
+  - pysam
+  - pybedtools
+  - bedtools
+  - bcftools
+  - samtools>=1.10
+  - htslib>=1.10
+  - anndata>=0.8.0
+  - typer
+  - rich
+  - rust
+  - libclang
+  - pip
+  - pip:
+    - maturin>=1.4

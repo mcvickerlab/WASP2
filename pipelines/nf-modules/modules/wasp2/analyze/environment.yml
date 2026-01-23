@@ -1,0 +1,20 @@
+name: wasp2_analyze
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11.*
+  - numpy
+  - pandas>=2.0.0
+  - polars>=0.19
+  - scipy
+  - anndata>=0.8.0
+  - scanpy>=1.9.0
+  - typer
+  - rich
+  - rust
+  - libclang
+  - pip
+  - pip:
+    - maturin>=1.4
