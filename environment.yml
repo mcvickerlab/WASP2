@@ -9,8 +9,8 @@ dependencies:
 
   # Data processing
   - numpy
-  - pandas
-  - polars
+  - pandas>=1.5,<2.0  # Pin <2.0 for anndata compatibility (see issue #6)
+  - polars>=0.19  # Pin minimum version for stable API
   - scipy
 
   # Bioinformatics
@@ -21,7 +21,7 @@ dependencies:
   - samtools>=1.10  # Required for collate -T option (indel processing)
   - htslib>=1.10
   - bwa  # Required for remapping step
-  - anndata
+  - anndata>=0.8,<0.10  # Pin for pandas <2.0 compatibility
   - plink2  # For PGEN file format support
 
   # CLI
