@@ -15,8 +15,15 @@ pub struct BamCounter {
 struct Region {
     chrom: String,
     pos: u32, // 1-based position from Python
-    ref_base: char,
-    alt_base: char,
+    ref_allele: String,  // Full reference allele (supports INDELs)
+    alt_allele: String,  // Full alternate allele (supports INDELs)
+}
+
+impl Region {
+    /// Returns true if this variant is a simple SNP (single base change)
+    fn is_snp(&self) -> bool {
+        self.ref_allele.len() == 1 && self.alt_allele.len() == 1
+    }
 }
 
 // PyO3 expands #[pymethods] into impl blocks that trigger non_local_definitions warnings;
@@ -36,10 +43,10 @@ impl BamCounter {
         Ok(BamCounter { bam_path })
     }
 
-    /// Count alleles at SNP positions using batched fetching
+    /// Count alleles at variant positions (SNPs and INDELs) using batched fetching
     ///
     /// Args:
-    ///     regions: List of (chrom, pos, ref, alt) tuples
+    ///     regions: List of (chrom, pos, ref, alt) tuples - supports both SNPs and INDELs
     ///     min_qual: Minimum base quality (default: 0 for WASP2 compatibility)
     ///     threads: Number of worker threads (default: 1). Use >1 to enable Rayon parallelism per chromosome.
     ///
@@ -53,20 +60,32 @@ impl BamCounter {
         min_qual: u8,
         threads: usize,
     ) -> PyResult<Vec<(u32, u32, u32)>> {
-        // Parse Python regions
+        // Parse Python regions (supports both SNPs and INDELs)
         let mut rust_regions = Vec::new();
         for item in regions.iter() {
             let tuple = item.downcast::<pyo3::types::PyTuple>()?;
             let chrom: String = tuple.get_item(0)?.extract()?;
             let pos: u32 = tuple.get_item(1)?.extract()?;
-            let ref_base: String = tuple.get_item(2)?.extract()?;
-            let alt_base: String = tuple.get_item(3)?.extract()?;
+            let ref_allele: String = tuple.get_item(2)?.extract()?;
+            let alt_allele: String = tuple.get_item(3)?.extract()?;
+
+            // Validate alleles are non-empty
+            if ref_allele.is_empty() {
+                return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                    format!("Empty ref_allele for variant at {}:{}", chrom, pos)
+                ));
+            }
+            if alt_allele.is_empty() {
+                return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                    format!("Empty alt_allele for variant at {}:{}", chrom, pos)
+                ));
+            }
 
             rust_regions.push(Region {
                 chrom,
                 pos,
-                ref_base: ref_base.chars().next().unwrap(),
-                alt_base: alt_base.chars().next().unwrap(),
+                ref_allele,
+                alt_allele,
             });
         }
 
@@ -156,11 +175,15 @@ impl BamCounter {
         })?;
 
         let mut seen_reads: FxHashSet<Vec<u8>> = FxHashSet::default();
-        let total_snps: usize = regions.len();
+        let total_variants: usize = regions.len();
         let mut counts: FxHashMap<usize, (u32, u32, u32)> = FxHashMap::default();
-        counts.reserve(total_snps);
+        counts.reserve(total_variants);
 
-        // Build position -> SNP list, preserving encounter order
+        // Track skipped records for logging (prevents silent failures)
+        let mut skipped_records: u32 = 0;
+        const MAX_SKIP_WARNINGS: u32 = 5;
+
+        // Build position -> variant list, preserving encounter order
         let mut pos_map: FxHashMap<u32, Vec<(usize, Region)>> = FxHashMap::default();
         let mut min_pos: u32 = u32::MAX;
         let mut max_pos: u32 = 0;
@@ -188,7 +211,11 @@ impl BamCounter {
             (min_pos - 1) as i64
         };
         let end = max_pos.saturating_add(1) as i64;
-        if bam.fetch((chrom, start, end)).is_err() {
+        if let Err(e) = bam.fetch((chrom, start, end)) {
+            eprintln!(
+                "[WARN] Failed to fetch {}:{}-{}: {}. Skipping {} variants.",
+                chrom, start, end, e, regions.len()
+            );
             return Ok(counts);
         }
 
@@ -197,7 +224,16 @@ impl BamCounter {
         while let Some(res) = read_iter.next() {
             let record = match res {
                 Ok(r) => r,
-                Err(_) => continue,
+                Err(e) => {
+                    skipped_records += 1;
+                    if skipped_records <= MAX_SKIP_WARNINGS {
+                        eprintln!(
+                            "[WARN] Skipped corrupted BAM record on {}: {}",
+                            chrom, e
+                        );
+                    }
+                    continue;
+                }
             };
             if record.is_unmapped()
                 || record.is_secondary()
@@ -239,21 +275,68 @@ impl BamCounter {
                         continue;
                     }
                 }
-                let base = match record.seq()[qpos] {
-                    b'A' => 'A',
-                    b'C' => 'C',
-                    b'G' => 'G',
-                    b'T' => 'T',
-                    b'N' => 'N',
-                    _ => continue,
-                };
+
                 let entry_counts = counts.entry(enc_idx).or_insert((0, 0, 0));
-                if base == region.ref_base {
-                    entry_counts.0 += 1;
-                } else if base == region.alt_base {
-                    entry_counts.1 += 1;
+                let read_allele: String;
+
+                if region.is_snp() {
+                    // Fast path for SNPs: single base comparison
+                    read_allele = match record.seq()[qpos] {
+                        b'A' => "A".to_string(),
+                        b'C' => "C".to_string(),
+                        b'G' => "G".to_string(),
+                        b'T' => "T".to_string(),
+                        b'N' => "N".to_string(),
+                        _ => continue,
+                    };
                 } else {
+                    // INDEL path: extract sequence span from read
+                    // For INDELs, we need to determine which allele the read supports
+                    // by comparing the read sequence to expected ref/alt alleles
+                    let seq = record.seq();
+                    let seq_len = seq.len();
+
+                    // Extract enough bases to compare against both alleles
+                    let max_allele_len = std::cmp::max(region.ref_allele.len(), region.alt_allele.len());
+                    let end_pos = std::cmp::min(qpos + max_allele_len, seq_len);
+
+                    if qpos >= seq_len {
+                        continue;
+                    }
+
+                    // Build read sequence string from the relevant positions
+                    let mut seq_string = String::with_capacity(end_pos - qpos);
+                    for i in qpos..end_pos {
+                        let base = match seq[i] {
+                            b'A' => 'A',
+                            b'C' => 'C',
+                            b'G' => 'G',
+                            b'T' => 'T',
+                            _ => 'N',
+                        };
+                        seq_string.push(base);
+                    }
+                    read_allele = seq_string;
+                }
+
+                // Compare read allele to ref/alt
+                if read_allele == region.ref_allele {
+                    entry_counts.0 += 1;
+                } else if read_allele == region.alt_allele {
+                    entry_counts.1 += 1;
+                } else if region.is_snp() {
+                    // For SNPs, a mismatch to both is "other"
                     entry_counts.2 += 1;
+                } else {
+                    // For INDELs, check if read starts with either allele
+                    // This handles cases where read extends beyond the variant
+                    if read_allele.starts_with(&region.ref_allele) {
+                        entry_counts.0 += 1;
+                    } else if read_allele.starts_with(&region.alt_allele) {
+                        entry_counts.1 += 1;
+                    } else {
+                        entry_counts.2 += 1;
+                    }
                 }
                 seen_reads.insert(qname.clone());
 
@@ -262,7 +345,7 @@ impl BamCounter {
                         && entry_counts.0 + entry_counts.1 + entry_counts.2 <= *limit as u32
                     {
                         eprintln!(
-                            "[DEBUG SNP] {}:{} read={} flags(unmap/sec/supp/dup)={}/{}/{}/{} qpos={} base={} -> idx={} ref={} alt={}",
+                            "[DEBUG VARIANT] {}:{} read={} flags(unmap/sec/supp/dup)={}/{}/{}/{} qpos={} read_seq={} -> idx={} ref={} alt={} snp={}",
                             chrom,
                             pos1,
                             String::from_utf8_lossy(&qname),
@@ -271,14 +354,23 @@ impl BamCounter {
                             record.is_supplementary(),
                             record.is_duplicate(),
                             qpos,
-                            base,
+                            read_allele,
                             enc_idx,
-                            region.ref_base,
-                            region.alt_base
+                            region.ref_allele,
+                            region.alt_allele,
+                            region.is_snp()
                         );
                     }
                 }
             }
+        }
+
+        // Log summary if records were skipped (prevents silent data loss)
+        if skipped_records > 0 {
+            eprintln!(
+                "[WARN] Skipped {} corrupted BAM record(s) on {} (shown first {})",
+                skipped_records, chrom, MAX_SKIP_WARNINGS.min(skipped_records)
+            );
         }
 
         Ok(counts)
@@ -387,20 +479,20 @@ mod tests {
             Region {
                 chrom: "chr1".into(),
                 pos: 10,
-                ref_base: 'A',
-                alt_base: 'G',
+                ref_allele: "A".into(),
+                alt_allele: "G".into(),
             },
             Region {
                 chrom: "chr1".into(),
                 pos: 20,
-                ref_base: 'C',
-                alt_base: 'T',
+                ref_allele: "C".into(),
+                alt_allele: "T".into(),
             },
             Region {
                 chrom: "chr2".into(),
                 pos: 5,
-                ref_base: 'T',
-                alt_base: 'C',
+                ref_allele: "T".into(),
+                alt_allele: "C".into(),
             },
         ];
 
