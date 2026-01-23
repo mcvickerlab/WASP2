@@ -85,6 +85,7 @@ output:
           type: file
           description: Filter statistics showing read counts before and after WASP filtering
           pattern: "*.filter_stats.txt"
+          optional: true
   - versions:
       - versions.yml:
           type: file

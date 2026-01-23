@@ -57,7 +57,7 @@ output:
       - meta:
           type: map
           description: Groovy Map containing sample information
-      - "*.counts.tsv":
+      - "*_counts.tsv":
           type: file
           description: |
             TSV file with allele counts per variant site or region.
