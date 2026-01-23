@@ -24,18 +24,22 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-action@stable
 
-      - name: Install dependencies
+      - name: Create virtualenv and install dependencies
         run: |
+          python -m venv .venv
+          source .venv/bin/activate
           python -m pip install --upgrade pip
           pip install maturin pytest pytest-cov
-          pip install numpy pandas polars scipy pysam pybedtools typer rich
+          pip install numpy pandas>=1.5,<2.0 polars>=0.19 scipy pysam pybedtools anndata>=0.8,<0.10 typer rich
 
       - name: Build Rust extension
         run: |
+          source .venv/bin/activate
           maturin develop --release -m rust/Cargo.toml
 
       - name: Run tests with coverage
         run: |
+          source .venv/bin/activate
           pytest tests/ --cov=src --cov-report=xml --cov-report=term-missing
         env:
           PYTHONPATH: ${{ github.workspace }}/src
