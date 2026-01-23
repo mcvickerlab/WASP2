@@ -1,0 +1,4 @@
+sample,bam,bai
+test_sample1,../../test/data/test_sample1.bam,../../test/data/test_sample1.bam.bai
+test_sample2,../../test/data/test_sample2.bam,../../test/data/test_sample2.bam.bai
+test_sample3,../../test/data/test_sample3.bam,../../test/data/test_sample3.bam.bai

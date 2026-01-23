@@ -1,86 +1,174 @@
-# nf-outrider: OUTRIDER Integration Pipeline
+# nf-outrider: WASP2 + OUTRIDER Pipeline
 
-WASP2 + OUTRIDER for aberrant expression and mono-allelic expression detection.
+[![Nextflow](https://img.shields.io/badge/nextflow%20DSL2-%E2%89%A523.04.0-23aa62.svg)](https://www.nextflow.io/)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+**WASP2 + OUTRIDER for aberrant expression and mono-allelic expression detection.**
+
+## Overview
+
+nf-outrider integrates WASP2's high-performance allele counting with OUTRIDER's autoencoder-based outlier detection to identify:
+
+1. **Aberrant Expression**: Gene-level expression outliers using OUTRIDER's neural network approach
+2. **Mono-allelic Expression (MAE)**: Allele-specific expression with binomial statistics
 
 ## Workflow
 
 ```
-RNA-seq BAMs → WASP2 Filter → WASP2 Count → Gene Aggregation → OUTRIDER → Outlier Calls
+RNA-seq BAMs → WASP2 Count → Gene Aggregation → OUTRIDER → Outlier Calls
                     ↓                              ↓
-              Bias-corrected             Autoencoder-based
-                  reads                  outlier detection
+              61× faster than              Autoencoder-based
+              GATK ASEReadCounter          outlier detection
+                    ↓
+              MAE Detection (binomial)
 ```
 
 ## Why WASP2 + OUTRIDER (vs nf-core/drop)?
 
 | Feature | nf-core/drop | nf-outrider |
 |---------|--------------|-------------|
-| Allele counting | GATK ASEReadCounter | WASP2 (61× faster) |
-| Bias correction | Basic | WASP2 mapping filter |
-| Statistics | Binomial | Beta-binomial (overdispersion-aware) |
-| MAE detection | Standard | Enhanced with WASP2 AI calls |
+| Allele counting | GATK ASEReadCounter (1600s) | **WASP2 (26s, 61× faster)** |
+| Acceleration | None | **Rust-accelerated** |
+| Statistics | Binomial | **Binomial with FDR correction** |
+| MAE detection | Standard | **Enhanced with FDR-corrected binomial test** |
+| Bias correction | Basic | **WASP mapping filter available** |
 
-## Inputs
+## Quick Start
 
+```bash
+# Run with Docker
+nextflow run nf-outrider \
+    -profile docker \
+    --input samplesheet.csv \
+    --vcf variants.vcf.gz \
+    --gtf annotation.gtf \
+    --outdir results
+
+# Run with Singularity (HPC)
+nextflow run nf-outrider \
+    -profile singularity \
+    --input samplesheet.csv \
+    --vcf variants.vcf.gz \
+    --gtf annotation.gtf
 ```
-params {
-    bams           = "data/*.bam"
-    vcf            = "variants.vcf.gz"
-    gtf            = "annotation.gtf"
-    sample_sheet   = "samples.csv"
-}
+
+## Input
+
+### Samplesheet (CSV)
+
+```csv
+sample,bam,bai
+patient1,/path/to/patient1.bam,/path/to/patient1.bam.bai
+patient2,/path/to/patient2.bam,/path/to/patient2.bam.bai
+control1,/path/to/control1.bam,/path/to/control1.bam.bai
 ```
 
-## Outputs
+### Required Files
+
+- **VCF**: Heterozygous variants (bgzip-compressed, tabix-indexed)
+- **GTF**: Gene annotation (Gencode, Ensembl, or RefSeq format)
+- **BAMs**: Aligned RNA-seq reads (coordinate-sorted, indexed)
+
+## Output
 
 ```
 results/
 ├── wasp2/
-│   ├── filtered_bams/      # Bias-corrected BAMs
-│   └── allele_counts/      # Per-sample, per-variant counts
+│   └── allele_counts/          # Per-sample, per-variant allele counts
 ├── aggregated/
-│   └── gene_counts.tsv     # Gene-level expression matrix
+│   └── *.gene_counts.tsv       # Gene-level expression for each sample
 ├── outrider/
-│   ├── outliers.tsv        # Aberrant expression calls
-│   └── model.rds           # Trained OUTRIDER model
-└── mae/
-    └── mae_results.tsv     # Mono-allelic expression
+│   ├── outrider_results.tsv    # Aberrant expression calls
+│   ├── outrider_model.rds      # Trained OUTRIDER model
+│   └── outrider_summary.html   # Interactive summary report
+├── mae/
+│   └── *.mae_results.tsv       # Mono-allelic expression calls
+└── pipeline_info/
+    └── execution_*.html        # Nextflow reports
 ```
 
-## Pipeline Modules
+## Parameters
 
+### Core Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `--input` | required | Samplesheet CSV |
+| `--vcf` | required | VCF with heterozygous variants |
+| `--gtf` | required | Gene annotation GTF |
+| `--outdir` | `./results` | Output directory |
+
+### OUTRIDER Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `--outrider_padj` | 0.05 | Adjusted p-value cutoff |
+| `--outrider_zScore` | 2 | Z-score cutoff |
+| `--outrider_q` | auto | Encoding dimension |
+| `--outrider_iterations` | 15 | Max iterations |
+| `--outrider_convergence` | 1e-5 | Convergence threshold |
+
+### MAE Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `--skip_mae` | false | Skip MAE analysis |
+| `--mae_min_count` | 10 | Min allele count |
+| `--mae_padj` | 0.05 | P-value cutoff |
+| `--mae_alt_ratio` | 0.8 | Alt ratio threshold |
+
+## Profiles
+
+```bash
+# Docker (recommended for local)
+-profile docker
+
+# Singularity (recommended for HPC)
+-profile singularity
+
+# Conda
+-profile conda
+
+# Test with minimal data
+-profile test
 ```
-include { WASP2_FILTER } from '../nf-modules/wasp2_filter'
-include { WASP2_COUNT } from '../nf-modules/wasp2_count'
-include { AGGREGATE_GENES } from './modules/aggregate'
-include { OUTRIDER_FIT } from './modules/outrider'
-include { MAE_DETECT } from './modules/mae'
-```
 
-## OUTRIDER Integration
+## OUTRIDER Algorithm
 
-```groovy
-process OUTRIDER_FIT {
-    container 'ghcr.io/gagneurlab/outrider:latest'
+OUTRIDER uses an autoencoder neural network to:
 
-    input:
-    path(count_matrix)
+1. **Learn latent representation**: Encode expression patterns into lower dimension
+2. **Reconstruct expected counts**: Decode to predict "normal" expression
+3. **Identify outliers**: Flag genes where observed >> expected
 
-    output:
-    path("outrider_results.tsv"), emit: outliers
-    path("outrider_model.rds"), emit: model
+The encoding dimension `q` controls model complexity - auto-estimated by analyzing eigenvalue distribution.
 
-    script:
-    """
-    Rscript -e "
-    library(OUTRIDER)
-    ods <- OutriderDataSet(countData = as.matrix(read.csv('${count_matrix}')))
-    ods <- OUTRIDER(ods)
-    res <- results(ods, padjCutoff = 0.05)
-    write.csv(res, 'outrider_results.tsv')
-    saveRDS(ods, 'outrider_model.rds')
-    "
-    """
+## MAE Detection
+
+Mono-allelic expression is detected using:
+
+1. **Binomial test**: Statistical test for allelic imbalance
+2. **Alt ratio threshold**: Identifies sites with extreme allelic ratios (default ≥0.8)
+3. **Multiple testing correction**: Benjamini-Hochberg FDR control
+
+## Citation
+
+If you use nf-outrider, please cite:
+
+```bibtex
+@article{WASP2,
+    title={WASP2: High-performance allele-specific analysis},
+    author={...},
+    journal={...},
+    year={2024}
+}
+
+@article{OUTRIDER,
+    title={OUTRIDER: A Statistical Method for Detecting Aberrantly Expressed Genes in RNA Sequencing Data},
+    author={Brechtmann et al.},
+    journal={Am J Hum Genet},
+    year={2018},
+    doi={10.1016/j.ajhg.2018.10.025}
 }
 ```
 
@@ -89,4 +177,12 @@ process OUTRIDER_FIT {
 - [OUTRIDER Paper](https://doi.org/10.1016/j.ajhg.2018.10.025)
 - [OUTRIDER GitHub](https://github.com/gagneurlab/OUTRIDER)
 - [nf-core/drop](https://nf-co.re/drop/dev/) (reference implementation)
+- [WASP2 Documentation](https://github.com/your-org/WASP2)
+
+## License
+
+MIT License - see [LICENSE](../../LICENSE) for details.
+
+## Issue Tracking
+
 - Issue: #35

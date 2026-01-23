@@ -1,0 +1,180 @@
+nextflow_process {
+
+    name "Test nf-outrider Pipeline"
+    script "../main.nf"
+
+    test("Should run with minimal test data") {
+
+        when {
+            params {
+                input = "${projectDir}/assets/test_samplesheet.csv"
+                vcf   = "${projectDir}/../../test/data/test_variants.vcf.gz"
+                gtf   = "${projectDir}/../../test/data/test_annotation.gtf"
+                outdir = "${outputDir}"
+                max_cpus = 2
+                max_memory = '6.GB'
+                outrider_iterations = 3
+                outrider_min_samples = 2
+            }
+        }
+
+        then {
+            // Pipeline should complete successfully
+            assert workflow.success
+
+            // Check WASP2 allele counts were generated
+            assert path("${params.outdir}/wasp2/allele_counts").exists()
+
+            // Check aggregated gene counts were generated
+            assert path("${params.outdir}/aggregated").exists()
+
+            // Check OUTRIDER results were generated
+            assert path("${params.outdir}/outrider/outrider_results.tsv").exists()
+            assert path("${params.outdir}/outrider/outrider_model.rds").exists()
+
+            // Check MAE results were generated (if not skipped)
+            if (!params.skip_mae) {
+                assert path("${params.outdir}/mae").exists()
+            }
+        }
+    }
+
+    test("Should skip MAE when requested") {
+
+        when {
+            params {
+                input = "${projectDir}/assets/test_samplesheet.csv"
+                vcf   = "${projectDir}/../../test/data/test_variants.vcf.gz"
+                gtf   = "${projectDir}/../../test/data/test_annotation.gtf"
+                outdir = "${outputDir}"
+                skip_mae = true
+            }
+        }
+
+        then {
+            assert workflow.success
+            // MAE directory should not exist or be empty
+            assert !path("${params.outdir}/mae").exists() ||
+                   path("${params.outdir}/mae").list().size() == 0
+        }
+    }
+
+    test("Should fail without required inputs") {
+
+        when {
+            params {
+                input = "${projectDir}/assets/test_samplesheet.csv"
+                // Missing vcf and gtf
+                outdir = "${outputDir}"
+            }
+        }
+
+        then {
+            assert workflow.failed
+            assert workflow.errorMessage.contains("--vcf is required")
+        }
+    }
+
+    test("Should fail when GTF is missing") {
+
+        when {
+            params {
+                input = "${projectDir}/assets/test_samplesheet.csv"
+                vcf   = "${projectDir}/../../test/data/test_variants.vcf.gz"
+                // Missing gtf
+                outdir = "${outputDir}"
+            }
+        }
+
+        then {
+            assert workflow.failed
+            assert workflow.errorMessage.contains("--gtf is required")
+        }
+    }
+
+    test("Should fail with non-existent samplesheet") {
+
+        when {
+            params {
+                input = "${projectDir}/assets/nonexistent_samplesheet.csv"
+                vcf   = "${projectDir}/../../test/data/test_variants.vcf.gz"
+                gtf   = "${projectDir}/../../test/data/test_annotation.gtf"
+                outdir = "${outputDir}"
+            }
+        }
+
+        then {
+            assert workflow.failed
+            // Verify the specific validation failure (Nextflow checkIfExists)
+            assert workflow.errorMessage.contains("does not exist") ||
+                   workflow.errorMessage.contains("not found") ||
+                   workflow.errorMessage.contains("No such file")
+        }
+    }
+
+    test("Should fail with non-existent VCF") {
+
+        when {
+            params {
+                input = "${projectDir}/assets/test_samplesheet.csv"
+                vcf   = "${projectDir}/../../test/data/nonexistent.vcf.gz"
+                gtf   = "${projectDir}/../../test/data/test_annotation.gtf"
+                outdir = "${outputDir}"
+            }
+        }
+
+        then {
+            assert workflow.failed
+            // Verify the specific validation failure (Nextflow checkIfExists)
+            assert workflow.errorMessage.contains("does not exist") ||
+                   workflow.errorMessage.contains("not found") ||
+                   workflow.errorMessage.contains("No such file")
+        }
+    }
+
+    test("Should fail with non-existent GTF") {
+
+        when {
+            params {
+                input = "${projectDir}/assets/test_samplesheet.csv"
+                vcf   = "${projectDir}/../../test/data/test_variants.vcf.gz"
+                gtf   = "${projectDir}/../../test/data/nonexistent_annotation.gtf"
+                outdir = "${outputDir}"
+            }
+        }
+
+        then {
+            assert workflow.failed
+            // Verify the specific validation failure (Nextflow checkIfExists)
+            assert workflow.errorMessage.contains("does not exist") ||
+                   workflow.errorMessage.contains("not found") ||
+                   workflow.errorMessage.contains("No such file")
+        }
+    }
+
+    test("Should validate samplesheet has required columns") {
+
+        setup {
+            // Create a malformed samplesheet
+            def malformedSheet = file("${workDir}/malformed_samplesheet.csv")
+            malformedSheet.text = "wrong_column,other\nvalue1,value2\n"
+        }
+
+        when {
+            params {
+                input = "${workDir}/malformed_samplesheet.csv"
+                vcf   = "${projectDir}/../../test/data/test_variants.vcf.gz"
+                gtf   = "${projectDir}/../../test/data/test_annotation.gtf"
+                outdir = "${outputDir}"
+            }
+        }
+
+        then {
+            assert workflow.failed
+            // Check for specific samplesheet validation error
+            assert workflow.errorMessage.contains("'sample' column is required") ||
+                   workflow.errorMessage.contains("'bam' column is required") ||
+                   workflow.errorMessage.contains("required")
+        }
+    }
+}

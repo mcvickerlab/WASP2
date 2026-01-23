@@ -1,0 +1,4 @@
+sample,bam,bai
+sample1,/path/to/sample1.bam,/path/to/sample1.bam.bai
+sample2,/path/to/sample2.bam,/path/to/sample2.bam.bai
+sample3,/path/to/sample3.bam,/path/to/sample3.bam.bai
