@@ -36,9 +36,15 @@ RUN maturin build --release -m rust/Cargo.toml -o /wheels
 # ============================================================================
 FROM python:3.11-slim-bookworm
 
-LABEL org.opencontainers.image.source="https://github.com/Jaureguy760/WASP2-exp"
-LABEL org.opencontainers.image.description="WASP2: Allele-specific analysis of NGS data"
+# Build arguments for versioning (can be overridden at build time)
+ARG VERSION=1.2.0
+
+LABEL org.opencontainers.image.source="https://github.com/Jaureguy760/WASP2-final"
+LABEL org.opencontainers.image.description="WASP2: Allele-specific analysis of NGS data with Rust acceleration"
 LABEL org.opencontainers.image.licenses="MIT"
+LABEL org.opencontainers.image.vendor="Jaureguy760"
+LABEL org.opencontainers.image.title="WASP2"
+LABEL org.opencontainers.image.version="${VERSION}"
 LABEL maintainer="Jeff Jaureguy <jeffpjaureguy@gmail.com>"
 
 # Install runtime dependencies
