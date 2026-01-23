@@ -47,9 +47,9 @@ workflow ABERRANT_EXPRESSION {
     //
     ch_gene_counts
         .count()
-        .map { n ->
-            if (n < 15) {
-                log.warn "WARNING: OUTRIDER requires >= 15 samples for reliable results. Found ${n} samples."
+        .map { sample_count ->
+            if (sample_count < 15) {
+                log.warn "WARNING: OUTRIDER requires >= 15 samples for reliable results. Found ${sample_count} samples."
             }
         }
 
