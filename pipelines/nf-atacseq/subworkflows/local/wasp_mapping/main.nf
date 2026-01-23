@@ -79,20 +79,20 @@ workflow WASP_MAPPING {
 
     // Combine BAM with index
     ch_remapped = ch_remapped_raw
-        .join(SAMTOOLS_INDEX.out.bai, by: [0])
+        .join(SAMTOOLS_INDEX.out.bai, by: [0], failOnMismatch: true)
 
     //
     // Join remapped BAM with WASP intermediate files
     // Combine all WASP2_MAKE_READS outputs into single channel first, then join with remapped BAM
     //
     ch_wasp_intermediates = WASP2_MAKE_READS.out.to_remap_bam
-        .join(WASP2_MAKE_READS.out.keep_bam, by: [0])
-        .join(WASP2_MAKE_READS.out.json, by: [0])
+        .join(WASP2_MAKE_READS.out.keep_bam, by: [0], failOnMismatch: true)
+        .join(WASP2_MAKE_READS.out.json, by: [0], failOnMismatch: true)
         .map { meta, to_remap, keep, json -> [ meta.id, meta, to_remap, keep, json ] }
 
     ch_filter_input = ch_remapped
         .map { meta, bam, bai -> [ meta.id.replace('_remap', ''), bam, bai ] }
-        .join(ch_wasp_intermediates, by: [0])
+        .join(ch_wasp_intermediates, by: [0], failOnMismatch: true)
         .map { orig_id, bam, bai, meta, to_remap, keep, json ->
             [ meta, bam, bai, to_remap, keep, json ]
         }

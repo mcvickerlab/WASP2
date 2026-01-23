@@ -30,7 +30,7 @@ workflow BAM_SORT_STATS_SAMTOOLS {
     // Join BAM and BAI for stats
     //
     ch_bam_bai = SAMTOOLS_SORT.out.bam
-        .join(SAMTOOLS_INDEX.out.bai, by: [0])
+        .join(SAMTOOLS_INDEX.out.bai, by: [0], failOnMismatch: true)
 
     //
     // Run samtools stats and flagstat
@@ -44,6 +44,7 @@ workflow BAM_SORT_STATS_SAMTOOLS {
 
     stats    = BAM_STATS_SAMTOOLS.out.stats       // channel: [ val(meta), path(stats) ]
     flagstat = BAM_STATS_SAMTOOLS.out.flagstat    // channel: [ val(meta), path(flagstat) ]
+    idxstats = BAM_STATS_SAMTOOLS.out.idxstats    // channel: [ val(meta), path(idxstats) ]
 
-    versions = ch_versions                        // channel: [ path(versions.yml) ]
+    versions = ch_versions                        // channel: path(versions.yml)
 }

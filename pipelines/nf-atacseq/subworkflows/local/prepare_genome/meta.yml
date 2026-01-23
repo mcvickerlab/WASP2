@@ -1,42 +1,53 @@
-# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/subworkflows/meta-schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/subworkflows/yaml-schema.json
 name: "prepare_genome"
-description: Prepare genome reference files and build aligner indices
+description: |
+  Prepare genome reference files and aligner indices for ATAC-seq analysis.
+  Requires params.fasta (reference FASTA) and params.aligner ('bwa' or 'bowtie2').
+  Optionally accepts params.fasta_fai, params.bwa_index, params.bowtie2_index.
 keywords:
   - genome
   - reference
-  - indexing
+  - index
   - bwa
   - bowtie2
-
+  - fasta
 components:
   - bwa/index
-  - bowtie2/index
-
-input:
-  - aligner:
-      description: |
-        Aligner to build index for
-        Value: 'bwa' or 'bowtie2'
-
+  - bowtie2/build
+  - samtools/faidx
+input: []
 output:
   - fasta:
+      type: channel
       description: |
         Reference FASTA file
         Structure: path(fasta)
+      pattern: "*.{fa,fasta}"
+  - fasta_fai:
+      type: channel
+      description: |
+        FASTA index file
+        Structure: path(fasta.fai)
+      pattern: "*.fai"
   - bwa_index:
+      type: channel
       description: |
-        BWA index files (if aligner='bwa')
+        BWA index files (when aligner='bwa')
         Structure: path(bwa_index)
+      pattern: "*.{amb,ann,bwt,pac,sa}"
   - bowtie2_index:
+      type: channel
       description: |
-        Bowtie2 index files (if aligner='bowtie2')
+        Bowtie2 index files (when aligner='bowtie2')
         Structure: path(bowtie2_index)
+      pattern: "*.bt2"
   - versions:
+      type: channel
       description: |
-        Software versions
-        Structure: [ path(versions.yml) ]
-
+        Version information
+        Structure: path(versions.yml)
+      pattern: "versions.yml"
 authors:
-  - "@Jaureguy760"
+  - "@jjaureguy760"
 maintainers:
-  - "@Jaureguy760"
+  - "@jjaureguy760"

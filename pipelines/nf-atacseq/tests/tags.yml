@@ -9,6 +9,21 @@ pipeline:
 workflows:
   - tests/workflows/**/*.nf.test
 
+# Subworkflow tests (nf-core pattern)
+subworkflows:
+  - tests/subworkflows/**/*.nf.test
+
+subworkflows/nf-core:
+  - tests/subworkflows/nf-core/**/*.nf.test
+
+subworkflows/local:
+  - tests/subworkflows/local/**/*.nf.test
+
+# Alignment subworkflows
+alignment:
+  - tests/subworkflows/nf-core/fastq_align_bwa/main.nf.test
+  - tests/subworkflows/nf-core/fastq_align_bowtie2/main.nf.test
+
 # Module tests (local WASP2 modules)
 wasp2:
   - tests/modules/local/wasp2_make_reads.nf.test
@@ -23,6 +38,7 @@ nf-core:
 # Quick stub tests for CI
 ci_stub:
   - tests/main.nf.test#"Should run stub-run mode for workflow validation"
+  - tests/subworkflows/**/*#ci_stub
 
 # Full integration tests
 integration:

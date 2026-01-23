@@ -36,7 +36,7 @@ workflow FASTQ_ALIGN_BWA {
     // Join BAM and BAI
     //
     ch_bam_bai = BWA_MEM.out.bam
-        .join(SAMTOOLS_INDEX.out.bai, by: [0])
+        .join(SAMTOOLS_INDEX.out.bai, by: [0], failOnMismatch: true)
 
     //
     // Run BAM stats
@@ -50,6 +50,7 @@ workflow FASTQ_ALIGN_BWA {
 
     stats    = BAM_STATS_SAMTOOLS.out.stats       // channel: [ val(meta), path(stats) ]
     flagstat = BAM_STATS_SAMTOOLS.out.flagstat    // channel: [ val(meta), path(flagstat) ]
+    idxstats = BAM_STATS_SAMTOOLS.out.idxstats    // channel: [ val(meta), path(idxstats) ]
 
-    versions = ch_versions                        // channel: [ path(versions.yml) ]
+    versions = ch_versions                        // channel: path(versions.yml)
 }

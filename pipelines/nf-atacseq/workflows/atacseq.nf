@@ -7,7 +7,6 @@
 // nf-core modules
 include { FASTQC                 } from '../modules/nf-core/fastqc/main'
 include { FASTP                  } from '../modules/nf-core/fastp/main'
-include { PICARD_MARKDUPLICATES  } from '../modules/nf-core/picard/markduplicates/main'
 include { MACS2_CALLPEAK         } from '../modules/nf-core/macs2/callpeak/main'
 include { MULTIQC                } from '../modules/nf-core/multiqc/main'
 
@@ -16,8 +15,9 @@ include { WASP2_COUNT_VARIANTS   } from '../modules/local/wasp2_count_variants'
 include { WASP2_FIND_IMBALANCE   } from '../modules/local/wasp2_find_imbalance'
 
 // nf-core subworkflows (standardized alignment interfaces)
-include { FASTQ_ALIGN_BWA        } from '../subworkflows/nf-core/fastq_align_bwa/main'
-include { FASTQ_ALIGN_BOWTIE2    } from '../subworkflows/nf-core/fastq_align_bowtie2/main'
+include { FASTQ_ALIGN_BWA             } from '../subworkflows/nf-core/fastq_align_bwa/main'
+include { FASTQ_ALIGN_BOWTIE2         } from '../subworkflows/nf-core/fastq_align_bowtie2/main'
+include { BAM_MARKDUPLICATES_PICARD   } from '../subworkflows/nf-core/bam_markduplicates_picard/main'
 
 // Local subworkflows
 include { PREPARE_GENOME         } from '../subworkflows/local/prepare_genome/main'
@@ -49,7 +49,7 @@ workflow ATACSEQ {
     //
     // SUBWORKFLOW: Prepare genome reference and indices
     //
-    PREPARE_GENOME ( params.aligner )
+    PREPARE_GENOME ()
     ch_versions = ch_versions.mix(PREPARE_GENOME.out.versions)
 
     ch_fasta = PREPARE_GENOME.out.fasta
@@ -85,10 +85,11 @@ workflow ATACSEQ {
     // SUBWORKFLOW: Alignment (BWA-MEM or Bowtie2)
     // Uses standardized nf-core subworkflow interface
     //
-    ch_aligned_bam   = Channel.empty()
-    ch_aligned_bai   = Channel.empty()
-    ch_align_stats   = Channel.empty()
+    ch_aligned_bam    = Channel.empty()
+    ch_aligned_bai    = Channel.empty()
+    ch_align_stats    = Channel.empty()
     ch_align_flagstat = Channel.empty()
+    ch_align_idxstats = Channel.empty()
 
     if (params.aligner == 'bwa') {
         FASTQ_ALIGN_BWA (
@@ -100,10 +101,9 @@ workflow ATACSEQ {
         ch_aligned_bai    = FASTQ_ALIGN_BWA.out.bai
         ch_align_stats    = FASTQ_ALIGN_BWA.out.stats
         ch_align_flagstat = FASTQ_ALIGN_BWA.out.flagstat
+        ch_align_idxstats = FASTQ_ALIGN_BWA.out.idxstats
         ch_versions = ch_versions.mix(FASTQ_ALIGN_BWA.out.versions)
-    }
-
-    if (params.aligner == 'bowtie2') {
+    } else if (params.aligner == 'bowtie2') {
         FASTQ_ALIGN_BOWTIE2 (
             ch_reads,
             PREPARE_GENOME.out.bowtie2_index,
@@ -113,30 +113,39 @@ workflow ATACSEQ {
         ch_aligned_bai    = FASTQ_ALIGN_BOWTIE2.out.bai
         ch_align_stats    = FASTQ_ALIGN_BOWTIE2.out.stats
         ch_align_flagstat = FASTQ_ALIGN_BOWTIE2.out.flagstat
+        ch_align_idxstats = FASTQ_ALIGN_BOWTIE2.out.idxstats
         ch_versions = ch_versions.mix(FASTQ_ALIGN_BOWTIE2.out.versions)
     }
 
     // Add alignment stats to MultiQC
     ch_multiqc_files = ch_multiqc_files.mix(ch_align_stats.collect { it[1] })
     ch_multiqc_files = ch_multiqc_files.mix(ch_align_flagstat.collect { it[1] })
+    ch_multiqc_files = ch_multiqc_files.mix(ch_align_idxstats.collect { it[1] })
 
     // Combine BAM with index
     ch_bam_indexed = ch_aligned_bam
-        .join(ch_aligned_bai, by: [0])
+        .join(ch_aligned_bai, by: [0], failOnMismatch: true)
 
     //
-    // MODULE: Mark duplicates (optional)
+    // SUBWORKFLOW: Mark duplicates with Picard and run BAM stats (optional)
     //
+    ch_fasta_fai = PREPARE_GENOME.out.fasta_fai
+
     if (!params.skip_dedup) {
-        PICARD_MARKDUPLICATES (
+        BAM_MARKDUPLICATES_PICARD (
             ch_bam_indexed.map { meta, bam, bai -> [meta, bam] },
             ch_fasta,
-            []  // fasta_fai
+            ch_fasta_fai
         )
-        ch_bam_dedup = PICARD_MARKDUPLICATES.out.bam
-            .join(PICARD_MARKDUPLICATES.out.bai, by: [0])
-        ch_versions = ch_versions.mix(PICARD_MARKDUPLICATES.out.versions.first())
-        ch_multiqc_files = ch_multiqc_files.mix(PICARD_MARKDUPLICATES.out.metrics.collect { it[1] })
+        ch_bam_dedup = BAM_MARKDUPLICATES_PICARD.out.bam
+            .join(BAM_MARKDUPLICATES_PICARD.out.bai, by: [0], failOnMismatch: true)
+        ch_versions = ch_versions.mix(BAM_MARKDUPLICATES_PICARD.out.versions)
+
+        // Add deduplication stats to MultiQC
+        ch_multiqc_files = ch_multiqc_files.mix(BAM_MARKDUPLICATES_PICARD.out.metrics.collect { it[1] })
+        ch_multiqc_files = ch_multiqc_files.mix(BAM_MARKDUPLICATES_PICARD.out.stats.collect { it[1] })
+        ch_multiqc_files = ch_multiqc_files.mix(BAM_MARKDUPLICATES_PICARD.out.flagstat.collect { it[1] })
+        ch_multiqc_files = ch_multiqc_files.mix(BAM_MARKDUPLICATES_PICARD.out.idxstats.collect { it[1] })
     } else {
         ch_bam_dedup = ch_bam_indexed
     }
@@ -200,7 +209,7 @@ workflow ATACSEQ {
         } else {
             // Sample-specific peaks from MACS2
             ch_bam_with_peaks = ch_wasp_bam
-                .join(ch_peaks, by: [0])
+                .join(ch_peaks, by: [0], failOnMismatch: true)
                 .map { meta, bam, bai, peaks -> [ meta, bam, bai, peaks ] }
 
             WASP2_COUNT_VARIANTS (
