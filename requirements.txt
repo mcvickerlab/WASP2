@@ -4,14 +4,14 @@
 
 # Data processing
 numpy>=1.21.0
-pandas>=2.0.0
+pandas>=1.5.0,<2.0.0  # Pin <2.0 for anndata compatibility (issue #6)
 polars>=0.19.0
 scipy>=1.9.0
 
 # Bioinformatics
 pysam>=0.21.0
 pybedtools>=0.9.0
-anndata>=0.9.0
+anndata>=0.8.0,<0.10.0  # Pin for pandas <2.0 compatibility (issue #6)
 
 # CLI
 typer>=0.9.0
