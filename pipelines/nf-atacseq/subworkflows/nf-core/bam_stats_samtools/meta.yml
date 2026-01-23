@@ -1,42 +1,54 @@
-# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/subworkflows/meta-schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/subworkflows/yaml-schema.json
 name: "bam_stats_samtools"
-description: Generate BAM statistics using samtools stats and flagstat
+description: Run samtools stats, flagstat, and idxstats on BAM files
 keywords:
   - bam
   - statistics
-  - quality-control
+  - qc
   - samtools
-
 components:
   - samtools/stats
   - samtools/flagstat
-
+  - samtools/idxstats
 input:
   - ch_bam_bai:
+      type: channel
       description: |
-        Channel containing BAM and index files
+        Channel containing BAM and BAI files
         Structure: [ val(meta), path(bam), path(bai) ]
-        meta: Groovy Map containing sample information
+      pattern: "*.{bam,bai}"
   - ch_fasta:
+      type: channel
       description: |
-        Channel containing reference FASTA for accurate statistics
+        Channel containing reference FASTA for stats calculation
         Structure: path(fasta)
-
+      pattern: "*.{fa,fasta,fa.gz,fasta.gz}"
 output:
   - stats:
+      type: channel
       description: |
-        Samtools stats output with comprehensive alignment statistics
+        Samtools stats output with alignment metrics
         Structure: [ val(meta), path(stats) ]
+      pattern: "*.stats"
   - flagstat:
+      type: channel
       description: |
-        Samtools flagstat output with flag-based read counts
+        Samtools flagstat output with flag counts
         Structure: [ val(meta), path(flagstat) ]
-  - versions:
+      pattern: "*.flagstat"
+  - idxstats:
+      type: channel
       description: |
-        Software versions
-        Structure: [ path(versions.yml) ]
-
+        Samtools idxstats output with per-chromosome counts
+        Structure: [ val(meta), path(idxstats) ]
+      pattern: "*.idxstats"
+  - versions:
+      type: channel
+      description: |
+        Version information
+        Structure: path(versions.yml)
+      pattern: "versions.yml"
 authors:
-  - "@Jaureguy760"
+  - "@jjaureguy760"
 maintainers:
-  - "@Jaureguy760"
+  - "@jjaureguy760"

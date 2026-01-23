@@ -1,61 +1,79 @@
-# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/subworkflows/meta-schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/subworkflows/yaml-schema.json
 name: "fastq_align_bowtie2"
-description: Align reads to genome using Bowtie2 with standardized post-processing
+description: Align reads with Bowtie2 and collect BAM statistics
 keywords:
   - alignment
   - bowtie2
   - bam
+  - map
   - fastq
-  - mapping
-
 components:
   - bowtie2/align
   - samtools/index
   - bam_stats_samtools
-
 input:
   - ch_reads:
+      type: channel
       description: |
-        Channel containing sample reads
+        Channel containing FASTQ reads
         Structure: [ val(meta), path(reads) ]
-        meta: Groovy Map containing sample information (e.g., [ id:'sample1' ])
-        reads: FASTQ files (paired or single-end)
+      pattern: "*.{fq,fastq,fq.gz,fastq.gz}"
   - ch_index:
+      type: channel
       description: |
-        Channel containing Bowtie2 index
+        Channel containing Bowtie2 index files
         Structure: path(index)
+      pattern: "*.bt2"
   - ch_fasta:
+      type: channel
       description: |
         Channel containing reference FASTA
         Structure: path(fasta)
-
+      pattern: "*.{fa,fasta,fa.gz,fasta.gz}"
 output:
   - bam:
+      type: channel
       description: |
-        Sorted BAM files from alignment
+        Aligned BAM file
         Structure: [ val(meta), path(bam) ]
+      pattern: "*.bam"
   - bai:
+      type: channel
       description: |
-        BAM index files
+        BAM index file
         Structure: [ val(meta), path(bai) ]
+      pattern: "*.bai"
   - log_out:
+      type: channel
       description: |
         Bowtie2 alignment log
         Structure: [ val(meta), path(log) ]
+      pattern: "*.log"
   - stats:
+      type: channel
       description: |
         Samtools stats output
         Structure: [ val(meta), path(stats) ]
+      pattern: "*.stats"
   - flagstat:
+      type: channel
       description: |
         Samtools flagstat output
         Structure: [ val(meta), path(flagstat) ]
-  - versions:
+      pattern: "*.flagstat"
+  - idxstats:
+      type: channel
       description: |
-        Software versions
-        Structure: [ path(versions.yml) ]
-
+        Samtools idxstats output
+        Structure: [ val(meta), path(idxstats) ]
+      pattern: "*.idxstats"
+  - versions:
+      type: channel
+      description: |
+        Version information
+        Structure: path(versions.yml)
+      pattern: "versions.yml"
 authors:
-  - "@Jaureguy760"
+  - "@jjaureguy760"
 maintainers:
-  - "@Jaureguy760"
+  - "@jjaureguy760"

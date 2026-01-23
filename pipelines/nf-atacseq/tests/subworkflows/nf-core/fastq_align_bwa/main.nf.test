@@ -1,0 +1,44 @@
+nextflow_workflow {
+
+    name "Test Workflow FASTQ_ALIGN_BWA"
+    script "../../../../subworkflows/nf-core/fastq_align_bwa/main.nf"
+    workflow "FASTQ_ALIGN_BWA"
+
+    tag "subworkflows"
+    tag "subworkflows/nf-core"
+    tag "subworkflows/nf-core/fastq_align_bwa"
+
+    test("Should align paired-end reads and emit all outputs") {
+
+        tag "ci_stub"
+        options "-stub-run"
+
+        when {
+            workflow {
+                """
+                input[0] = Channel.of([
+                    [ id:'test', single_end:false ],
+                    [ file('test_R1.fastq.gz'), file('test_R2.fastq.gz') ]
+                ])
+                input[1] = file('bwa_index')
+                input[2] = file('genome.fa')
+                """
+            }
+        }
+
+        then {
+            assert workflow.success
+
+            // Verify all required nf-core outputs are emitted
+            with(workflow.out.bam) {
+                assert size() == 1
+                assert get(0)[0].id == 'test'
+            }
+            assert workflow.out.bai.size() == 1
+            assert workflow.out.stats.size() == 1
+            assert workflow.out.flagstat.size() == 1
+            assert workflow.out.idxstats.size() == 1
+            assert workflow.out.versions
+        }
+    }
+}

@@ -1,0 +1,48 @@
+nextflow_workflow {
+
+    name "Test Workflow BAM_STATS_SAMTOOLS"
+    script "../../../../subworkflows/nf-core/bam_stats_samtools/main.nf"
+    workflow "BAM_STATS_SAMTOOLS"
+
+    tag "subworkflows"
+    tag "subworkflows/nf-core"
+    tag "subworkflows/nf-core/bam_stats_samtools"
+
+    test("Should generate stats, flagstat, and idxstats outputs") {
+
+        tag "ci_stub"
+        options "-stub-run"
+
+        when {
+            workflow {
+                """
+                input[0] = Channel.of([
+                    [ id:'test' ],
+                    file('test.bam'),
+                    file('test.bam.bai')
+                ])
+                input[1] = file('genome.fa')
+                """
+            }
+        }
+
+        then {
+            assert workflow.success
+
+            // Verify all three stat outputs with correct metadata
+            with(workflow.out.stats) {
+                assert size() == 1
+                assert get(0)[0].id == 'test'
+            }
+            with(workflow.out.flagstat) {
+                assert size() == 1
+                assert get(0)[0].id == 'test'
+            }
+            with(workflow.out.idxstats) {
+                assert size() == 1
+                assert get(0)[0].id == 'test'
+            }
+            assert workflow.out.versions
+        }
+    }
+}

@@ -1,0 +1,79 @@
+nextflow_workflow {
+
+    name "Test Workflow PREPARE_GENOME"
+    script "../../../../subworkflows/local/prepare_genome/main.nf"
+    workflow "PREPARE_GENOME"
+
+    tag "subworkflows"
+    tag "subworkflows/local"
+    tag "subworkflows/local/prepare_genome"
+
+    test("Should prepare BWA index and FASTA index") {
+
+        tag "ci_stub"
+        options "-stub-run"
+
+        when {
+            params {
+                fasta = "genome.fa"
+                fasta_fai = null
+                bwa_index = null
+                bowtie2_index = null
+                aligner = "bwa"
+            }
+        }
+
+        then {
+            assert workflow.success
+            assert workflow.out.fasta
+            assert workflow.out.fasta_fai
+            assert workflow.out.bwa_index
+            assert workflow.out.versions
+        }
+    }
+
+    test("Should prepare Bowtie2 index") {
+
+        tag "ci_stub"
+        options "-stub-run"
+
+        when {
+            params {
+                fasta = "genome.fa"
+                fasta_fai = null
+                bwa_index = null
+                bowtie2_index = null
+                aligner = "bowtie2"
+            }
+        }
+
+        then {
+            assert workflow.success
+            assert workflow.out.fasta
+            assert workflow.out.fasta_fai
+            assert workflow.out.bowtie2_index
+            assert workflow.out.versions
+        }
+    }
+
+    test("Should fail when fasta is not provided") {
+
+        tag "ci_stub"
+        options "-stub-run"
+
+        when {
+            params {
+                fasta = null
+                fasta_fai = null
+                bwa_index = null
+                bowtie2_index = null
+                aligner = "bwa"
+            }
+        }
+
+        then {
+            assert workflow.failed
+            assert workflow.stdout.any { it.contains("--fasta is required") }
+        }
+    }
+}
