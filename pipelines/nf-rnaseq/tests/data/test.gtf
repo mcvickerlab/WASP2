@@ -1,0 +1,13 @@
+##description: Minimal test GTF for WASP2 RNA-seq ASE pipeline testing
+##provider: WASP2 Test Suite
+##format: gtf
+chr1	test	gene	1000	5000	.	+	.	gene_id "TESTGENE001"; gene_name "TestGene1"; gene_biotype "protein_coding";
+chr1	test	transcript	1000	5000	.	+	.	gene_id "TESTGENE001"; transcript_id "TESTTX001"; gene_name "TestGene1";
+chr1	test	exon	1000	1500	.	+	.	gene_id "TESTGENE001"; transcript_id "TESTTX001"; exon_number "1"; exon_id "TESTEXON001";
+chr1	test	exon	2000	2500	.	+	.	gene_id "TESTGENE001"; transcript_id "TESTTX001"; exon_number "2"; exon_id "TESTEXON002";
+chr1	test	exon	4000	5000	.	+	.	gene_id "TESTGENE001"; transcript_id "TESTTX001"; exon_number "3"; exon_id "TESTEXON003";
+chr1	test	gene	10000	15000	.	-	.	gene_id "TESTGENE002"; gene_name "TestGene2"; gene_biotype "protein_coding";
+chr1	test	transcript	10000	15000	.	-	.	gene_id "TESTGENE002"; transcript_id "TESTTX002"; gene_name "TestGene2";
+chr1	test	exon	10000	10500	.	-	.	gene_id "TESTGENE002"; transcript_id "TESTTX002"; exon_number "1"; exon_id "TESTEXON004";
+chr1	test	exon	12000	12500	.	-	.	gene_id "TESTGENE002"; transcript_id "TESTTX002"; exon_number "2"; exon_id "TESTEXON005";
+chr1	test	exon	14500	15000	.	-	.	gene_id "TESTGENE002"; transcript_id "TESTTX002"; exon_number "3"; exon_id "TESTEXON006";

@@ -1,0 +1,28 @@
+# nf-test tags for WASP2 RNA-seq ASE Pipeline
+#
+# Usage: nf-test test --tag <tag_name>
+#
+# Available tags:
+#   - pipeline:     Run all pipeline tests
+#   - wasp2:        Run all WASP2-related tests
+#   - rnaseq_ase:   Run RNA-seq ASE specific tests
+#   - stub:         Run only stub tests (fast, no real data)
+#   - integration:  Run integration tests with real data
+
+pipeline:
+  - tests/main.nf.test
+
+wasp2:
+  - tests/main.nf.test
+  # TODO: Add module tests when created
+  # - tests/modules/**/*.nf.test
+
+rnaseq_ase:
+  - tests/main.nf.test
+
+stub:
+  - tests/main.nf.test
+
+# TODO: Add integration tests with real data
+# integration:
+#   - tests/integration/*.nf.test
