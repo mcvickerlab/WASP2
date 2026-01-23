@@ -1,0 +1,35 @@
+name: generate_fragments
+description: |
+  Generate 10x-compatible fragments.tsv.gz from scATAC-seq BAM files.
+  Uses sinto to extract fragments and tabix for indexing.
+keywords:
+  - scatac
+  - fragments
+  - sinto
+  - 10x
+  - single-cell
+
+components:
+  - sinto_fragments
+
+input:
+  - ch_bam:
+      description: |
+        Channel containing sorted BAM files with cell barcode tags.
+        Structure: [ val(meta), path(bam), path(bai) ]
+        Meta map should contain cell_barcode_tag (default: 'CB')
+
+output:
+  - fragments:
+      description: |
+        10x-compatible fragments file with tabix index.
+        Structure: [ val(meta), path(fragments.tsv.gz), path(fragments.tbi) ]
+  - versions:
+      description: |
+        File containing software versions.
+        Structure: [ path(versions.yml) ]
+
+authors:
+  - "@Jaureguy760"
+maintainers:
+  - "@Jaureguy760"

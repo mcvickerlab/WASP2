@@ -1,5 +1,7 @@
 /*
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     Utility subworkflows for nf-scatac pipeline
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
 
 workflow PIPELINE_INITIALISATION {
@@ -20,27 +22,34 @@ workflow PIPELINE_INITIALISATION {
         System.exit(0)
     }
 
+    // Parse samplesheet with scATAC-specific meta map fields
     ch_samplesheet = Channel.fromPath(input, checkIfExists: true)
         .splitCsv(header: true, strip: true)
         .map { row ->
-            // Validate required column
             if (!row.sample) {
                 error "Samplesheet error: 'sample' column is required. Found columns: ${row.keySet()}"
             }
-            // Validate path source
             if (!row.fragments && !row.cellranger_dir) {
                 error "Samplesheet error for '${row.sample}': provide 'fragments' or 'cellranger_dir'"
             }
-            def meta = [id: row.sample]
-            def fragments = row.fragments ?
-                file(row.fragments, checkIfExists: true) :
-                file("${row.cellranger_dir}/outs/fragments.tsv.gz", checkIfExists: true)
+
+            def meta = [
+                id: row.sample,
+                single_end: false,
+                cell_barcode_tag: row.barcode_tag ?: 'CB',
+                chemistry: row.chemistry ?: '10x-atac-v2'
+            ]
+
+            def fragments = row.fragments
+                ? file(row.fragments, checkIfExists: true)
+                : file("${row.cellranger_dir}/outs/fragments.tsv.gz", checkIfExists: true)
             def fragments_tbi = file("${fragments}.tbi", checkIfExists: true)
+
             [ meta, fragments, fragments_tbi ]
         }
 
     emit:
-    samplesheet = ch_samplesheet
+    samplesheet = ch_samplesheet  // channel: [ val(meta), path(fragments), path(fragments_tbi) ]
 }
 
 workflow PIPELINE_COMPLETION {
@@ -54,6 +63,10 @@ workflow PIPELINE_COMPLETION {
      nf-scatac COMPLETE
     =============================================================
     Output: ${outdir}
+
+    Results:
+      - allele_counts/: Per-cell allele counts at het SNPs
+      - imbalance/: Allelic imbalance analysis results
     """.stripIndent()
 }
 
@@ -65,9 +78,22 @@ def helpMessage() {
         nextflow run nf-scatac -profile docker --input samplesheet.csv --vcf variants.vcf.gz
 
     Required:
-        --input   Samplesheet CSV
-        --vcf     VCF/BCF variant file
+        --input       Samplesheet CSV (columns: sample, fragments or cellranger_dir)
+        --vcf         Indexed VCF/BCF with heterozygous SNPs
 
-    See: https://github.com/Jaureguy760/WASP2-final/issues/32
+    Optional:
+        --outdir                  Output directory [default: ./results]
+        --min_fragments_per_cell  Minimum fragments per cell [default: 1000]
+
+    Samplesheet:
+        sample,fragments,cellranger_dir,barcode_tag,chemistry
+        sample1,/path/to/fragments.tsv.gz,,,CB,10x-atac-v2
+        sample2,,/path/to/cellranger/output,,CB,10x-atac-v2
+
+    Profiles:
+        -profile docker        Run with Docker
+        -profile singularity   Run with Singularity
+        -profile conda         Run with Conda
+        -profile test_stub     Run stub test
     """.stripIndent()
 }

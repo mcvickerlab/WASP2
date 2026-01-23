@@ -1,7 +1,36 @@
 # nf-scatac test tags
+
+# Main tags
 scatac:
   - tests/main.nf.test
+  - tests/subworkflows/wasp_allelic_sc.nf.test
+  - tests/subworkflows/generate_fragments.nf.test
 
 wasp2:
   - tests/main.nf.test
+  - tests/subworkflows/wasp_allelic_sc.nf.test
   - ../nf-modules/modules/wasp2/**/tests/main.nf.test
+
+# Component tags
+pipeline:
+  - tests/main.nf.test
+
+workflow:
+  - tests/main.nf.test
+
+subworkflow:
+  - tests/subworkflows/wasp_allelic_sc.nf.test
+  - tests/subworkflows/generate_fragments.nf.test
+
+module:
+  - tests/main.nf.test
+
+# Specific component tags
+wasp_allelic_sc:
+  - tests/subworkflows/wasp_allelic_sc.nf.test
+
+generate_fragments:
+  - tests/subworkflows/generate_fragments.nf.test
+
+scatac_count_alleles:
+  - tests/main.nf.test
