@@ -31,7 +31,7 @@ input:
         description: |
           TSV file with allele counts from WASP2_COUNT or WASP2_COUNT_ALLELES.
           Must contain columns: chrom, pos, ref, alt, ref_count, alt_count
-        pattern: "*.counts.tsv"
+        pattern: "*_counts.tsv"
 
 output:
   - results:

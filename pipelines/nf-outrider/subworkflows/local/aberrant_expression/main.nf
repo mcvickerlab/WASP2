@@ -27,6 +27,33 @@ workflow ABERRANT_EXPRESSION {
     ch_versions = Channel.empty()
 
     //
+    // Parameter validation
+    //
+    if (padj_cutoff <= 0 || padj_cutoff >= 1) {
+        error "ERROR: padj_cutoff must be between 0 and 1 (exclusive), got: ${padj_cutoff}"
+    }
+    if (zscore_cutoff <= 0) {
+        error "ERROR: zscore_cutoff must be positive, got: ${zscore_cutoff}"
+    }
+    if (max_iterations <= 0) {
+        error "ERROR: max_iterations must be positive, got: ${max_iterations}"
+    }
+    if (convergence <= 0) {
+        error "ERROR: convergence threshold must be positive, got: ${convergence}"
+    }
+
+    //
+    // Validate minimum sample count for OUTRIDER
+    //
+    ch_gene_counts
+        .count()
+        .map { n ->
+            if (n < 15) {
+                log.warn "WARNING: OUTRIDER requires >= 15 samples for reliable results. Found ${n} samples."
+            }
+        }
+
+    //
     // MODULE: Merge individual sample counts into matrix
     //
     MERGE_COUNTS(
