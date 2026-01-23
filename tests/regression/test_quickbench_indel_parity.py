@@ -95,4 +95,3 @@ def test_quickbench_indel_parity(tmp_path: Path) -> None:
         f"Only in baseline: {only_baseline[:5]}\n"
         f"Only in unified:  {only_unified[:5]}"
     )
-

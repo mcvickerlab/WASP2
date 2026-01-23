@@ -1,10 +1,7 @@
-from pathlib import Path
-import tempfile
-import re
 import json
-from typing import Optional, Union, List, cast
+import re
+from pathlib import Path
 
-import pysam
 from pysam import VariantFile
 from pysam.libcalignmentfile import AlignmentFile
 
@@ -15,15 +12,14 @@ class WaspDataFiles:
 
     def __init__(
         self,
-        bam_file: Union[str, Path],
-        variant_file: Union[str, Path],
-        is_paired: Optional[bool] = None,
-        samples: Optional[Union[str, List[str]]] = None,
-        is_phased: Optional[bool] = None,
-        out_dir: Optional[Union[str, Path]] = None,
-        temp_loc: Optional[Union[str, Path]] = None
+        bam_file: str | Path,
+        variant_file: str | Path,
+        is_paired: bool | None = None,
+        samples: str | list[str] | None = None,
+        is_phased: bool | None = None,
+        out_dir: str | Path | None = None,
+        temp_loc: str | Path | None = None,
     ) -> None:
-
         # User input files
         self.bam_file = bam_file
         self.variant_file = variant_file
@@ -32,22 +28,18 @@ class WaspDataFiles:
         self.is_phased = is_phased
         self.out_dir = out_dir
         self.temp_loc = temp_loc
-        
-        
+
         # Autoparse args
         if self.is_paired is None:
             with AlignmentFile(self.bam_file, "r") as bam:
                 self.is_paired = next(bam.head(1)).is_paired
-        
-        
+
         # Process samples as list
         if self.samples is None:
-            self.is_phased = False # No phasing w/o sample
+            self.is_phased = False  # No phasing w/o sample
         elif isinstance(self.samples, str):
-
             # Check if sample file or comma delim string
             if Path(self.samples).is_file():
-
                 with open(self.samples) as sample_file:
                     self.samples = [l.strip() for l in sample_file]
 
@@ -63,7 +55,7 @@ class WaspDataFiles:
             # Note: This only works for VCF/BCF files, PGEN doesn't store phase in the same way
             variant_path = Path(self.variant_file)
             suffix = variant_path.suffix.lower()
-            if suffix in ('.vcf', '.bcf') or str(variant_path).lower().endswith('.vcf.gz'):
+            if suffix in (".vcf", ".bcf") or str(variant_path).lower().endswith(".vcf.gz"):
                 with VariantFile(self.variant_file, "r") as vcf:
                     vcf_samps = next(vcf.fetch()).samples
                     samps_phased = [vcf_samps[s].phased for s in self.samples]
@@ -79,7 +71,7 @@ class WaspDataFiles:
                 self.is_phased = True
 
         if self.out_dir is None:
-            self.out_dir = Path(bam_file).parent # change to cwd?
+            self.out_dir = Path(bam_file).parent  # change to cwd?
 
         # TODO handle temp loc, maybe make default if temp not made?
         # Temporary workaround until figure out temp dir options
@@ -91,44 +83,48 @@ class WaspDataFiles:
 
         # Handle different variant file extensions for prefix extraction
         variant_name = Path(self.variant_file).name
-        if variant_name.endswith('.vcf.gz'):
+        if variant_name.endswith(".vcf.gz"):
             variant_prefix = variant_name[:-7]  # Remove .vcf.gz
-        elif variant_name.endswith('.pgen'):
+        elif variant_name.endswith(".pgen"):
             variant_prefix = variant_name[:-5]  # Remove .pgen
         else:
-            variant_prefix = re.split(r'\.vcf|\.bcf', variant_name)[0]
+            variant_prefix = re.split(r"\.vcf|\.bcf", variant_name)[0]
         bam_prefix = Path(self.bam_file).name.rsplit(".bam")[0]
 
         self.variant_prefix = variant_prefix
         self.bam_prefix = bam_prefix
-        
+
         self.vcf_bed = str(Path(self.temp_loc) / f"{variant_prefix}.bed")
         self.remap_reads = str(Path(self.temp_loc) / f"{bam_prefix}_remap_reads.txt")
-        self.intersect_file = str(Path(self.temp_loc) / f"{bam_prefix}_{variant_prefix}_intersect.bed")
-        
+        self.intersect_file = str(
+            Path(self.temp_loc) / f"{bam_prefix}_{variant_prefix}_intersect.bed"
+        )
+
         self.to_remap_bam = str(Path(self.out_dir) / f"{bam_prefix}_to_remap.bam")
         self.keep_bam = str(Path(self.out_dir) / f"{bam_prefix}_keep.bam")
-        
+
         # Relevant output reads
         if self.is_paired:
             self.remap_fq1 = str(Path(self.out_dir) / f"{bam_prefix}_swapped_alleles_r1.fq")
-            self.remap_fq2: Optional[str] = str(Path(self.out_dir) / f"{bam_prefix}_swapped_alleles_r2.fq")
+            self.remap_fq2: str | None = str(
+                Path(self.out_dir) / f"{bam_prefix}_swapped_alleles_r2.fq"
+            )
         else:
             self.remap_fq1 = str(Path(self.out_dir) / f"{bam_prefix}_swapped_alleles.fq")
             self.remap_fq2 = None
-    
-    def write_data(self, out_file: Optional[Union[str, Path]] = None) -> None:
+
+    def write_data(self, out_file: str | Path | None = None) -> None:
         """Export Relevant Files to JSON
         Used for parsing post remapping step easily
 
         :param out_file: name for output file if not using default
         :type out_file: str, optional
         """
-        
+
         if out_file is None:
             out_file = str(Path(str(self.out_dir)) / f"{self.bam_prefix}_wasp_data_files.json")
-        
+
         with open(out_file, "w") as json_out:
             json.dump(self.__dict__, json_out)
-        
+
         print(f"File Data written to JSON...\n{out_file}")

@@ -98,4 +98,3 @@ def test_quickbench_indel_trim_invariants(tmp_path: Path) -> None:
     assert mate2_seqs == {r2_seq}
     assert mate1_totals == {3}
     assert mate2_totals == {3}
-

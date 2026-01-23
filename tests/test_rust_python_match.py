@@ -3,14 +3,16 @@
 Direct comparison: Verify Rust and Python INDEL algorithms match.
 Uses the SAME test cases as Rust unit tests in multi_sample.rs
 """
+
 import sys
 from pathlib import Path
+
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-from mapping.remap_utils import make_phased_seqs_with_qual, _build_ref2read_maps
-
 import pysam
+
+from mapping.remap_utils import _build_ref2read_maps, make_phased_seqs_with_qual
 
 print("=" * 70)
 print("RUST vs PYTHON COMPARISON - Using identical test cases")
@@ -19,6 +21,7 @@ print()
 
 passed = 0
 failed = 0
+
 
 def report(name, expected, actual, description=""):
     global passed, failed
@@ -34,6 +37,7 @@ def report(name, expected, actual, description=""):
         print("  ❌ MISMATCH")
         failed += 1
     print()
+
 
 # =============================================================================
 # These are the EXACT same test cases from Rust: multi_sample.rs lines 960-1097
@@ -122,7 +126,13 @@ Rust test:
 
 # Two variants: [before, v1, between, v2, after]
 split_seq = ["AA", "A", "AAA", "A", "AA"]  # 5 segments for 2 variants
-split_qual = [np.array([30, 30]), np.array([30]), np.array([30, 30, 30]), np.array([30]), np.array([30, 30])]
+split_qual = [
+    np.array([30, 30]),
+    np.array([30]),
+    np.array([30, 30, 30]),
+    np.array([30]),
+    np.array([30, 30]),
+]
 hap1_alleles = ["G", "T"]  # both alt
 hap2_alleles = ["A", "A"]  # both ref
 
@@ -146,10 +156,7 @@ This tests that CIGAR-aware position mapping correctly handles deletions.
 """)
 
 # Create a pysam read with deletion
-header = pysam.AlignmentHeader.from_dict({
-    'HD': {'VN': '1.0'},
-    'SQ': [{'SN': 'chr1', 'LN': 1000}]
-})
+header = pysam.AlignmentHeader.from_dict({"HD": {"VN": "1.0"}, "SQ": [{"SN": "chr1", "LN": 1000}]})
 read = pysam.AlignedSegment(header)
 read.query_sequence = "AAAAABBBBB"
 read.reference_start = 0
@@ -163,8 +170,12 @@ ref2q_left, ref2q_right = _build_ref2read_maps(read)
 report("CIGAR deletion: ref pos 0 -> query pos", 0, ref2q_left.get(0, -1))
 report("CIGAR deletion: ref pos 4 -> query pos", 4, ref2q_left.get(4, -1))
 # Positions 5-6 are deleted in ref, so ref 7 should map to query 5
-report("CIGAR deletion: ref pos 7 -> query pos", 5, ref2q_left.get(7, -1),
-       "This is the key test - ref 7 should map to query 5 due to 2bp deletion")
+report(
+    "CIGAR deletion: ref pos 7 -> query pos",
+    5,
+    ref2q_left.get(7, -1),
+    "This is the key test - ref 7 should map to query 5 due to 2bp deletion",
+)
 report("CIGAR deletion: ref pos 8 -> query pos", 6, ref2q_left.get(8, -1))
 
 # =============================================================================

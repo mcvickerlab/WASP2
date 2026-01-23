@@ -1,18 +1,18 @@
 import os
 import timeit
-from pathlib import Path
-from typing import Optional
 
 import polars as pl
 
 # Try to import Rust acceleration (required; no Python fallback)
 try:
     from wasp2_rust import BamCounter as RustBamCounter
+
     RUST_AVAILABLE = True
 except ImportError:
     RUST_AVAILABLE = False
 
-def count_snp_alleles_rust(bam_file, chrom, snp_list, threads: Optional[int] = None):
+
+def count_snp_alleles_rust(bam_file, chrom, snp_list, threads: int | None = None):
     """
     Rust-accelerated version of count_snp_alleles
 
@@ -24,7 +24,9 @@ def count_snp_alleles_rust(bam_file, chrom, snp_list, threads: Optional[int] = N
     """
     rust_threads_env = os.environ.get("WASP2_RUST_THREADS") if threads is None else None
     try:
-        rust_threads = threads if threads is not None else (int(rust_threads_env) if rust_threads_env else 1)
+        rust_threads = (
+            threads if threads is not None else (int(rust_threads_env) if rust_threads_env else 1)
+        )
     except ValueError:
         rust_threads = 1
     rust_threads = max(1, rust_threads)
@@ -60,8 +62,7 @@ def make_count_df(bam_file, df, use_rust=True):
     """
     count_list = []
 
-    chrom_list = df.get_column("chrom").unique(
-        maintain_order=True)
+    chrom_list = df.get_column("chrom").unique(maintain_order=True)
 
     # Require Rust path (no Python fallback)
     if not (use_rust and RUST_AVAILABLE):
@@ -83,18 +84,24 @@ def make_count_df(bam_file, df, use_rust=True):
     for chrom in chrom_list:
         chrom_df = df.filter(pl.col("chrom") == chrom)
 
-        snp_list = chrom_df.select(
-            ["pos", "ref", "alt"]).unique(
-            subset=["pos"], maintain_order=True).iter_rows()
+        snp_list = (
+            chrom_df.select(["pos", "ref", "alt"])
+            .unique(subset=["pos"], maintain_order=True)
+            .iter_rows()
+        )
 
         start = timeit.default_timer()
 
         try:
-            count_list.extend(count_snp_alleles_rust(bam_file, chrom, snp_list, threads=rust_threads))
+            count_list.extend(
+                count_snp_alleles_rust(bam_file, chrom, snp_list, threads=rust_threads)
+            )
         except Exception as e:
             print(f"Skipping {chrom}: {e}\n")
         else:
-            print(f"{chrom}: Counted {chrom_df.height} SNP's in {timeit.default_timer() - start:.2f} seconds!")
+            print(
+                f"{chrom}: Counted {chrom_df.height} SNP's in {timeit.default_timer() - start:.2f} seconds!"
+            )
 
     total_end = timeit.default_timer()
     print(f"Counted all SNP's in {total_end - total_start:.2f} seconds!")
@@ -104,22 +111,25 @@ def make_count_df(bam_file, df, use_rust=True):
 
     count_df = pl.DataFrame(
         count_list,
-        schema={"chrom": chrom_enum,
-                "pos": pl.UInt32,
-                "ref_count": pl.UInt16,
-                "alt_count": pl.UInt16,
-                "other_count": pl.UInt16
-               },
-        orient="row"
+        schema={
+            "chrom": chrom_enum,
+            "pos": pl.UInt32,
+            "ref_count": pl.UInt16,
+            "alt_count": pl.UInt16,
+            "other_count": pl.UInt16,
+        },
+        orient="row",
     )
 
     # possibly find better solution
-    df = df.with_columns([pl.col("chrom").cast(chrom_enum)]
-                         ).join(count_df, on=["chrom", "pos"], how="left")
+    df = df.with_columns([pl.col("chrom").cast(chrom_enum)]).join(
+        count_df, on=["chrom", "pos"], how="left"
+    )
 
     # df = df.join(count_df, on=["chrom", "pos"], how="left")
 
     return df
+
 
 # Legacy helper retained for imports in counting/count_alleles_sc.py
 def find_read_aln_pos(read, pos):

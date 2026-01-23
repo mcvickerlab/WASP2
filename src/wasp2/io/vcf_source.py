@@ -11,8 +11,8 @@ which is 5-6x faster than bcftools subprocess.
 
 import os
 import subprocess
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator, List, Optional, Tuple
 
 import pysam
 
@@ -26,12 +26,13 @@ from .variant_source import (
 # Try to import Rust acceleration
 try:
     from wasp2_rust import vcf_to_bed_py as rust_vcf_to_bed
+
     RUST_VCF_AVAILABLE = True
 except ImportError:
     RUST_VCF_AVAILABLE = False
 
 
-@VariantSource.register('vcf', 'vcf.gz', 'vcf.bgz', 'bcf', 'bcf.gz')
+@VariantSource.register("vcf", "vcf.gz", "vcf.bgz", "bcf", "bcf.gz")
 class VCFSource(VariantSource):
     """VariantSource implementation for VCF/BCF files.
 
@@ -76,16 +77,16 @@ class VCFSource(VariantSource):
         try:
             self.vcf = pysam.VariantFile(str(self.path))
         except (OSError, ValueError) as e:
-            raise ValueError(f"Failed to open VCF file {self.path}: {e}")
+            raise ValueError(f"Failed to open VCF file {self.path}: {e}") from e
 
         # Cache samples from header
         self._samples = list(self.vcf.header.samples)
 
         # Lazy-computed variant count
-        self._variant_count: Optional[int] = None
+        self._variant_count: int | None = None
 
     @property
-    def samples(self) -> List[str]:
+    def samples(self) -> list[str]:
         """Get list of sample IDs from VCF header.
 
         Returns:
@@ -126,9 +127,7 @@ class VCFSource(VariantSource):
         return len(self._samples)
 
     def iter_variants(
-        self,
-        samples: Optional[List[str]] = None,
-        het_only: bool = False
+        self, samples: list[str] | None = None, het_only: bool = False
     ) -> Iterator[VariantGenotype]:
         """Iterate over variants with optional filtering.
 
@@ -168,7 +167,7 @@ class VCFSource(VariantSource):
         for record in self.vcf.fetch():
             # Get sample genotype
             sample_data = record.samples[sample_id]
-            gt = sample_data.get('GT', None)
+            gt = sample_data.get("GT", None)
 
             if gt is None or None in gt:
                 # Missing genotype
@@ -184,21 +183,14 @@ class VCFSource(VariantSource):
             # Create Variant object (use first ALT if multi-allelic)
             alt = record.alts[0] if record.alts else record.ref
             variant = Variant(
-                chrom=record.chrom,
-                pos=record.pos,
-                ref=record.ref,
-                alt=alt,
-                id=record.id
+                chrom=record.chrom, pos=record.pos, ref=record.ref, alt=alt, id=record.id
             )
 
             # Get allele sequences
             allele1, allele2 = self._get_alleles(record, gt)
 
             yield VariantGenotype(
-                variant=variant,
-                genotype=genotype,
-                allele1=allele1,
-                allele2=allele2
+                variant=variant, genotype=genotype, allele1=allele1, allele2=allele2
             )
 
     def get_genotype(self, sample: str, chrom: str, pos: int) -> Genotype:
@@ -223,7 +215,7 @@ class VCFSource(VariantSource):
         try:
             records = list(self.vcf.fetch(chrom, pos - 1, pos))
         except (OSError, ValueError) as e:
-            raise ValueError(f"Failed to query position {chrom}:{pos}: {e}")
+            raise ValueError(f"Failed to query position {chrom}:{pos}: {e}") from e
 
         if not records:
             raise ValueError(f"No variant found at {chrom}:{pos}")
@@ -231,7 +223,7 @@ class VCFSource(VariantSource):
         # Get genotype from first matching record
         record = records[0]
         sample_data = record.samples[sample]
-        gt = sample_data.get('GT', None)
+        gt = sample_data.get("GT", None)
 
         if gt is None or None in gt:
             return Genotype.MISSING
@@ -239,11 +231,7 @@ class VCFSource(VariantSource):
         return self._parse_gt(gt)
 
     def query_region(
-        self,
-        chrom: str,
-        start: int,
-        end: int,
-        samples: Optional[List[str]] = None
+        self, chrom: str, start: int, end: int, samples: list[str] | None = None
     ) -> Iterator[VariantGenotype]:
         """Query variants in a genomic region.
 
@@ -281,14 +269,13 @@ class VCFSource(VariantSource):
             records = self.vcf.fetch(chrom, start - 1, end)
         except (OSError, ValueError) as e:
             raise ValueError(
-                f"Failed to query region {chrom}:{start}-{end}. "
-                f"File may not be indexed: {e}"
-            )
+                f"Failed to query region {chrom}:{start}-{end}. File may not be indexed: {e}"
+            ) from e
 
         # Yield VariantGenotype for each record
         for record in records:
             sample_data = record.samples[sample_id]
-            gt = sample_data.get('GT', None)
+            gt = sample_data.get("GT", None)
 
             if gt is None or None in gt:
                 genotype = Genotype.MISSING
@@ -298,30 +285,23 @@ class VCFSource(VariantSource):
             # Create Variant (use first ALT)
             alt = record.alts[0] if record.alts else record.ref
             variant = Variant(
-                chrom=record.chrom,
-                pos=record.pos,
-                ref=record.ref,
-                alt=alt,
-                id=record.id
+                chrom=record.chrom, pos=record.pos, ref=record.ref, alt=alt, id=record.id
             )
 
             allele1, allele2 = self._get_alleles(record, gt)
 
             yield VariantGenotype(
-                variant=variant,
-                genotype=genotype,
-                allele1=allele1,
-                allele2=allele2
+                variant=variant, genotype=genotype, allele1=allele1, allele2=allele2
             )
 
     def to_bed(
         self,
         output: Path,
-        samples: Optional[List[str]] = None,
+        samples: list[str] | None = None,
         het_only: bool = True,
         include_genotypes: bool = True,
         include_indels: bool = False,
-        max_indel_len: int = 10
+        max_indel_len: int = 10,
     ) -> Path:
         """Export variants to BED format file.
 
@@ -354,10 +334,7 @@ class VCFSource(VariantSource):
                     raise ValueError(f"Sample '{s}' not found in VCF")
 
         # Try Rust acceleration first (5-6x faster than bcftools)
-        use_rust = (
-            RUST_VCF_AVAILABLE
-            and os.environ.get("WASP2_DISABLE_RUST") != "1"
-        )
+        use_rust = RUST_VCF_AVAILABLE and os.environ.get("WASP2_DISABLE_RUST") != "1"
 
         if use_rust:
             try:
@@ -376,18 +353,17 @@ class VCFSource(VariantSource):
 
         # Fallback to bcftools subprocess
         return self._to_bed_bcftools(
-            output, samples, het_only, include_genotypes,
-            include_indels, max_indel_len
+            output, samples, het_only, include_genotypes, include_indels, max_indel_len
         )
 
     def _to_bed_bcftools(
         self,
         output: Path,
-        samples: Optional[List[str]],
+        samples: list[str] | None,
         het_only: bool,
         include_genotypes: bool,
         include_indels: bool,
-        max_indel_len: int
+        max_indel_len: int,
     ) -> Path:
         """Export variants to BED using bcftools subprocess (fallback).
 
@@ -400,7 +376,9 @@ class VCFSource(VariantSource):
 
         # Base view command
         view_cmd = [
-            "bcftools", "view", str(self.path),
+            "bcftools",
+            "view",
+            str(self.path),
         ]
 
         # Add variant type filter
@@ -408,18 +386,19 @@ class VCFSource(VariantSource):
             view_cmd.extend(["-v", "snps,indels"])  # Both SNPs and indels
             # Add indel length filter (max absolute difference in allele lengths)
             # This filters indels where |len(ALT) - len(REF)| > max_indel_len
-            view_cmd.extend(["-i", f'strlen(REF)-strlen(ALT)<={max_indel_len} && strlen(ALT)-strlen(REF)<={max_indel_len}'])
+            view_cmd.extend(
+                [
+                    "-i",
+                    f"strlen(REF)-strlen(ALT)<={max_indel_len} && strlen(ALT)-strlen(REF)<={max_indel_len}",
+                ]
+            )
         else:
             view_cmd.extend(["-v", "snps"])  # SNPs only (backward compatible)
 
         view_cmd.append("-Ou")  # uncompressed BCF output
 
         # Build query command
-        query_cmd = [
-            "bcftools", "query",
-            "-o", str(output),
-            "-f"
-        ]
+        query_cmd = ["bcftools", "query", "-o", str(output), "-f"]
 
         # Configure based on samples and het_only
         if samples is None:
@@ -427,29 +406,21 @@ class VCFSource(VariantSource):
             view_cmd.append("--drop-genotypes")
             query_cmd.append("%CHROM\t%POS0\t%END\t%REF\t%ALT\n")
 
-            view_process = subprocess.run(
-                view_cmd, stdout=subprocess.PIPE, check=True
-            )
+            view_process = subprocess.run(view_cmd, stdout=subprocess.PIPE, check=True)
         else:
             samples_arg = ",".join(samples)
             num_samples = len(samples)
 
             if num_samples > 1:
                 # Multi-sample: filter to variants with at least one non-ref allele
-                view_cmd.extend([
-                    "-s", samples_arg,
-                    "--min-ac", "1",
-                    "--max-ac", str((num_samples * 2) - 1)
-                ])
-                view_process = subprocess.run(
-                    view_cmd, stdout=subprocess.PIPE, check=True
+                view_cmd.extend(
+                    ["-s", samples_arg, "--min-ac", "1", "--max-ac", str((num_samples * 2) - 1)]
                 )
+                view_process = subprocess.run(view_cmd, stdout=subprocess.PIPE, check=True)
             else:
                 # Single sample
                 view_cmd.extend(["-s", samples_arg])
-                subset_process = subprocess.run(
-                    view_cmd, stdout=subprocess.PIPE, check=True
-                )
+                subset_process = subprocess.run(view_cmd, stdout=subprocess.PIPE, check=True)
 
                 if het_only:
                     # Filter to het genotypes
@@ -458,7 +429,7 @@ class VCFSource(VariantSource):
                         het_view_cmd,
                         input=subset_process.stdout,
                         stdout=subprocess.PIPE,
-                        check=True
+                        check=True,
                     )
                 else:
                     view_process = subset_process
@@ -471,17 +442,13 @@ class VCFSource(VariantSource):
 
         # Run query command
         try:
-            subprocess.run(
-                query_cmd,
-                input=view_process.stdout,
-                check=True
-            )
+            subprocess.run(query_cmd, input=view_process.stdout, check=True)
         except subprocess.CalledProcessError as e:
-            raise IOError(f"bcftools failed: {e}")
+            raise OSError(f"bcftools failed: {e}") from e
 
         return output
 
-    def _parse_gt(self, gt_tuple: Tuple[int, ...]) -> Genotype:
+    def _parse_gt(self, gt_tuple: tuple[int, ...]) -> Genotype:
         """Convert pysam GT tuple to Genotype enum.
 
         Args:
@@ -512,8 +479,8 @@ class VCFSource(VariantSource):
             return Genotype.HET
 
     def _get_alleles(
-        self, record: pysam.VariantRecord, gt: Optional[Tuple[int, ...]]
-    ) -> Tuple[Optional[str], Optional[str]]:
+        self, record: pysam.VariantRecord, gt: tuple[int, ...] | None
+    ) -> tuple[str | None, str | None]:
         """Get allele sequences from genotype.
 
         Args:
@@ -547,5 +514,5 @@ class VCFSource(VariantSource):
         Releases file resources. Should be called when done with the source,
         or use context manager protocol.
         """
-        if hasattr(self, 'vcf') and self.vcf is not None:
+        if hasattr(self, "vcf") and self.vcf is not None:
             self.vcf.close()
