@@ -17,12 +17,17 @@ def test_quickbench_snv_parity(tmp_path: Path) -> None:
     """Unified make-reads matches the established multi-pass path on SNVs."""
     wasp2_rust = pytest.importorskip("wasp2_rust")
 
-    from benchmarking.quickbench.fastq_utils import counter_diff, fastq_counter
-    from benchmarking.quickbench.synthetic_dataset import (
-        quickbench_snv_variants,
-        write_bed,
-        write_synthetic_bam,
-    )
+    # Skip if benchmarking module not available (not included in release)
+    try:
+        from benchmarking.quickbench.fastq_utils import counter_diff, fastq_counter
+        from benchmarking.quickbench.synthetic_dataset import (
+            quickbench_snv_variants,
+            write_bed,
+            write_synthetic_bam,
+        )
+    except ImportError:
+        pytest.skip("benchmarking module not available (not included in release)")
+
     from mapping.intersect_variant_data import intersect_reads, process_bam
     from mapping.make_remap_reads import write_remap_bam
 

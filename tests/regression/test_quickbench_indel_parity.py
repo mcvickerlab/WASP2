@@ -16,12 +16,17 @@ def test_quickbench_indel_parity(tmp_path: Path) -> None:
     """Unified make-reads matches the multi-pass path on a simple INDEL dataset (no trim combos)."""
     wasp2_rust = pytest.importorskip("wasp2_rust")
 
-    from benchmarking.quickbench.fastq_utils import counter_diff, fastq_counter
-    from benchmarking.quickbench.synthetic_dataset import (
-        quickbench_indel_variants,
-        write_bed,
-        write_synthetic_bam_indel,
-    )
+    # Skip if benchmarking module not available (not included in release)
+    try:
+        from benchmarking.quickbench.fastq_utils import counter_diff, fastq_counter
+        from benchmarking.quickbench.synthetic_dataset import (
+            quickbench_indel_variants,
+            write_bed,
+            write_synthetic_bam_indel,
+        )
+    except ImportError:
+        pytest.skip("benchmarking module not available (not included in release)")
+
     from mapping.intersect_variant_data import intersect_reads, process_bam
     from mapping.make_remap_reads import write_remap_bam
 

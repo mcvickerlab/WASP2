@@ -35,9 +35,10 @@ flate2 = "1.0"         # For gzip decompression
 criterion = { version = "0.5", features = ["html_reports"] }
 tempfile = "3.8"
 
-[[bench]]
-name = "mapping_filter_bench"
-harness = false
+# Benchmarks removed for clean release (benchmark files in paper branch only)
+# [[bench]]
+# name = "mapping_filter_bench"
+# harness = false
 
 [profile.release]
 debug = true  # Enable debug symbols for profiling

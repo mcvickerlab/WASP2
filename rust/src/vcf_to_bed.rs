@@ -158,7 +158,15 @@ fn vcf_to_bed_from_reader<R: BufRead>(
         .context("Failed to read VCF header")?;
 
     // Get sample indices
-    let sample_indices = get_sample_indices_from_header(&header, &config.samples)?;
+    // When include_genotypes=False, we only need to check one sample to determine
+    // if a variant passes filters (het_only, etc.) - no need to output duplicates
+    let all_sample_indices = get_sample_indices_from_header(&header, &config.samples)?;
+    let sample_indices = if !config.include_genotypes && all_sample_indices.len() > 1 {
+        // Only use first sample when not outputting genotypes to avoid duplicates
+        vec![all_sample_indices[0]]
+    } else {
+        all_sample_indices
+    };
 
     eprintln!(
         "  Processing {} samples: {:?}",
@@ -232,7 +240,36 @@ fn process_vcf_record<W: Write>(
     // Calculate end position (BED end is exclusive)
     let end = pos0 + ref_allele.len();
 
-    // Process each sample
+    // Special case: when not filtering by het and not including genotypes,
+    // output all variants regardless of sample genotypes (like bcftools --drop-genotypes)
+    if !config.het_only && !config.include_genotypes {
+        let mut written = 0;
+        for alt_allele in alt_alleles.iter() {
+            // Check SNP vs indel
+            let is_snp = ref_allele.len() == 1 && alt_allele.len() == 1;
+            if !is_snp && !config.include_indels {
+                continue;
+            }
+
+            // Check indel length
+            if !is_snp {
+                let len_diff = (ref_allele.len() as i32 - alt_allele.len() as i32).abs() as usize;
+                if len_diff > config.max_indel_len {
+                    continue;
+                }
+            }
+
+            writeln!(
+                writer,
+                "{}\t{}\t{}\t{}\t{}",
+                chrom, pos0, end, ref_allele, alt_allele
+            )?;
+            written += 1;
+        }
+        return Ok(Some(written));
+    }
+
+    // Process each sample for het filtering or genotype output
     let samples = record.samples();
     let mut written = 0;
 

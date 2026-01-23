@@ -23,14 +23,18 @@ def test_quickbench_indel_trim_invariants(tmp_path: Path) -> None:
     """INDEL-mode produces N+1 trim-combos for a +2bp insertion and preserves read length."""
     wasp2_rust = pytest.importorskip("wasp2_rust")
 
-    import pysam
+    # Skip if benchmarking module not available (not included in release)
+    try:
+        from benchmarking.quickbench.fastq_utils import iter_fastq
+        from benchmarking.quickbench.synthetic_dataset import (
+            quickbench_indel_variants,
+            write_bed,
+            write_synthetic_bam_indel,
+        )
+    except ImportError:
+        pytest.skip("benchmarking module not available (not included in release)")
 
-    from benchmarking.quickbench.fastq_utils import iter_fastq
-    from benchmarking.quickbench.synthetic_dataset import (
-        quickbench_indel_variants,
-        write_bed,
-        write_synthetic_bam_indel,
-    )
+    import pysam
 
     bam = tmp_path / "synthetic_indel.bam"
     bed = tmp_path / "variants_indel.bed"
