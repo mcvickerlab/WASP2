@@ -2,6 +2,26 @@
 
 All notable changes to WASP2 will be documented in this file.
 
+## [1.2.0] - 2025-01-23
+
+### Added
+- **61× faster WASP filtering** via Rust optimization (validated r² > 0.99 vs GATK)
+- INDEL support in variant processing
+- bcftools and samtools added to environment.yml
+- nf-test infrastructure for Nextflow modules
+- Docker container support with ghcr.io publishing
+- Security scanning workflow (pip-audit, cargo-audit, Bandit, Gitleaks, CodeQL)
+
+### Fixed
+- VCF→BED conversion now handles missing genotypes correctly
+- CI maturin build fixed by using virtualenv
+- Polars version constraint for stable API
+
+### Changed
+- Pinned pandas<2.0 and anndata<0.10 for compatibility
+- Added ruff linting and pre-commit hooks for code quality
+- Nextflow modules now use containerized WASP2
+
 ## [1.1.0] - 2024-11-24
 
 ### Added

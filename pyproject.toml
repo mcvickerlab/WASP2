@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "wasp2"
-version = "1.2.1"
+version = "1.2.0"
 description = "Allele-specific analysis of next-generation sequencing data with high-performance multi-format variant support (VCF/cyvcf2/PGEN)"
 readme = "README.md"
 authors = [
@@ -44,12 +44,12 @@ classifiers = [
 
 dependencies = [
     "numpy>=1.21.0",
-    "pandas>=2.0.0",
+    "pandas>=1.5.0,<2.0.0",  # Pin <2.0 for anndata compatibility
     "polars>=0.19.0",
     "scipy>=1.10.0",
     "pysam>=0.21.0",
     "pybedtools>=0.9.0",
-    "anndata>=0.8.0",
+    "anndata>=0.8.0,<0.10.0",  # Pin <0.10 for pandas <2.0 compatibility
     "scanpy>=1.9.0",
     "typer>=0.9.0",
     "rich>=13.0.0",
@@ -59,12 +59,23 @@ dependencies = [
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
+    "pytest-benchmark>=4.0",
+    "memory-profiler>=0.61",
     "mypy>=1.0",
     "ruff>=0.9.0",
     "pre-commit>=3.0",
     "build>=0.10",
     "twine>=4.0",
     "maturin>=1.4",
+    # Security tools
+    "bandit[toml]>=1.8.0",
+    "pip-audit>=2.7.0",
+]
+benchmark = [
+    "pytest-benchmark>=4.0",
+    "memory-profiler>=0.61",
+    "matplotlib>=3.7.0",
+    "seaborn>=0.12.0",
 ]
 docs = [
     "sphinx>=5.0",
@@ -92,12 +103,14 @@ Documentation = "https://Jaureguy760.github.io/WASP2-exp/"
 Repository = "https://github.com/Jaureguy760/WASP2-exp"
 Issues = "https://github.com/Jaureguy760/WASP2-exp/issues"
 
-[tool.setuptools]
-package-dir = {"" = "src"}
-
-[tool.setuptools.packages.find]
-where = ["src"]
-include = ["counting*", "mapping*", "analysis*", "wasp2*"]
+# Note: [tool.setuptools] is not used when building with maturin
+# Maturin handles package discovery via [tool.maturin.python-packages]
+# The setuptools config below is kept as reference if ever switching to pure Python builds:
+# [tool.setuptools]
+# package-dir = {"" = "src"}
+# [tool.setuptools.packages.find]
+# where = ["src"]
+# include = ["counting*", "mapping*", "analysis*", "wasp2*"]
 
 [tool.maturin]
 manifest-path = "rust/Cargo.toml"
@@ -118,6 +131,7 @@ markers = [
     "integration: integration tests",
     "slow: slow tests",
     "rust: tests requiring Rust backend",
+    "benchmark: performance benchmark tests",
 ]
 
 [tool.mypy]
@@ -185,3 +199,13 @@ omit = ["*/tests/*", "*/__pycache__/*"]
 [tool.coverage.report]
 precision = 2
 show_missing = true
+
+# Bandit security linter configuration
+[tool.bandit]
+exclude_dirs = ["tests", ".venv", "build", "dist"]
+skips = [
+    "B101",  # assert_used - OK in tests and CLI validation
+    "B404",  # import_subprocess - needed for external tool calls
+    "B603",  # subprocess_without_shell_equals_true - intentional for safety
+]
+targets = ["src"]
