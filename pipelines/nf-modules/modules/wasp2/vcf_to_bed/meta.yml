@@ -1,0 +1,62 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/meta-schema.json
+name: "wasp2_vcf_to_bed"
+description: Extract heterozygous SNP positions from VCF to BED format
+keywords:
+  - vcf
+  - bed
+  - variants
+  - heterozygous
+  - conversion
+
+tools:
+  - wasp2:
+      description: |
+        WASP2 is a tool for allele-specific analysis of next-generation sequencing data.
+        The vcf_to_bed module extracts heterozygous SNP positions from VCF files and
+        converts them to BED format for use with other tools.
+      homepage: https://github.com/Jaureguy760/WASP2-exp
+      documentation: https://Jaureguy760.github.io/WASP2-exp/
+      tool_dev_url: https://github.com/Jaureguy760/WASP2-exp
+      licence: ["MIT"]
+
+input:
+  - - meta:
+        type: map
+        description: |
+          Groovy Map containing VCF information.
+          e.g. `[ id:'variants' ]`
+    - vcf:
+        type: file
+        description: VCF file with genotype information
+        pattern: "*.{vcf,vcf.gz,bcf}"
+    - vcf_index:
+        type: file
+        description: VCF index file (TBI for VCF.GZ, CSI for BCF)
+        pattern: "*.{tbi,csi}"
+  - - samples:
+        type: val
+        description: |
+          Comma-separated list of sample names to extract.
+          If empty, all heterozygous variants are extracted.
+
+output:
+  - bed:
+      - meta:
+          type: map
+          description: Groovy Map containing VCF information
+      - "*.variants.bed":
+          type: file
+          description: |
+            BED file with heterozygous SNP positions.
+            Columns: chrom, start (0-based), end (1-based), ref, alt
+          pattern: "*.variants.bed"
+  - versions:
+      - versions.yml:
+          type: file
+          description: File containing software versions
+          pattern: "versions.yml"
+
+authors:
+  - "@Jaureguy760"
+maintainers:
+  - "@Jaureguy760"

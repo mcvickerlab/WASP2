@@ -1,0 +1,99 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/meta-schema.json
+name: "star_align"
+description: Align RNA-seq reads to a reference genome using STAR
+keywords:
+  - star
+  - alignment
+  - rna-seq
+  - splice-aware
+  - bam
+
+tools:
+  - star:
+      description: |
+        STAR is an ultrafast universal RNA-seq aligner. It performs spliced
+        alignments of RNA-seq reads to a reference genome using an uncompressed
+        suffix array index for rapid seed finding.
+      homepage: https://github.com/alexdobin/STAR
+      documentation: https://github.com/alexdobin/STAR/blob/master/doc/STARmanual.pdf
+      tool_dev_url: https://github.com/alexdobin/STAR
+      doi: "10.1093/bioinformatics/bts635"
+      licence: ["MIT"]
+  - samtools:
+      description: Tools for manipulating next-generation sequencing data
+      homepage: http://www.htslib.org/
+      documentation: http://www.htslib.org/doc/samtools.html
+      licence: ["MIT"]
+
+input:
+  - - meta:
+        type: map
+        description: |
+          Groovy Map containing sample information.
+          e.g. `[ id:'sample1', single_end:false ]`
+    - reads:
+        type: file
+        description: |
+          List of input FASTQ files. For paired-end data, provide as [read1.fq.gz, read2.fq.gz].
+          For single-end data, provide as [reads.fq.gz].
+        pattern: "*.{fq,fq.gz,fastq,fastq.gz}"
+  - - star_index:
+        type: directory
+        description: STAR genome index directory
+        pattern: "star_index"
+  - - gtf:
+        type: file
+        description: |
+          Optional GTF annotation file for splice junction database.
+          Improves alignment accuracy at known splice sites.
+        pattern: "*.{gtf,gff}"
+
+output:
+  - bam:
+      - meta:
+          type: map
+          description: Groovy Map containing sample information
+      - "*.Aligned.sortedByCoord.out.bam":
+          type: file
+          description: Coordinate-sorted BAM file with aligned reads
+          pattern: "*.Aligned.sortedByCoord.out.bam"
+      - "*.Aligned.sortedByCoord.out.bam.bai":
+          type: file
+          description: BAM index file
+          pattern: "*.Aligned.sortedByCoord.out.bam.bai"
+  - log_final:
+      - meta:
+          type: map
+          description: Groovy Map containing sample information
+      - "*.Log.final.out":
+          type: file
+          description: STAR final log with alignment statistics
+          pattern: "*.Log.final.out"
+  - log_out:
+      - meta:
+          type: map
+          description: Groovy Map containing sample information
+      - "*.Log.out":
+          type: file
+          description: STAR detailed log
+          pattern: "*.Log.out"
+  - sj_tab:
+      - meta:
+          type: map
+          description: Groovy Map containing sample information
+      - "*.SJ.out.tab":
+          type: file
+          description: |
+            Tab-separated file with detected splice junctions.
+            Columns: chromosome, start, end, strand, intron_motif, annotated, unique_reads, multi_reads, max_overhang
+          pattern: "*.SJ.out.tab"
+  - versions:
+      - versions.yml:
+          type: file
+          description: File containing software versions
+          pattern: "versions.yml"
+
+authors:
+  - "@Jaureguy760"
+maintainers:
+  - "@Jaureguy760"

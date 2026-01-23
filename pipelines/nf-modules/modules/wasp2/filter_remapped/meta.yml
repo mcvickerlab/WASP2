@@ -1,0 +1,97 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/meta-schema.json
+name: "wasp2_filter_remapped"
+description: Filter remapped reads using WASP algorithm and merge with kept reads
+keywords:
+  - wasp
+  - mapping-bias
+  - allele-specific
+  - remapping
+  - filtering
+
+tools:
+  - wasp2:
+      description: |
+        WASP2 is a tool for allele-specific analysis of next-generation sequencing data.
+        The filter_remapped module applies the WASP filtering algorithm to identify reads
+        that map to the same location regardless of which allele they contain, then merges
+        with reads that did not overlap variants.
+      homepage: https://github.com/Jaureguy760/WASP2-exp
+      documentation: https://Jaureguy760.github.io/WASP2-exp/
+      tool_dev_url: https://github.com/Jaureguy760/WASP2-exp
+      licence: ["MIT"]
+  - samtools:
+      description: Tools for manipulating next-generation sequencing data
+      homepage: http://www.htslib.org/
+      documentation: http://www.htslib.org/doc/samtools.html
+      licence: ["MIT"]
+
+input:
+  - - meta:
+        type: map
+        description: |
+          Groovy Map containing sample information.
+          e.g. `[ id:'sample1', sample:'NA12878' ]`
+    - remapped_bam:
+        type: file
+        description: BAM file from remapping step (e.g., BWA, STAR) containing remapped reads
+        pattern: "*.{bam}"
+    - remapped_bai:
+        type: file
+        description: Index for remapped BAM
+        pattern: "*.{bai}"
+  - - meta2:
+        type: map
+        description: Groovy Map (matches meta from make_reads step)
+    - to_remap_bam:
+        type: file
+        description: Original to_remap BAM from make_reads step containing reads to be remapped
+        pattern: "*.to_remap.bam"
+  - - meta3:
+        type: map
+        description: Groovy Map (matches meta from make_reads step)
+    - keep_bam:
+        type: file
+        description: Keep BAM from make_reads step containing reads without variant overlap
+        pattern: "*.keep.bam"
+  - - meta4:
+        type: map
+        description: Groovy Map (matches meta from make_reads step)
+    - wasp_json:
+        type: file
+        description: JSON metadata from make_reads step with read tracking information
+        pattern: "*.wasp_data.json"
+
+output:
+  - bam:
+      - meta:
+          type: map
+          description: Groovy Map containing sample information
+      - "*_wasp_filt.bam":
+          type: file
+          description: |
+            Final WASP-filtered BAM file, sorted and indexed.
+            Contains reads that passed the mapping bias filter merged with reads
+            that didn't overlap variants.
+          pattern: "*_wasp_filt.bam"
+      - "*_wasp_filt.bam.bai":
+          type: file
+          description: BAM index file
+          pattern: "*_wasp_filt.bam.bai"
+  - stats:
+      - meta:
+          type: map
+          description: Groovy Map containing sample information
+      - "*.filter_stats.txt":
+          type: file
+          description: Filter statistics showing read counts before and after WASP filtering
+          pattern: "*.filter_stats.txt"
+  - versions:
+      - versions.yml:
+          type: file
+          description: File containing software versions
+          pattern: "versions.yml"
+
+authors:
+  - "@Jaureguy760"
+maintainers:
+  - "@Jaureguy760"

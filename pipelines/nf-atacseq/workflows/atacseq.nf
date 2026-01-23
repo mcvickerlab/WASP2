@@ -20,8 +20,8 @@ include { FASTQ_ALIGN_BWA        } from '../subworkflows/nf-core/fastq_align_bwa
 include { FASTQ_ALIGN_BOWTIE2    } from '../subworkflows/nf-core/fastq_align_bowtie2/main'
 
 // Local subworkflows
-include { PREPARE_GENOME         } from '../subworkflows/local/prepare_genome'
-include { WASP_MAPPING           } from '../subworkflows/local/wasp_mapping'
+include { PREPARE_GENOME         } from '../subworkflows/local/prepare_genome/main'
+include { WASP_MAPPING           } from '../subworkflows/local/wasp_mapping/main'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -1,0 +1,42 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/subworkflows/meta-schema.json
+name: "prepare_genome"
+description: Prepare genome reference files and build aligner indices
+keywords:
+  - genome
+  - reference
+  - indexing
+  - bwa
+  - bowtie2
+
+components:
+  - bwa/index
+  - bowtie2/index
+
+input:
+  - aligner:
+      description: |
+        Aligner to build index for
+        Value: 'bwa' or 'bowtie2'
+
+output:
+  - fasta:
+      description: |
+        Reference FASTA file
+        Structure: path(fasta)
+  - bwa_index:
+      description: |
+        BWA index files (if aligner='bwa')
+        Structure: path(bwa_index)
+  - bowtie2_index:
+      description: |
+        Bowtie2 index files (if aligner='bowtie2')
+        Structure: path(bowtie2_index)
+  - versions:
+      description: |
+        Software versions
+        Structure: [ path(versions.yml) ]
+
+authors:
+  - "@Jaureguy760"
+maintainers:
+  - "@Jaureguy760"

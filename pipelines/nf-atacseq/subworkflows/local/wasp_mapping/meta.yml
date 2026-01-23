@@ -1,0 +1,58 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/subworkflows/meta-schema.json
+name: "wasp_mapping"
+description: WASP2 mapping bias correction workflow with allele swapping and filtering
+keywords:
+  - wasp
+  - mapping-bias
+  - allele-specific
+  - remapping
+  - filtering
+
+components:
+  - wasp2_make_reads
+  - wasp2_filter_remapped
+  - bwa/mem
+  - bowtie2/align
+  - samtools/index
+
+input:
+  - ch_bam:
+      description: |
+        Channel containing BAM files for WASP correction
+        Structure: [ val(meta), path(bam), path(bai) ]
+        meta: Groovy Map containing sample information
+  - ch_vcf:
+      description: |
+        Channel containing VCF file with phased genotypes
+        Structure: path(vcf)
+  - ch_aligner_index:
+      description: |
+        Channel containing aligner index
+        Structure: path(index)
+  - ch_fasta:
+      description: |
+        Channel containing reference FASTA
+        Structure: path(fasta)
+  - aligner:
+      description: |
+        Aligner to use for remapping
+        Value: 'bwa' or 'bowtie2'
+
+output:
+  - bam:
+      description: |
+        WASP-filtered BAM files with bias-corrected reads
+        Structure: [ val(meta), path(bam), path(bai) ]
+  - stats:
+      description: |
+        WASP filtering statistics
+        Structure: [ val(meta), path(stats) ]
+  - versions:
+      description: |
+        Software versions
+        Structure: path(versions.yml)
+
+authors:
+  - "@Jaureguy760"
+maintainers:
+  - "@Jaureguy760"

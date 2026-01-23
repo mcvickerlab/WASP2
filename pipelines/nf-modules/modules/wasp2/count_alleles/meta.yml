@@ -1,0 +1,75 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/meta-schema.json
+name: "wasp2_count_alleles"
+description: Count reference and alternative alleles at heterozygous variant sites from aligned BAM files
+keywords:
+  - allele-specific
+  - counting
+  - variants
+  - bam
+  - vcf
+  - wasp
+
+tools:
+  - wasp2:
+      description: |
+        WASP2 is a high-performance tool for allele-specific analysis of next-generation
+        sequencing data with Rust-accelerated backend. The count_alleles module counts
+        reads supporting reference and alternative alleles at heterozygous SNP sites.
+      homepage: https://github.com/Jaureguy760/WASP2-exp
+      documentation: https://Jaureguy760.github.io/WASP2-exp/
+      tool_dev_url: https://github.com/Jaureguy760/WASP2-exp
+      licence: ["MIT"]
+
+input:
+  - - meta:
+        type: map
+        description: |
+          Groovy Map containing sample information.
+          e.g. `[ id:'sample1', sample:'NA12878' ]`
+    - bam:
+        type: file
+        description: Coordinate-sorted BAM file with aligned reads
+        pattern: "*.{bam}"
+    - bai:
+        type: file
+        description: BAM index file
+        pattern: "*.{bai}"
+  - - meta2:
+        type: map
+        description: Groovy Map containing VCF information
+    - vcf:
+        type: file
+        description: VCF file with genotype information (supports VCF, VCF.GZ, BCF, or PGEN)
+        pattern: "*.{vcf,vcf.gz,bcf,pgen}"
+    - vcf_index:
+        type: file
+        description: VCF index file (TBI for VCF.GZ, CSI for BCF)
+        pattern: "*.{tbi,csi}"
+  - - gtf:
+        type: file
+        description: |
+          Optional GTF/GFF annotation file to restrict counting to specific regions.
+          When provided, counts are aggregated per gene/region.
+        pattern: "*.{gtf,gff,gff3}"
+
+output:
+  - counts:
+      - meta:
+          type: map
+          description: Groovy Map containing sample information
+      - "*.counts.tsv":
+          type: file
+          description: |
+            TSV file with allele counts per variant site or region.
+            Columns: chrom, pos, ref, alt, [region], ref_count, alt_count, other_count, N
+          pattern: "*_counts.tsv"
+  - versions:
+      - versions.yml:
+          type: file
+          description: File containing software versions
+          pattern: "versions.yml"
+
+authors:
+  - "@Jaureguy760"
+maintainers:
+  - "@Jaureguy760"
