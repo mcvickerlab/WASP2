@@ -1,0 +1,126 @@
+<tool id="wasp2_find_imbalance" name="WASP2 Find Imbalance" version="@TOOL_VERSION@@VERSION_SUFFIX@" profile="@PROFILE@">
+    <description>Statistical analysis of allelic imbalance</description>
+    <macros>
+        <import>macros.xml</import>
+    </macros>
+    <expand macro="requirements"/>
+    <expand macro="bio_tools"/>
+
+    <command detect_errors="exit_code"><![CDATA[
+        ln -s '$counts' counts.tsv &&
+
+        wasp2-analyze find-imbalance
+            counts.tsv
+            --out '$output_results'
+            #if $min_count
+                --min $min_count
+            #end if
+            #if $pseudocount
+                --pseudocount $pseudocount
+            #end if
+            $phased
+            #if str($model).strip()
+                --model '$model'
+            #end if
+            #if str($advanced.region_col).strip()
+                --region_col '$advanced.region_col'
+            #end if
+            #if str($advanced.groupby).strip()
+                --groupby '$advanced.groupby'
+            #end if
+    ]]></command>
+
+    <inputs>
+        <param name="counts" type="data" format="tabular"
+               label="Allele counts file"
+               help="Output from 'WASP2 Count Variants'"/>
+
+        <param argument="--min" name="min_count" type="integer" value="10" min="1"
+               label="Minimum allele count"
+               help="Minimum total read count at a variant to test for imbalance"/>
+
+        <param argument="--pseudocount" type="integer" value="1" min="0"
+               label="Pseudocount"
+               help="Pseudocount added when calculating allelic ratios"/>
+
+        <param argument="--phased" type="boolean" truevalue="--phased" falsevalue=""
+               checked="false" label="Use phased haplotype model"
+               help="Calculate imbalance using phased haplotype information (requires phased genotypes)"/>
+
+        <param argument="--model" type="select" label="Dispersion model">
+            <option value="single" selected="true">Single dispersion (recommended)</option>
+            <option value="linear">Linear dispersion</option>
+        </param>
+
+        <section name="advanced" title="Advanced Options" expanded="false">
+            <param argument="--region_col" type="text" value="" optional="true"
+                   label="Region column name"
+                   help="Name of region column (auto-detected if not specified)"/>
+            <param argument="--groupby" type="text" value="" optional="true"
+                   label="Group by column"
+                   help="Report imbalance by parent/group instead of feature level (for RNA-seq)"/>
+        </section>
+    </inputs>
+
+    <outputs>
+        <data name="output_results" format="tabular"
+              label="${tool.name} on ${on_string}: imbalance results"/>
+    </outputs>
+
+    <tests>
+        <test expect_num_outputs="1">
+            <param name="counts" value="counts.tsv"/>
+            <param name="min_count" value="10"/>
+            <output name="output_results" ftype="tabular">
+                <assert_contents>
+                    <has_text text="p_value"/>
+                </assert_contents>
+            </output>
+        </test>
+    </tests>
+
+    <help><![CDATA[
+**WASP2 Find Imbalance**
+
+Statistical analysis to identify significant allelic imbalance from variant counts.
+
+**Statistical Model**
+
+WASP2 uses a beta-binomial model to test for allelic imbalance:
+
+- **Null hypothesis**: Equal expression from both alleles (ratio = 0.5)
+- **Alternative**: Unequal expression (allelic imbalance)
+- **Dispersion parameter**: Accounts for biological and technical overdispersion
+
+**Inputs**
+
+- **Allele counts**: Tab-separated output from "WASP2 Count Variants"
+
+**Outputs**
+
+- **Imbalance results**: Tab-separated file with columns:
+    - Region/feature identifier
+    - Total reference and alternate counts
+    - Estimated allelic ratio
+    - Dispersion parameter
+    - P-value for imbalance
+    - FDR-corrected q-value
+
+**Parameters**
+
+- **Minimum count**: Variants with fewer total reads are excluded
+- **Pseudocount**: Added to counts to avoid division by zero and stabilize ratios
+- **Phased model**: Uses haplotype phase to aggregate counts across variants
+- **Dispersion model**: 'single' fits one dispersion across all variants (recommended)
+
+**Usage Notes**
+
+For single-cell data, use "WASP2 Find Imbalance SC" with barcode groupings.
+
+For comparing imbalance between conditions/cell types, use "WASP2 Compare Imbalance".
+
+    ]]></help>
+
+    <expand macro="creators"/>
+    <expand macro="citations"/>
+</tool>

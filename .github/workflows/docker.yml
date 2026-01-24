@@ -1,0 +1,121 @@
+# WASP2 Docker Build Workflow
+# Builds and pushes container images to GitHub Container Registry
+
+name: Docker
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - "v*"
+  pull_request:
+    branches: [main]
+    paths:
+      - "Dockerfile"
+      - "rust/**"
+      - "src/**"
+      - "pyproject.toml"
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build:
+    name: Build and Push
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            # Set latest tag for default branch
+            type=raw,value=latest,enable={{is_default_branch}}
+            # Tag with semver on release tags
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            # Tag with SHA for all builds
+            type=sha,prefix=sha-
+            # Tag with branch name for pushes
+            type=ref,event=branch
+            # Tag PR builds
+            type=ref,event=pr
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          # Only push for non-PR events (main branch or tags)
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+          build-args: |
+            VERSION=${{ github.ref_name }}
+
+      - name: Test image
+        if: github.event_name == 'pull_request'
+        run: |
+          docker build -t wasp2-test .
+          docker run --rm wasp2-test wasp2-count --version
+          docker run --rm wasp2-test wasp2-map --help
+          docker run --rm wasp2-test wasp2-analyze --help
+          docker run --rm wasp2-test python -c "import wasp2_rust; print('Rust OK')"
+
+  # ===========================================================================
+  # Build Singularity image from Docker (for HPC environments)
+  # ===========================================================================
+  singularity:
+    name: Build Singularity
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Singularity
+        uses: eWaterCycle/setup-singularity@v7
+        with:
+          singularity-version: 3.11.4
+
+      - name: Get version
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Build Singularity image
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          singularity build wasp2_${VERSION}.sif docker://${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}
+
+      - name: Upload Singularity image to release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: wasp2_*.sif
