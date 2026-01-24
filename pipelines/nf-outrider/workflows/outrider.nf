@@ -5,10 +5,10 @@
     WASP2 + OUTRIDER for Aberrant Expression and MAE Detection
 
     Workflow:
-    RNA-seq BAMs → WASP2 Filter → WASP2 Count → Gene Aggregation → OUTRIDER → Outlier Calls
-                        ↓                              ↓
-                  Bias-corrected             Autoencoder-based
-                      reads                  outlier detection
+    RNA-seq BAMs → WASP2 Count → Gene Aggregation → OUTRIDER → Outlier Calls
+                       ↓                 ↓
+                 Allele counts    Autoencoder-based
+                 at het SNPs      outlier detection
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
 
