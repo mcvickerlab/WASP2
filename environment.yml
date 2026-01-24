@@ -9,7 +9,7 @@ dependencies:
 
   # Data processing
   - numpy
-  - pandas>=1.5,<2.0  # Pin <2.0 for anndata compatibility (see issue #6)
+  - pandas>=2.0,<2.3  # Requires anndata>=0.10.7 for compatibility
   - polars>=0.19  # Pin minimum version for stable API
   - scipy
 
@@ -21,7 +21,7 @@ dependencies:
   - samtools>=1.10  # Required for collate -T option (indel processing)
   - htslib>=1.10
   - bwa  # Required for remapping step
-  - anndata>=0.8,<0.10  # Pin for pandas <2.0 compatibility
+  - anndata>=0.10.7,<0.11  # 0.10.7+ has pandas 2.x compatibility fixes
   - plink2  # For PGEN file format support
 
   # CLI
@@ -45,4 +45,4 @@ dependencies:
   - pip
   - pip:
     - Pgenlib>=0.90  # Python bindings for PGEN format
-    - maturin>=1.4
+    - maturin>=1.4,<2.0  # Upper bound prevents major version breaks
