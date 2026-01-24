@@ -20,6 +20,7 @@
 
 // WASP2 modules from shared nf-modules
 include { WASP2_COUNT             } from '../../nf-modules/modules/wasp2/count/main'
+include { WASP2_ML_OUTPUT         } from '../../nf-modules/modules/wasp2/ml_output/main'
 
 // Local modules
 include { AGGREGATE_COUNTS        } from '../modules/local/aggregate_counts'
@@ -44,6 +45,9 @@ workflow OUTRIDER {
     ch_gene_counts = Channel.empty()
     ch_outliers    = Channel.empty()
     ch_mae_results = Channel.empty()
+    ch_ml_zarr     = Channel.empty()
+    ch_ml_parquet  = Channel.empty()
+    ch_ml_anndata  = Channel.empty()
 
     //
     // Prepare reference files
@@ -144,7 +148,24 @@ workflow OUTRIDER {
     }
 
     //
-    // STEP 6: MultiQC (Optional)
+    // STEP 6: ML Output Formats (Optional)
+    //
+    // Convert counts to ML-ready formats: Zarr, Parquet, AnnData
+    //
+
+    if (params.output_format) {
+        WASP2_ML_OUTPUT(
+            ch_counts,
+            params.output_format
+        )
+        ch_versions = ch_versions.mix(WASP2_ML_OUTPUT.out.versions.first())
+        ch_ml_zarr = WASP2_ML_OUTPUT.out.zarr
+        ch_ml_parquet = WASP2_ML_OUTPUT.out.parquet
+        ch_ml_anndata = WASP2_ML_OUTPUT.out.anndata
+    }
+
+    //
+    // STEP 7: MultiQC (Optional)
     //
     // Generate summary report
     //
@@ -156,6 +177,9 @@ workflow OUTRIDER {
     gene_counts    = ch_gene_counts                               // channel: [ val(meta), path(gene_counts) ]
     outliers       = ch_outliers                                  // channel: path(outliers.tsv)
     mae_results    = params.skip_mae ? Channel.empty() : ch_mae_results // channel: [ val(meta), path(mae_results) ]
+    ml_zarr        = ch_ml_zarr                                   // channel: [ val(meta), path(*.zarr) ]
+    ml_parquet     = ch_ml_parquet                                // channel: [ val(meta), path(*.parquet) ]
+    ml_anndata     = ch_ml_anndata                                // channel: [ val(meta), path(*.h5ad) ]
     multiqc_report = ch_multiqc_report                            // channel: path(report)
     versions       = ch_versions                                  // channel: path(versions.yml)
 }

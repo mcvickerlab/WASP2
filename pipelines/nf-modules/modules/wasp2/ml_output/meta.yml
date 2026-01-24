@@ -1,0 +1,53 @@
+name: "wasp2_ml_output"
+description: Convert WASP2 allele counts to ML-ready formats (Zarr, Parquet, AnnData)
+keywords:
+  - allele-specific
+  - machine-learning
+  - zarr
+  - parquet
+  - anndata
+  - genvarloader
+tools:
+  - wasp2:
+      description: High-performance allele-specific analysis toolkit
+      homepage: https://github.com/mcvickerlab/WASP2
+      documentation: https://wasp2.readthedocs.io
+      licence: ["MIT"]
+input:
+  - - meta:
+        type: map
+        description: Sample metadata (id, single_end, etc.)
+    - counts:
+        type: file
+        description: WASP2 allele counts TSV file
+        pattern: "*_counts.tsv"
+  - - output_format:
+        type: string
+        description: Comma-separated output formats (zarr, parquet, anndata)
+output:
+  - zarr:
+      - meta:
+          type: map
+      - "*.zarr":
+          type: directory
+          description: Zarr store for GenVarLoader ML training
+  - parquet:
+      - meta:
+          type: map
+      - "*.parquet":
+          type: file
+          description: Parquet file for Polars/DuckDB analytics
+  - anndata:
+      - meta:
+          type: map
+      - "*.h5ad":
+          type: file
+          description: AnnData H5AD for scverse ecosystem
+  - versions:
+      - "versions.yml":
+          type: file
+          description: Tool versions
+authors:
+  - "@Jaureguy760"
+maintainers:
+  - "@Jaureguy760"

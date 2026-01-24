@@ -18,9 +18,9 @@
 
 | Component | Issue | Status |
 |-----------|-------|--------|
-| ML Output Formats | [#36](../../issues/36) | 🔄 Open |
-| GenVarLoader | [#37](../../issues/37) | 🔄 Open |
-| nf-core Compliance | [#38](../../issues/38) | 🔄 Open |
+| ML Output Formats | [#36](../../issues/36) | ✅ Complete |
+| GenVarLoader | [#37](../../issues/37) | ✅ Complete |
+| nf-core Compliance | [#38](../../issues/38) | ✅ Complete |
 | Seqera AI | [#39](../../issues/39) | 🔄 Open |
 
 ## Module Inventory
@@ -32,6 +32,7 @@
 | WASP2_ANALYZE | Statistical analysis | Rust-backed |
 | WASP2_COUNT_ALLELES | Single-cell counting | Rust |
 | WASP2_ANALYZE_IMBALANCE | SC imbalance | Rust |
+| WASP2_ML_OUTPUT | ML format conversion | Zarr, Parquet, AnnData |
 | VCF_TO_BED | VCF conversion | Rust: 7-25× faster |
 | STAR_ALIGN | STAR 2-pass | Native |
 
@@ -76,16 +77,16 @@ pipelines/
                         │
         ┌───────────────┼───────────────┐
         ▼               ▼               ▼
-   nf-rnaseq ✅    nf-atacseq ✅   ML Formats
+   nf-rnaseq ✅    nf-atacseq ✅   ML Formats ✅
         │               │               │
         ▼               ▼               ▼
-   nf-outrider ✅   nf-scatac ✅   GenVarLoader
+   nf-outrider ✅   nf-scatac ✅   GenVarLoader ✅
                         │
                         ▼
-                nf-core Compliance
+                nf-core Compliance ✅
                         │
                         ▼
-                   Seqera AI
+                   Seqera AI 🔄
 ```
 
 ## Implementation Roadmap
@@ -99,12 +100,41 @@ pipelines/
 ### Phase 2: Expansion ✅
 - [x] nf-scatac (#32) - Single-cell ATAC-seq allelic imbalance
 - [x] nf-outrider (#35) - OUTRIDER aberrant expression + MAE
-- [ ] ML output formats (#36)
+- [x] ML output formats (#36) - Zarr, Parquet, AnnData
 
-### Phase 3: Integration
-- [ ] GenVarLoader integration (#37)
-- [ ] nf-core compliance (#38)
-- [ ] Seqera AI compatibility (#39)
+### Phase 3: Integration ✅
+- [x] GenVarLoader integration (#37) - Via Zarr output format
+- [x] nf-core compliance (#38) - Pipeline structure compliance
+- [ ] Seqera AI compatibility (#39) - Documentation only
+
+## ML Output Formats
+
+All pipelines support optional ML-ready output formats via the `--output_format` parameter:
+
+```bash
+# Single format
+nextflow run . --output_format zarr
+
+# Multiple formats (comma-separated)
+nextflow run . --output_format zarr,parquet,anndata
+```
+
+### Available Formats
+
+| Format | Description | Ecosystem |
+|--------|-------------|-----------|
+| **Zarr** | Chunked cloud-native arrays | GenVarLoader, xarray |
+| **Parquet** | Columnar analytics format | Polars, DuckDB, pandas |
+| **AnnData** | H5AD with layers | Scanpy, ArchR, scverse |
+
+### GenVarLoader Compatibility
+
+Zarr outputs are directly compatible with [GenVarLoader](https://genvarloader.readthedocs.io/) for ML training:
+
+```python
+import genvarloader as gvl
+loader = gvl.VariantLoader(zarr_path="sample.zarr")
+```
 
 ## Testing
 
@@ -130,4 +160,4 @@ nextflow run . -profile test_stub -stub-run
 
 ---
 *Milestone: v1.3.0 - Pipeline Ecosystem*
-*Last updated: 2025-01-24*
+*Last updated: 2026-01-24*

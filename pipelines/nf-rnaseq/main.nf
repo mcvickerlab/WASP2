@@ -33,6 +33,7 @@ log.info """
  gtf           : ${params.gtf ?: 'not provided'}
  outdir        : ${params.outdir}
  skip_analysis : ${params.skip_analysis}
+ output_format : ${params.output_format ?: 'tsv (default)'}
 ----------------------------------------------
 """
 
@@ -53,6 +54,7 @@ include { WASP2_UNIFIED_MAKE_READS         } from '../nf-modules/modules/wasp2/u
 include { WASP2_FILTER_REMAPPED            } from '../nf-modules/modules/wasp2/filter_remapped/main'
 include { WASP2_COUNT_ALLELES              } from '../nf-modules/modules/wasp2/count_alleles/main'
 include { WASP2_ANALYZE_IMBALANCE          } from '../nf-modules/modules/wasp2/analyze_imbalance/main'
+include { WASP2_ML_OUTPUT                  } from '../nf-modules/modules/wasp2/ml_output/main'
 
 /*
 ========================================================================================
@@ -65,8 +67,11 @@ workflow RNASEQ_ASE {
     // Channel for version tracking
     ch_versions = Channel.empty()
 
-    // Initialize output channel for conditional analysis step
+    // Initialize output channels for conditional steps
     ch_ai_results = Channel.empty()
+    ch_ml_zarr = Channel.empty()
+    ch_ml_parquet = Channel.empty()
+    ch_ml_anndata = Channel.empty()
 
     //
     // Parse input samplesheet with validation
@@ -245,6 +250,21 @@ workflow RNASEQ_ASE {
     }
 
     //
+    // STEP 7: Convert to ML output formats (optional)
+    // Run if params.output_format is specified
+    //
+    if (params.output_format) {
+        WASP2_ML_OUTPUT(
+            WASP2_COUNT_ALLELES.out.counts,
+            params.output_format
+        )
+        ch_versions = ch_versions.mix(WASP2_ML_OUTPUT.out.versions)
+        ch_ml_zarr = WASP2_ML_OUTPUT.out.zarr
+        ch_ml_parquet = WASP2_ML_OUTPUT.out.parquet
+        ch_ml_anndata = WASP2_ML_OUTPUT.out.anndata
+    }
+
+    //
     // Collect and deduplicate versions
     //
     ch_versions
@@ -252,10 +272,13 @@ workflow RNASEQ_ASE {
         .collectFile(name: 'software_versions.yml', storeDir: "${params.outdir}/pipeline_info")
 
     emit:
-    wasp_bam = WASP2_FILTER_REMAPPED.out.bam
-    counts   = WASP2_COUNT_ALLELES.out.counts
-    results  = ch_ai_results
-    versions = ch_versions
+    wasp_bam    = WASP2_FILTER_REMAPPED.out.bam
+    counts      = WASP2_COUNT_ALLELES.out.counts
+    results     = ch_ai_results
+    ml_zarr     = ch_ml_zarr
+    ml_parquet  = ch_ml_parquet
+    ml_anndata  = ch_ml_anndata
+    versions    = ch_versions
 }
 
 /*
