@@ -11,7 +11,7 @@ scipy>=1.9.0
 # Bioinformatics
 pysam>=0.21.0
 pybedtools>=0.9.0
-anndata>=0.10.7,<0.11.0  # 0.10.7+ has pandas 2.x compatibility fixes
+anndata>=0.10.7,<0.12.0  # 0.10.7+ has pandas 2.x compatibility fixes
 
 # CLI
 typer>=0.9.0
