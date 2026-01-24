@@ -111,14 +111,11 @@ PYEOF
     stub:
     def prefix = task.ext.prefix ?: "${meta.id}"
     """
-    # Create minimal stub H5AD
     python3 << 'PYEOF'
 import pandas as pd
-import numpy as np
 from scipy import sparse
 import anndata as ad
 
-# Minimal test data
 adata = ad.AnnData(
     X=sparse.csr_matrix([[5, 3], [2, 8]]),
     obs=pd.DataFrame({'n_snps': [2, 2], 'total_counts': [8, 10]}, index=['AAACGAAC-1', 'AAACGAAT-1']),
@@ -133,7 +130,7 @@ pd.DataFrame({
 }).to_csv("${prefix}_cell_qc.tsv", sep='\\t', index=False)
 PYEOF
 
-    if [ "${zarr_flag}" == "True" ]; then
+    if [ "${create_zarr}" == "true" ]; then
         mkdir -p ${prefix}_allelic.zarr
         touch ${prefix}_allelic.zarr/.zgroup
     fi
