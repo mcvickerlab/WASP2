@@ -50,16 +50,20 @@ process SCATAC_PSEUDOBULK {
         input_snps[\$2 ":" \$3]++
     }
     END {
-        # Write filtered pseudo-bulk counts
-        for (key in total)
-            if (cells_per_snp[key] >= min_cells)
+        # Write filtered pseudo-bulk counts and count how many pass filter
+        filtered_count = 0
+        for (key in total) {
+            if (cells_per_snp[key] >= min_cells) {
                 print key, total[key], 0 >> prefix "_pseudobulk_counts.tsv"
+                filtered_count++
+            }
+        }
 
         # Write aggregation stats
         print "metric", "value" > prefix "_aggregation_stats.tsv"
         print "total_cells_input", length(input_cells) >> prefix "_aggregation_stats.tsv"
         print "total_snps_input", length(input_snps) >> prefix "_aggregation_stats.tsv"
-        print "snps_after_filtering", length(total) >> prefix "_aggregation_stats.tsv"
+        print "snps_after_filtering", filtered_count >> prefix "_aggregation_stats.tsv"
     }' ${cell_counts}
 
     cat <<-END_VERSIONS > versions.yml
