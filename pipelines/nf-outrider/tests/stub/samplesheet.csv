@@ -1,0 +1,4 @@
+sample,bam,bai
+test_sample1,stub/test_sample1.bam,stub/test_sample1.bam.bai
+test_sample2,stub/test_sample2.bam,stub/test_sample2.bam.bai
+test_sample3,stub/test_sample3.bam,stub/test_sample3.bam.bai

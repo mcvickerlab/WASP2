@@ -1,0 +1,52 @@
+{
+    "$schema": "https://json-schema.org/draft-07/schema",
+    "$id": "https://raw.githubusercontent.com/Jaureguy760/WASP2/master/pipelines/nf-scatac/assets/schema_input.json",
+    "title": "nf-scatac samplesheet schema",
+    "description": "Schema for the samplesheet input to nf-scatac pipeline",
+    "type": "array",
+    "items": {
+        "type": "object",
+        "required": ["sample"],
+        "properties": {
+            "sample": {
+                "type": "string",
+                "pattern": "^\\S+$",
+                "description": "Sample identifier. Must be unique and contain no whitespace.",
+                "errorMessage": "Sample name must be provided and cannot contain spaces"
+            },
+            "fragments": {
+                "type": "string",
+                "format": "file-path",
+                "exists": true,
+                "pattern": "^\\S+\\.tsv(\\.gz)?$",
+                "description": "Path to 10x fragments.tsv.gz file. File must have extension '.tsv' or '.tsv.gz'.",
+                "errorMessage": "Fragments file cannot contain spaces and must have extension '.tsv' or '.tsv.gz'"
+            },
+            "cellranger_dir": {
+                "type": "string",
+                "format": "directory-path",
+                "exists": true,
+                "description": "Path to CellRanger ATAC output directory (alternative to fragments).",
+                "errorMessage": "CellRanger directory path cannot contain spaces"
+            },
+            "barcode_tag": {
+                "type": "string",
+                "pattern": "^[A-Z]{2}$",
+                "default": "CB",
+                "description": "BAM tag for cell barcodes (default: CB).",
+                "errorMessage": "Barcode tag must be exactly 2 uppercase letters"
+            },
+            "chemistry": {
+                "type": "string",
+                "enum": ["10x-atac-v1", "10x-atac-v2", "custom"],
+                "default": "10x-atac-v2",
+                "description": "Library chemistry (default: 10x-atac-v2).",
+                "errorMessage": "Chemistry must be one of: 10x-atac-v1, 10x-atac-v2, custom"
+            }
+        },
+        "anyOf": [
+            {"required": ["fragments"]},
+            {"required": ["cellranger_dir"]}
+        ]
+    }
+}

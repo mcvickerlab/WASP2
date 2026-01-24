@@ -1,0 +1,9 @@
+chr1	HAVANA	gene	50000	150000	.	+	.	gene_id "ENSG00000001"; gene_name "TEST1";
+chr1	HAVANA	exon	50000	60000	.	+	.	gene_id "ENSG00000001"; transcript_id "ENST00000001"; exon_number "1";
+chr1	HAVANA	exon	90000	110000	.	+	.	gene_id "ENSG00000001"; transcript_id "ENST00000001"; exon_number "2";
+chr1	HAVANA	exon	140000	150000	.	+	.	gene_id "ENSG00000001"; transcript_id "ENST00000001"; exon_number "3";
+chr1	HAVANA	gene	180000	250000	.	-	.	gene_id "ENSG00000002"; gene_name "TEST2";
+chr1	HAVANA	exon	180000	200000	.	-	.	gene_id "ENSG00000002"; transcript_id "ENST00000002"; exon_number "1";
+chr1	HAVANA	exon	230000	250000	.	-	.	gene_id "ENSG00000002"; transcript_id "ENST00000002"; exon_number "2";
+chr1	HAVANA	gene	280000	350000	.	+	.	gene_id "ENSG00000003"; gene_name "TEST3";
+chr1	HAVANA	exon	280000	320000	.	+	.	gene_id "ENSG00000003"; transcript_id "ENST00000003"; exon_number "1";
