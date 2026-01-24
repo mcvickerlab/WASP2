@@ -1,0 +1,90 @@
+{% set name = "wasp2" %}
+{% set version = "1.2.0" %}
+
+package:
+  name: {{ name|lower }}
+  version: {{ version }}
+
+source:
+  url: https://pypi.io/packages/source/{{ name[0] }}/{{ name }}/{{ name }}-{{ version }}.tar.gz
+  # sha256 will be added after PyPI release
+  # sha256: PLACEHOLDER
+
+build:
+  number: 0
+  skip: true  # [win or py<310]
+  script: {{ PYTHON }} -m pip install . --no-deps --no-build-isolation -vv
+  entry_points:
+    - wasp2-count = counting.__main__:app
+    - wasp2-map = mapping.__main__:app
+    - wasp2-analyze = analysis.__main__:app
+
+requirements:
+  build:
+    - {{ compiler('c') }}
+    - {{ compiler('rust') }}
+    - cargo-bundle-licenses
+    - pkg-config
+    - make
+    - clang
+  host:
+    - python >=3.10
+    - pip
+    - maturin >=1.4,<2.0
+    - htslib >=1.10
+    - bzip2
+    - xz
+    - zlib
+    - openssl
+    - libcurl
+  run:
+    - python >=3.10
+    # Data processing
+    - numpy >=1.21.0
+    - pandas >=1.5.0,<2.0.0
+    - polars >=0.19.0
+    - scipy >=1.10.0
+    # Bioinformatics
+    - pysam >=0.21.0
+    - pybedtools >=0.9.0
+    - anndata >=0.8.0,<0.10.0
+    - scanpy >=1.9.0
+    # CLI
+    - typer >=0.9.0
+    - rich >=13.0.0
+    # External tools (bioconda)
+    - samtools >=1.10
+    - bcftools
+    - bedtools
+
+test:
+  imports:
+    - counting
+    - mapping
+    - analysis
+    - wasp2_rust
+  commands:
+    - wasp2-count --help
+    - wasp2-map --help
+    - wasp2-analyze --help
+    - python -c "import wasp2_rust; print('Rust extension OK')"
+
+about:
+  home: https://github.com/Jaureguy760/WASP2-exp
+  license: MIT
+  license_family: MIT
+  license_file: LICENSE
+  summary: Allele-specific analysis of next-generation sequencing data with Rust acceleration
+  description: |
+    WASP2 is a high-performance tool for allele-specific analysis of NGS data.
+    It provides functionality for variant counting, read remapping for bias
+    correction, and statistical analysis of allelic imbalance. The package
+    includes a Rust extension for accelerated BAM processing.
+  doc_url: https://Jaureguy760.github.io/WASP2-exp/
+  dev_url: https://github.com/Jaureguy760/WASP2-exp
+
+extra:
+  recipe-maintainers:
+    - Jaureguy760
+  identifiers:
+    - biotools:wasp2

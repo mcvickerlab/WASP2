@@ -1,0 +1,110 @@
+<tool id="wasp2_count_variants" name="WASP2 Count Variants" version="@TOOL_VERSION@@VERSION_SUFFIX@" profile="@PROFILE@">
+    <description>Count allele-specific reads at heterozygous variants</description>
+    <macros>
+        <import>macros.xml</import>
+    </macros>
+    <expand macro="requirements"/>
+    <expand macro="bio_tools"/>
+
+    <command detect_errors="exit_code"><![CDATA[
+        @LINK_BAM@ &&
+        @LINK_VARIANTS@
+
+        wasp2-count count-variants
+            input.bam
+            $variant_file
+            #if str($samples).strip()
+                --samples '$samples'
+            #end if
+            #if $region
+                --region '$region'
+            #end if
+            --out counts.tsv
+            $use_rust
+            $include_indels
+            #if $advanced.use_region_names
+                --use_region_names
+            #end if
+            #if str($advanced.gene_feature).strip()
+                --gene_feature '$advanced.gene_feature'
+            #end if
+            #if str($advanced.gene_attribute).strip()
+                --gene_attribute '$advanced.gene_attribute'
+            #end if
+    ]]></command>
+
+    <inputs>
+        <expand macro="bam_input"/>
+        <expand macro="variant_input"/>
+        <expand macro="sample_param"/>
+        <expand macro="region_param"/>
+        <expand macro="use_rust_param"/>
+        <expand macro="include_indels_param"/>
+
+        <section name="advanced" title="Advanced Options" expanded="false">
+            <param argument="--use_region_names" type="boolean" truevalue="true" falsevalue="false"
+                   checked="false" label="Use region names"
+                   help="Use names from 4th column of BED file instead of coordinates"/>
+            <param argument="--gene_feature" type="text" value="" optional="true"
+                   label="Gene feature type"
+                   help="Feature type in GTF/GFF3 for counting (e.g., 'exon', 'gene')"/>
+            <param argument="--gene_attribute" type="text" value="" optional="true"
+                   label="Gene attribute"
+                   help="Attribute name from GTF/GFF3 to use as ID"/>
+        </section>
+    </inputs>
+
+    <outputs>
+        <data name="output_counts" format="tabular" from_work_dir="counts.tsv"
+              label="${tool.name} on ${on_string}: counts"/>
+    </outputs>
+
+    <tests>
+        <test expect_num_outputs="1">
+            <param name="bam" value="test.bam"/>
+            <param name="variants" value="test.vcf"/>
+            <output name="output_counts" ftype="tabular">
+                <assert_contents>
+                    <has_text text="chrom"/>
+                    <has_text text="ref_count"/>
+                    <has_text text="alt_count"/>
+                </assert_contents>
+            </output>
+        </test>
+    </tests>
+
+    <help><![CDATA[
+**WASP2 Count Variants**
+
+Counts allele-specific reads at heterozygous variant positions from aligned BAM files.
+
+**Inputs**
+
+- **BAM file**: Aligned sequencing reads (must be indexed)
+- **Variant file**: VCF, VCF.GZ, or BCF file with heterozygous variants
+- **Sample name** (optional): Specific sample to use from multi-sample VCF
+- **Region file** (optional): BED file to restrict analysis to specific regions
+
+**Outputs**
+
+- **Counts table**: Tab-separated file with columns:
+    - chrom, pos, ref, alt: Variant information
+    - ref_count, alt_count: Allele-specific read counts
+    - genotype: Sample genotype at this position
+    - region (if provided): Associated region/feature
+
+**Options**
+
+- **Use Rust acceleration**: Enable high-performance Rust backend (recommended)
+- **Include indels**: Process insertions/deletions in addition to SNPs
+
+**Usage Notes**
+
+For best results, use phased VCF files from population imputation (e.g., SHAPEIT, Eagle).
+For single-cell data, use the companion tool "WASP2 Count Variants SC".
+
+    ]]></help>
+
+    <expand macro="creators"/>
+    <expand macro="citations"/>
+</tool>

@@ -1,0 +1,117 @@
+<macros>
+    <!-- WASP2 Galaxy Tool Macros -->
+    <!-- Shared definitions for all WASP2 tools -->
+
+    <token name="@TOOL_VERSION@">1.2.0</token>
+    <token name="@VERSION_SUFFIX@">+galaxy0</token>
+    <token name="@PROFILE@">23.0</token>
+
+    <xml name="requirements">
+        <requirements>
+            <requirement type="package" version="@TOOL_VERSION@">wasp2</requirement>
+            <requirement type="package" version="1.17">samtools</requirement>
+            <requirement type="package" version="1.17">bcftools</requirement>
+            <requirement type="package" version="2.31.0">bedtools</requirement>
+        </requirements>
+    </xml>
+
+    <xml name="bio_tools">
+        <xrefs>
+            <xref type="bio.tools">wasp2</xref>
+        </xrefs>
+    </xml>
+
+    <xml name="creators">
+        <creator>
+            <person givenName="Jeff" familyName="Jaureguy" email="jeffpjaureguy@gmail.com"/>
+            <person givenName="Aaron" familyName="Ho"/>
+            <organization name="McVicker Lab" url="https://github.com/mcvickerlab"/>
+        </creator>
+    </xml>
+
+    <xml name="citations">
+        <citations>
+            <citation type="bibtex">
+@misc{wasp2,
+    title = {WASP2: Allele-specific analysis of next-generation sequencing data},
+    author = {Ho, Aaron and Jaureguy, Jeff and McVicker Lab},
+    year = {2024},
+    url = {https://github.com/Jaureguy760/WASP2-exp}
+}
+            </citation>
+        </citations>
+    </xml>
+
+    <!-- Common input parameters -->
+    <xml name="bam_input">
+        <param name="bam" type="data" format="bam" label="BAM file"
+               help="Aligned sequencing reads in BAM format"/>
+    </xml>
+
+    <xml name="variant_input">
+        <param name="variants" type="data" format="vcf,vcf_bgzip,bcf"
+               label="Variant file"
+               help="Variants in VCF, VCF.GZ, or BCF format"/>
+    </xml>
+
+    <xml name="sample_param">
+        <param argument="--samples" type="text" value="" optional="true"
+               label="Sample name(s)"
+               help="One or more samples to use from variant file. Comma-separated or leave empty for all samples."/>
+    </xml>
+
+    <xml name="region_param">
+        <param argument="--region" type="data" format="bed,interval" optional="true"
+               label="Region file (optional)"
+               help="Only process variants overlapping these regions. BED or MACS2 peak format."/>
+    </xml>
+
+    <xml name="use_rust_param">
+        <param argument="--use-rust" type="boolean" truevalue="--use-rust" falsevalue="--no-rust"
+               checked="true" label="Use Rust acceleration"
+               help="Use high-performance Rust backend for BAM processing (recommended)"/>
+    </xml>
+
+    <xml name="threads_param">
+        <param argument="--threads" type="integer" value="1" min="1" max="32"
+               label="Number of threads"
+               help="Threads for BAM I/O operations"/>
+    </xml>
+
+    <xml name="include_indels_param">
+        <param argument="--include-indels" type="boolean" truevalue="--include-indels" falsevalue="--no-indels"
+               checked="false" label="Include indels"
+               help="Process indels in addition to SNPs"/>
+    </xml>
+
+    <!-- Sanitizer for sample names -->
+    <xml name="sanitize_sample">
+        <sanitizer invalid_char="">
+            <valid initial="string.letters,string.digits">
+                <add value="_"/>
+                <add value="-"/>
+                <add value=","/>
+            </valid>
+        </sanitizer>
+    </xml>
+
+    <!-- Common command prefix for linking input files -->
+    <token name="@LINK_BAM@">
+        ln -s '$bam' input.bam &amp;&amp;
+        ln -s '${bam.metadata.bam_index}' input.bam.bai
+    </token>
+
+    <token name="@LINK_VARIANTS@">
+        #if str($variants.ext) == "vcf_bgzip"
+            ln -s '$variants' variants.vcf.gz &amp;&amp;
+            #set variant_file = "variants.vcf.gz"
+        #elif str($variants.ext) == "bcf"
+            ln -s '$variants' variants.bcf &amp;&amp;
+            #set variant_file = "variants.bcf"
+        #else
+            ln -s '$variants' variants.vcf &amp;&amp;
+            #set variant_file = "variants.vcf"
+        #end if
+    </token>
+
+</macros>

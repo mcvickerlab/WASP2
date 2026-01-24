@@ -1,0 +1,34 @@
+name: wasp2
+owner: jaureguy760
+description: |
+    WASP2: Allele-specific analysis of next-generation sequencing data.
+    High-performance tools for variant counting, mapping bias correction,
+    and statistical analysis of allelic imbalance.
+homepage_url: https://github.com/Jaureguy760/WASP2-exp
+long_description: |
+    WASP2 provides a complete pipeline for allele-specific analysis of NGS data:
+
+    **Counting Tools:**
+    - Count allele-specific reads at heterozygous variants
+    - Support for VCF, BCF, and PGEN variant formats
+    - Bulk and single-cell analysis modes
+
+    **Mapping Correction (WASP Algorithm):**
+    - Remove reference mapping bias
+    - Generate reads with swapped alleles
+    - Filter by mapping consistency
+
+    **Statistical Analysis:**
+    - Beta-binomial test for allelic imbalance
+    - Phased and unphased models
+    - Multi-sample comparison
+
+    The package includes a Rust extension for high-performance BAM processing.
+
+remote_repository_url: https://github.com/Jaureguy760/WASP2-exp
+type: unrestricted
+categories:
+    - Sequence Analysis
+    - Variant Analysis
+    - Transcriptomics
+    - Epigenetics

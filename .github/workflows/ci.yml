@@ -1,0 +1,191 @@
+# WASP2 Continuous Integration Workflow
+# Runs on all PRs and pushes to main
+
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # ===========================================================================
+  # Linting and Code Quality
+  # ===========================================================================
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install linting tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff mypy
+
+      - name: Run ruff linter
+        run: ruff check src/ tests/
+
+      - name: Run ruff formatter check
+        run: ruff format --check src/ tests/
+
+      - name: Run mypy
+        run: mypy src/ --ignore-missing-imports
+
+  # ===========================================================================
+  # Security Scanning
+  # ===========================================================================
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install security tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install "bandit[toml]>=1.8.0" "pip-audit>=2.7.0"
+
+      - name: Run bandit (Python security)
+        run: bandit -c pyproject.toml -r src/
+
+      - name: Run pip-audit (dependency vulnerabilities)
+        run: |
+          pip install -e ".[dev]" --no-build-isolation || true
+          pip-audit --skip-editable --ignore-vuln GHSA-jfmj-5v4g-7637 || true
+        continue-on-error: true  # Advisory: don't fail CI on new CVEs
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
+
+      - name: Run cargo-audit (Rust security)
+        working-directory: rust
+        run: cargo audit
+
+  # ===========================================================================
+  # Build and Test Matrix
+  # ===========================================================================
+  test:
+    name: Test (Python ${{ matrix.python-version }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      - name: Install system dependencies (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libhts-dev \
+            libbz2-dev \
+            liblzma-dev \
+            zlib1g-dev \
+            libclang-dev \
+            samtools \
+            bcftools \
+            bedtools
+
+      - name: Install system dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install htslib samtools bcftools bedtools
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install maturin pytest pytest-cov
+
+      - name: Build Rust extension
+        run: |
+          maturin build --release -m rust/Cargo.toml
+          pip install target/wheels/*.whl
+
+      - name: Install package
+        run: pip install -e ".[dev]" --no-build-isolation
+
+      - name: Run tests
+        run: |
+          pytest tests/ -v --tb=short -x \
+            --ignore=tests/test_benchmark*.py \
+            --ignore=tests/benchmarks/
+
+      - name: Verify CLI tools
+        run: |
+          wasp2-count --help
+          wasp2-map --help
+          wasp2-analyze --help
+          python -c "import wasp2_rust; print('Rust extension OK')"
+
+  # ===========================================================================
+  # Rust-specific checks
+  # ===========================================================================
+  rust:
+    name: Rust Checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libhts-dev libbz2-dev liblzma-dev zlib1g-dev libclang-dev
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      - name: Check formatting
+        working-directory: rust
+        run: cargo fmt --check
+
+      - name: Run clippy
+        working-directory: rust
+        run: cargo clippy -- -D warnings
+
+      - name: Run Rust tests
+        working-directory: rust
+        run: cargo test

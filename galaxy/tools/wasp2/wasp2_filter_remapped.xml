@@ -1,0 +1,142 @@
+<tool id="wasp2_filter_remapped" name="WASP2 Filter Remapped" version="@TOOL_VERSION@@VERSION_SUFFIX@" profile="@PROFILE@">
+    <description>Filter remapped reads using WASP algorithm</description>
+    <macros>
+        <import>macros.xml</import>
+    </macros>
+    <expand macro="requirements"/>
+    <expand macro="bio_tools"/>
+
+    <command detect_errors="exit_code"><![CDATA[
+        ## Link input files
+        ln -s '$remapped_bam' remapped.bam &&
+        ln -s '${remapped_bam.metadata.bam_index}' remapped.bam.bai &&
+
+        #if $input_mode.mode == "json"
+            ln -s '$input_mode.wasp_json' wasp_data.json &&
+            wasp2-map filter-remapped
+                remapped.bam
+                --json wasp_data.json
+        #else
+            ln -s '$input_mode.to_remap_bam' to_remap.bam &&
+            ln -s '${input_mode.to_remap_bam.metadata.bam_index}' to_remap.bam.bai &&
+            ln -s '$input_mode.keep_bam' keep.bam &&
+            ln -s '${input_mode.keep_bam.metadata.bam_index}' keep.bam.bai &&
+            wasp2-map filter-remapped
+                remapped.bam
+                to_remap.bam
+                keep.bam
+        #end if
+            --out_bam filtered.bam
+            $use_rust
+            --threads \${GALAXY_SLOTS:-1}
+            #if $advanced.same_locus_slop
+                --same-locus-slop $advanced.same_locus_slop
+            #end if
+            #if $advanced.output_keep_info
+                --remap_keep_bam remap_kept.bam
+                --remap_keep_file kept_reads.txt
+            #end if
+    ]]></command>
+
+    <inputs>
+        <param name="remapped_bam" type="data" format="bam"
+               label="Remapped BAM file"
+               help="BAM file from remapping the to_remap FASTQ files"/>
+
+        <conditional name="input_mode">
+            <param name="mode" type="select" label="Input mode">
+                <option value="json" selected="true">Use WASP data JSON (recommended)</option>
+                <option value="manual">Specify BAM files manually</option>
+            </param>
+            <when value="json">
+                <param name="wasp_json" type="data" format="json"
+                       label="WASP data JSON"
+                       help="JSON file from 'WASP2 Make Reads' containing file paths"/>
+            </when>
+            <when value="manual">
+                <param name="to_remap_bam" type="data" format="bam"
+                       label="to_remap BAM"
+                       help="Original reads before allele swapping (from Make Reads)"/>
+                <param name="keep_bam" type="data" format="bam"
+                       label="keep BAM"
+                       help="Reads that don't overlap variants (from Make Reads)"/>
+            </when>
+        </conditional>
+
+        <expand macro="use_rust_param"/>
+
+        <section name="advanced" title="Advanced Options" expanded="false">
+            <param argument="--same-locus-slop" type="integer" value="0" min="0" max="10"
+                   label="Same-locus tolerance (bp)"
+                   help="Allow remapped reads to differ by this many bp. Use 2-3 for indels."/>
+            <param name="output_keep_info" type="boolean" truevalue="true" falsevalue="false"
+                   checked="false" label="Output kept reads info"
+                   help="Also output BAM and list of kept reads (for debugging)"/>
+        </section>
+    </inputs>
+
+    <outputs>
+        <data name="filtered_bam" format="bam" from_work_dir="filtered.bam"
+              label="${tool.name} on ${on_string}: filtered BAM"/>
+        <data name="remap_kept_bam" format="bam" from_work_dir="remap_kept.bam"
+              label="${tool.name} on ${on_string}: kept reads BAM">
+            <filter>advanced['output_keep_info']</filter>
+        </data>
+        <data name="kept_reads_list" format="txt" from_work_dir="kept_reads.txt"
+              label="${tool.name} on ${on_string}: kept reads list">
+            <filter>advanced['output_keep_info']</filter>
+        </data>
+    </outputs>
+
+    <tests>
+        <test expect_num_outputs="1">
+            <param name="remapped_bam" value="remapped.bam"/>
+            <conditional name="input_mode">
+                <param name="mode" value="json"/>
+                <param name="wasp_json" value="wasp_data.json"/>
+            </conditional>
+            <output name="filtered_bam" ftype="bam">
+                <assert_contents>
+                    <has_size min="100"/>
+                </assert_contents>
+            </output>
+        </test>
+    </tests>
+
+    <help><![CDATA[
+**WASP2 Filter Remapped**
+
+Filters remapped reads using the WASP algorithm. This is step 3 of the WASP bias-correction workflow.
+
+**WASP Algorithm**
+
+The WASP algorithm removes reads where the mapping location depends on which allele is present:
+
+1. For each read overlapping a heterozygous variant, swap the allele
+2. Remap the modified read
+3. If the read maps to a different location, discard it
+4. Keep reads that map to the same location regardless of allele
+
+This removes reference mapping bias.
+
+**Inputs**
+
+- **Remapped BAM**: The output from remapping the to_remap FASTQ files
+- **WASP data JSON**: Metadata file from "WASP2 Make Reads"
+  (Or manually specify the to_remap and keep BAM files)
+
+**Outputs**
+
+- **Filtered BAM**: Bias-corrected BAM file ready for allele-specific analysis
+
+**Usage Notes**
+
+For indel analysis, set "Same-locus tolerance" to 2-3 bp to account for micro-homology.
+
+The filtered BAM should be used with "WASP2 Count Variants" for unbiased allele counts.
+
+    ]]></help>
+
+    <expand macro="creators"/>
+    <expand macro="citations"/>
+</tool>

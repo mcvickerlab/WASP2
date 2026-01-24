@@ -1,0 +1,157 @@
+# WASP2 Release Workflow
+# Builds multi-platform wheels and publishes to PyPI on tag push
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (build but don't publish)"
+        required: false
+        default: "false"
+        type: boolean
+
+permissions:
+  contents: read
+  id-token: write  # Required for trusted publishing (OIDC)
+
+jobs:
+  # ===========================================================================
+  # Build Linux wheels (x86_64 and aarch64)
+  # ===========================================================================
+  linux:
+    name: Linux (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [x86_64, aarch64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --out dist -m rust/Cargo.toml
+          manylinux: "2014"
+          before-script-linux: |
+            # Install htslib build dependencies
+            yum install -y bzip2-devel xz-devel zlib-devel libcurl-devel openssl-devel clang-devel
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-linux-${{ matrix.target }}
+          path: dist/*.whl
+
+  # ===========================================================================
+  # Build macOS wheels (x86_64 and arm64)
+  # ===========================================================================
+  macos:
+    name: macOS (${{ matrix.target }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-apple-darwin
+            runner: macos-13
+          - target: aarch64-apple-darwin
+            runner: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install htslib (macOS)
+        run: brew install htslib
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --out dist -m rust/Cargo.toml
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-macos-${{ matrix.target }}
+          path: dist/*.whl
+
+  # ===========================================================================
+  # Build source distribution (sdist)
+  # ===========================================================================
+  sdist:
+    name: Source Distribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --out dist -m rust/Cargo.toml
+
+      - name: Upload sdist
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+
+  # ===========================================================================
+  # Publish to PyPI (trusted publishing via OIDC)
+  # ===========================================================================
+  publish:
+    name: Publish to PyPI
+    needs: [linux, macos, sdist]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/wasp2/
+    # Only publish on tag push, not workflow_dispatch dry runs
+    if: startsWith(github.ref, 'refs/tags/v') && github.event.inputs.dry_run != 'true'
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: "{wheels-*,sdist}"
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -la dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          # No password needed - uses trusted publishing (OIDC)
+
+  # ===========================================================================
+  # Create GitHub Release
+  # ===========================================================================
+  release:
+    name: Create GitHub Release
+    needs: [publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: "{wheels-*,sdist}"
+          merge-multiple: true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/*
+          generate_release_notes: true
+          draft: false
+          prerelease: false
