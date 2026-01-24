@@ -32,58 +32,29 @@ process SCATAC_PSEUDOBULK {
     def prefix = task.ext.prefix ?: "${meta.id}"
     def min_cells = params.min_cells_per_snp ?: 3
     """
-    # Aggregate per-cell counts to pseudo-bulk (sample-level)
-    # Input: barcode, chrom, pos, ref, alt, overlap_count
-    # Output: chrom, pos, ref, alt, total_count (WASP2-compatible format)
-
-    awk -v OFS='\\t' -v min_cells="${min_cells}" '
+    # Aggregate per-cell counts to pseudo-bulk and generate stats in one pass
+    awk -v OFS='\\t' -v min_cells="${min_cells}" -v prefix="${prefix}" '
     BEGIN {
-        # WASP2-compatible header for count_alleles output
-        print "chrom", "pos", "ref", "alt", "ref_count", "alt_count"
+        print "chrom", "pos", "ref", "alt", "ref_count", "alt_count" > prefix "_pseudobulk_counts.tsv"
     }
     NR > 1 {
-        # Create SNP key
-        key = \$2 "\\t" \$3 "\\t" \$4 "\\t" \$5
-
-        # Aggregate counts across all cells
-        # For fragments (no allele info), we store total as ref_count
-        # TODO: When phased VCF available, split into hap1/hap2
-        total_counts[key] += \$6
-        cell_counts[key]++
+        key = \$2 OFS \$3 OFS \$4 OFS \$5
+        total[key] += \$6
+        cells_per_snp[key]++
+        input_cells[\$1]++
+        input_snps[\$2 ":" \$3]++
     }
     END {
-        for (key in total_counts) {
-            # Filter SNPs with insufficient cell coverage
-            if (cell_counts[key] >= min_cells) {
-                # Output total as ref_count, 0 as alt_count (no allele resolution in fragments)
-                print key, total_counts[key], 0
-            }
-        }
-    }' ${cell_counts} > ${prefix}_pseudobulk_counts.tsv
+        # Write filtered pseudo-bulk counts
+        for (key in total)
+            if (cells_per_snp[key] >= min_cells)
+                print key, total[key], 0 >> prefix "_pseudobulk_counts.tsv"
 
-    # Generate aggregation statistics
-    awk -v OFS='\\t' '
-    BEGIN {
-        print "metric", "value"
-    }
-    NR > 1 {
-        snps++
-        total_frags += \$5
-    }
-    END {
-        print "snps_after_filtering", snps
-        print "total_fragment_overlaps", total_frags
-    }' ${prefix}_pseudobulk_counts.tsv > ${prefix}_aggregation_stats.tsv
-
-    # Also count cells and SNPs from input
-    awk -v OFS='\\t' '
-    NR > 1 {
-        cells[\$1]++
-        snps[\$2 ":" \$3]++
-    }
-    END {
-        print "total_cells_input", length(cells) >> "${prefix}_aggregation_stats.tsv"
-        print "total_snps_input", length(snps) >> "${prefix}_aggregation_stats.tsv"
+        # Write aggregation stats
+        print "metric", "value" > prefix "_aggregation_stats.tsv"
+        print "total_cells_input", length(input_cells) >> prefix "_aggregation_stats.tsv"
+        print "total_snps_input", length(input_snps) >> prefix "_aggregation_stats.tsv"
+        print "snps_after_filtering", length(total) >> prefix "_aggregation_stats.tsv"
     }' ${cell_counts}
 
     cat <<-END_VERSIONS > versions.yml

@@ -37,98 +37,55 @@ process SCATAC_CREATE_ANNDATA {
     """
     python3 << 'PYEOF'
 import pandas as pd
-import numpy as np
 from scipy import sparse
 import anndata as ad
 import warnings
 warnings.filterwarnings('ignore')
 
 # Read allele counts TSV
-# Expected columns: barcode, chrom, pos, ref, alt, overlap_count
 df = pd.read_csv("${counts}", sep='\\t')
 
+# Handle empty input (early return pattern)
 if df.empty:
-    # Create minimal empty AnnData for edge case
-    adata = ad.AnnData(
-        X=sparse.csr_matrix((0, 0)),
-        obs=pd.DataFrame(index=[]),
-        var=pd.DataFrame(index=[])
-    )
-    adata.write_h5ad("${prefix}_allelic.h5ad")
+    ad.AnnData(X=sparse.csr_matrix((0, 0))).write_h5ad("${prefix}_allelic.h5ad")
     pd.DataFrame(columns=['barcode', 'n_snps', 'total_counts']).to_csv(
-        "${prefix}_cell_qc.tsv", sep='\\t', index=False
-    )
+        "${prefix}_cell_qc.tsv", sep='\\t', index=False)
+    print("Created empty AnnData (no data)")
 else:
-    # Create unique SNP identifiers
+    # Build SNP identifiers and get unique values
     df['snp_id'] = df['chrom'].astype(str) + ':' + df['pos'].astype(str) + ':' + df['ref'] + '>' + df['alt']
+    barcodes, snp_ids = df['barcode'].unique(), df['snp_id'].unique()
 
-    # Get unique barcodes and SNPs
-    barcodes = df['barcode'].unique()
-    snp_ids = df['snp_id'].unique()
-    n_cells = len(barcodes)
-    n_snps = len(snp_ids)
+    # Build sparse matrix using categorical codes for efficiency
+    row_idx = pd.Categorical(df['barcode'], categories=barcodes).codes
+    col_idx = pd.Categorical(df['snp_id'], categories=snp_ids).codes
+    X = sparse.csr_matrix((df['overlap_count'].values, (row_idx, col_idx)),
+                          shape=(len(barcodes), len(snp_ids)))
 
-    # Create index mappings
-    barcode_to_idx = {bc: i for i, bc in enumerate(barcodes)}
-    snp_to_idx = {snp: i for i, snp in enumerate(snp_ids)}
+    # Build cell metadata directly from groupby
+    cell_stats = df.groupby('barcode', sort=False).agg(
+        n_snps=('snp_id', 'nunique'),
+        total_counts=('overlap_count', 'sum')
+    ).reindex(barcodes)
+    cell_stats['chemistry'] = '${meta.chemistry ?: "10x-atac-v2"}'
+    cell_stats['sample_id'] = '${meta.id}'
+    cell_stats.index.name = 'barcode'
 
-    # Build sparse matrix (cells x SNPs) with overlap counts
-    row_idx = df['barcode'].map(barcode_to_idx).values
-    col_idx = df['snp_id'].map(snp_to_idx).values
-    data = df['overlap_count'].values
-
-    X = sparse.csr_matrix((data, (row_idx, col_idx)), shape=(n_cells, n_snps))
-
-    # Build cell metadata (obs)
-    cell_stats = df.groupby('barcode').agg({
-        'snp_id': 'nunique',
-        'overlap_count': 'sum'
-    }).rename(columns={'snp_id': 'n_snps', 'overlap_count': 'total_counts'})
-    cell_stats = cell_stats.reindex(barcodes)
-
-    obs = pd.DataFrame({
-        'n_snps': cell_stats['n_snps'].values,
-        'total_counts': cell_stats['total_counts'].values,
-        'chemistry': '${meta.chemistry ?: "10x-atac-v2"}',
-        'sample_id': '${meta.id}'
-    }, index=barcodes)
-    obs.index.name = 'barcode'
-
-    # Build variant metadata (var)
-    snp_info = df.drop_duplicates('snp_id').set_index('snp_id')[['chrom', 'pos', 'ref', 'alt']]
-    snp_info = snp_info.reindex(snp_ids)
-
-    var = pd.DataFrame({
-        'chrom': snp_info['chrom'].values,
-        'pos': snp_info['pos'].values,
-        'ref': snp_info['ref'].values,
-        'alt': snp_info['alt'].values
-    }, index=snp_ids)
+    # Build variant metadata
+    var = df.drop_duplicates('snp_id').set_index('snp_id')[['chrom', 'pos', 'ref', 'alt']].reindex(snp_ids)
     var.index.name = 'snp_id'
 
-    # Create AnnData object
-    adata = ad.AnnData(
-        X=X,
-        obs=obs,
-        var=var
-    )
-
-    # Add metadata
-    adata.uns['sample_id'] = '${meta.id}'
-    adata.uns['pipeline'] = 'nf-scatac'
-    adata.uns['data_type'] = 'scATAC_allelic_counts'
-
-    # Write H5AD
+    # Create and write AnnData
+    adata = ad.AnnData(X=X, obs=cell_stats, var=var,
+                       uns={'sample_id': '${meta.id}', 'pipeline': 'nf-scatac',
+                            'data_type': 'scATAC_allelic_counts'})
     adata.write_h5ad("${prefix}_allelic.h5ad")
+    cell_stats.reset_index().to_csv("${prefix}_cell_qc.tsv", sep='\\t', index=False)
 
-    # Write cell QC metrics
-    obs.reset_index().to_csv("${prefix}_cell_qc.tsv", sep='\\t', index=False)
-
-    # Optionally write Zarr for GenVarLoader
     if ${zarr_flag}:
         adata.write_zarr("${prefix}_allelic.zarr")
 
-print(f"Created AnnData: {n_cells} cells x {n_snps} SNPs")
+    print(f"Created AnnData: {len(barcodes)} cells x {len(snp_ids)} SNPs")
 PYEOF
 
     cat <<-END_VERSIONS > versions.yml
