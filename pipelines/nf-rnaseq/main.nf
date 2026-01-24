@@ -27,11 +27,12 @@ log.info """
 ==============================================
  WASP2 RNA-seq ASE Pipeline v${workflow.manifest.version}
 ==============================================
- input       : ${params.input}
- vcf         : ${params.vcf}
- star_index  : ${params.star_index}
- gtf         : ${params.gtf ?: 'not provided'}
- outdir      : ${params.outdir}
+ input         : ${params.input}
+ vcf           : ${params.vcf}
+ star_index    : ${params.star_index}
+ gtf           : ${params.gtf ?: 'not provided'}
+ outdir        : ${params.outdir}
+ skip_analysis : ${params.skip_analysis}
 ----------------------------------------------
 """
 
@@ -63,6 +64,9 @@ workflow RNASEQ_ASE {
 
     // Channel for version tracking
     ch_versions = Channel.empty()
+
+    // Initialize output channel for conditional analysis step
+    ch_ai_results = Channel.empty()
 
     //
     // Parse input samplesheet with validation
@@ -170,12 +174,16 @@ workflow RNASEQ_ASE {
     ch_versions = ch_versions.mix(WASP2_COUNT_ALLELES.out.versions)
 
     //
-    // STEP 6: Statistical testing for allelic imbalance
+    // STEP 6: Statistical testing for allelic imbalance (optional)
+    // Skip if params.skip_analysis is true
     //
-    WASP2_ANALYZE_IMBALANCE(
-        WASP2_COUNT_ALLELES.out.counts
-    )
-    ch_versions = ch_versions.mix(WASP2_ANALYZE_IMBALANCE.out.versions)
+    if (!params.skip_analysis) {
+        WASP2_ANALYZE_IMBALANCE(
+            WASP2_COUNT_ALLELES.out.counts
+        )
+        ch_versions = ch_versions.mix(WASP2_ANALYZE_IMBALANCE.out.versions)
+        ch_ai_results = WASP2_ANALYZE_IMBALANCE.out.results
+    }
 
     //
     // Collect and deduplicate versions
@@ -187,7 +195,7 @@ workflow RNASEQ_ASE {
     emit:
     wasp_bam = WASP2_FILTER_REMAPPED.out.bam
     counts   = WASP2_COUNT_ALLELES.out.counts
-    results  = WASP2_ANALYZE_IMBALANCE.out.results
+    results  = ch_ai_results
     versions = ch_versions
 }
 

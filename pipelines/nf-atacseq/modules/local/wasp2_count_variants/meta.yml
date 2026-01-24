@@ -1,0 +1,66 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/meta-schema.json
+name: "wasp2_count_variants"
+description: Count allele-specific reads at variant positions within genomic regions using WASP2
+keywords:
+  - wasp
+  - allele-specific
+  - variant-counting
+  - allelic-imbalance
+  - atac-seq
+
+tools:
+  - wasp2:
+      description: "WASP2: Allele-specific software for robust molecular QTL discovery"
+      homepage: "https://github.com/mcvicker-lab/WASP2"
+      documentation: "https://github.com/mcvicker-lab/WASP2/wiki"
+      doi: "10.1038/nmeth.3582"
+      licence: ["Apache-2.0"]
+      identifier: biotools:wasp
+
+input:
+  - - meta:
+        type: map
+        description: |
+          Groovy Map containing sample information
+          e.g. [ id:'sample1', single_end:false, sample_name:'NA12878' ]
+          Optional: sample_name - filters VCF to this sample's variants
+    - bam:
+        type: file
+        description: BAM file with aligned reads
+        pattern: "*.bam"
+    - bai:
+        type: file
+        description: BAM index file
+        pattern: "*.bam.bai"
+  - - vcf:
+        type: file
+        description: |
+          VCF file containing variant genotypes.
+          For compressed VCF files (.vcf.gz), an index file (.tbi) should be co-located.
+        pattern: "*.{vcf,vcf.gz,bcf}"
+  - - peaks:
+        type: file
+        description: BED file defining genomic regions (e.g., ATAC-seq peaks)
+        pattern: "*.{bed,narrowPeak,broadPeak}"
+
+output:
+  - counts:
+      - meta:
+          type: map
+          description: |
+            Groovy Map containing sample information
+            e.g. [ id:'sample1', single_end:false ]
+      - "*_counts.tsv":
+          type: file
+          description: TSV file with allele counts per variant
+          pattern: "*_counts.tsv"
+  - versions:
+      - "versions.yml":
+          type: file
+          description: File containing software versions
+          pattern: "versions.yml"
+
+authors:
+  - "@Jaureguy760"
+maintainers:
+  - "@Jaureguy760"

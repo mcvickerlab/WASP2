@@ -1,7 +1,7 @@
 nextflow_process {
 
     name "Test Process WASP2_FILTER_REMAPPED"
-    script "../../../modules/local/wasp2_filter_remapped.nf"
+    script "../../../modules/local/wasp2_filter_remapped/main.nf"
     process "WASP2_FILTER_REMAPPED"
 
     tag "modules"

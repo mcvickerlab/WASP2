@@ -11,8 +11,8 @@ include { MACS2_CALLPEAK         } from '../modules/nf-core/macs2/callpeak/main'
 include { MULTIQC                } from '../modules/nf-core/multiqc/main'
 
 // Local WASP2 modules
-include { WASP2_COUNT_VARIANTS   } from '../modules/local/wasp2_count_variants'
-include { WASP2_FIND_IMBALANCE   } from '../modules/local/wasp2_find_imbalance'
+include { WASP2_COUNT_VARIANTS   } from '../modules/local/wasp2_count_variants/main'
+include { WASP2_FIND_IMBALANCE   } from '../modules/local/wasp2_find_imbalance/main'
 
 // nf-core subworkflows (standardized alignment interfaces)
 include { FASTQ_ALIGN_BWA             } from '../subworkflows/nf-core/fastq_align_bwa/main'

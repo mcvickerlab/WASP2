@@ -1,0 +1,57 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/meta-schema.json
+name: "wasp2_find_imbalance"
+description: Detect allelic imbalance using beta-binomial statistical model from WASP2
+keywords:
+  - wasp
+  - allelic-imbalance
+  - beta-binomial
+  - statistical-testing
+  - ase
+
+tools:
+  - wasp2:
+      description: "WASP2: Allele-specific software for robust molecular QTL discovery"
+      homepage: "https://github.com/mcvicker-lab/WASP2"
+      documentation: "https://github.com/mcvicker-lab/WASP2/wiki"
+      doi: "10.1038/nmeth.3582"
+      licence: ["Apache-2.0"]
+      identifier: biotools:wasp
+
+input:
+  - - meta:
+        type: map
+        description: |
+          Groovy Map containing sample information
+          e.g. [ id:'sample1', single_end:false ]
+    - counts:
+        type: file
+        description: TSV file with allele counts from wasp2_count_variants
+        pattern: "*_counts.tsv"
+  - - min_count:
+        type: value
+        description: Minimum allele count threshold for analysis (numeric)
+  - - pseudocount:
+        type: value
+        description: Pseudocount added to allele counts for beta-binomial model (numeric)
+
+output:
+  - results:
+      - meta:
+          type: map
+          description: |
+            Groovy Map containing sample information
+            e.g. [ id:'sample1', single_end:false ]
+      - "*_ai_results.tsv":
+          type: file
+          description: TSV file with allelic imbalance statistics and p-values
+          pattern: "*_ai_results.tsv"
+  - versions:
+      - "versions.yml":
+          type: file
+          description: File containing software versions
+          pattern: "versions.yml"
+
+authors:
+  - "@Jaureguy760"
+maintainers:
+  - "@Jaureguy760"

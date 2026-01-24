@@ -9,11 +9,11 @@
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
 
-include { WASP2_MAKE_READS      } from '../../modules/local/wasp2_make_reads'
-include { WASP2_FILTER_REMAPPED } from '../../modules/local/wasp2_filter_remapped'
-include { BWA_MEM               } from '../../modules/nf-core/bwa/mem/main'
-include { BOWTIE2_ALIGN         } from '../../modules/nf-core/bowtie2/align/main'
-include { SAMTOOLS_INDEX        } from '../../modules/nf-core/samtools/index/main'
+include { WASP2_MAKE_READS      } from '../../../modules/local/wasp2_make_reads/main'
+include { WASP2_FILTER_REMAPPED } from '../../../modules/local/wasp2_filter_remapped/main'
+include { BWA_MEM               } from '../../../modules/nf-core/bwa/mem/main'
+include { BOWTIE2_ALIGN         } from '../../../modules/nf-core/bowtie2/align/main'
+include { SAMTOOLS_INDEX        } from '../../../modules/nf-core/samtools/index/main'
 
 workflow WASP_MAPPING {
     take:

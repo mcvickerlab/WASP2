@@ -1,0 +1,96 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/meta-schema.json
+name: "wasp2_make_reads"
+description: Generate allele-swapped reads for WASP2 mapping bias correction
+keywords:
+  - wasp
+  - mapping-bias
+  - allele-swapping
+  - remapping
+  - variant-aware
+
+tools:
+  - wasp2:
+      description: "WASP2: Allele-specific software for robust molecular QTL discovery"
+      homepage: "https://github.com/mcvicker-lab/WASP2"
+      documentation: "https://github.com/mcvicker-lab/WASP2/wiki"
+      doi: "10.1038/nmeth.3582"
+      licence: ["Apache-2.0"]
+      identifier: biotools:wasp
+
+input:
+  - - meta:
+        type: map
+        description: |
+          Groovy Map containing sample information
+          e.g. [ id:'sample1', single_end:false, sample_name:'NA12878' ]
+          Optional: sample_name - filters VCF to this sample's variants
+    - bam:
+        type: file
+        description: BAM file with aligned reads
+        pattern: "*.bam"
+    - bai:
+        type: file
+        description: BAM index file
+        pattern: "*.bam.bai"
+  - - vcf:
+        type: file
+        description: |
+          VCF file containing variant genotypes.
+          For compressed VCF files (.vcf.gz), an index file (.tbi) should be co-located.
+        pattern: "*.{vcf,vcf.gz,bcf}"
+
+output:
+  - fastq:
+      - meta:
+          type: map
+          description: |
+            Groovy Map containing sample information
+            e.g. [ id:'sample1', single_end:false ]
+      - "*_remap_r1.fq.gz":
+          type: file
+          description: FASTQ R1 with allele-swapped reads for remapping
+          pattern: "*_remap_r1.fq.gz"
+      - "*_remap_r2.fq.gz":
+          type: file
+          description: FASTQ R2 with allele-swapped reads for remapping
+          pattern: "*_remap_r2.fq.gz"
+  - to_remap_bam:
+      - meta:
+          type: map
+          description: |
+            Groovy Map containing sample information
+            e.g. [ id:'sample1', single_end:false ]
+      - "*_to_remap.bam":
+          type: file
+          description: Intermediate BAM with reads overlapping variants
+          pattern: "*_to_remap.bam"
+  - keep_bam:
+      - meta:
+          type: map
+          description: |
+            Groovy Map containing sample information
+            e.g. [ id:'sample1', single_end:false ]
+      - "*_keep.bam":
+          type: file
+          description: Intermediate BAM with reads not overlapping variants
+          pattern: "*_keep.bam"
+  - json:
+      - meta:
+          type: map
+          description: |
+            Groovy Map containing sample information
+            e.g. [ id:'sample1', single_end:false ]
+      - "*_wasp_data_files.json":
+          type: file
+          description: JSON file tracking intermediate file paths
+          pattern: "*_wasp_data_files.json"
+  - versions:
+      - "versions.yml":
+          type: file
+          description: File containing software versions
+          pattern: "versions.yml"
+
+authors:
+  - "@Jaureguy760"
+maintainers:
+  - "@Jaureguy760"
