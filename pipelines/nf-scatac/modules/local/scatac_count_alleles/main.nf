@@ -50,16 +50,20 @@ process SCATAC_COUNT_ALLELES {
     # Set barcode file (empty string disables filtering)
     BARCODE_FILE=\$( [ "${filter_barcodes}" == "true" ] && echo "${barcodes}" || echo "" )
 
-    # Count fragment overlaps at SNP positions
+    # Count and aggregate fragment overlaps at SNP positions per barcode
+    # Applies barcode whitelist and minimum fragment filters
     bedtools intersect -a ${fragments} -b \$SNP_BED -wa -wb | \\
     awk -v OFS='\\t' -v bc_file="\$BARCODE_FILE" -v min_frags="${min_frags}" '
     BEGIN {
         if (bc_file != "") { while ((getline bc < bc_file) > 0) valid[bc]=1; close(bc_file) }
     }
     {
+        # After bedtools intersect: cols 1-5 are fragment (chrom,start,end,barcode,count)
+        # cols 6-10 are SNP BED (chrom,start,end,ref,alt)
         if (bc_file != "" && !(\$4 in valid)) next
-        key = \$4 OFS \$6 OFS \$8 OFS \$9 OFS \$10
-        counts[key] += \$5; bc_total[\$4] += \$5
+        key = \$4 OFS \$6 OFS \$8 OFS \$9 OFS \$10  # barcode, snp_chrom, snp_pos, ref, alt
+        counts[key] += \$5   # Add fragment count
+        bc_total[\$4] += \$5  # Track total per barcode for min_frags filter
     }
     END {
         print "barcode", "chrom", "pos", "ref", "alt", "overlap_count"

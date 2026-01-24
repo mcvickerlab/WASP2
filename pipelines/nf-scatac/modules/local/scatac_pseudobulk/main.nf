@@ -5,7 +5,10 @@
  * This increases statistical power for allelic imbalance testing by combining
  * sparse per-cell data into denser aggregate counts.
  *
- * Output format matches WASP2_COUNT_ALLELES for compatibility with WASP2_ANALYZE_IMBALANCE.
+ * Output format has columns matching WASP2_COUNT_ALLELES (ref_count, alt_count).
+ * Note: Since fragment files lack sequence data, total overlaps are placed in
+ * ref_count while alt_count is zero. This is a limitation of fragment-based
+ * scATAC analysis - true allele-specific counting requires BAM-level data.
  */
 
 process SCATAC_PSEUDOBULK {
@@ -32,6 +35,8 @@ process SCATAC_PSEUDOBULK {
     def prefix = task.ext.prefix ?: "${meta.id}"
     def min_cells = params.min_cells_per_snp ?: 3
     """
+    set -euo pipefail
+
     # Aggregate per-cell counts to pseudo-bulk and generate stats in one pass
     awk -v OFS='\\t' -v min_cells="${min_cells}" -v prefix="${prefix}" '
     BEGIN {
@@ -71,10 +76,9 @@ process SCATAC_PSEUDOBULK {
     echo -e "chr1\\t200000\\tC\\tT\\t32\\t0" >> ${prefix}_pseudobulk_counts.tsv
 
     echo -e "metric\\tvalue" > ${prefix}_aggregation_stats.tsv
-    echo -e "snps_after_filtering\\t2" >> ${prefix}_aggregation_stats.tsv
-    echo -e "total_fragment_overlaps\\t77" >> ${prefix}_aggregation_stats.tsv
     echo -e "total_cells_input\\t10" >> ${prefix}_aggregation_stats.tsv
     echo -e "total_snps_input\\t2" >> ${prefix}_aggregation_stats.tsv
+    echo -e "snps_after_filtering\\t2" >> ${prefix}_aggregation_stats.tsv
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
