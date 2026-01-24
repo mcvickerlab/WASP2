@@ -59,6 +59,13 @@ Documentation
    user_guide/counting
    user_guide/mapping
    user_guide/analysis
+   user_guide/single_cell
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Tutorials
+
+   tutorials/scrna_seq
 
 .. toctree::
    :maxdepth: 2
