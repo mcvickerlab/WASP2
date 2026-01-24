@@ -15,8 +15,8 @@ process SCATAC_COUNT_ALLELES {
 
     conda "${projectDir}/../nf-modules/modules/wasp2/environment.yml"
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
-        'docker://jaureguy760/wasp2:latest' :
-        'jaureguy760/wasp2:latest' }"
+        'docker://ghcr.io/jaureguy760/wasp2:latest' :
+        'ghcr.io/jaureguy760/wasp2:latest' }"
 
     input:
     tuple val(meta), path(fragments), path(fragments_tbi), path(snp_bed)
@@ -37,7 +37,7 @@ process SCATAC_COUNT_ALLELES {
     def filter_barcodes = barcodes.name != 'NO_FILE' ? "true" : "false"
     def filter_peaks = peaks.name != 'NO_FILE' ? "true" : "false"
     """
-    set -o pipefail
+    set -euo pipefail
 
     # Optionally filter SNPs to peak regions
     if [ "${filter_peaks}" == "true" ]; then

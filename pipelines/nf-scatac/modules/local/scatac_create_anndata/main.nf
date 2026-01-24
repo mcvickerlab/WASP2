@@ -19,8 +19,8 @@ process SCATAC_CREATE_ANNDATA {
 
     conda "${projectDir}/../nf-modules/modules/wasp2/environment.yml"
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
-        'docker://jaureguy760/wasp2:latest' :
-        'jaureguy760/wasp2:latest' }"
+        'docker://ghcr.io/jaureguy760/wasp2:latest' :
+        'ghcr.io/jaureguy760/wasp2:latest' }"
 
     input:
     tuple val(meta), path(counts)
