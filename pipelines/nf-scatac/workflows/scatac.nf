@@ -15,6 +15,7 @@
 */
 
 include { WASP_ALLELIC_SC } from '../subworkflows/local/wasp_allelic_sc/main'
+include { WASP2_ML_OUTPUT } from '../../nf-modules/modules/wasp2/ml_output/main'
 
 workflow SCATAC {
     take:
@@ -22,6 +23,9 @@ workflow SCATAC {
 
     main:
     ch_versions = Channel.empty()
+    ch_ml_zarr = Channel.empty()
+    ch_ml_parquet = Channel.empty()
+    ch_ml_anndata = Channel.empty()
 
     // Validate required VCF parameter
     if (!params.vcf) {
@@ -45,6 +49,18 @@ workflow SCATAC {
     WASP_ALLELIC_SC ( samplesheet, ch_vcf )
     ch_versions = ch_versions.mix(WASP_ALLELIC_SC.out.versions)
 
+    // Convert to ML output formats (optional)
+    if (params.output_format) {
+        WASP2_ML_OUTPUT(
+            WASP_ALLELIC_SC.out.cell_counts,
+            params.output_format
+        )
+        ch_versions = ch_versions.mix(WASP2_ML_OUTPUT.out.versions)
+        ch_ml_zarr = WASP2_ML_OUTPUT.out.zarr
+        ch_ml_parquet = WASP2_ML_OUTPUT.out.parquet
+        ch_ml_anndata = WASP2_ML_OUTPUT.out.anndata
+    }
+
     emit:
     cell_counts = WASP_ALLELIC_SC.out.cell_counts  // channel: [ val(meta), path(counts.tsv) ]
     count_stats = WASP_ALLELIC_SC.out.count_stats  // channel: [ val(meta), path(stats.tsv) ]
@@ -53,5 +69,8 @@ workflow SCATAC {
     cell_qc     = WASP_ALLELIC_SC.out.cell_qc      // channel: [ val(meta), path(cell_qc.tsv) ]
     pseudobulk  = WASP_ALLELIC_SC.out.pseudobulk   // channel: [ val(meta), path(pseudobulk.tsv) ]
     imbalance   = WASP_ALLELIC_SC.out.imbalance    // channel: [ val(meta), path(results.tsv) ]
+    ml_zarr     = ch_ml_zarr                        // channel: [ val(meta), path(*.zarr) ] (ML format)
+    ml_parquet  = ch_ml_parquet                     // channel: [ val(meta), path(*.parquet) ]
+    ml_anndata  = ch_ml_anndata                     // channel: [ val(meta), path(*.h5ad) ] (ML format)
     versions    = ch_versions                       // channel: [ path(versions.yml) ]
 }

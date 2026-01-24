@@ -1,0 +1,113 @@
+nextflow_process {
+    name "Test Process WASP2_ML_OUTPUT"
+    script "../main.nf"
+    process "WASP2_ML_OUTPUT"
+
+    test("Should convert counts to Zarr format") {
+        when {
+            params {
+                outdir = "$outputDir"
+            }
+            process {
+                """
+                input[0] = [
+                    [ id:'test_sample', single_end:false ],
+                    file("${projectDir}/tests/data/test_counts.tsv", checkIfExists: true)
+                ]
+                input[1] = "zarr"
+                """
+            }
+        }
+        then {
+            assert process.success
+            assert process.out.zarr
+            assert path(process.out.zarr[0][1]).isDirectory()
+        }
+    }
+
+    test("Should convert counts to Parquet format") {
+        when {
+            params {
+                outdir = "$outputDir"
+            }
+            process {
+                """
+                input[0] = [
+                    [ id:'test_sample', single_end:false ],
+                    file("${projectDir}/tests/data/test_counts.tsv", checkIfExists: true)
+                ]
+                input[1] = "parquet"
+                """
+            }
+        }
+        then {
+            assert process.success
+            assert process.out.parquet
+            assert path(process.out.parquet[0][1]).exists()
+        }
+    }
+
+    test("Should convert counts to AnnData format") {
+        when {
+            params {
+                outdir = "$outputDir"
+            }
+            process {
+                """
+                input[0] = [
+                    [ id:'test_sample', single_end:false ],
+                    file("${projectDir}/tests/data/test_counts.tsv", checkIfExists: true)
+                ]
+                input[1] = "anndata"
+                """
+            }
+        }
+        then {
+            assert process.success
+            assert process.out.anndata
+            assert path(process.out.anndata[0][1]).name.endsWith('.h5ad')
+        }
+    }
+
+    test("Should convert counts to multiple formats") {
+        when {
+            params {
+                outdir = "$outputDir"
+            }
+            process {
+                """
+                input[0] = [
+                    [ id:'test_sample', single_end:false ],
+                    file("${projectDir}/tests/data/test_counts.tsv", checkIfExists: true)
+                ]
+                input[1] = "zarr,parquet,anndata"
+                """
+            }
+        }
+        then {
+            assert process.success
+            assert process.out.zarr
+            assert process.out.parquet
+            assert process.out.anndata
+        }
+    }
+
+    test("Should run with stub") {
+        options "-stub"
+        when {
+            params {
+                outdir = "$outputDir"
+            }
+            process {
+                """
+                input[0] = [[id:'test'], file('test_counts.tsv')]
+                input[1] = "zarr,parquet,anndata"
+                """
+            }
+        }
+        then {
+            assert process.success
+            assert process.out.versions
+        }
+    }
+}
