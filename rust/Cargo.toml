@@ -27,7 +27,7 @@ smallvec = "1.13" # Reduce heap allocs for small overlap/span vectors
 # Note: noodles-bcf depends on noodles-vcf, so we use compatible versions
 noodles-vcf = "0.72"   # Match version used by noodles-bcf
 noodles-bcf = "0.68"
-noodles-core = "0.15"
+noodles-core = "0.16"
 noodles-bgzf = "0.33"  # For compressed VCF (.vcf.gz)
 flate2 = "1.0"         # For gzip decompression
 
