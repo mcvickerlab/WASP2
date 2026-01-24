@@ -108,4 +108,304 @@ nextflow_pipeline {
             )
         }
     }
+
+    //
+    // Edge Case Tests - Samplesheet Validation
+    //
+
+    test("RNASEQ_ASE - fails with non-existent samplesheet") {
+
+        options "-stub"
+
+        when {
+            params {
+                input      = "${projectDir}/tests/samplesheets/this_file_does_not_exist.csv"
+                vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
+                star_index = "${projectDir}/tests/data/star_index"
+                gtf        = "${projectDir}/tests/data/test.gtf"
+                outdir     = "${outputDir}/results_nonexistent"
+            }
+        }
+
+        then {
+            assert workflow.failed
+            assert workflow.exitStatus == 1
+        }
+    }
+
+    test("RNASEQ_ASE - fails with empty samplesheet") {
+
+        options "-stub"
+
+        when {
+            params {
+                input      = "${projectDir}/tests/samplesheets/empty_samplesheet.csv"
+                vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
+                star_index = "${projectDir}/tests/data/star_index"
+                gtf        = "${projectDir}/tests/data/test.gtf"
+                outdir     = "${outputDir}/results_empty_samplesheet"
+            }
+        }
+
+        then {
+            assert workflow.failed
+            assert workflow.exitStatus == 1
+            assert workflow.stdout.any { it.contains("Samplesheet is empty") }
+        }
+    }
+
+    test("RNASEQ_ASE - fails with missing sample column") {
+
+        options "-stub"
+
+        when {
+            params {
+                input      = "${projectDir}/tests/samplesheets/missing_sample_column.csv"
+                vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
+                star_index = "${projectDir}/tests/data/star_index"
+                gtf        = "${projectDir}/tests/data/test.gtf"
+                outdir     = "${outputDir}/results_missing_sample_col"
+            }
+        }
+
+        then {
+            assert workflow.failed
+            assert workflow.exitStatus == 1
+            assert workflow.stdout.any { it.contains("missing 'sample' column") }
+        }
+    }
+
+    test("RNASEQ_ASE - fails with missing fastq_1 column") {
+
+        options "-stub"
+
+        when {
+            params {
+                input      = "${projectDir}/tests/samplesheets/missing_fastq1_column.csv"
+                vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
+                star_index = "${projectDir}/tests/data/star_index"
+                gtf        = "${projectDir}/tests/data/test.gtf"
+                outdir     = "${outputDir}/results_missing_fastq1_col"
+            }
+        }
+
+        then {
+            assert workflow.failed
+            assert workflow.exitStatus == 1
+            assert workflow.stdout.any { it.contains("missing 'fastq_1' column") }
+        }
+    }
+
+    test("RNASEQ_ASE - fails with empty sample value") {
+
+        options "-stub"
+
+        when {
+            params {
+                input      = "${projectDir}/tests/samplesheets/empty_sample_value.csv"
+                vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
+                star_index = "${projectDir}/tests/data/star_index"
+                gtf        = "${projectDir}/tests/data/test.gtf"
+                outdir     = "${outputDir}/results_empty_sample"
+            }
+        }
+
+        then {
+            assert workflow.failed
+            assert workflow.exitStatus == 1
+            assert workflow.stdout.any { it.contains("Empty sample ID") }
+        }
+    }
+
+    test("RNASEQ_ASE - fails with empty fastq_1 value") {
+
+        options "-stub"
+
+        when {
+            params {
+                input      = "${projectDir}/tests/samplesheets/empty_fastq1_value.csv"
+                vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
+                star_index = "${projectDir}/tests/data/star_index"
+                gtf        = "${projectDir}/tests/data/test.gtf"
+                outdir     = "${outputDir}/results_empty_fastq1"
+            }
+        }
+
+        then {
+            assert workflow.failed
+            assert workflow.exitStatus == 1
+            assert workflow.stdout.any { it.contains("Empty fastq_1 path") }
+        }
+    }
+
+    test("RNASEQ_ASE - fails with whitespace-only sample value") {
+
+        options "-stub"
+
+        when {
+            params {
+                input      = "${projectDir}/tests/samplesheets/whitespace_sample_value.csv"
+                vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
+                star_index = "${projectDir}/tests/data/star_index"
+                gtf        = "${projectDir}/tests/data/test.gtf"
+                outdir     = "${outputDir}/results_whitespace_sample"
+            }
+        }
+
+        then {
+            assert workflow.failed
+            assert workflow.exitStatus == 1
+            assert workflow.stdout.any { it.contains("Empty sample ID") }
+        }
+    }
+
+    test("RNASEQ_ASE - fails with whitespace-only fastq_1 value") {
+
+        options "-stub"
+
+        when {
+            params {
+                input      = "${projectDir}/tests/samplesheets/whitespace_fastq1_value.csv"
+                vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
+                star_index = "${projectDir}/tests/data/star_index"
+                gtf        = "${projectDir}/tests/data/test.gtf"
+                outdir     = "${outputDir}/results_whitespace_fastq1"
+            }
+        }
+
+        then {
+            assert workflow.failed
+            assert workflow.exitStatus == 1
+            assert workflow.stdout.any { it.contains("Empty fastq_1 path") }
+        }
+    }
+
+    test("RNASEQ_ASE - fails with spaces in sample ID") {
+
+        options "-stub"
+
+        when {
+            params {
+                input      = "${projectDir}/tests/samplesheets/sample_with_spaces.csv"
+                vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
+                star_index = "${projectDir}/tests/data/star_index"
+                gtf        = "${projectDir}/tests/data/test.gtf"
+                outdir     = "${outputDir}/results_spaces"
+            }
+        }
+
+        then {
+            assert workflow.failed
+            assert workflow.exitStatus == 1
+            assert workflow.stdout.any { it.contains("contains spaces") }
+        }
+    }
+
+    test("RNASEQ_ASE - fails with invalid sample characters") {
+
+        options "-stub"
+
+        when {
+            params {
+                input      = "${projectDir}/tests/samplesheets/invalid_sample_chars.csv"
+                vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
+                star_index = "${projectDir}/tests/data/star_index"
+                gtf        = "${projectDir}/tests/data/test.gtf"
+                outdir     = "${outputDir}/results_invalid_chars"
+            }
+        }
+
+        then {
+            assert workflow.failed
+            assert workflow.exitStatus == 1
+            assert workflow.stdout.any { it.contains("invalid characters") }
+        }
+    }
+
+    test("RNASEQ_ASE - fails with duplicate sample IDs") {
+
+        options "-stub"
+
+        when {
+            params {
+                input      = "${projectDir}/tests/samplesheets/duplicate_sample_ids.csv"
+                vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
+                star_index = "${projectDir}/tests/data/star_index"
+                gtf        = "${projectDir}/tests/data/test.gtf"
+                outdir     = "${outputDir}/results_duplicates"
+            }
+        }
+
+        then {
+            assert workflow.failed
+            assert workflow.exitStatus == 1
+            assert workflow.stdout.any { it.contains("Duplicate sample ID") }
+        }
+    }
+
+    test("RNASEQ_ASE - fails with non-gzipped fastq_1") {
+
+        options "-stub"
+
+        when {
+            params {
+                input      = "${projectDir}/tests/samplesheets/invalid_fastq_extension.csv"
+                vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
+                star_index = "${projectDir}/tests/data/star_index"
+                gtf        = "${projectDir}/tests/data/test.gtf"
+                outdir     = "${outputDir}/results_not_gzipped_fq1"
+            }
+        }
+
+        then {
+            assert workflow.failed
+            assert workflow.exitStatus == 1
+            assert workflow.stdout.any { it.contains("fastq_1") && it.contains("must be gzipped") }
+        }
+    }
+
+    test("RNASEQ_ASE - fails with non-gzipped fastq_2") {
+
+        options "-stub"
+
+        when {
+            params {
+                input      = "${projectDir}/tests/samplesheets/invalid_fastq2_extension.csv"
+                vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
+                star_index = "${projectDir}/tests/data/star_index"
+                gtf        = "${projectDir}/tests/data/test.gtf"
+                outdir     = "${outputDir}/results_not_gzipped_fq2"
+            }
+        }
+
+        then {
+            assert workflow.failed
+            assert workflow.exitStatus == 1
+            assert workflow.stdout.any { it.contains("fastq_2") && it.contains("must be gzipped") }
+        }
+    }
+
+    test("RNASEQ_ASE - stub run - single-end data") {
+
+        options "-stub"
+
+        when {
+            params {
+                input      = "${projectDir}/tests/samplesheets/single_end_valid.csv"
+                vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
+                star_index = "${projectDir}/tests/data/star_index"
+                gtf        = "${projectDir}/tests/data/test.gtf"
+                outdir     = "${outputDir}/results_single_end"
+            }
+        }
+
+        then {
+            assertAll(
+                { assert workflow.success },
+                { assert workflow.out.wasp_bam != null },
+                { assert workflow.out.counts != null },
+                { assert workflow.out.results != null }
+            )
+        }
+    }
 }
