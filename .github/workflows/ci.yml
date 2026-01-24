@@ -137,3 +137,110 @@ jobs:
         run: |
           source ~/.bashrc
           cd rust && cargo test || true
+
+  # ===========================================================================
+  # Nextflow Integration Tests
+  # NOTE: Disabled - requires GitHub-hosted runners (STAR, Nextflow, nf-test)
+  # Re-enable when billing issue is resolved or self-hosted runner has these tools
+  # ===========================================================================
+  nf-integration:
+    name: Nextflow Integration Tests
+    if: false  # Disabled - requires GitHub-hosted runners
+    runs-on: ubuntu-latest
+    needs: [test]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libhts-dev \
+            libbz2-dev \
+            liblzma-dev \
+            zlib1g-dev \
+            libclang-dev \
+            samtools \
+            bcftools \
+            tabix
+
+      - name: Install Nextflow
+        uses: nf-core/setup-nextflow@v2
+        with:
+          version: "24.04.0"
+
+      - name: Install nf-test
+        run: |
+          curl -fsSL https://get.nf-test.com | bash
+          sudo mv nf-test /usr/local/bin/
+
+      - name: Install STAR aligner
+        run: |
+          wget -q https://github.com/alexdobin/STAR/archive/2.7.11b.tar.gz
+          tar -xzf 2.7.11b.tar.gz
+          cd STAR-2.7.11b/source
+          make STAR
+          sudo cp STAR /usr/local/bin/
+          cd ../..
+          rm -rf STAR-2.7.11b 2.7.11b.tar.gz
+
+      - name: Build and install WASP2
+        run: |
+          python -m pip install --upgrade pip
+          pip install maturin
+          maturin build --release -m rust/Cargo.toml
+          pip install target/wheels/*.whl
+          pip install -e ".[dev]" --no-build-isolation
+
+      - name: Verify WASP2 installation
+        run: |
+          wasp2-count --help
+          wasp2-map --help
+
+      - name: Cache integration test data
+        uses: actions/cache@v4
+        id: cache-test-data
+        with:
+          path: |
+            pipelines/nf-rnaseq/tests/data/integration/star_index
+            pipelines/nf-rnaseq/tests/data/integration/*.fq.gz
+            pipelines/nf-rnaseq/tests/data/integration/*.vcf.gz
+            pipelines/nf-rnaseq/tests/data/integration/*.vcf.gz.tbi
+            pipelines/nf-rnaseq/tests/data/integration/*.fai
+          key: nf-integration-test-data-${{ hashFiles('pipelines/nf-rnaseq/tests/data/integration/chr_test.fa', 'pipelines/nf-rnaseq/tests/data/integration/generate_test_data.sh') }}
+
+      - name: Generate integration test data
+        if: steps.cache-test-data.outputs.cache-hit != 'true'
+        working-directory: pipelines/nf-rnaseq/tests/data/integration
+        run: bash generate_test_data.sh
+
+      - name: Run Nextflow integration tests
+        working-directory: pipelines/nf-rnaseq
+        run: |
+          nf-test test tests/integration.nf.test \
+            --profile test_integration,conda \
+            --tap=test-results.tap
+        env:
+          NXF_ANSI_LOG: false
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nf-test-results
+          path: |
+            pipelines/nf-rnaseq/.nf-test/
+            pipelines/nf-rnaseq/test-results.tap
