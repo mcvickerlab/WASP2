@@ -63,12 +63,10 @@ workflow WASP_ALLELIC_SC {
     ch_imbalance = Channel.empty()
 
     if (!params.skip_pseudobulk) {
-        // Aggregate per-cell counts to pseudo-bulk
         SCATAC_PSEUDOBULK ( SCATAC_COUNT_ALLELES.out.counts )
         ch_versions = ch_versions.mix(SCATAC_PSEUDOBULK.out.versions.first())
         ch_pseudobulk = SCATAC_PSEUDOBULK.out.counts
 
-        // Analyze allelic imbalance on pseudo-bulk counts
         WASP2_ANALYZE_IMBALANCE ( SCATAC_PSEUDOBULK.out.counts )
         ch_versions = ch_versions.mix(WASP2_ANALYZE_IMBALANCE.out.versions.first())
         ch_imbalance = WASP2_ANALYZE_IMBALANCE.out.results
