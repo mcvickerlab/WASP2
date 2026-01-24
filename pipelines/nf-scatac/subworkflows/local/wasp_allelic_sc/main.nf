@@ -15,7 +15,7 @@ include { WASP2_ANALYZE_IMBALANCE } from '../../../../nf-modules/modules/wasp2/a
 
 workflow WASP_ALLELIC_SC {
     take:
-    ch_fragments   // channel: [ val(meta), path(fragments.tsv.gz), path(fragments.tbi), path(barcodes), path(peaks) ]
+    ch_fragments   // channel: [ val(meta), path(fragments.tsv.gz), path(fragments.tbi), path(barcodes|NO_FILE), path(peaks|NO_FILE) ]
     ch_vcf         // channel: [ val(meta), path(vcf), path(tbi) ]
 
     main:

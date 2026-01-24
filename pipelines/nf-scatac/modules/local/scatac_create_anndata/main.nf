@@ -3,10 +3,14 @@
  *
  * Creates AnnData object with per-cell allele counts at heterozygous SNPs.
  * Outputs:
- *   - H5AD file with sparse matrices in layers (X=total, ref, alt)
+ *   - H5AD file with sparse matrix (X=total overlap counts per cell/SNP)
  *   - Cell metadata (obs) with QC metrics
  *   - Variant metadata (var) with SNP annotations
  *   - Optional Zarr format for GenVarLoader integration
+ *
+ * Note: Fragment files contain coordinates only, not sequences, so we count
+ * total overlaps rather than allele-specific counts. Handles empty input
+ * gracefully by creating a minimal valid H5AD with 0x0 matrix.
  */
 
 process SCATAC_CREATE_ANNDATA {
@@ -36,14 +40,21 @@ process SCATAC_CREATE_ANNDATA {
     def zarr_flag = create_zarr ? "True" : "False"
     """
     python3 << 'PYEOF'
+import sys
 import pandas as pd
 from scipy import sparse
 import anndata as ad
-import warnings
-warnings.filterwarnings('ignore')
 
 # Read allele counts TSV
 df = pd.read_csv("${counts}", sep='\\t')
+
+# Validate required columns
+required_cols = ['barcode', 'chrom', 'pos', 'ref', 'alt', 'overlap_count']
+missing = set(required_cols) - set(df.columns)
+if missing:
+    print(f"ERROR: Input TSV missing required columns: {missing}", file=sys.stderr)
+    print(f"Found columns: {list(df.columns)}", file=sys.stderr)
+    sys.exit(1)
 
 # Handle empty input (early return pattern)
 if df.empty:
