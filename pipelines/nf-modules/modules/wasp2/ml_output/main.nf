@@ -21,100 +21,72 @@ process WASP2_ML_OUTPUT {
     task.ext.when == null || task.ext.when
 
     script:
-    def args = task.ext.args ?: ''
     def prefix = task.ext.prefix ?: "${meta.id}"
-    def formats = output_format.split(',').collect { it.trim().toLowerCase() }
-    def zarr_cmd = formats.contains('zarr') ? "convert_to_zarr ${counts} ${prefix}.zarr" : ''
-    def parquet_cmd = formats.contains('parquet') ? "convert_to_parquet ${counts} ${prefix}.parquet" : ''
-    def anndata_cmd = formats.contains('anndata') || formats.contains('h5ad') ? "convert_to_anndata ${counts} ${prefix}.h5ad" : ''
     """
     #!/usr/bin/env python3
     import pandas as pd
     import numpy as np
     import sys
-    from pathlib import Path
 
-    # Read WASP2 counts TSV
+    # Configuration
     counts_file = "${counts}"
     prefix = "${prefix}"
+    sample_id = "${meta.id}"
     formats = "${output_format}".lower().split(',')
 
+    # Read WASP2 counts TSV
     df = pd.read_csv(counts_file, sep='\\t')
 
     # Ensure required columns exist
-    required_cols = ['chrom', 'pos', 'ref', 'alt', 'ref_count', 'alt_count']
-    for col in required_cols:
+    for col in ['chrom', 'pos', 'ref', 'alt', 'ref_count', 'alt_count']:
         if col not in df.columns:
             print(f"Warning: Missing column {col}, creating empty", file=sys.stderr)
             df[col] = 0 if 'count' in col else ''
 
-    # Add computed columns
+    # Compute derived columns
     df['total_count'] = df['ref_count'] + df['alt_count']
     df['ref_ratio'] = np.where(df['total_count'] > 0, df['ref_count'] / df['total_count'], 0.5)
-    df['hap1_count'] = df['ref_count']  # Default: ref = hap1
-    df['hap2_count'] = df['alt_count']  # Default: alt = hap2
+    df['hap1_count'] = df['ref_count']
+    df['hap2_count'] = df['alt_count']
 
-    # Convert to Zarr (GenVarLoader compatible)
+    n_variants = len(df)
+
+    # Zarr output (GenVarLoader compatible)
     if 'zarr' in formats:
         import zarr
         z = zarr.open(f"{prefix}.zarr", mode='w')
-        # Store as structured array
-        z.create_dataset('chrom', data=df['chrom'].values.astype(str), chunks=True)
-        z.create_dataset('pos', data=df['pos'].values, chunks=True, dtype='i8')
-        z.create_dataset('ref', data=df['ref'].values.astype(str), chunks=True)
-        z.create_dataset('alt', data=df['alt'].values.astype(str), chunks=True)
-        z.create_dataset('ref_count', data=df['ref_count'].values, chunks=True, dtype='i4')
-        z.create_dataset('alt_count', data=df['alt_count'].values, chunks=True, dtype='i4')
-        z.create_dataset('hap1_count', data=df['hap1_count'].values, chunks=True, dtype='i4')
-        z.create_dataset('hap2_count', data=df['hap2_count'].values, chunks=True, dtype='i4')
-        z.create_dataset('total_count', data=df['total_count'].values, chunks=True, dtype='i4')
-        z.create_dataset('ref_ratio', data=df['ref_ratio'].values, chunks=True, dtype='f4')
-        # Add metadata
-        z.attrs['sample_id'] = "${meta.id}"
-        z.attrs['format'] = 'wasp2_genvarloader'
-        z.attrs['version'] = '1.0'
-        print(f"Created {prefix}.zarr with {len(df)} variants", file=sys.stderr)
+        for col, dtype in [('chrom', str), ('pos', 'i8'), ('ref', str), ('alt', str),
+                           ('ref_count', 'i4'), ('alt_count', 'i4'), ('hap1_count', 'i4'),
+                           ('hap2_count', 'i4'), ('total_count', 'i4'), ('ref_ratio', 'f4')]:
+            data = df[col].values.astype(dtype) if dtype == str else df[col].values
+            z.create_dataset(col, data=data, chunks=True, dtype=dtype if dtype != str else None)
+        z.attrs.update({'sample_id': sample_id, 'format': 'wasp2_genvarloader', 'version': '1.0'})
+        print(f"Created {prefix}.zarr with {n_variants} variants", file=sys.stderr)
 
-    # Convert to Parquet (Polars/DuckDB compatible)
+    # Parquet output (Polars/DuckDB compatible)
     if 'parquet' in formats:
         df.to_parquet(f"{prefix}.parquet", index=False, compression='snappy')
-        print(f"Created {prefix}.parquet with {len(df)} variants", file=sys.stderr)
+        print(f"Created {prefix}.parquet with {n_variants} variants", file=sys.stderr)
 
-    # Convert to AnnData/H5AD (scverse compatible)
+    # AnnData output (scverse compatible)
     if 'anndata' in formats or 'h5ad' in formats:
         import anndata as ad
         import scipy.sparse as sp
 
-        # For single-sample: create 1-row AnnData
-        # X = total counts, layers = ref/alt/hap1/hap2
-        n_vars = len(df)
         X = sp.csr_matrix(df['total_count'].values.reshape(1, -1))
-
-        # Create obs (sample metadata)
-        obs = pd.DataFrame({'sample_id': ["${meta.id}"]}, index=["${meta.id}"])
-
-        # Create var (variant metadata)
+        obs = pd.DataFrame({'sample_id': [sample_id]}, index=[sample_id])
         var = pd.DataFrame({
-            'chrom': df['chrom'].values,
-            'pos': df['pos'].values,
-            'ref': df['ref'].values,
-            'alt': df['alt'].values,
-            'region': df.get('region', pd.Series([''] * n_vars)).values,
+            'chrom': df['chrom'].values, 'pos': df['pos'].values,
+            'ref': df['ref'].values, 'alt': df['alt'].values,
+            'region': df.get('region', pd.Series([''] * n_variants)).values,
         }, index=[f"{r.chrom}_{r.pos}_{r.ref}_{r.alt}" for r in df.itertuples()])
 
         adata = ad.AnnData(X=X, obs=obs, var=var)
-
-        # Add layers for allele counts
-        adata.layers['ref'] = sp.csr_matrix(df['ref_count'].values.reshape(1, -1))
-        adata.layers['alt'] = sp.csr_matrix(df['alt_count'].values.reshape(1, -1))
-        adata.layers['hap1'] = sp.csr_matrix(df['hap1_count'].values.reshape(1, -1))
-        adata.layers['hap2'] = sp.csr_matrix(df['hap2_count'].values.reshape(1, -1))
-
-        # Store ref_ratio in obsm for convenience
+        for layer in ['ref_count', 'alt_count', 'hap1_count', 'hap2_count']:
+            adata.layers[layer.replace('_count', '')] = sp.csr_matrix(df[layer].values.reshape(1, -1))
         adata.obsm['ref_ratio'] = df['ref_ratio'].values.reshape(1, -1)
-
         adata.write_h5ad(f"{prefix}.h5ad")
-        print(f"Created {prefix}.h5ad with 1 sample x {n_vars} variants", file=sys.stderr)
+        print(f"Created {prefix}.h5ad with 1 sample x {n_variants} variants", file=sys.stderr)
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
@@ -127,14 +99,11 @@ process WASP2_ML_OUTPUT {
 
     stub:
     def prefix = task.ext.prefix ?: "${meta.id}"
-    def formats = output_format.split(',').collect { it.trim().toLowerCase() }
-    def zarr_cmd = formats.contains('zarr') ? "mkdir -p ${prefix}.zarr && touch ${prefix}.zarr/.zarray" : ''
-    def parquet_cmd = formats.contains('parquet') ? "touch ${prefix}.parquet" : ''
-    def anndata_cmd = formats.contains('anndata') || formats.contains('h5ad') ? "touch ${prefix}.h5ad" : ''
+    def formats = output_format.toLowerCase().split(',')
     """
-    ${zarr_cmd}
-    ${parquet_cmd}
-    ${anndata_cmd}
+    ${formats.contains('zarr') ? "mkdir -p ${prefix}.zarr && touch ${prefix}.zarr/.zarray" : ''}
+    ${formats.contains('parquet') ? "touch ${prefix}.parquet" : ''}
+    ${formats.contains('anndata') || formats.contains('h5ad') ? "touch ${prefix}.h5ad" : ''}
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
