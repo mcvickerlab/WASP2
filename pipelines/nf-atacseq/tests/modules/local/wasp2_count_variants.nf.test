@@ -1,7 +1,7 @@
 nextflow_process {
 
     name "Test Process WASP2_COUNT_VARIANTS"
-    script "../../../modules/local/wasp2_count_variants.nf"
+    script "../../../modules/local/wasp2_count_variants/main.nf"
     process "WASP2_COUNT_VARIANTS"
 
     tag "modules"

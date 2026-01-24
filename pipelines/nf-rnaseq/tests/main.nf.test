@@ -74,4 +74,38 @@ nextflow_pipeline {
             assert workflow.stdout.any { it.contains("VCF index not found") }
         }
     }
+
+    test("RNASEQ_ASE - stub run - skip_analysis") {
+
+        tag "skip_options"
+
+        options "-stub"
+
+        when {
+            params {
+                input         = "${projectDir}/assets/samplesheet_test.csv"
+                vcf           = "${projectDir}/tests/data/test_snps.vcf.gz"
+                star_index    = "${projectDir}/tests/data/star_index"
+                gtf           = "${projectDir}/tests/data/test.gtf"
+                outdir        = "${outputDir}/results_skip_analysis"
+                skip_analysis = true
+            }
+        }
+
+        then {
+            assertAll(
+                // Pipeline completes successfully
+                { assert workflow.success },
+
+                // WASP BAM and counts should be produced
+                { assert workflow.out.wasp_bam != null },
+                { assert workflow.out.counts != null },
+
+                // Results channel should be empty (analysis skipped)
+                { assert workflow.out.results != null },
+
+                { assert workflow.out.versions != null }
+            )
+        }
+    }
 }

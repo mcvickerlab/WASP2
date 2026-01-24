@@ -1,7 +1,7 @@
 nextflow_process {
 
     name "Test Process WASP2_FIND_IMBALANCE"
-    script "../../../modules/local/wasp2_find_imbalance.nf"
+    script "../../../modules/local/wasp2_find_imbalance/main.nf"
     process "WASP2_FIND_IMBALANCE"
 
     tag "modules"
