@@ -1,0 +1,47 @@
+name: "scatac_create_anndata"
+description: Convert per-cell allele counts to AnnData H5AD format for scverse ecosystem
+keywords:
+  - scatac
+  - anndata
+  - single-cell
+  - allelic-imbalance
+  - h5ad
+  - zarr
+tools:
+  - anndata:
+      description: AnnData - Annotated Data for single-cell analysis
+      homepage: https://anndata.readthedocs.io/
+      documentation: https://anndata.readthedocs.io/
+      licence: ["BSD-3-Clause"]
+input:
+  - meta:
+      type: map
+      description: |
+        Groovy Map containing sample information
+        e.g. [ id:'test', chemistry:'10x-atac-v2' ]
+  - counts:
+      type: file
+      description: TSV file with per-cell allele counts
+      pattern: "*_allele_counts.tsv"
+  - create_zarr:
+      type: boolean
+      description: Whether to also create Zarr output for GenVarLoader
+output:
+  - anndata:
+      type: file
+      description: AnnData H5AD file with sparse allele count matrices
+      pattern: "*.h5ad"
+  - zarr:
+      type: directory
+      description: Optional Zarr directory for GenVarLoader integration
+      pattern: "*.zarr"
+  - cell_qc:
+      type: file
+      description: Cell QC metrics TSV
+      pattern: "*_cell_qc.tsv"
+  - versions:
+      type: file
+      description: File containing software versions
+      pattern: "versions.yml"
+authors:
+  - "@wasp2-team"

@@ -1,0 +1,46 @@
+name: scatac_pseudobulk
+description: Aggregate per-cell allele counts to pseudo-bulk for statistical analysis
+keywords:
+  - scatac
+  - single-cell
+  - pseudo-bulk
+  - aggregation
+  - allelic-imbalance
+tools:
+  - awk:
+      description: Pattern scanning and processing language
+      homepage: https://www.gnu.org/software/gawk/
+      licence: ["GPL-3.0"]
+
+input:
+  - meta:
+      type: map
+      description: |
+        Groovy Map containing sample information
+        e.g. [ id:'test', single_end:false ]
+  - cell_counts:
+      type: file
+      description: Per-cell allele counts TSV from SCATAC_COUNT_ALLELES
+      pattern: "*_allele_counts.tsv"
+
+output:
+  - meta:
+      type: map
+      description: Groovy Map containing sample information
+  - counts:
+      type: file
+      description: Pseudo-bulk aggregated counts compatible with WASP2_ANALYZE_IMBALANCE
+      pattern: "*_pseudobulk_counts.tsv"
+  - stats:
+      type: file
+      description: Aggregation statistics (cells, SNPs, total counts)
+      pattern: "*_aggregation_stats.tsv"
+  - versions:
+      type: file
+      description: File containing software versions
+      pattern: "versions.yml"
+
+authors:
+  - "@Jaureguy760"
+maintainers:
+  - "@Jaureguy760"

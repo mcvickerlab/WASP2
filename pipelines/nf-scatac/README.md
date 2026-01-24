@@ -4,12 +4,14 @@ Single-Cell ATAC-seq Allelic Imbalance Pipeline
 
 ## Features
 
-- 10x Genomics scATAC fragment support
-- Allelic imbalance analysis at heterozygous SNPs
-- Cell barcode propagation through pipeline stages
-- Pseudo-bulk aggregation per sample
-- Support for CellRanger ATAC output and custom fragments
-- nf-core compliant subworkflow architecture (Issue #57)
+- **10x Genomics scATAC fragment support** - Direct input from CellRanger ATAC output
+- **Allelic imbalance analysis** - At heterozygous SNPs using WASP2
+- **Cell barcode filtering** - Optional whitelist for quality-filtered cells
+- **Peak region filtering** - Restrict analysis to accessible regions
+- **AnnData/H5AD output** - For scverse ecosystem (Scanpy, ArchR, Signac)
+- **Zarr output** - For GenVarLoader integration
+- **Pseudo-bulk aggregation** - Sample-level aggregation for statistical power
+- **nf-core compliant** - Subworkflow architecture (Issue #57)
 
 ## Architecture
 
@@ -28,7 +30,9 @@ nf-scatac/
 │       └── bam_stats_samtools/      # BAM QC stats
 ├── modules/
 │   └── local/
-│       └── scatac_count_alleles/    # Per-cell allele counting
+│       ├── scatac_count_alleles/    # Per-cell allele counting
+│       ├── scatac_create_anndata/   # AnnData H5AD output
+│       └── scatac_pseudobulk/       # Pseudo-bulk aggregation
 ├── conf/
 │   ├── base.config
 │   ├── modules.config
@@ -58,15 +62,34 @@ nextflow run . -profile docker \
 | cellranger_dir | Yes* | Path to CellRanger ATAC output |
 | barcode_tag | No | BAM tag for cell barcodes (default: CB) |
 | chemistry | No | Library chemistry (default: 10x-atac-v2) |
+| barcodes | No | File with valid cell barcodes (one per line) |
+| peaks | No | BED file with peak regions to restrict analysis |
 
 *Either `fragments` or `cellranger_dir` is required
 
 Example:
 ```csv
-sample,fragments,cellranger_dir,barcode_tag,chemistry
-GM12878_rep1,/path/to/fragments.tsv.gz,,CB,10x-atac-v2
-GM12878_rep2,,/path/to/cellranger/output,CB,10x-atac-v2
+sample,fragments,cellranger_dir,barcode_tag,chemistry,barcodes,peaks
+GM12878_rep1,/path/to/fragments.tsv.gz,,CB,10x-atac-v2,/path/to/barcodes.txt,/path/to/peaks.bed
+GM12878_rep2,,/path/to/cellranger/output,CB,10x-atac-v2,,
 ```
+
+## Parameters
+
+### Required
+- `--input` - Samplesheet CSV (see format above)
+- `--vcf` - Indexed VCF/BCF with heterozygous SNPs
+
+### Processing Options
+- `--min_fragments_per_cell` - Minimum fragments per cell to include [default: 1000]
+- `--min_cells_per_snp` - Minimum cells per SNP for pseudo-bulk [default: 3]
+- `--min_count` - Minimum count for imbalance testing [default: 10]
+
+### Output Options
+- `--outdir` - Output directory [default: ./results]
+- `--create_zarr` - Also output Zarr format for GenVarLoader [default: false]
+- `--skip_anndata` - Skip AnnData H5AD creation [default: false]
+- `--skip_pseudobulk` - Skip pseudo-bulk aggregation and analysis [default: false]
 
 ## Single-Cell Meta Map
 
@@ -92,13 +115,17 @@ Single-cell WASP2 allelic imbalance analysis:
 include { WASP_ALLELIC_SC } from './subworkflows/local/wasp_allelic_sc/main'
 
 WASP_ALLELIC_SC (
-    ch_fragments,   // [ val(meta), path(fragments), path(tbi) ]
+    ch_fragments,   // [ val(meta), path(fragments), path(tbi), path(barcodes), path(peaks) ]
     ch_vcf          // [ val(meta), path(vcf), path(tbi) ]
 )
 
 // Outputs:
 // - cell_counts: Per-cell allele counts at SNPs
-// - imbalance: Allelic imbalance analysis results
+// - anndata: AnnData H5AD files
+// - zarr: Zarr directories (if enabled)
+// - cell_qc: Cell QC metrics
+// - pseudobulk: Aggregated counts
+// - imbalance: Allelic imbalance results
 ```
 
 ### GENERATE_FRAGMENTS
@@ -149,37 +176,52 @@ Test data locations:
 - **BAM**: `/iblm/netapp/data3/aho/project_data/wasp2/10x_cellranger_atac/gm12878_el4/`
 - **VCF**: `/iblm/netapp/data1/aho/variants/NA12878.vcf.gz`
 
-### Test Structure
-
-```
-tests/
-├── main.nf.test              # Pipeline & workflow tests
-├── tags.yml                  # Test tags for filtering
-├── stub/                     # Minimal stub test data
-│   ├── samplesheet.csv
-│   ├── fragments.tsv.gz
-│   ├── variants.vcf.gz
-│   └── variants.bed
-├── real/                     # Integration test samplesheet
-│   └── samplesheet.csv
-└── subworkflows/             # Subworkflow-level tests
-    ├── wasp_allelic_sc.nf.test
-    └── generate_fragments.nf.test
-```
-
 ## Output
 
 ```
 results/
 ├── allele_counts/           # Per-cell allele counts at het SNPs
 │   └── {sample}_allele_counts.tsv
+├── count_stats/             # Counting statistics
+│   └── {sample}_count_stats.tsv
+├── anndata/                 # AnnData H5AD files for scverse
+│   └── {sample}_allelic.h5ad
+├── zarr/                    # Zarr directories (if --create_zarr)
+│   └── {sample}_allelic.zarr/
+├── cell_qc/                 # Cell QC metrics
+│   └── {sample}_cell_qc.tsv
+├── pseudobulk/              # Pseudo-bulk aggregated counts
+│   ├── {sample}_pseudobulk_counts.tsv
+│   └── {sample}_aggregation_stats.tsv
 ├── imbalance/               # Allelic imbalance analysis
-│   └── {sample}_imbalance.tsv
+│   └── {sample}_ai_results.tsv
+├── variants/                # Processed variant BED
+│   └── variants.variants.bed
 └── pipeline_info/           # Execution reports
     ├── timeline.html
     ├── report.html
     └── trace.txt
 ```
+
+## AnnData Output Format
+
+The H5AD file contains:
+
+- **X**: Sparse matrix of total fragment overlaps (cells × SNPs)
+- **obs**: Cell metadata
+  - `n_snps`: Number of SNPs with overlaps
+  - `total_counts`: Total fragment overlaps
+  - `chemistry`: Library chemistry
+  - `sample_id`: Sample identifier
+- **var**: SNP metadata
+  - `chrom`: Chromosome
+  - `pos`: Position
+  - `ref`: Reference allele
+  - `alt`: Alternate allele
+- **uns**: Unstructured metadata
+  - `sample_id`: Sample identifier
+  - `pipeline`: 'nf-scatac'
+  - `data_type`: 'scATAC_allelic_counts'
 
 ## Supported Chemistries
 
@@ -191,8 +233,11 @@ results/
 
 ## References
 
+- Issue [#32](https://github.com/Jaureguy760/WASP2-final/issues/32) - scATAC Pipeline
 - Issue [#57](https://github.com/Jaureguy760/WASP2-final/issues/57) - nf-core Subworkflow Pattern Compliance
 - Issue [#48](https://github.com/Jaureguy760/WASP2-final/issues/48) - Validation & Test Suite
-- Issue [#32](https://github.com/Jaureguy760/WASP2-final/issues/32) - scATAC Pipeline
+- [ArchR](https://www.archrproject.com/) - scATAC-seq analysis
+- [Signac](https://satijalab.org/signac/) - scATAC-seq toolkit
+- [AnnData](https://anndata.readthedocs.io/) - Annotated data format
 - [nf-test docs](https://code.askimed.com/nf-test/)
 - [nf-core guidelines](https://nf-co.re/docs/guidelines)

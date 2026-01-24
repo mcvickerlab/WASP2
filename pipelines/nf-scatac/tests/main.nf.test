@@ -19,7 +19,8 @@ nextflow_pipeline {
         then {
             assertAll(
                 { assert workflow.success },
-                { assert workflow.out.allele_counts != null },
+                { assert workflow.out.cell_counts != null },
+                { assert workflow.out.anndata != null },
                 { assert workflow.out.imbalance != null },
                 { assert snapshot(
                     workflow.trace.tasks().size(),
@@ -39,7 +40,7 @@ nextflow_workflow {
     tag "scatac"
     tag "workflow"
 
-    test("SCATAC workflow - stub run") {
+    test("SCATAC workflow - stub run with all features") {
 
         options "-stub"
 
@@ -47,6 +48,7 @@ nextflow_workflow {
             params {
                 vcf = "${projectDir}/tests/stub/variants.vcf.gz"
                 outdir = "$outputDir"
+                create_zarr = true
             }
             workflow {
                 """
@@ -58,7 +60,9 @@ nextflow_workflow {
                         chemistry: '10x-atac-v2'
                     ],
                     file("${projectDir}/tests/stub/fragments.tsv.gz"),
-                    file("${projectDir}/tests/stub/fragments.tsv.gz.tbi")
+                    file("${projectDir}/tests/stub/fragments.tsv.gz.tbi"),
+                    file('NO_FILE'),  // barcodes (optional)
+                    file('NO_FILE')   // peaks (optional)
                 ])
                 """
             }
@@ -67,9 +71,50 @@ nextflow_workflow {
         then {
             assertAll(
                 { assert workflow.success },
-                { assert workflow.out.allele_counts.size() == 1 },
+                { assert workflow.out.cell_counts.size() == 1 },
+                { assert workflow.out.anndata.size() == 1 },
                 { assert workflow.out.imbalance.size() == 1 },
                 { assert snapshot(workflow.out.versions).match("scatac_versions") }
+            )
+        }
+    }
+
+    test("SCATAC workflow - skip anndata and pseudobulk") {
+
+        options "-stub"
+
+        when {
+            params {
+                vcf = "${projectDir}/tests/stub/variants.vcf.gz"
+                outdir = "$outputDir"
+                skip_anndata = true
+                skip_pseudobulk = true
+            }
+            workflow {
+                """
+                input[0] = Channel.of([
+                    [
+                        id: 'test_sample',
+                        single_end: false,
+                        cell_barcode_tag: 'CB',
+                        chemistry: '10x-atac-v2'
+                    ],
+                    file("${projectDir}/tests/stub/fragments.tsv.gz"),
+                    file("${projectDir}/tests/stub/fragments.tsv.gz.tbi"),
+                    file('NO_FILE'),
+                    file('NO_FILE')
+                ])
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert workflow.success },
+                { assert workflow.out.cell_counts.size() == 1 },
+                // anndata and imbalance should be empty when skipped
+                { assert workflow.out.anndata.size() == 0 },
+                { assert workflow.out.imbalance.size() == 0 }
             )
         }
     }
@@ -93,7 +138,9 @@ nextflow_workflow {
                         chemistry: '10x-atac-v2'
                     ],
                     file("${projectDir}/tests/stub/fragments.tsv.gz"),
-                    file("${projectDir}/tests/stub/fragments.tsv.gz.tbi")
+                    file("${projectDir}/tests/stub/fragments.tsv.gz.tbi"),
+                    file('NO_FILE'),
+                    file('NO_FILE')
                 ])
                 """
             }
@@ -115,13 +162,13 @@ nextflow_process {
     tag "module"
     tag "scatac_count_alleles"
 
-    test("SCATAC_COUNT_ALLELES - stub") {
+    test("SCATAC_COUNT_ALLELES - stub with no filtering") {
 
         options "-stub"
 
         when {
             params {
-                min_fragments_per_cell = 100
+                min_fragments_per_cell = 0
             }
             process {
                 """
@@ -136,6 +183,8 @@ nextflow_process {
                     file("${projectDir}/tests/stub/fragments.tsv.gz.tbi"),
                     file("${projectDir}/tests/stub/variants.bed")
                 ]
+                input[1] = file('NO_FILE')  // barcodes
+                input[2] = file('NO_FILE')  // peaks
                 """
             }
         }
@@ -145,8 +194,133 @@ nextflow_process {
                 { assert process.success },
                 { assert snapshot(process.out.versions).match("count_alleles_versions") },
                 { assert process.out.counts.size() == 1 },
+                { assert process.out.stats.size() == 1 },
                 { assert file(process.out.counts[0][1]).exists() },
                 { assert file(process.out.counts[0][1]).text.contains("barcode") }
+            )
+        }
+    }
+}
+
+nextflow_process {
+
+    name "Test Process SCATAC_CREATE_ANNDATA"
+    script "../modules/local/scatac_create_anndata/main.nf"
+    process "SCATAC_CREATE_ANNDATA"
+
+    tag "scatac"
+    tag "module"
+    tag "scatac_create_anndata"
+
+    test("SCATAC_CREATE_ANNDATA - stub") {
+
+        options "-stub"
+
+        when {
+            process {
+                """
+                // Create a minimal test allele counts file
+                def counts_content = '''barcode\\tchrom\\tpos\\tref\\talt\\toverlap_count
+AAACGAAC-1\\tchr1\\t100\\tA\\tG\\t5
+AAACGAAC-1\\tchr1\\t200\\tC\\tT\\t3
+AAACGAAT-1\\tchr1\\t100\\tA\\tG\\t8
+'''
+                def counts_file = file("${workDir}/test_allele_counts.tsv")
+                counts_file.text = counts_content
+
+                input[0] = [
+                    [id: 'test_sample', chemistry: '10x-atac-v2'],
+                    counts_file
+                ]
+                input[1] = false  // create_zarr
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert process.success },
+                { assert process.out.anndata.size() == 1 },
+                { assert process.out.cell_qc.size() == 1 },
+                { assert file(process.out.anndata[0][1]).name.endsWith('.h5ad') }
+            )
+        }
+    }
+
+    test("SCATAC_CREATE_ANNDATA - stub with zarr") {
+
+        options "-stub"
+
+        when {
+            process {
+                """
+                def counts_content = '''barcode\\tchrom\\tpos\\tref\\talt\\toverlap_count
+AAACGAAC-1\\tchr1\\t100\\tA\\tG\\t5
+'''
+                def counts_file = file("${workDir}/test_allele_counts.tsv")
+                counts_file.text = counts_content
+
+                input[0] = [
+                    [id: 'test_sample', chemistry: '10x-atac-v2'],
+                    counts_file
+                ]
+                input[1] = true  // create_zarr
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert process.success },
+                { assert process.out.anndata.size() == 1 },
+                { assert process.out.zarr.size() == 1 }
+            )
+        }
+    }
+}
+
+nextflow_process {
+
+    name "Test Process SCATAC_PSEUDOBULK"
+    script "../modules/local/scatac_pseudobulk/main.nf"
+    process "SCATAC_PSEUDOBULK"
+
+    tag "scatac"
+    tag "module"
+    tag "scatac_pseudobulk"
+
+    test("SCATAC_PSEUDOBULK - stub") {
+
+        options "-stub"
+
+        when {
+            params {
+                min_cells_per_snp = 1
+            }
+            process {
+                """
+                def counts_content = '''barcode\\tchrom\\tpos\\tref\\talt\\toverlap_count
+AAACGAAC-1\\tchr1\\t100\\tA\\tG\\t5
+AAACGAAT-1\\tchr1\\t100\\tA\\tG\\t8
+AAACGAAC-1\\tchr1\\t200\\tC\\tT\\t3
+'''
+                def counts_file = file("${workDir}/test_allele_counts.tsv")
+                counts_file.text = counts_content
+
+                input[0] = [
+                    [id: 'test_sample'],
+                    counts_file
+                ]
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert process.success },
+                { assert process.out.counts.size() == 1 },
+                { assert process.out.stats.size() == 1 },
+                { assert file(process.out.counts[0][1]).text.contains("ref_count") }
             )
         }
     }
