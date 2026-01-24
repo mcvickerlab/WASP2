@@ -6,13 +6,13 @@
 
 ### Core Pipelines
 
-| Component | Issue | Status |
-|-----------|-------|--------|
-| wasp2-nf-modules | [#29](../../issues/29) | ✅ Complete |
-| wasp2-nf-rnaseq | [#30](../../issues/30) | ✅ Complete |
-| wasp2-nf-atacseq | [#31](../../issues/31) | ✅ Complete |
-| wasp2-nf-scatac | [#32](../../issues/32) | 🔄 In Progress |
-| wasp2-nf-outrider | [#35](../../issues/35) | 🔄 Open |
+| Component | Issue | Status | Infrastructure |
+|-----------|-------|--------|----------------|
+| wasp2-nf-modules | [#29](../../issues/29) | ✅ Complete | 9 modules, nf-test |
+| wasp2-nf-rnaseq | [#30](../../issues/30) | ✅ Complete | docs, tests, assets |
+| wasp2-nf-atacseq | [#31](../../issues/31) | ✅ Complete | docs, tests, assets, bin |
+| wasp2-nf-scatac | [#32](../../issues/32) | ✅ Complete | docs, tests, assets, bin |
+| wasp2-nf-outrider | [#35](../../issues/35) | ✅ Complete | docs, tests, assets, bin |
 
 ### Integrations
 
@@ -27,13 +27,47 @@
 
 | Module | Function | Performance |
 |--------|----------|-------------|
-| WASP2_COUNT | Allelic read counting | Rust: 5-10x |
-| WASP2_MAP | Read remapping/filtering | Rust: 5x |
+| WASP2_COUNT | Allelic read counting | Rust: 61× faster |
+| WASP2_MAP | Read remapping/filtering | Rust: 5× faster |
 | WASP2_ANALYZE | Statistical analysis | Rust-backed |
 | WASP2_COUNT_ALLELES | Single-cell counting | Rust |
 | WASP2_ANALYZE_IMBALANCE | SC imbalance | Rust |
-| VCF_TO_BED | VCF conversion | Rust: 7-25x |
+| VCF_TO_BED | VCF conversion | Rust: 7-25× faster |
 | STAR_ALIGN | STAR 2-pass | Native |
+
+## Pipeline Directory Structure
+
+All pipelines follow a consistent nf-core-inspired structure:
+
+```
+pipelines/
+├── nf-modules/              # Shared DSL2 modules
+│   └── modules/wasp2/       # WASP2-specific modules
+├── nf-rnaseq/               # RNA-seq allelic imbalance
+├── nf-atacseq/              # ATAC-seq allelic imbalance
+├── nf-scatac/               # Single-cell ATAC-seq AI
+│   ├── main.nf
+│   ├── nextflow.config
+│   ├── workflows/
+│   ├── subworkflows/
+│   ├── modules/local/
+│   ├── conf/
+│   ├── assets/              # samplesheet schema, multiqc config
+│   ├── bin/                 # helper scripts
+│   ├── docs/                # usage.md, output.md
+│   └── tests/               # nf-test, stub data
+└── nf-outrider/             # OUTRIDER aberrant expression
+    ├── main.nf
+    ├── nextflow.config
+    ├── workflows/
+    ├── subworkflows/
+    ├── modules/local/
+    ├── conf/
+    ├── assets/
+    ├── bin/
+    ├── docs/
+    └── tests/
+```
 
 ## Dependency Graph
 
@@ -45,7 +79,7 @@
    nf-rnaseq ✅    nf-atacseq ✅   ML Formats
         │               │               │
         ▼               ▼               ▼
-   nf-outrider     nf-scatac       GenVarLoader
+   nf-outrider ✅   nf-scatac ✅   GenVarLoader
                         │
                         ▼
                 nf-core Compliance
@@ -57,25 +91,43 @@
 ## Implementation Roadmap
 
 ### Phase 1: Foundation ✅
-- [x] Core DSL2 modules
-- [x] nf-rnaseq, nf-atacseq pipelines
-- [x] Docker builds, nf-test
+- [x] Core DSL2 modules (9 modules)
+- [x] nf-rnaseq pipeline
+- [x] nf-atacseq pipeline
+- [x] Docker builds, nf-test infrastructure
 
-### Phase 2: Expansion (Current)
-- [ ] nf-scatac (#32)
-- [ ] nf-outrider (#35)
+### Phase 2: Expansion ✅
+- [x] nf-scatac (#32) - Single-cell ATAC-seq allelic imbalance
+- [x] nf-outrider (#35) - OUTRIDER aberrant expression + MAE
 - [ ] ML output formats (#36)
 
 ### Phase 3: Integration
-- [ ] GenVarLoader (#37)
+- [ ] GenVarLoader integration (#37)
 - [ ] nf-core compliance (#38)
-- [ ] Seqera AI (#39)
+- [ ] Seqera AI compatibility (#39)
+
+## Testing
+
+All pipelines support:
+- **Stub tests**: Fast CI/CD validation with `-profile test_stub -stub-run`
+- **Integration tests**: Real data with `-profile test_real` or `-profile test`
+- **nf-test framework**: Modular testing at workflow, subworkflow, and module levels
+
+Run stub tests:
+```bash
+cd pipelines/nf-scatac
+nextflow run . -profile test_stub -stub-run
+
+cd pipelines/nf-outrider
+nextflow run . -profile test_stub -stub-run
+```
 
 ## References
 
-- [nf-core/drop](https://nf-co.re/drop/dev/)
-- [GenVarLoader](https://genvarloader.readthedocs.io/)
-- [Seqera AI](https://seqera.io/blog/seqera-ai-new-features-june-2025/)
+- [nf-core/drop](https://nf-co.re/drop/dev/) - Reference OUTRIDER implementation
+- [GenVarLoader](https://genvarloader.readthedocs.io/) - ML variant loading
+- [Seqera AI](https://seqera.io/blog/seqera-ai-new-features-june-2025/) - Pipeline AI assistant
 
 ---
 *Milestone: v1.3.0 - Pipeline Ecosystem*
+*Last updated: 2025-01-24*

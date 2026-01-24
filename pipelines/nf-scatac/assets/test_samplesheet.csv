@@ -1,0 +1,2 @@
+sample,fragments,cellranger_dir,barcode_tag,chemistry
+GM12878_rep1,tests/stub/fragments.tsv.gz,,CB,10x-atac-v2
