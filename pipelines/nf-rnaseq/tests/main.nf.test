@@ -53,4 +53,25 @@ nextflow_pipeline {
             assert workflow.exitStatus == 1
         }
     }
+
+    test("RNASEQ_ASE - fails with missing VCF index") {
+
+        options "-stub"
+
+        when {
+            params {
+                input      = "${projectDir}/assets/samplesheet_test.csv"
+                vcf        = "${projectDir}/tests/data/test_snps_no_index.vcf.gz"
+                star_index = "${projectDir}/tests/data/star_index"
+                gtf        = "${projectDir}/tests/data/test.gtf"
+                outdir     = "${outputDir}/results_no_index"
+            }
+        }
+
+        then {
+            assert workflow.failed
+            assert workflow.exitStatus == 1
+            assert workflow.stdout.any { it.contains("VCF index not found") }
+        }
+    }
 }
