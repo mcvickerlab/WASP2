@@ -161,17 +161,17 @@ Run the single-cell allele counting:
    wasp2-count count-variants-sc \
      cellranger_output/outs/possorted_genome_bam.bam \
      phased_variants.vcf.gz \
-     --barcodes barcodes_celltype.tsv \
+     barcodes_celltype.tsv \
      --region genes.gtf \
      --samples SAMPLE_ID \
-     --output allele_counts.h5ad
+     --out_file allele_counts.h5ad
 
 **Parameters:**
 
-* ``--barcodes``: Your barcode file with cell type annotations
+* ``barcodes_celltype.tsv``: Your barcode file with cell type annotations (positional)
 * ``--region``: Gene annotation file (GTF/GFF) or peak file (BED)
 * ``--samples``: Sample ID matching VCF sample column
-* ``--output``: Output AnnData file
+* ``--out_file``: Output AnnData file
 
 Step 4: Analyze Allelic Imbalance
 ---------------------------------
@@ -185,10 +185,9 @@ Analyze imbalance within each cell type:
 
    wasp2-analyze find-imbalance-sc \
      allele_counts.h5ad \
+     barcodes_celltype.tsv \
      --sample SAMPLE_ID \
-     --groups cell_type \
-     --min-count 5 \
-     --output imbalance_by_celltype.tsv
+     --out_file imbalance_by_celltype.tsv
 
 **Output columns:**
 
@@ -209,8 +208,9 @@ Find differential allelic imbalance between cell types:
 
    wasp2-analyze compare-imbalance \
      allele_counts.h5ad \
+     barcodes_celltype.tsv \
      --groups "CD4_T_cell,CD8_T_cell" \
-     --output differential_imbalance.tsv
+     --out_file differential_imbalance.tsv
 
 Step 5: Interpret Results
 -------------------------
@@ -287,19 +287,21 @@ Single-cell data is sparse. Consider:
 Memory Issues
 ~~~~~~~~~~~~~
 
-For large datasets:
+For large datasets, process chromosomes separately by filtering your region file:
 
 .. code-block:: bash
 
-   # Process chromosomes separately
+   # Process autosomes separately (add chrX, chrY if needed)
    for chr in chr{1..22}; do
+     # Extract regions for this chromosome
+     grep "^${chr}\t" genes.bed > genes_${chr}.bed
+
      wasp2-count count-variants-sc \
        sample.bam \
        variants.vcf.gz \
-       --barcodes barcodes.tsv \
-       --region genes.gtf \
-       --chrom $chr \
-       --output counts_${chr}.h5ad
+       barcodes.tsv \
+       --region genes_${chr}.bed \
+       --out_file counts_${chr}.h5ad
    done
 
 Next Steps
