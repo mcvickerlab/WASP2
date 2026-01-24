@@ -132,10 +132,10 @@ Count Alleles
    wasp2-count count-variants-sc \
      sample.bam \
      variants.vcf.gz \
-     --barcodes barcodes.tsv \
+     barcodes.tsv \
      --region peaks.bed \
      --samples NA12878 \
-     --output allele_counts.h5ad
+     --out_file allele_counts.h5ad
 
 Analyze Imbalance
 ~~~~~~~~~~~~~~~~~
@@ -144,10 +144,9 @@ Analyze Imbalance
 
    wasp2-analyze find-imbalance-sc \
      allele_counts.h5ad \
+     barcodes.tsv \
      --sample NA12878 \
-     --groups cell_type \
-     --min-count 5 \
-     --output imbalance_results.tsv
+     --out_file imbalance_results.tsv
 
 Output Format
 -------------
