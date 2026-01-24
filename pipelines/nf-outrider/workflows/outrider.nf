@@ -164,22 +164,13 @@ workflow OUTRIDER {
         ch_ml_anndata = WASP2_ML_OUTPUT.out.anndata
     }
 
-    //
-    // STEP 7: MultiQC (Optional)
-    //
-    // Generate summary report
-    //
-
-    ch_multiqc_report = Channel.empty()
-
     emit:
-    counts         = ch_counts                                    // channel: [ val(meta), path(counts) ]
-    gene_counts    = ch_gene_counts                               // channel: [ val(meta), path(gene_counts) ]
-    outliers       = ch_outliers                                  // channel: path(outliers.tsv)
-    mae_results    = params.skip_mae ? Channel.empty() : ch_mae_results // channel: [ val(meta), path(mae_results) ]
-    ml_zarr        = ch_ml_zarr                                   // channel: [ val(meta), path(*.zarr) ]
-    ml_parquet     = ch_ml_parquet                                // channel: [ val(meta), path(*.parquet) ]
-    ml_anndata     = ch_ml_anndata                                // channel: [ val(meta), path(*.h5ad) ]
-    multiqc_report = ch_multiqc_report                            // channel: path(report)
-    versions       = ch_versions                                  // channel: path(versions.yml)
+    counts      = ch_counts                                    // channel: [ val(meta), path(counts) ]
+    gene_counts = ch_gene_counts                               // channel: [ val(meta), path(gene_counts) ]
+    outliers    = ch_outliers                                  // channel: path(outliers.tsv)
+    mae_results = params.skip_mae ? Channel.empty() : ch_mae_results // channel: [ val(meta), path(mae_results) ]
+    ml_zarr     = ch_ml_zarr                                   // channel: [ val(meta), path(*.zarr) ]
+    ml_parquet  = ch_ml_parquet                                // channel: [ val(meta), path(*.parquet) ]
+    ml_anndata  = ch_ml_anndata                                // channel: [ val(meta), path(*.h5ad) ]
+    versions    = ch_versions                                  // channel: path(versions.yml)
 }
