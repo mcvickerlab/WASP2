@@ -1,2 +1,2 @@
-sample,fragments,cellranger_dir
-test_sample,tests/stub/fragments.tsv.gz,
+sample,fragments,cellranger_dir,barcode_tag,chemistry,barcodes,peaks
+test_sample,tests/stub/fragments.tsv.gz,,CB,10x-atac-v2,,

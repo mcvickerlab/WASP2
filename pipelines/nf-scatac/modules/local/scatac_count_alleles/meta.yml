@@ -1,11 +1,13 @@
 name: scatac_count_alleles
-description: Count fragment overlaps at heterozygous SNP positions from scATAC-seq fragments
+description: Count fragment overlaps at heterozygous SNP positions from scATAC-seq fragments with optional filtering
 keywords:
   - scatac
   - single-cell
   - allelic imbalance
   - fragments
   - wasp2
+  - barcode-filtering
+  - peak-filtering
 tools:
   - bedtools:
       description: A powerful toolset for genome arithmetic
@@ -22,7 +24,7 @@ input:
       type: map
       description: |
         Groovy Map containing sample information
-        e.g. [ id:'test', single_end:false, cell_barcode_tag:'CB' ]
+        e.g. [ id:'test', single_end:false, cell_barcode_tag:'CB', chemistry:'10x-atac-v2' ]
   - fragments:
       type: file
       description: 10x-compatible fragments.tsv.gz file
@@ -35,6 +37,14 @@ input:
       type: file
       description: BED file with heterozygous SNP positions (chrom, start, end, ref, alt)
       pattern: "*.bed"
+  - barcodes:
+      type: file
+      description: Optional file with valid cell barcodes to include (one per line)
+      pattern: "*.txt"
+  - peaks:
+      type: file
+      description: Optional BED file with peak regions to restrict SNP counting
+      pattern: "*.bed"
 
 output:
   - meta:
@@ -46,6 +56,10 @@ output:
       type: file
       description: Per-cell fragment overlap counts at SNP positions (barcode, chrom, pos, ref, alt, overlap_count)
       pattern: "*_allele_counts.tsv"
+  - stats:
+      type: file
+      description: Counting statistics summary (total_barcodes, total_snps, total_fragment_overlaps)
+      pattern: "*_count_stats.tsv"
   - versions:
       type: file
       description: File containing software versions
