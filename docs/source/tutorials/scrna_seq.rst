@@ -67,7 +67,6 @@ After running Seurat clustering and annotation:
 .. code-block:: r
 
    library(Seurat)
-   library(dplyr)
 
    # Load your analyzed Seurat object
    seurat_obj <- readRDS("seurat_analyzed.rds")
