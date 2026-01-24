@@ -133,7 +133,7 @@ pd.DataFrame({
 }).to_csv("${prefix}_cell_qc.tsv", sep='\\t', index=False)
 PYEOF
 
-    if [ "${create_zarr}" == "true" ]; then
+    if [ "${zarr_flag}" == "True" ]; then
         mkdir -p ${prefix}_allelic.zarr
         touch ${prefix}_allelic.zarr/.zgroup
     fi
