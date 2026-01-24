@@ -1,0 +1,49 @@
+# Linting workflow for WASP2
+# Runs Ruff linter/formatter and Bandit security scan
+
+name: Lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Ruff
+        run: pip install ruff==0.9.6
+
+      - name: Run Ruff linter
+        run: ruff check src/ tests/ --output-format=github
+
+      - name: Run Ruff formatter check
+        run: ruff format src/ tests/ --check --diff
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Bandit
+        run: pip install "bandit[toml]==1.8.3"
+
+      - name: Run Bandit security scan
+        run: bandit -c pyproject.toml -r src/

@@ -1,0 +1,101 @@
+# Rust build workflow for WASP2
+# Builds and tests Rust extension on Linux and macOS
+
+name: Rust Build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "rust/**"
+      - "pyproject.toml"
+      - ".github/workflows/rust-build.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "rust/**"
+      - "pyproject.toml"
+      - ".github/workflows/rust-build.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libhts-dev \
+            libbz2-dev \
+            liblzma-dev \
+            zlib1g-dev \
+            libcurl4-openssl-dev \
+            libssl-dev \
+            pkg-config \
+            libclang-dev
+
+      - name: Install system dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install htslib xz bzip2 openssl@3 pkg-config llvm
+
+      - name: Set macOS library paths
+        if: runner.os == 'macOS'
+        run: |
+          echo "PKG_CONFIG_PATH=$(brew --prefix htslib)/lib/pkgconfig:$(brew --prefix openssl@3)/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
+          echo "LIBRARY_PATH=$(brew --prefix htslib)/lib:$(brew --prefix openssl@3)/lib:$LIBRARY_PATH" >> $GITHUB_ENV
+          echo "CPATH=$(brew --prefix htslib)/include:$CPATH" >> $GITHUB_ENV
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust -> target
+
+      - name: Check Rust formatting
+        working-directory: rust
+        run: cargo fmt --check
+
+      - name: Run Clippy
+        working-directory: rust
+        run: cargo clippy -- -D warnings
+
+      - name: Build Rust library
+        working-directory: rust
+        run: cargo build --release
+
+      - name: Run Rust tests
+        working-directory: rust
+        run: cargo test
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install maturin
+        run: pip install maturin
+
+      - name: Build wheel with maturin
+        run: maturin build --release -o dist/
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.os }}
+          path: dist/*.whl
