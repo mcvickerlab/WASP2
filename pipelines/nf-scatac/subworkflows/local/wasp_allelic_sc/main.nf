@@ -25,20 +25,20 @@ workflow WASP_ALLELIC_SC {
     WASP2_VCF_TO_BED ( ch_vcf, '' )
     ch_versions = ch_versions.mix(WASP2_VCF_TO_BED.out.versions)
 
-    // Prepare input for counting: combine fragments with SNP BED
-    // Extract barcodes and peaks from the fragment channel
+    // Combine fragments with SNP BED and prepare inputs for counting
     ch_count_input = ch_fragments
         .combine(WASP2_VCF_TO_BED.out.bed)
-        .map { meta, fragments, fragments_tbi, barcodes, peaks, var_meta, bed ->
-            [ meta, fragments, fragments_tbi, bed, barcodes, peaks ]
+        .multiMap { meta, fragments, fragments_tbi, barcodes, peaks, var_meta, bed ->
+            main:    [ meta, fragments, fragments_tbi, bed ]
+            barcodes: barcodes
+            peaks:    peaks
         }
 
     // Count fragment overlaps per cell at SNP positions
-    // Supports optional barcode filtering and peak region filtering
     SCATAC_COUNT_ALLELES (
-        ch_count_input.map { meta, fragments, tbi, bed, barcodes, peaks -> [ meta, fragments, tbi, bed ] },
-        ch_count_input.map { meta, fragments, tbi, bed, barcodes, peaks -> barcodes },
-        ch_count_input.map { meta, fragments, tbi, bed, barcodes, peaks -> peaks }
+        ch_count_input.main,
+        ch_count_input.barcodes,
+        ch_count_input.peaks
     )
     ch_versions = ch_versions.mix(SCATAC_COUNT_ALLELES.out.versions.first())
 
