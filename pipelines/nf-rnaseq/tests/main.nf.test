@@ -587,4 +587,99 @@ nextflow_pipeline {
             )
         }
     }
+
+    //
+    // WASP2 Output Validation Tests (Issue #63)
+    //
+
+    test("WASP2 - counts output has expected TSV format") {
+
+        tag "wasp2_validation"
+        tag "output_format"
+
+        options "-stub"
+
+        when {
+            params {
+                input      = "${projectDir}/assets/samplesheet_test.csv"
+                vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
+                star_index = "${projectDir}/tests/data/star_index"
+                gtf        = "${projectDir}/tests/data/test.gtf"
+                outdir     = "${outputDir}/results_counts_format"
+            }
+        }
+
+        then {
+            assertAll(
+                { assert workflow.success },
+                { assert workflow.out.counts != null },
+                // Validate counts TSV has expected header columns
+                {
+                    def header = path(workflow.out.counts[0][1]).readLines()[0]
+                    ['chrom', 'pos', 'ref', 'alt', 'region', 'ref_count', 'alt_count'].each { col ->
+                        assert header.contains(col) : "Missing '${col}' in header: ${header}"
+                    }
+                }
+            )
+        }
+    }
+
+    test("WASP2 - allelic imbalance results produced with expected format") {
+
+        tag "wasp2_validation"
+        tag "output_format"
+
+        options "-stub"
+
+        when {
+            params {
+                input      = "${projectDir}/assets/samplesheet_test.csv"
+                vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
+                star_index = "${projectDir}/tests/data/star_index"
+                gtf        = "${projectDir}/tests/data/test.gtf"
+                outdir     = "${outputDir}/results_ai_format"
+            }
+        }
+
+        then {
+            assertAll(
+                { assert workflow.success },
+                { assert workflow.out.results != null },
+                // Validate results TSV has expected header columns
+                {
+                    def header = path(workflow.out.results[0][1]).readLines()[0]
+                    ['region', 'snp_count', 'ref_sum', 'alt_sum', 'pvalue', 'fdr'].each { col ->
+                        assert header.contains(col) : "Missing '${col}' in header: ${header}"
+                    }
+                }
+            )
+        }
+    }
+
+    test("WASP2 - pipeline runs without GTF (optional annotation)") {
+
+        tag "wasp2_validation"
+        tag "skip_behavior"
+
+        options "-stub"
+
+        when {
+            params {
+                input      = "${projectDir}/assets/samplesheet_test.csv"
+                vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
+                star_index = "${projectDir}/tests/data/star_index"
+                outdir     = "${outputDir}/results_no_gtf"
+                // GTF intentionally omitted - it's optional
+            }
+        }
+
+        then {
+            assertAll(
+                { assert workflow.success },
+                { assert workflow.out.wasp_bam != null },
+                { assert workflow.out.counts != null },
+                { assert workflow.out.versions != null }
+            )
+        }
+    }
 }
