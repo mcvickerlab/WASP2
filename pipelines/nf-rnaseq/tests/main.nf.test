@@ -110,6 +110,185 @@ nextflow_pipeline {
     }
 
     //
+    // Additional Skip Options Tests
+    //
+
+    test("RNASEQ_ASE - stub run - output_format zarr") {
+
+        tag "skip_options"
+
+        options "-stub"
+
+        when {
+            params {
+                input         = "${projectDir}/assets/samplesheet_test.csv"
+                vcf           = "${projectDir}/tests/data/test_snps.vcf.gz"
+                star_index    = "${projectDir}/tests/data/star_index"
+                gtf           = "${projectDir}/tests/data/test.gtf"
+                outdir        = "${outputDir}/results_output_zarr"
+                output_format = "zarr"
+            }
+        }
+
+        then {
+            assertAll(
+                // Pipeline completes successfully
+                { assert workflow.success },
+
+                // Standard outputs should be produced
+                { assert workflow.out.wasp_bam != null },
+                { assert workflow.out.counts != null },
+                { assert workflow.out.results != null },
+
+                // Zarr ML output and versions
+                { assert workflow.out.ml_zarr != null },
+                { assert workflow.out.versions != null }
+            )
+        }
+    }
+
+    test("RNASEQ_ASE - stub run - output_format parquet") {
+
+        tag "skip_options"
+
+        options "-stub"
+
+        when {
+            params {
+                input         = "${projectDir}/assets/samplesheet_test.csv"
+                vcf           = "${projectDir}/tests/data/test_snps.vcf.gz"
+                star_index    = "${projectDir}/tests/data/star_index"
+                gtf           = "${projectDir}/tests/data/test.gtf"
+                outdir        = "${outputDir}/results_output_parquet"
+                output_format = "parquet"
+            }
+        }
+
+        then {
+            assertAll(
+                // Pipeline completes successfully
+                { assert workflow.success },
+
+                // Standard outputs should be produced
+                { assert workflow.out.wasp_bam != null },
+                { assert workflow.out.counts != null },
+                { assert workflow.out.results != null },
+
+                // Parquet ML output and versions
+                { assert workflow.out.ml_parquet != null },
+                { assert workflow.out.versions != null }
+            )
+        }
+    }
+
+    test("RNASEQ_ASE - stub run - output_format anndata") {
+
+        tag "skip_options"
+
+        options "-stub"
+
+        when {
+            params {
+                input         = "${projectDir}/assets/samplesheet_test.csv"
+                vcf           = "${projectDir}/tests/data/test_snps.vcf.gz"
+                star_index    = "${projectDir}/tests/data/star_index"
+                gtf           = "${projectDir}/tests/data/test.gtf"
+                outdir        = "${outputDir}/results_output_anndata"
+                output_format = "anndata"
+            }
+        }
+
+        then {
+            assertAll(
+                // Pipeline completes successfully
+                { assert workflow.success },
+
+                // Standard outputs should be produced
+                { assert workflow.out.wasp_bam != null },
+                { assert workflow.out.counts != null },
+                { assert workflow.out.results != null },
+
+                // AnnData ML output and versions
+                { assert workflow.out.ml_anndata != null },
+                { assert workflow.out.versions != null }
+            )
+        }
+    }
+
+    test("RNASEQ_ASE - stub run - output_format multi-format") {
+
+        tag "skip_options"
+
+        options "-stub"
+
+        when {
+            params {
+                input         = "${projectDir}/assets/samplesheet_test.csv"
+                vcf           = "${projectDir}/tests/data/test_snps.vcf.gz"
+                star_index    = "${projectDir}/tests/data/star_index"
+                gtf           = "${projectDir}/tests/data/test.gtf"
+                outdir        = "${outputDir}/results_output_multi"
+                output_format = "zarr,parquet,anndata"
+            }
+        }
+
+        then {
+            assertAll(
+                // Pipeline completes successfully
+                { assert workflow.success },
+
+                // Standard outputs should be produced
+                { assert workflow.out.wasp_bam != null },
+                { assert workflow.out.counts != null },
+                { assert workflow.out.results != null },
+
+                // All ML outputs and versions
+                { assert workflow.out.ml_zarr != null },
+                { assert workflow.out.ml_parquet != null },
+                { assert workflow.out.ml_anndata != null },
+                { assert workflow.out.versions != null }
+            )
+        }
+    }
+
+    test("RNASEQ_ASE - stub run - skip_analysis with output_format") {
+
+        tag "skip_options"
+
+        options "-stub"
+
+        when {
+            params {
+                input         = "${projectDir}/assets/samplesheet_test.csv"
+                vcf           = "${projectDir}/tests/data/test_snps.vcf.gz"
+                star_index    = "${projectDir}/tests/data/star_index"
+                gtf           = "${projectDir}/tests/data/test.gtf"
+                outdir        = "${outputDir}/results_skip_with_output"
+                skip_analysis = true
+                output_format = "zarr"
+            }
+        }
+
+        then {
+            assertAll(
+                // Pipeline completes successfully
+                { assert workflow.success },
+
+                // WASP BAM and counts should be produced
+                { assert workflow.out.wasp_bam != null },
+                { assert workflow.out.counts != null },
+
+                // Results should be empty (analysis skipped)
+                { assert workflow.out.results != null },
+
+                // ML output and versions
+                { assert workflow.out.ml_zarr != null },
+                { assert workflow.out.versions != null }
+            )
+        }
+    }
+
+    //
     // Edge Case Tests - Samplesheet Validation
     //
 
