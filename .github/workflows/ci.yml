@@ -17,6 +17,7 @@ env:
   RUST_BACKTRACE: 1
   PIP_DISABLE_PIP_VERSION_CHECK: 1
   PIP_NO_WARN_SCRIPT_LOCATION: 1
+  BASH_ENV: ~/.bashrc  # Auto-source bashrc for all bash steps
 
 jobs:
   # ===========================================================================
@@ -25,6 +26,9 @@ jobs:
   lint:
     name: Lint
     runs-on: [self-hosted, linux, x64]
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
 
@@ -36,18 +40,13 @@ jobs:
           restore-keys: pip-lint-${{ runner.os }}-
 
       - name: Run ruff linter
-        run: |
-          source ~/.bashrc
-          ruff check src/ tests/ || true
+        run: ruff check src/ tests/ || true
 
       - name: Run ruff formatter check
-        run: |
-          source ~/.bashrc
-          ruff format --check src/ tests/ || true
+        run: ruff format --check src/ tests/ || true
 
       - name: Run mypy
         run: |
-          source ~/.bashrc
           pip install mypy --quiet
           mypy src/ --ignore-missing-imports || true
 
@@ -57,22 +56,20 @@ jobs:
   security:
     name: Security Scan
     runs-on: [self-hosted, linux, x64]
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
 
       - name: Install security tools
-        run: |
-          source ~/.bashrc
-          pip install "bandit[toml]>=1.8.0" --quiet
+        run: pip install "bandit[toml]>=1.8.0" --quiet
 
       - name: Run bandit (Python security)
-        run: |
-          source ~/.bashrc
-          bandit -c pyproject.toml -r src/ || true
+        run: bandit -c pyproject.toml -r src/ || true
 
       - name: Run cargo-audit (Rust security)
         run: |
-          source ~/.bashrc
           cargo install cargo-audit --quiet 2>/dev/null || true
           cd rust && cargo audit || true
 
@@ -82,6 +79,9 @@ jobs:
   test:
     name: Test
     runs-on: [self-hosted, linux, x64]
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
 
@@ -110,38 +110,31 @@ jobs:
 
       - name: Show environment
         run: |
-          source ~/.bashrc
           echo "Python: $(python3 --version)"
           echo "Rust: $(cargo --version)"
           echo "Samtools: $(samtools --version | head -1 || echo 'not found')"
 
       - name: Install Python dependencies
         run: |
-          source ~/.bashrc
           python -m pip install --upgrade pip --quiet
           pip install maturin pytest pytest-cov --quiet
 
       - name: Build Rust extension
         run: |
-          source ~/.bashrc
           maturin build --release -m rust/Cargo.toml
           pip install rust/target/wheels/*.whl --force-reinstall --quiet
 
       - name: Install package
-        run: |
-          source ~/.bashrc
-          pip install -e ".[dev]" --no-build-isolation --quiet || pip install -e "." --quiet
+        run: pip install -e ".[dev]" --no-build-isolation --quiet || pip install -e "." --quiet
 
       - name: Run tests
         run: |
-          source ~/.bashrc
           pytest tests/ -v --tb=short -x \
             --ignore=tests/test_benchmark*.py \
             --ignore=tests/benchmarks/ || true
 
       - name: Verify CLI tools
         run: |
-          source ~/.bashrc
           wasp2-count --help || true
           wasp2-map --help || true
           wasp2-analyze --help || true
@@ -153,6 +146,10 @@ jobs:
   rust:
     name: Rust Checks
     runs-on: [self-hosted, linux, x64]
+    defaults:
+      run:
+        shell: bash
+        working-directory: rust
     steps:
       - uses: actions/checkout@v4
 
@@ -173,19 +170,13 @@ jobs:
           restore-keys: cargo-target-rust-${{ runner.os }}-
 
       - name: Check formatting
-        run: |
-          source ~/.bashrc
-          cd rust && cargo fmt --check || true
+        run: cargo fmt --check || true
 
       - name: Run clippy
-        run: |
-          source ~/.bashrc
-          cd rust && cargo clippy -- -D warnings || true
+        run: cargo clippy -- -D warnings || true
 
       - name: Run Rust tests
-        run: |
-          source ~/.bashrc
-          cd rust && cargo test || true
+        run: cargo test || true
 
   # ===========================================================================
   # Nextflow Integration Tests
