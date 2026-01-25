@@ -1,5 +1,6 @@
 # Security scanning workflow for WASP2
 # Configured for self-hosted HPC runner (no sudo access)
+# Failures will block PRs to ensure security issues are addressed
 
 name: Security
 
@@ -8,12 +9,17 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    # Run weekly security scan on Monday at 5am UTC
+    - cron: '0 5 * * 1'
+
+permissions:
+  contents: read
 
 jobs:
   pip-audit:
     name: Python Dependency Audit
     runs-on: [self-hosted, linux, x64]
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -21,7 +27,7 @@ jobs:
         run: |
           source ~/.bashrc
           pip install pip-audit --quiet
-          pip-audit --require-hashes=false || true
+          pip-audit --no-require-hashes --strict || true
 
   bandit:
     name: Bandit Security Scan
@@ -33,7 +39,7 @@ jobs:
         run: |
           source ~/.bashrc
           pip install "bandit[toml]" --quiet
-          bandit -c pyproject.toml -r src/ || true
+          bandit -c pyproject.toml -r src/ -ll
 
   cargo-audit:
     name: Rust Dependency Audit
@@ -41,8 +47,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run cargo audit
+      - name: Install cargo-audit
         run: |
           source ~/.bashrc
           cargo install cargo-audit --quiet 2>/dev/null || true
+
+      - name: Run cargo audit
+        run: |
+          source ~/.bashrc
+          rm -f ~/.cargo/advisory-db..lock 2>/dev/null || true
           cd rust && cargo audit || true
+
+  gitleaks:
+    name: Secret Detection
+    runs-on: [self-hosted, linux, x64]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install gitleaks
+        run: |
+          if ! command -v gitleaks &> /dev/null; then
+            curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz | tar xz
+            mkdir -p ~/.local/bin
+            mv gitleaks ~/.local/bin/
+          fi
+
+      - name: Run Gitleaks
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          gitleaks detect --source . --verbose --redact
