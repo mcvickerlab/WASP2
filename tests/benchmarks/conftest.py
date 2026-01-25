@@ -11,10 +11,13 @@ import gc
 import subprocess
 from collections.abc import Generator
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pytest
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 # Try to import memory_profiler for memory benchmarks
 try:
@@ -56,6 +59,55 @@ def benchmark_data_dir(tmp_path_factory) -> Path:
 def rng() -> np.random.Generator:
     """Seeded random number generator for reproducible benchmarks."""
     return np.random.default_rng(seed=42)
+
+
+# ============================================================================
+# Allele count DataFrame generation (shared utility)
+# ============================================================================
+
+
+def generate_allele_count_data(
+    n_variants: int,
+    n_samples: int,
+    n_regions: int,
+    rng: np.random.Generator,
+) -> "pd.DataFrame":
+    """
+    Generate synthetic allele count data for benchmarking.
+
+    This is a shared utility used by multiple benchmark modules.
+    Coverage scales with sample count to simulate realistic pooled data.
+    """
+    import pandas as pd
+
+    chroms = rng.choice([f"chr{i}" for i in range(1, 23)], size=n_variants)
+    positions = rng.integers(1, 250_000_000, size=n_variants)
+    bases = ["A", "C", "G", "T"]
+    refs = rng.choice(bases, size=n_variants)
+    alts = np.array([rng.choice([b for b in bases if b != r]) for r in refs])
+
+    # Coverage scales with sample count
+    mean_coverage = 30 * n_samples / 10
+    total_counts = rng.exponential(scale=mean_coverage, size=n_variants).astype(int) + max(10, n_samples)
+    ratios = rng.beta(10, 10, size=n_variants)
+    ref_counts = (total_counts * ratios).astype(int)
+    alt_counts = total_counts - ref_counts
+
+    region_names = [f"region_{i:06d}" for i in range(n_regions)]
+    regions = rng.choice(region_names, size=n_variants)
+
+    return pd.DataFrame(
+        {
+            "chrom": pd.Categorical(chroms),
+            "pos": positions.astype(np.uint32),
+            "ref": pd.Categorical(refs),
+            "alt": pd.Categorical(alts),
+            "ref_count": ref_counts.astype(np.uint32),
+            "alt_count": alt_counts.astype(np.uint32),
+            "other_count": np.zeros(n_variants, dtype=np.uint16),
+            "region": regions,
+        }
+    )
 
 
 # ============================================================================
