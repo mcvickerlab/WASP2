@@ -1,6 +1,7 @@
 # WASP2 Continuous Integration Workflow
 # Runs on all PRs and pushes to main
 # Configured for self-hosted HPC runner (tools pre-installed via conda)
+# Optimized with caching for faster builds
 
 name: CI
 
@@ -14,6 +15,8 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  PIP_DISABLE_PIP_VERSION_CHECK: 1
+  PIP_NO_WARN_SCRIPT_LOCATION: 1
 
 jobs:
   # ===========================================================================
@@ -24,6 +27,13 @@ jobs:
     runs-on: [self-hosted, linux, x64]
     steps:
       - uses: actions/checkout@v4
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-lint-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
+          restore-keys: pip-lint-${{ runner.os }}-
 
       - name: Run ruff linter
         run: |
@@ -75,6 +85,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-test-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
+          restore-keys: pip-test-${{ runner.os }}-
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-registry-${{ runner.os }}-${{ hashFiles('rust/Cargo.lock') }}
+          restore-keys: cargo-registry-${{ runner.os }}-
+
+      - name: Cache Rust target
+        uses: actions/cache@v4
+        with:
+          path: rust/target
+          key: cargo-target-${{ runner.os }}-${{ hashFiles('rust/Cargo.lock', 'rust/src/**/*.rs') }}
+          restore-keys: cargo-target-${{ runner.os }}-
+
       - name: Show environment
         run: |
           source ~/.bashrc
@@ -122,6 +155,22 @@ jobs:
     runs-on: [self-hosted, linux, x64]
     steps:
       - uses: actions/checkout@v4
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-rust-${{ runner.os }}-${{ hashFiles('rust/Cargo.lock') }}
+          restore-keys: cargo-rust-${{ runner.os }}-
+
+      - name: Cache Rust target
+        uses: actions/cache@v4
+        with:
+          path: rust/target
+          key: cargo-target-rust-${{ runner.os }}-${{ hashFiles('rust/Cargo.lock', 'rust/src/**/*.rs') }}
+          restore-keys: cargo-target-rust-${{ runner.os }}-
 
       - name: Check formatting
         run: |
