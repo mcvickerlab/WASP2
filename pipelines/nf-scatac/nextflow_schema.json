@@ -1,0 +1,206 @@
+{
+    "$schema": "https://json-schema.org/draft-07/schema",
+    "$id": "https://raw.githubusercontent.com/Jaureguy760/WASP2/master/pipelines/nf-scatac/nextflow_schema.json",
+    "title": "nf-scatac pipeline parameters",
+    "description": "Single-Cell ATAC-seq Allelic Imbalance Pipeline with WASP2",
+    "type": "object",
+    "definitions": {
+        "input_output_options": {
+            "title": "Input/Output options",
+            "type": "object",
+            "fa_icon": "fas fa-terminal",
+            "description": "Define where the pipeline should find input data and save output data.",
+            "required": ["input"],
+            "properties": {
+                "input": {
+                    "type": "string",
+                    "format": "file-path",
+                    "exists": true,
+                    "mimetype": "text/csv",
+                    "pattern": "^\\S+\\.csv$",
+                    "description": "Path to samplesheet CSV file containing sample information.",
+                    "help_text": "The samplesheet must contain sample metadata and paths to fragment files or BAM files.",
+                    "fa_icon": "fas fa-file-csv"
+                },
+                "outdir": {
+                    "type": "string",
+                    "format": "directory-path",
+                    "description": "The output directory where results will be saved.",
+                    "default": "./results",
+                    "fa_icon": "fas fa-folder-open"
+                },
+                "publish_dir_mode": {
+                    "type": "string",
+                    "default": "copy",
+                    "description": "Method used to save pipeline results to output directory.",
+                    "help_text": "The Nextflow `publishDir` option specifies which intermediate files should be saved to the output directory. Options: 'symlink', 'rellink', 'link', 'copy', 'copyNoFollow', 'move'.",
+                    "fa_icon": "fas fa-copy",
+                    "enum": ["symlink", "rellink", "link", "copy", "copyNoFollow", "move"]
+                }
+            }
+        },
+        "variant_options": {
+            "title": "Variant data options",
+            "type": "object",
+            "fa_icon": "fas fa-exchange-alt",
+            "description": "Variant data required for WASP2 allelic analysis.",
+            "properties": {
+                "vcf": {
+                    "type": "string",
+                    "format": "file-path",
+                    "exists": true,
+                    "pattern": "^\\S+\\.(vcf|bcf|pgen)(\\.gz)?$",
+                    "description": "Path to VCF/BCF/PGEN variant file with sample genotypes.",
+                    "help_text": "Required for WASP2 mapping bias correction and allelic imbalance analysis.",
+                    "fa_icon": "fas fa-file-code"
+                }
+            }
+        },
+        "scatac_processing_options": {
+            "title": "Single-cell processing options",
+            "type": "object",
+            "fa_icon": "fas fa-filter",
+            "description": "Options for single-cell ATAC-seq quality filtering and processing.",
+            "properties": {
+                "min_fragments_per_cell": {
+                    "type": "integer",
+                    "default": 1000,
+                    "minimum": 1,
+                    "description": "Minimum fragments per cell to include in analysis.",
+                    "help_text": "Cells with fewer fragments than this threshold will be excluded.",
+                    "fa_icon": "fas fa-sort-numeric-up"
+                },
+                "min_cells_per_snp": {
+                    "type": "integer",
+                    "default": 3,
+                    "minimum": 1,
+                    "description": "Minimum cells per SNP for pseudo-bulk aggregation.",
+                    "help_text": "SNPs covered by fewer cells will be excluded from pseudo-bulk analysis.",
+                    "fa_icon": "fas fa-users"
+                },
+                "min_count": {
+                    "type": "integer",
+                    "default": 10,
+                    "minimum": 1,
+                    "description": "Minimum allele count for imbalance testing.",
+                    "help_text": "Variants with fewer than this many total reads will be excluded from statistical testing.",
+                    "fa_icon": "fas fa-sort-numeric-up"
+                },
+                "pseudocount": {
+                    "type": "integer",
+                    "default": 1,
+                    "minimum": 0,
+                    "description": "Pseudocount for imbalance calculation.",
+                    "help_text": "Added to allele counts to stabilize ratio estimates.",
+                    "fa_icon": "fas fa-plus"
+                }
+            }
+        },
+        "output_format_options": {
+            "title": "Output format options",
+            "type": "object",
+            "fa_icon": "fas fa-file-export",
+            "description": "Configure output file formats for downstream analysis.",
+            "properties": {
+                "create_zarr": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Also output Zarr format for GenVarLoader compatibility.",
+                    "help_text": "Creates Zarr arrays suitable for use with GenVarLoader and other ML frameworks.",
+                    "fa_icon": "fas fa-database"
+                },
+                "skip_anndata": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Skip AnnData H5AD file creation.",
+                    "fa_icon": "fas fa-fast-forward"
+                },
+                "skip_pseudobulk": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Skip pseudo-bulk aggregation and analysis.",
+                    "help_text": "If enabled, only single-cell level results will be produced.",
+                    "fa_icon": "fas fa-fast-forward"
+                },
+                "output_format": {
+                    "type": "string",
+                    "description": "ML output formats (comma-separated): zarr, parquet, anndata.",
+                    "help_text": "Specify multiple formats separated by commas for ML-ready outputs.",
+                    "fa_icon": "fas fa-cogs"
+                }
+            }
+        },
+        "max_job_request_options": {
+            "title": "Max resource options",
+            "type": "object",
+            "fa_icon": "fas fa-server",
+            "description": "Set the maximum resource limits for pipeline processes.",
+            "properties": {
+                "max_cpus": {
+                    "type": "integer",
+                    "default": 16,
+                    "minimum": 1,
+                    "description": "Maximum number of CPUs that can be requested for any single process.",
+                    "fa_icon": "fas fa-microchip"
+                },
+                "max_memory": {
+                    "type": "string",
+                    "default": "128.GB",
+                    "pattern": "^\\d+(\\.\\d+)?\\.?\\s*(K|M|G|T)?B$",
+                    "description": "Maximum amount of memory that can be requested for any single process.",
+                    "fa_icon": "fas fa-memory"
+                },
+                "max_time": {
+                    "type": "string",
+                    "default": "240.h",
+                    "pattern": "^(\\d+\\.?\\s*(s|m|h|d)\\.?\\s*)+$",
+                    "description": "Maximum amount of time that can be requested for any single process.",
+                    "fa_icon": "fas fa-clock"
+                }
+            }
+        },
+        "generic_options": {
+            "title": "Generic options",
+            "type": "object",
+            "fa_icon": "fas fa-file-import",
+            "description": "Less common options for the pipeline.",
+            "properties": {
+                "help": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Display help text.",
+                    "fa_icon": "fas fa-question-circle",
+                    "hidden": true
+                },
+                "version": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Display version and exit.",
+                    "fa_icon": "fas fa-info-circle",
+                    "hidden": true
+                },
+                "validate_params": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Boolean whether to validate parameters against the schema at runtime.",
+                    "fa_icon": "fas fa-check-square",
+                    "hidden": true
+                },
+                "tracedir": {
+                    "type": "string",
+                    "default": "${params.outdir}/pipeline_info",
+                    "description": "Directory to keep pipeline Nextflow trace, timeline, report, and DAG files.",
+                    "fa_icon": "fas fa-folder"
+                }
+            }
+        }
+    },
+    "allOf": [
+        { "$ref": "#/definitions/input_output_options" },
+        { "$ref": "#/definitions/variant_options" },
+        { "$ref": "#/definitions/scatac_processing_options" },
+        { "$ref": "#/definitions/output_format_options" },
+        { "$ref": "#/definitions/max_job_request_options" },
+        { "$ref": "#/definitions/generic_options" }
+    ]
+}
