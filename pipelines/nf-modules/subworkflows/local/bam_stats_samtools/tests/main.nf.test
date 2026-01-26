@@ -1,0 +1,68 @@
+nextflow_workflow {
+
+    name "Test Subworkflow BAM_STATS_SAMTOOLS"
+    script "../main.nf"
+    workflow "BAM_STATS_SAMTOOLS"
+
+    tag "subworkflows"
+    tag "subworkflows_local"
+    tag "bam_stats_samtools"
+    tag "samtools"
+
+    test("Should generate BAM statistics - stub") {
+
+        options "-stub-run"
+
+        when {
+            workflow {
+                """
+                input[0] = Channel.of([
+                    [ id:'test_sample', single_end:false ],
+                    file('test.bam'),
+                    file('test.bam.bai')
+                ])
+                input[1] = Channel.of([
+                    [ id:'reference' ],
+                    file('reference.fa')
+                ])
+                """
+            }
+        }
+
+        then {
+            assert workflow.success
+            assert workflow.out.stats
+            assert workflow.out.flagstat
+            assert workflow.out.idxstats
+            assert workflow.out.versions
+            assert snapshot(workflow.out).match()
+        }
+    }
+
+    test("Should handle CRAM input - stub") {
+
+        options "-stub-run"
+
+        when {
+            workflow {
+                """
+                input[0] = Channel.of([
+                    [ id:'cram_sample', single_end:false ],
+                    file('test.cram'),
+                    file('test.cram.crai')
+                ])
+                input[1] = Channel.of([
+                    [ id:'reference' ],
+                    file('reference.fa')
+                ])
+                """
+            }
+        }
+
+        then {
+            assert workflow.success
+            assert workflow.out.stats
+            assert snapshot(workflow.out).match()
+        }
+    }
+}

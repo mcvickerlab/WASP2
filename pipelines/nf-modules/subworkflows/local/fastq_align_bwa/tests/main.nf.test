@@ -1,0 +1,110 @@
+nextflow_workflow {
+
+    name "Test Subworkflow FASTQ_ALIGN_BWA"
+    script "../main.nf"
+    workflow "FASTQ_ALIGN_BWA"
+
+    tag "subworkflows"
+    tag "subworkflows_local"
+    tag "fastq_align_bwa"
+    tag "bwa"
+    tag "samtools"
+
+    test("Should align FASTQ with pre-built index - stub") {
+
+        options "-stub-run"
+
+        when {
+            workflow {
+                """
+                input[0] = Channel.of([
+                    [ id:'test_sample', single_end:false ],
+                    [ file('test_R1.fastq.gz'), file('test_R2.fastq.gz') ]
+                ])
+                input[1] = Channel.of([
+                    [ id:'reference' ],
+                    file('bwa_index/')
+                ])
+                input[2] = Channel.of([
+                    [ id:'reference' ],
+                    file('reference.fa')
+                ])
+                input[3] = true
+                """
+            }
+        }
+
+        then {
+            assert workflow.success
+            assert workflow.out.bam
+            assert workflow.out.bai
+            assert workflow.out.stats
+            assert workflow.out.flagstat
+            assert workflow.out.idxstats
+            assert workflow.out.versions
+            assert snapshot(workflow.out).match()
+        }
+    }
+
+    test("Should align single-end reads - stub") {
+
+        options "-stub-run"
+
+        when {
+            workflow {
+                """
+                input[0] = Channel.of([
+                    [ id:'single_end_sample', single_end:true ],
+                    file('test.fastq.gz')
+                ])
+                input[1] = Channel.of([
+                    [ id:'reference' ],
+                    file('bwa_index/')
+                ])
+                input[2] = Channel.of([
+                    [ id:'reference' ],
+                    file('reference.fa')
+                ])
+                input[3] = true
+                """
+            }
+        }
+
+        then {
+            assert workflow.success
+            assert workflow.out.bam
+            assert snapshot(workflow.out).match()
+        }
+    }
+
+    test("Should handle unsorted output - stub") {
+
+        options "-stub-run"
+
+        when {
+            workflow {
+                """
+                input[0] = Channel.of([
+                    [ id:'unsorted_sample', single_end:false ],
+                    [ file('test_R1.fastq.gz'), file('test_R2.fastq.gz') ]
+                ])
+                input[1] = Channel.of([
+                    [ id:'reference' ],
+                    file('bwa_index/')
+                ])
+                input[2] = Channel.of([
+                    [ id:'reference' ],
+                    file('reference.fa')
+                ])
+                input[3] = false
+                """
+            }
+        }
+
+        then {
+            assert workflow.success
+            assert workflow.out.bam
+            assert snapshot(workflow.out).match()
+        }
+    }
+}
