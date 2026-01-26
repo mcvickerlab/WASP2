@@ -30,9 +30,10 @@ nf-scatac/
 │       └── bam_stats_samtools/      # BAM QC stats
 ├── modules/
 │   └── local/
-│       ├── scatac_count_alleles/    # Per-cell allele counting
-│       ├── scatac_create_anndata/   # AnnData H5AD output
-│       └── scatac_pseudobulk/       # Pseudo-bulk aggregation
+│       ├── scatac_add_haplotype_layers/  # Hap1/hap2 layer creation from phased VCF
+│       ├── scatac_count_alleles/         # Per-cell allele counting (fragment-based)
+│       ├── scatac_create_anndata/        # AnnData H5AD output
+│       └── scatac_pseudobulk/            # Pseudo-bulk aggregation
 ├── conf/
 │   ├── base.config
 │   ├── modules.config
@@ -57,21 +58,27 @@ nextflow run . -profile docker \
 
 | Column | Required | Description |
 |--------|----------|-------------|
-| sample | Yes | Sample identifier |
+| sample | Yes | Sample identifier (must match VCF sample name for BAM mode) |
 | fragments | Yes* | Path to fragments.tsv.gz |
 | cellranger_dir | Yes* | Path to CellRanger ATAC output |
+| bam | No | Path to BAM file (enables allele-specific counting with ref/alt/hap1/hap2 layers) |
 | barcode_tag | No | BAM tag for cell barcodes (default: CB) |
 | chemistry | No | Library chemistry (default: 10x-atac-v2) |
 | barcodes | No | File with valid cell barcodes (one per line) |
 | peaks | No | BED file with peak regions to restrict analysis |
 
-*Either `fragments` or `cellranger_dir` is required
+*Either `fragments` or `cellranger_dir` is required for fragment-based counting
+
+**Note on counting modes:**
+- **Fragment-based** (fragments only): Counts fragment overlaps at SNP positions. Output has only `X` layer (total overlaps).
+- **BAM-based** (bam column provided): True allele-specific counting. Output has `X`, `ref`, `alt`, `hap1`, `hap2` layers.
 
 Example:
 ```csv
-sample,fragments,cellranger_dir,barcode_tag,chemistry,barcodes,peaks
-GM12878_rep1,/path/to/fragments.tsv.gz,,CB,10x-atac-v2,/path/to/barcodes.txt,/path/to/peaks.bed
-GM12878_rep2,,/path/to/cellranger/output,CB,10x-atac-v2,,
+sample,fragments,cellranger_dir,bam,barcode_tag,chemistry,barcodes,peaks
+GM12878_rep1,/path/to/fragments.tsv.gz,,,CB,10x-atac-v2,/path/to/barcodes.txt,/path/to/peaks.bed
+GM12878_rep2,,/path/to/cellranger/output,,CB,10x-atac-v2,,
+NA12878_bam,,,/path/to/possorted_bam.bam,CB,10x-atac-v2,/path/to/barcodes.txt,
 ```
 
 ## Parameters
@@ -205,12 +212,27 @@ results/
 
 ## AnnData Output Format
 
-The H5AD file contains:
+The H5AD file contains different layers depending on input type:
 
+### Fragment-based input (overlap counting)
 - **X**: Sparse matrix of total fragment overlaps (cells × SNPs)
+
+### BAM-based input (allele-specific counting)
+- **X**: Sparse matrix of total counts (cells × SNPs)
+- **layers**:
+  - `ref`: Reference allele counts per cell/SNP
+  - `alt`: Alternate allele counts per cell/SNP
+  - `hap1`: Haplotype 1 counts (from phased VCF)
+  - `hap2`: Haplotype 2 counts (from phased VCF)
+
+### Common metadata
 - **obs**: Cell metadata
   - `n_snps`: Number of SNPs with overlaps
-  - `total_counts`: Total fragment overlaps
+  - `total_counts`: Total counts
+  - `ref_counts`: Total reference allele counts (BAM input only)
+  - `alt_counts`: Total alternate allele counts (BAM input only)
+  - `hap1_counts`: Total haplotype 1 counts (BAM input only)
+  - `hap2_counts`: Total haplotype 2 counts (BAM input only)
   - `chemistry`: Library chemistry
   - `sample_id`: Sample identifier
 - **var**: SNP metadata
@@ -221,7 +243,9 @@ The H5AD file contains:
 - **uns**: Unstructured metadata
   - `sample_id`: Sample identifier
   - `pipeline`: 'nf-scatac'
-  - `data_type`: 'scATAC_allelic_counts'
+  - `data_type`: 'scATAC_allelic_counts' or 'scATAC_allelic_counts_phased'
+  - `phased_snps`: Number of phased SNPs (BAM input only)
+  - `phasing_rate`: Fraction of SNPs with phasing info (BAM input only)
 
 ## Supported Chemistries
 

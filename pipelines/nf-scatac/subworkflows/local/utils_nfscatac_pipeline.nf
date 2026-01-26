@@ -23,29 +23,62 @@ workflow PIPELINE_INITIALISATION {
     }
 
     // Parse samplesheet with scATAC-specific meta map fields
-    // Supports optional barcodes and peaks columns for filtering
+    // Supports optional barcodes, peaks, and BAM columns
+    // BAM input enables true allele-specific counting with ref/alt/hap layers
     ch_samplesheet = Channel.fromPath(input, checkIfExists: true)
         .splitCsv(header: true, strip: true)
         .map { row ->
             if (!row.sample) {
                 error "Samplesheet error: 'sample' column is required. Found columns: ${row.keySet()}"
             }
-            if (!row.fragments && !row.cellranger_dir) {
-                error "Samplesheet error for '${row.sample}': provide 'fragments' or 'cellranger_dir'"
+            if (!row.fragments && !row.cellranger_dir && !row.bam) {
+                error "Samplesheet error for '${row.sample}': provide 'fragments', 'cellranger_dir', or 'bam'"
             }
 
             def meta = [
                 id: row.sample,
                 single_end: false,
                 cell_barcode_tag: row.barcode_tag ?: 'CB',
-                chemistry: row.chemistry ?: '10x-atac-v2'
+                chemistry: row.chemistry ?: '10x-atac-v2',
+                has_bam: row.bam as boolean || row.cellranger_dir as boolean
             ]
 
-            // Resolve fragments file path
-            def fragments = row.fragments
-                ? file(row.fragments, checkIfExists: true)
-                : file("${row.cellranger_dir}/outs/fragments.tsv.gz", checkIfExists: true)
-            def fragments_tbi = file("${fragments}.tbi", checkIfExists: true)
+            // Resolve fragments file path (optional when BAM is provided)
+            def fragments = file('NO_FILE')
+            def fragments_tbi = file('NO_FILE')
+            if (row.fragments) {
+                fragments = file(row.fragments, checkIfExists: true)
+                fragments_tbi = file("${fragments}.tbi", checkIfExists: true)
+            } else if (row.cellranger_dir) {
+                def frag_path = "${row.cellranger_dir}/outs/fragments.tsv.gz"
+                if (file(frag_path).exists()) {
+                    fragments = file(frag_path, checkIfExists: true)
+                    fragments_tbi = file("${frag_path}.tbi", checkIfExists: true)
+                }
+            }
+
+            // Optional: BAM file for true allele-specific counting
+            def bam = file('NO_FILE')
+            def bai = file('NO_FILE')
+            if (row.bam && row.bam.trim()) {
+                bam = file(row.bam, checkIfExists: true)
+                // Try common BAI naming conventions: .bam.bai and .bai
+                def bai_path1 = file("${bam}.bai")
+                def bai_path2 = file("${bam}".replaceAll(/\.bam$/, '.bai'))
+                if (bai_path1.exists()) {
+                    bai = bai_path1
+                } else if (bai_path2.exists()) {
+                    bai = bai_path2
+                } else {
+                    error "Samplesheet error for '${row.sample}': BAM index not found. Tried: ${bai_path1}, ${bai_path2}"
+                }
+            } else if (row.cellranger_dir) {
+                def bam_path = "${row.cellranger_dir}/outs/possorted_bam.bam"
+                if (file(bam_path).exists()) {
+                    bam = file(bam_path, checkIfExists: true)
+                    bai = file("${bam_path}.bai", checkIfExists: true)
+                }
+            }
 
             // Optional: cell barcode whitelist file
             def barcodes = row.barcodes && row.barcodes.trim()
@@ -57,11 +90,11 @@ workflow PIPELINE_INITIALISATION {
                 ? file(row.peaks, checkIfExists: true)
                 : file('NO_FILE')
 
-            [ meta, fragments, fragments_tbi, barcodes, peaks ]
+            [ meta, fragments, fragments_tbi, barcodes, peaks, bam, bai ]
         }
 
     emit:
-    samplesheet = ch_samplesheet  // channel: [ val(meta), path(fragments), path(fragments_tbi), path(barcodes), path(peaks) ]
+    samplesheet = ch_samplesheet  // channel: [ val(meta), path(fragments), path(fragments_tbi), path(barcodes), path(peaks), path(bam), path(bai) ]
 }
 
 workflow PIPELINE_COMPLETION {
@@ -93,7 +126,7 @@ def helpMessage() {
 
     Required:
         --input       Samplesheet CSV (see format below)
-        --vcf         Indexed VCF/BCF with heterozygous SNPs
+        --vcf         Indexed VCF/BCF with heterozygous SNPs (phased recommended)
 
     Optional:
         --outdir                  Output directory [default: ./results]
@@ -104,18 +137,24 @@ def helpMessage() {
         --skip_anndata            Skip AnnData H5AD creation [default: false]
 
     Samplesheet format:
-        sample,fragments,cellranger_dir,barcode_tag,chemistry,barcodes,peaks
-        sample1,/path/to/fragments.tsv.gz,,CB,10x-atac-v2,/path/to/barcodes.txt,/path/to/peaks.bed
-        sample2,,/path/to/cellranger/output,CB,10x-atac-v2,,
+        sample,fragments,cellranger_dir,bam,barcode_tag,chemistry,barcodes,peaks
+        sample1,/path/to/fragments.tsv.gz,,,CB,10x-atac-v2,/path/to/barcodes.txt,/path/to/peaks.bed
+        sample2,,/path/to/cellranger/output,,CB,10x-atac-v2,,
+        sample3,,,/path/to/possorted.bam,CB,10x-atac-v2,/path/to/barcodes.txt,
 
     Column descriptions:
         sample         - Sample identifier (required)
-        fragments      - Path to fragments.tsv.gz (required if no cellranger_dir)
-        cellranger_dir - Path to CellRanger ATAC output (required if no fragments)
+        fragments      - Path to fragments.tsv.gz
+        cellranger_dir - Path to CellRanger ATAC output (auto-detects fragments & BAM)
+        bam            - Path to indexed BAM (enables true allele-specific counting)
         barcode_tag    - BAM tag for cell barcodes [default: CB]
         chemistry      - Library chemistry [default: 10x-atac-v2]
         barcodes       - Optional: file with valid cell barcodes (one per line)
         peaks          - Optional: BED file with peak regions to restrict analysis
+
+    Input priority: At least one of fragments, cellranger_dir, or bam is required.
+    When BAM is provided, true allele-specific counting is performed with ref/alt/hap layers.
+    When only fragments are provided, overlap counting is performed (total counts only).
 
     Profiles:
         -profile docker        Run with Docker
@@ -126,8 +165,8 @@ def helpMessage() {
 
     Output:
         results/
-        ├── allele_counts/      # Per-cell allele counts TSV
-        ├── anndata/            # AnnData H5AD files
+        ├── allele_counts/      # Per-cell allele counts
+        ├── anndata/            # AnnData H5AD files (with ref/alt/hap layers if BAM provided)
         ├── zarr/               # Zarr files (if --create_zarr)
         ├── cell_qc/            # Cell QC metrics
         ├── pseudobulk/         # Pseudo-bulk aggregated counts

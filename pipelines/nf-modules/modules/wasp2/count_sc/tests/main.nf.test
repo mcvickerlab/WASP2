@@ -1,0 +1,144 @@
+nextflow_process {
+
+    name "Test Process WASP2_COUNT_SC"
+    script "../main.nf"
+    process "WASP2_COUNT_SC"
+
+    tag "modules"
+    tag "modules_nfcore"
+    tag "wasp2"
+    tag "wasp2/count_sc"
+
+    test("wasp2_count_sc - bam + vcf - stub") {
+
+        options "-stub"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id:'test_sample', sample:'NA12878' ],
+                    file("${projectDir}/tests/data/minimal.bam"),
+                    file("${projectDir}/tests/data/minimal.bam.bai")
+                ]
+                input[1] = [
+                    [ id:'test_vcf' ],
+                    file("${projectDir}/tests/data/sample.vcf.gz"),
+                    file("${projectDir}/tests/data/sample.vcf.gz.tbi")
+                ]
+                input[2] = file('NO_FILE')
+                input[3] = file('NO_FILE')
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert process.success },
+                { assert snapshot(process.out.versions).match("versions_stub") },
+                { assert process.out.counts.size() == 1 },
+                { assert file(process.out.counts[0][1]).exists() },
+                { assert process.out.counts[0][1].toString().endsWith('.h5ad') }
+            )
+        }
+    }
+
+    test("wasp2_count_sc - bam + vcf + barcodes - stub") {
+
+        options "-stub"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id:'test_with_barcodes', sample:'NA12878' ],
+                    file("${projectDir}/tests/data/minimal.bam"),
+                    file("${projectDir}/tests/data/minimal.bam.bai")
+                ]
+                input[1] = [
+                    [ id:'test_vcf' ],
+                    file("${projectDir}/tests/data/sample.vcf.gz"),
+                    file("${projectDir}/tests/data/sample.vcf.gz.tbi")
+                ]
+                input[2] = file("${projectDir}/tests/data/barcodes.txt", checkIfExists: false)
+                input[3] = file('NO_FILE')
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert process.success },
+                { assert snapshot(process.out).match("stub_with_barcodes") }
+            )
+        }
+    }
+
+    test("wasp2_count_sc - bam + vcf + peaks - stub") {
+
+        options "-stub"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id:'test_with_peaks', sample:'NA12878' ],
+                    file("${projectDir}/tests/data/minimal.bam"),
+                    file("${projectDir}/tests/data/minimal.bam.bai")
+                ]
+                input[1] = [
+                    [ id:'test_vcf' ],
+                    file("${projectDir}/tests/data/sample.vcf.gz"),
+                    file("${projectDir}/tests/data/sample.vcf.gz.tbi")
+                ]
+                input[2] = file('NO_FILE')
+                input[3] = file("${projectDir}/tests/data/regions.bed", checkIfExists: false)
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert process.success },
+                { assert snapshot(process.out).match("stub_with_peaks") },
+                { assert process.out.stats.size() == 1 }
+            )
+        }
+    }
+
+    test("wasp2_count_sc - outputs have correct structure - stub") {
+
+        options "-stub"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id:'test_structure', sample:'NA12878' ],
+                    file("${projectDir}/tests/data/minimal.bam"),
+                    file("${projectDir}/tests/data/minimal.bam.bai")
+                ]
+                input[1] = [
+                    [ id:'test_vcf' ],
+                    file("${projectDir}/tests/data/sample.vcf.gz"),
+                    file("${projectDir}/tests/data/sample.vcf.gz.tbi")
+                ]
+                input[2] = file('NO_FILE')
+                input[3] = file('NO_FILE')
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert process.success },
+                // Verify H5AD output exists and has correct naming
+                { assert process.out.counts[0][1].toString().contains('test_structure') },
+                { assert process.out.counts[0][1].toString().endsWith('_allele_counts.h5ad') },
+                // Verify stats output exists
+                { assert process.out.stats.size() == 1 },
+                { assert process.out.stats[0][1].toString().endsWith('_stats.tsv') }
+            )
+        }
+    }
+}

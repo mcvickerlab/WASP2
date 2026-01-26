@@ -5,11 +5,16 @@
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     Allelic imbalance analysis for single-cell ATAC-seq data using WASP2.
 
+    Input modes:
+    - BAM input: True allele-specific counting with ref/alt/hap1/hap2 layers
+    - Fragments input: Overlap counting (total counts only)
+
     Features:
     - 10x Genomics CellRanger ATAC output support
     - Cell barcode filtering
     - Peak region filtering
     - Per-cell allele counts with AnnData/H5AD output
+    - AnnData layers: X (total), ref, alt, hap1, hap2 (when BAM provided)
     - Zarr output for GenVarLoader integration
     - Pseudo-bulk aggregation for statistical power
     - Integration with ArchR/Signac via scverse ecosystem
@@ -24,7 +29,7 @@ include { PIPELINE_COMPLETION     } from './subworkflows/local/utils_nfscatac_pi
 
 workflow NFSCATAC {
     take:
-    samplesheet  // channel: [ val(meta), path(fragments), path(fragments_tbi), path(barcodes), path(peaks) ]
+    samplesheet  // channel: [ val(meta), path(fragments), path(fragments_tbi), path(barcodes), path(peaks), path(bam), path(bai) ]
 
     main:
     SCATAC ( samplesheet )
