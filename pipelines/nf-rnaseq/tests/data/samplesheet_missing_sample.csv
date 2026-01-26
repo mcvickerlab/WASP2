@@ -1,0 +1,2 @@
+fastq_1,fastq_2
+${projectDir}/tests/data/sample1_R1.fq.gz,${projectDir}/tests/data/sample1_R2.fq.gz
