@@ -1,0 +1,60 @@
+nextflow_process {
+
+    name "Test Process AGGREGATE_COUNTS"
+    script "../../../modules/local/aggregate_counts.nf"
+    process "AGGREGATE_COUNTS"
+
+    tag "modules"
+    tag "modules_local"
+    tag "outrider"
+
+    test("Should aggregate variant counts to gene level with sum - stub") {
+
+        options "-stub-run"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id:'test_sample' ],
+                    file('variant_counts.tsv')
+                ]
+                input[1] = file('genes.gtf')
+                input[2] = 'sum'
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.gene_counts
+            assert process.out.versions
+            assert snapshot(process.out).match()
+        }
+    }
+
+    test("Should aggregate with mean method - stub") {
+
+        options "-stub-run"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id:'test_sample_mean' ],
+                    file('variant_counts.tsv')
+                ]
+                input[1] = file('genes.gtf')
+                input[2] = 'mean'
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.gene_counts
+            assert process.out.versions
+            assert snapshot(process.out).match()
+        }
+    }
+}

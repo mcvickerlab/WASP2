@@ -1,0 +1,42 @@
+nextflow_process {
+
+    name "Test Process WASP2_UNIFIED_MAKE_READS"
+    script "../../../modules/local/wasp2_unified_make_reads/main.nf"
+    process "WASP2_UNIFIED_MAKE_READS"
+
+    tag "modules"
+    tag "modules_local"
+    tag "wasp2"
+
+    test("Should generate swapped-allele reads for remapping - stub") {
+
+        options "-stub-run"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id:'test_sample', single_end:false, sample:'NA12878' ],
+                    file('test.bam'),
+                    file('test.bam.bai')
+                ]
+                input[1] = [
+                    [ id:'reference' ],
+                    file('variants.vcf.gz'),
+                    file('variants.vcf.gz.tbi')
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.remap_fastq
+            assert process.out.to_remap_bam
+            assert process.out.keep_bam
+            assert process.out.wasp_json
+            assert process.out.versions
+            assert snapshot(process.out).match()
+        }
+    }
+}

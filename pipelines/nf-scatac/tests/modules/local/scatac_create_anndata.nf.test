@@ -1,0 +1,62 @@
+nextflow_process {
+
+    name "Test Process SCATAC_CREATE_ANNDATA"
+    script "../../../modules/local/scatac_create_anndata/main.nf"
+    process "SCATAC_CREATE_ANNDATA"
+
+    tag "modules"
+    tag "modules_local"
+    tag "scatac"
+    tag "anndata"
+
+    test("Should create AnnData H5AD from allele counts - stub") {
+
+        options "-stub-run"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id:'test_sample' ],
+                    file('allele_counts.tsv')
+                ]
+                input[1] = false
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.anndata
+            assert process.out.cell_qc
+            assert process.out.versions
+            assert snapshot(process.out).match()
+        }
+    }
+
+    test("Should create AnnData with Zarr output - stub") {
+
+        options "-stub-run"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id:'test_sample_zarr' ],
+                    file('allele_counts.tsv')
+                ]
+                input[1] = true
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.anndata
+            assert process.out.zarr
+            assert process.out.cell_qc
+            assert process.out.versions
+            assert snapshot(process.out).match()
+        }
+    }
+}

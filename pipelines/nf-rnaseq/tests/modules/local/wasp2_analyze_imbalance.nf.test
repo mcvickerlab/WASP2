@@ -1,0 +1,33 @@
+nextflow_process {
+
+    name "Test Process WASP2_ANALYZE_IMBALANCE"
+    script "../../../modules/local/wasp2_analyze_imbalance/main.nf"
+    process "WASP2_ANALYZE_IMBALANCE"
+
+    tag "modules"
+    tag "modules_local"
+    tag "wasp2"
+
+    test("Should perform statistical testing for allelic imbalance - stub") {
+
+        options "-stub-run"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id:'test_sample', single_end:false ],
+                    file('counts.tsv')
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.results
+            assert process.out.versions
+            assert snapshot(process.out).match()
+        }
+    }
+}

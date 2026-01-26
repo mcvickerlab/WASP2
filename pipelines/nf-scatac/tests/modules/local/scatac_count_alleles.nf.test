@@ -1,0 +1,92 @@
+nextflow_process {
+
+    name "Test Process SCATAC_COUNT_ALLELES"
+    script "../../../modules/local/scatac_count_alleles/main.nf"
+    process "SCATAC_COUNT_ALLELES"
+
+    tag "modules"
+    tag "modules_local"
+    tag "scatac"
+
+    test("Should count fragment overlaps at SNP positions - stub") {
+
+        options "-stub-run"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id:'test_sample' ],
+                    file('fragments.tsv.gz'),
+                    file('fragments.tsv.gz.tbi'),
+                    file('snps.bed')
+                ]
+                input[1] = file('NO_FILE')  // No barcode filter
+                input[2] = file('NO_FILE')  // No peak filter
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.counts
+            assert process.out.stats
+            assert process.out.versions
+            assert snapshot(process.out).match()
+        }
+    }
+
+    test("Should filter by barcode whitelist - stub") {
+
+        options "-stub-run"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id:'test_sample_filtered' ],
+                    file('fragments.tsv.gz'),
+                    file('fragments.tsv.gz.tbi'),
+                    file('snps.bed')
+                ]
+                input[1] = file('barcodes.txt')
+                input[2] = file('NO_FILE')
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.counts
+            assert process.out.versions
+            assert snapshot(process.out).match()
+        }
+    }
+
+    test("Should filter by peak regions - stub") {
+
+        options "-stub-run"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id:'test_sample_peaks' ],
+                    file('fragments.tsv.gz'),
+                    file('fragments.tsv.gz.tbi'),
+                    file('snps.bed')
+                ]
+                input[1] = file('NO_FILE')
+                input[2] = file('peaks.bed')
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.counts
+            assert process.out.versions
+            assert snapshot(process.out).match()
+        }
+    }
+}
