@@ -1,5 +1,5 @@
 # Security scanning workflow for WASP2
-# Configured for self-hosted HPC runner (no sudo access)
+# Configured for self-hosted Mac runner with Docker
 # Security scans are informational - failures logged but don't block PRs
 # Exception: gitleaks (secret detection) will fail the build if secrets found
 
@@ -17,13 +17,10 @@ on:
 permissions:
   contents: read
 
-env:
-  BASH_ENV: ~/.bashrc  # Auto-source bashrc for all bash steps
-
 jobs:
   pip-audit:
     name: Python Dependency Audit
-    runs-on: [self-hosted, linux, x64]
+    runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
     timeout-minutes: 10
     defaults:
       run:
@@ -38,7 +35,7 @@ jobs:
 
   bandit:
     name: Bandit Security Scan
-    runs-on: [self-hosted, linux, x64]
+    runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
     timeout-minutes: 10
     defaults:
       run:
@@ -53,7 +50,7 @@ jobs:
 
   cargo-audit:
     name: Rust Dependency Audit
-    runs-on: [self-hosted, linux, x64]
+    runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
     timeout-minutes: 10
     defaults:
       run:
@@ -73,7 +70,7 @@ jobs:
 
   gitleaks:
     name: Secret Detection
-    runs-on: [self-hosted, linux, x64]
+    runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
     timeout-minutes: 10
     defaults:
       run:
@@ -87,7 +84,7 @@ jobs:
         run: |
           if ! command -v gitleaks &> /dev/null; then
             # Gitleaks v8.18.4 - review for updates quarterly
-            curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz | tar xz
+            curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_darwin_arm64.tar.gz | tar xz
             mkdir -p ~/.local/bin
             mv gitleaks ~/.local/bin/
           fi

@@ -1,12 +1,14 @@
 # Git
 .git
 .gitignore
+.gitattributes
 
 # GitHub
 .github
 
-# Documentation
+# Documentation (keep README for build)
 docs
+doc
 *.md
 !README.md
 
@@ -14,27 +16,85 @@ docs
 tests
 .pytest_cache
 .nf-test
+.coverage
+htmlcov
+coverage.xml
 
-# Python cache
+# Python cache and environments
 __pycache__
 *.pyc
 *.pyo
+*.pyd
 *.egg-info
 .eggs
 dist
 build
+.venv
+venv
+.tox
+.nox
 
-# IDE
+# Rust build artifacts (handled by multi-stage)
+rust/target
+
+# IDE and editors
 .vscode
 .idea
 *.swp
 *.swo
+*~
+.project
+.pydevproject
+.settings
 
 # Nextflow
 .nextflow*
 work
 results
+pipelines/test_output
 
-# Other
+# Other build/runtime artifacts
 *.log
 .DS_Store
+Thumbs.db
+*.tmp
+*.bak
+
+# Security - never include in build context
+.env
+.env.*
+*.pem
+*.key
+credentials*
+secrets*
+
+# CI/CD configs (not needed in image)
+.pre-commit-config.yaml
+.readthedocs.yml
+.travis.yml
+Jenkinsfile
+Makefile
+
+# Container definitions (prevent recursion)
+Dockerfile*
+docker-compose*
+Singularity*
+
+# Benchmarks and profiling
+*.prof
+*.benchmark
+
+# Galaxy and Bioconda (distribution only)
+galaxy
+bioconda-recipe
+
+# Large data files
+*.bam
+*.bai
+*.vcf
+*.vcf.gz
+*.bed
+*.fastq
+*.fastq.gz
+*.fasta
+*.fa

@@ -1,30 +1,32 @@
-# Docker container workflow for WASP2
-# NOTE: Disabled on PRs as HPC runner does not have Docker
-# Only runs on push to main/tags for releases
+# Docker container workflow for WASP2 (PR Testing)
+# Uses self-hosted Mac runner with Docker support (wasp2-mac-runner)
+# This workflow handles PR testing only - production releases use docker.yml
 
 name: Containers
 
 on:
-  push:
+  pull_request:
     branches: [main]
-    tags: ['v*']
-  # Disabled on PRs - no Docker on self-hosted HPC runner
-  # pull_request:
-  #   branches: [main]
+  workflow_dispatch:
+
+# Prevent parallel runs on the same PR
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: jaureguy760/wasp2-final
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   docker:
-    name: Build and Push Docker Image
-    # Skip this job entirely for now - requires GitHub-hosted runner
-    if: false
-    runs-on: ubuntu-latest
+    name: Build and Test Docker Image
+    # Using self-hosted Mac runner with Docker support
+    runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
+    timeout-minutes: 30
     permissions:
       contents: read
-      packages: write
+      # Note: packages: write not needed - we only test, never push
 
     steps:
       - uses: actions/checkout@v4
@@ -32,33 +34,59 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to Container Registry
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: jaureguy760
-          password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Extract metadata for Docker
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/jaureguy760/wasp2-final
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=ref,event=branch
             type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
             type=sha
 
-      - name: Build and push Docker image
+      - name: Build Docker image
         uses: docker/build-push-action@v6
         with:
           context: .
-          push: ${{ github.event_name != 'pull_request' }}
+          # Load image locally for testing (don't push for PRs)
+          load: true
+          push: false
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # Using local cache for self-hosted runner
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
           platforms: linux/amd64
+
+      - name: Rotate cache
+        run: rm -rf /tmp/.buildx-cache && mv /tmp/.buildx-cache-new /tmp/.buildx-cache 2>/dev/null || true
+
+      # Test the built image
+      - name: Test Docker image
+        id: test
+        env:
+          TEST_IMAGE: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
+        run: |
+          echo "Testing image: $TEST_IMAGE"
+          echo "Testing WASP2 CLI tools..."
+          docker run --rm "$TEST_IMAGE" wasp2-count --version
+          docker run --rm "$TEST_IMAGE" wasp2-map --help | head -5
+          docker run --rm "$TEST_IMAGE" wasp2-analyze --help | head -5
+          docker run --rm "$TEST_IMAGE" python -c "import wasp2_rust; print('Rust extension: OK')"
+          echo "All Docker image tests passed!"
+
+      - name: Summary
+        if: always()
+        env:
+          META_TAGS: ${{ steps.meta.outputs.tags }}
+          TEST_OUTCOME: ${{ steps.test.outcome }}
+        run: |
+          echo "## Docker PR Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Image Tags:** \`${META_TAGS//$'\n'/, }\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Runner:** self-hosted Mac with Docker" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [[ "$TEST_OUTCOME" == "success" ]]; then
+            echo ":white_check_mark: All tests passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo ":x: Tests failed" >> $GITHUB_STEP_SUMMARY
+          fi
