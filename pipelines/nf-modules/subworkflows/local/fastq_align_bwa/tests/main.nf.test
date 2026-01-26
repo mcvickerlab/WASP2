@@ -1,110 +1,109 @@
 nextflow_workflow {
 
-    name "Test Subworkflow FASTQ_ALIGN_BWA"
+    name "Test Workflow FASTQ_ALIGN_BWA"
     script "../main.nf"
     workflow "FASTQ_ALIGN_BWA"
 
     tag "subworkflows"
     tag "subworkflows_local"
     tag "fastq_align_bwa"
-    tag "bwa"
-    tag "samtools"
 
-    test("Should align FASTQ with pre-built index - stub") {
+    test("fastq_align_bwa - paired_end - stub") {
 
-        options "-stub-run"
+        options "-stub"
 
         when {
             workflow {
                 """
                 input[0] = Channel.of([
-                    [ id:'test_sample', single_end:false ],
-                    [ file('test_R1.fastq.gz'), file('test_R2.fastq.gz') ]
+                    [ id:'test', single_end:false ],
+                    [ file("test_R1.fastq.gz"), file("test_R2.fastq.gz") ]
                 ])
-                input[1] = Channel.of([
-                    [ id:'reference' ],
-                    file('bwa_index/')
-                ])
-                input[2] = Channel.of([
-                    [ id:'reference' ],
-                    file('reference.fa')
-                ])
-                input[3] = true
+                input[1] = Channel.of([ [ id:'bwa_index' ], file("bwa_index") ])
+                input[2] = Channel.of([ [ id:'genome' ], file("genome.fa") ])
                 """
             }
         }
 
         then {
-            assert workflow.success
-            assert workflow.out.bam
-            assert workflow.out.bai
-            assert workflow.out.stats
-            assert workflow.out.flagstat
-            assert workflow.out.idxstats
-            assert workflow.out.versions
-            assert snapshot(workflow.out).match()
+            assertAll(
+                { assert workflow.success },
+                { assert snapshot(workflow.out.versions).match("versions_stub") },
+                // Validate all output channels exist
+                { assert workflow.out.bam.size() == 1 },
+                { assert workflow.out.bai.size() == 1 },
+                { assert workflow.out.stats.size() == 1 },
+                { assert workflow.out.flagstat.size() == 1 },
+                { assert workflow.out.idxstats.size() == 1 },
+                // Validate meta propagation
+                { assert workflow.out.bam[0][0].id == 'test' },
+                { assert workflow.out.bam[0][0].single_end == false }
+            )
         }
     }
 
-    test("Should align single-end reads - stub") {
+    test("fastq_align_bwa - single_end - stub") {
 
-        options "-stub-run"
+        options "-stub"
 
         when {
             workflow {
                 """
                 input[0] = Channel.of([
-                    [ id:'single_end_sample', single_end:true ],
-                    file('test.fastq.gz')
+                    [ id:'test_se', single_end:true ],
+                    [ file("test_R1.fastq.gz") ]
                 ])
-                input[1] = Channel.of([
-                    [ id:'reference' ],
-                    file('bwa_index/')
-                ])
-                input[2] = Channel.of([
-                    [ id:'reference' ],
-                    file('reference.fa')
-                ])
-                input[3] = true
+                input[1] = Channel.of([ [ id:'bwa_index' ], file("bwa_index") ])
+                input[2] = Channel.of([ [ id:'genome' ], file("genome.fa") ])
                 """
             }
         }
 
         then {
-            assert workflow.success
-            assert workflow.out.bam
-            assert snapshot(workflow.out).match()
+            assertAll(
+                { assert workflow.success },
+                { assert snapshot(workflow.out.versions).match("versions_stub_single_end") },
+                // Validate all output channels exist
+                { assert workflow.out.bam.size() == 1 },
+                { assert workflow.out.bai.size() == 1 },
+                { assert workflow.out.stats.size() == 1 },
+                { assert workflow.out.flagstat.size() == 1 },
+                { assert workflow.out.idxstats.size() == 1 },
+                // Validate meta propagation
+                { assert workflow.out.bam[0][0].id == 'test_se' },
+                { assert workflow.out.bam[0][0].single_end == true }
+            )
         }
     }
 
-    test("Should handle unsorted output - stub") {
+    test("fastq_align_bwa - multiple_samples - stub") {
 
-        options "-stub-run"
+        options "-stub"
 
         when {
             workflow {
                 """
-                input[0] = Channel.of([
-                    [ id:'unsorted_sample', single_end:false ],
-                    [ file('test_R1.fastq.gz'), file('test_R2.fastq.gz') ]
-                ])
-                input[1] = Channel.of([
-                    [ id:'reference' ],
-                    file('bwa_index/')
-                ])
-                input[2] = Channel.of([
-                    [ id:'reference' ],
-                    file('reference.fa')
-                ])
-                input[3] = false
+                input[0] = Channel.of(
+                    [ [ id:'sample1', single_end:false ], [ file("s1_R1.fq.gz"), file("s1_R2.fq.gz") ] ],
+                    [ [ id:'sample2', single_end:false ], [ file("s2_R1.fq.gz"), file("s2_R2.fq.gz") ] ],
+                    [ [ id:'sample3', single_end:false ], [ file("s3_R1.fq.gz"), file("s3_R2.fq.gz") ] ]
+                )
+                input[1] = Channel.of([ [ id:'bwa_index' ], file("bwa_index") ])
+                input[2] = Channel.of([ [ id:'genome' ], file("genome.fa") ])
                 """
             }
         }
 
         then {
-            assert workflow.success
-            assert workflow.out.bam
-            assert snapshot(workflow.out).match()
+            assertAll(
+                { assert workflow.success },
+                // Validate all samples processed
+                { assert workflow.out.bam.size() == 3 },
+                { assert workflow.out.bai.size() == 3 },
+                { assert workflow.out.stats.size() == 3 },
+                { assert workflow.out.flagstat.size() == 3 },
+                { assert workflow.out.idxstats.size() == 3 }
+            )
         }
     }
 }
