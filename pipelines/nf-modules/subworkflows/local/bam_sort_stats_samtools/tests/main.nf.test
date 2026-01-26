@@ -1,0 +1,69 @@
+nextflow_workflow {
+
+    name "Test Subworkflow BAM_SORT_STATS_SAMTOOLS"
+    script "../main.nf"
+    workflow "BAM_SORT_STATS_SAMTOOLS"
+
+    tag "subworkflows"
+    tag "subworkflows_local"
+    tag "bam_sort_stats_samtools"
+    tag "samtools"
+
+    test("Should sort BAM, index, and generate stats - stub") {
+
+        options "-stub-run"
+
+        when {
+            workflow {
+                """
+                input[0] = Channel.of([
+                    [ id:'test_sample', single_end:false ],
+                    file('test.bam')
+                ])
+                input[1] = Channel.of([
+                    [ id:'reference' ],
+                    file('reference.fa')
+                ])
+                """
+            }
+        }
+
+        then {
+            assert workflow.success
+            assert workflow.out.bam
+            assert workflow.out.bai
+            assert workflow.out.stats
+            assert workflow.out.flagstat
+            assert workflow.out.idxstats
+            assert workflow.out.versions
+            assert snapshot(workflow.out).match()
+        }
+    }
+
+    test("Should handle paired-end data - stub") {
+
+        options "-stub-run"
+
+        when {
+            workflow {
+                """
+                input[0] = Channel.of([
+                    [ id:'paired_sample', single_end:false ],
+                    file('paired.bam')
+                ])
+                input[1] = Channel.of([
+                    [ id:'reference' ],
+                    file('reference.fa')
+                ])
+                """
+            }
+        }
+
+        then {
+            assert workflow.success
+            assert workflow.out.bam
+            assert workflow.out.bai
+            assert snapshot(workflow.out).match()
+        }
+    }
+}

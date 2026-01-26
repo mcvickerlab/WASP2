@@ -1,0 +1,64 @@
+name: "bam_sort_stats_samtools"
+description: Sort BAM files, create index, and generate comprehensive statistics using samtools
+keywords:
+  - sort
+  - index
+  - stats
+  - bam
+  - samtools
+components:
+  - samtools/sort
+  - samtools/index
+  - bam_stats_samtools
+input:
+  - meta:
+      type: map
+      description: |
+        Groovy Map containing sample information
+        e.g. `[ id:'sample1', single_end:false ]`
+  - bam:
+      type: file
+      description: BAM file (unsorted or sorted)
+      pattern: "*.bam"
+  - fasta:
+      type: file
+      description: Reference FASTA file (optional, required for CRAM)
+      pattern: "*.{fa,fasta}"
+output:
+  - meta:
+      type: map
+      description: |
+        Groovy Map containing sample information
+        e.g. `[ id:'sample1', single_end:false ]`
+  - bam:
+      type: file
+      description: Sorted BAM file
+      pattern: "*.sorted.bam"
+  - bai:
+      type: file
+      description: BAM index file
+      pattern: "*.sorted.bam.bai"
+  - csi:
+      type: file
+      description: CSI index file (for large chromosomes)
+      pattern: "*.sorted.bam.csi"
+  - stats:
+      type: file
+      description: Samtools stats output
+      pattern: "*.stats"
+  - flagstat:
+      type: file
+      description: Samtools flagstat output
+      pattern: "*.flagstat"
+  - idxstats:
+      type: file
+      description: Samtools idxstats output
+      pattern: "*.idxstats"
+  - versions:
+      type: file
+      description: File containing software versions
+      pattern: "versions.yml"
+authors:
+  - "@wasp2-team"
+maintainers:
+  - "@wasp2-team"
