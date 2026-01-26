@@ -1,0 +1,58 @@
+# Dependabot Auto-Approve and Auto-Merge
+# Automatically approves and merges patch/minor dependency updates
+# Based on GitHub's official documentation and best practices
+
+name: Dependabot Auto-Merge
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  pull-requests: write
+  contents: write
+
+jobs:
+  auto-approve-merge:
+    name: Auto-approve and merge Dependabot PRs
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'
+
+    steps:
+      - name: Fetch Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Approve patch updates
+        if: steps.metadata.outputs.update-type == 'version-update:semver-patch'
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr review --approve "$PR_URL" --body "Auto-approved patch update"
+
+      - name: Approve minor updates
+        if: steps.metadata.outputs.update-type == 'version-update:semver-minor'
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr review --approve "$PR_URL" --body "Auto-approved minor update"
+
+      - name: Enable auto-merge for patch updates
+        if: steps.metadata.outputs.update-type == 'version-update:semver-patch'
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr merge --squash --auto "$PR_URL"
+
+      - name: Add label for major updates (needs manual review)
+        if: steps.metadata.outputs.update-type == 'version-update:semver-major'
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr edit "$PR_URL" --add-label "needs-review,major-update"

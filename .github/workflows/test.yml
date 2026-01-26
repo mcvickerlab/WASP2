@@ -1,6 +1,6 @@
 # Python test workflow for WASP2
 # Runs pytest with Rust extension
-# Configured for self-hosted HPC runner (tools pre-installed via conda)
+# Configured for self-hosted Mac runner with Docker
 
 name: Test
 
@@ -15,30 +15,26 @@ permissions:
 
 jobs:
   test:
-    runs-on: [self-hosted, linux, x64]
+    runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
     steps:
       - uses: actions/checkout@v4
 
       - name: Show environment info
         run: |
-          source ~/.bashrc
           echo "Python: $(python3 --version)"
           echo "Rust: $(cargo --version)"
-          echo "Samtools: $(samtools --version | head -1)"
+          echo "Samtools: $(samtools --version | head -1)" || echo "samtools not installed"
 
       - name: Install Python dependencies
         run: |
-          source ~/.bashrc
           python -m pip install --upgrade pip --quiet
           pip install maturin pytest pytest-cov --quiet
           pip install -e ".[dev]" --quiet || pip install -e "." --quiet
 
       - name: Build Rust extension
         run: |
-          source ~/.bashrc
           maturin develop --release
 
       - name: Run tests
         run: |
-          source ~/.bashrc
           pytest tests/ -v -m "not slow and not benchmark" --ignore=tests/test_benchmark*.py --ignore=tests/benchmarks/ || true

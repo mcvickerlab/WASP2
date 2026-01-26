@@ -1,5 +1,9 @@
-# WASP2 Docker Build Workflow
+# WASP2 Docker Build Workflow (Production Releases)
 # Builds and pushes container images to GitHub Container Registry
+# Uses GitHub-hosted runners for consistent, reproducible builds
+#
+# NOTE: For PR testing, see containers.yml which uses self-hosted Mac runner
+#       This workflow focuses on official releases and tag pushes only
 
 name: Docker
 
@@ -8,14 +12,21 @@ on:
     branches: [main]
     tags:
       - "v*"
-  pull_request:
-    branches: [main]
-    paths:
-      - "Dockerfile"
-      - "rust/**"
-      - "src/**"
-      - "pyproject.toml"
+  # PR testing is handled by containers.yml using self-hosted Mac runner
+  # Keeping this commented to avoid duplicate builds
+  # pull_request:
+  #   branches: [main]
+  #   paths:
+  #     - "Dockerfile"
+  #     - "rust/**"
+  #     - "src/**"
+  #     - "pyproject.toml"
   workflow_dispatch:
+
+# Prevent parallel builds
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false  # Don't cancel production deployments
 
 env:
   REGISTRY: ghcr.io
@@ -37,7 +48,6 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to Container Registry
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -50,26 +60,20 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            # Set latest tag for default branch
             type=raw,value=latest,enable={{is_default_branch}}
-            # Tag with semver on release tags
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
-            # Tag with SHA for all builds
             type=sha,prefix=sha-
-            # Tag with branch name for pushes
             type=ref,event=branch
-            # Tag PR builds
-            type=ref,event=pr
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        id: build-push
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
-          # Only push for non-PR events (main branch or tags)
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
@@ -78,14 +82,18 @@ jobs:
           build-args: |
             VERSION=${{ github.ref_name }}
 
-      - name: Test image
-        if: github.event_name == 'pull_request'
+      - name: Summary
+        env:
+          META_TAGS: ${{ steps.meta.outputs.tags }}
+          IMAGE_DIGEST: ${{ steps.build-push.outputs.digest }}
+          REPO_NAME: ${{ github.repository }}
         run: |
-          docker build -t wasp2-test .
-          docker run --rm wasp2-test wasp2-count --version
-          docker run --rm wasp2-test wasp2-map --help
-          docker run --rm wasp2-test wasp2-analyze --help
-          docker run --rm wasp2-test python -c "import wasp2_rust; print('Rust OK')"
+          echo "## Docker Image Published" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Tags:** \`${META_TAGS//$'\n'/, }\`" >> $GITHUB_STEP_SUMMARY
+          [ -n "${IMAGE_DIGEST}" ] && echo "**Digest:** \`${IMAGE_DIGEST}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Pull: \`docker pull ghcr.io/${REPO_NAME}:latest\`" >> $GITHUB_STEP_SUMMARY
 
   # ===========================================================================
   # Build Singularity image from Docker (for HPC environments)

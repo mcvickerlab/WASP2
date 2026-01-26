@@ -1,6 +1,6 @@
 # Linting workflow for WASP2
 # Runs Ruff linter/formatter and Bandit security scan
-# Configured for self-hosted HPC runner (no sudo access)
+# Configured for self-hosted Mac runner with Docker
 
 name: Lint
 
@@ -15,31 +15,27 @@ permissions:
 
 jobs:
   lint:
-    runs-on: [self-hosted, linux, x64]
+    runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
     steps:
       - uses: actions/checkout@v4
 
       - name: Run Ruff linter
         run: |
-          source ~/.bashrc
           ruff check src/ tests/ --output-format=github || true
 
       - name: Run Ruff formatter check
         run: |
-          source ~/.bashrc
           ruff format src/ tests/ --check --diff || true
 
   security:
-    runs-on: [self-hosted, linux, x64]
+    runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Bandit if needed
         run: |
-          source ~/.bashrc
           pip install "bandit[toml]==1.8.3" --quiet || true
 
       - name: Run Bandit security scan
         run: |
-          source ~/.bashrc
           bandit -c pyproject.toml -r src/ || true
