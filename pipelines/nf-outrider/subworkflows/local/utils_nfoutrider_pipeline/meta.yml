@@ -1,0 +1,46 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/subworkflows/meta-schema.json
+name: "utils_nfoutrider_pipeline"
+description: |
+  Pipeline utility subworkflows for initialization, samplesheet validation, and completion handling.
+  Contains two workflows: PIPELINE_INITIALISATION and PIPELINE_COMPLETION.
+keywords:
+  - pipeline-utils
+  - initialization
+  - samplesheet
+  - validation
+  - completion
+
+components: []
+
+input:
+  - version:
+      description: |
+        Boolean flag to show pipeline version (PIPELINE_INITIALISATION)
+        Value: boolean
+  - help:
+      description: |
+        Boolean flag to show help message (PIPELINE_INITIALISATION)
+        Value: boolean
+  - input:
+      description: |
+        Path to samplesheet CSV file (PIPELINE_INITIALISATION)
+        Value: string (path)
+  - outdir:
+      description: |
+        Output directory path (PIPELINE_COMPLETION)
+        Value: string (path)
+  - multiqc_report:
+      description: |
+        MultiQC report channel (PIPELINE_COMPLETION)
+        Value: channel
+
+output:
+  - samplesheet:
+      description: |
+        Parsed and validated samplesheet channel (from PIPELINE_INITIALISATION)
+        Structure: [ val(meta), path(bam), path(bai) ]
+
+authors:
+  - "@Jaureguy760"
+maintainers:
+  - "@Jaureguy760"

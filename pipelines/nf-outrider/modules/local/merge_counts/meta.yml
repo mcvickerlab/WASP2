@@ -1,0 +1,38 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/meta-schema.json
+name: "merge_counts"
+description: Merge individual sample gene counts into a gene x sample matrix for OUTRIDER
+keywords:
+  - count-matrix
+  - merge
+  - outrider
+  - rna-seq
+
+tools:
+  - pandas:
+      description: Data manipulation library for Python
+      homepage: https://pandas.pydata.org/
+      documentation: https://pandas.pydata.org/docs/
+      licence: ["BSD-3-Clause"]
+
+input:
+  - - gene_counts:
+        type: file
+        description: Collection of gene count TSV files from individual samples
+        pattern: "*.gene_counts.tsv"
+
+output:
+  - count_matrix:
+      - "count_matrix.tsv":
+          type: file
+          description: Gene x sample count matrix for OUTRIDER input
+          pattern: "count_matrix.tsv"
+  - versions:
+      - "versions.yml":
+          type: file
+          description: File containing software versions
+          pattern: "versions.yml"
+
+authors:
+  - "@Jaureguy760"
+maintainers:
+  - "@Jaureguy760"

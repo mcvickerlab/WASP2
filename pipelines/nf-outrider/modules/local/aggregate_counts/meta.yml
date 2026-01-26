@@ -1,0 +1,55 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/meta-schema.json
+name: "aggregate_counts"
+description: Aggregate variant-level allele counts to gene level using GTF annotation
+keywords:
+  - allele-specific
+  - gene-counts
+  - aggregation
+  - gtf-mapping
+
+tools:
+  - pandas:
+      description: Data manipulation library for Python
+      homepage: https://pandas.pydata.org/
+      documentation: https://pandas.pydata.org/docs/
+      licence: ["BSD-3-Clause"]
+
+input:
+  - - meta:
+        type: map
+        description: |
+          Groovy Map containing sample information
+          e.g. [ id:'sample1' ]
+    - counts:
+        type: file
+        description: TSV file with variant-level allele counts
+        pattern: "*.tsv"
+  - - gtf:
+        type: file
+        description: GTF file with gene annotations
+        pattern: "*.gtf"
+  - - method:
+        type: string
+        description: Aggregation method (sum, mean, or max)
+
+output:
+  - gene_counts:
+      - meta:
+          type: map
+          description: |
+            Groovy Map containing sample information
+            e.g. [ id:'sample1' ]
+      - "*.gene_counts.tsv":
+          type: file
+          description: TSV file with gene-level aggregated counts
+          pattern: "*.gene_counts.tsv"
+  - versions:
+      - "versions.yml":
+          type: file
+          description: File containing software versions
+          pattern: "versions.yml"
+
+authors:
+  - "@Jaureguy760"
+maintainers:
+  - "@Jaureguy760"

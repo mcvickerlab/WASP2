@@ -1,0 +1,122 @@
+nextflow_workflow {
+
+    name "Test Subworkflow ABERRANT_EXPRESSION"
+    script "../main.nf"
+    workflow "ABERRANT_EXPRESSION"
+
+    tag "subworkflows"
+    tag "subworkflows_local"
+    tag "aberrant_expression"
+    tag "outrider"
+
+    test("Should detect aberrant expression with valid inputs - stub") {
+
+        options "-stub-run"
+
+        when {
+            workflow {
+                """
+                // Create mock gene count channel
+                input[0] = Channel.of(
+                    [[ id:'sample1' ], file('sample1.gene_counts.tsv')],
+                    [[ id:'sample2' ], file('sample2.gene_counts.tsv')],
+                    [[ id:'sample3' ], file('sample3.gene_counts.tsv')]
+                )
+                input[1] = 0.05      // padj_cutoff
+                input[2] = 2.0       // zscore_cutoff
+                input[3] = null      // encoding_dim (auto)
+                input[4] = 15        // max_iterations
+                input[5] = 1e-5      // convergence
+                """
+            }
+        }
+
+        then {
+            assert workflow.success
+            assert workflow.out.count_matrix
+            assert workflow.out.model
+            assert workflow.out.results
+            assert workflow.out.versions
+        }
+    }
+
+    test("Should emit summary report when available - stub") {
+
+        options "-stub-run"
+
+        when {
+            workflow {
+                """
+                input[0] = Channel.of(
+                    [[ id:'sample1' ], file('sample1.gene_counts.tsv')],
+                    [[ id:'sample2' ], file('sample2.gene_counts.tsv')]
+                )
+                input[1] = 0.05
+                input[2] = 0.0
+                input[3] = 5         // explicit encoding_dim
+                input[4] = 10
+                input[5] = 1e-4
+                """
+            }
+        }
+
+        then {
+            assert workflow.success
+            assert workflow.out.count_matrix
+            assert workflow.out.results
+            assert workflow.out.summary != null
+        }
+    }
+
+    test("Should handle custom p-value and z-score cutoffs - stub") {
+
+        options "-stub-run"
+
+        when {
+            workflow {
+                """
+                input[0] = Channel.of(
+                    [[ id:'test1' ], file('test1.gene_counts.tsv')],
+                    [[ id:'test2' ], file('test2.gene_counts.tsv')]
+                )
+                input[1] = 0.01      // stricter padj
+                input[2] = 3.0       // stricter zscore
+                input[3] = null
+                input[4] = 20
+                input[5] = 1e-6
+                """
+            }
+        }
+
+        then {
+            assert workflow.success
+            assert workflow.out.results
+        }
+    }
+
+    test("Should collect versions from all modules - stub") {
+
+        options "-stub-run"
+
+        when {
+            workflow {
+                """
+                input[0] = Channel.of(
+                    [[ id:'s1' ], file('s1.gene_counts.tsv')],
+                    [[ id:'s2' ], file('s2.gene_counts.tsv')]
+                )
+                input[1] = 0.05
+                input[2] = 2.0
+                input[3] = null
+                input[4] = 15
+                input[5] = 1e-5
+                """
+            }
+        }
+
+        then {
+            assert workflow.success
+            assert workflow.out.versions
+        }
+    }
+}

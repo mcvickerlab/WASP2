@@ -11,8 +11,8 @@
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
 
-include { MERGE_COUNTS   } from '../../modules/local/merge_counts'
-include { OUTRIDER_FIT   } from '../../modules/local/outrider_fit'
+include { MERGE_COUNTS   } from '../../../modules/local/merge_counts/main'
+include { OUTRIDER_FIT   } from '../../../modules/local/outrider_fit/main'
 
 workflow ABERRANT_EXPRESSION {
     take:
@@ -32,8 +32,8 @@ workflow ABERRANT_EXPRESSION {
     if (padj_cutoff <= 0 || padj_cutoff >= 1) {
         error "ERROR: padj_cutoff must be between 0 and 1 (exclusive), got: ${padj_cutoff}"
     }
-    if (zscore_cutoff <= 0) {
-        error "ERROR: zscore_cutoff must be positive, got: ${zscore_cutoff}"
+    if (zscore_cutoff < 0) {
+        error "ERROR: zscore_cutoff must be non-negative, got: ${zscore_cutoff}"
     }
     if (max_iterations <= 0) {
         error "ERROR: max_iterations must be positive, got: ${max_iterations}"
