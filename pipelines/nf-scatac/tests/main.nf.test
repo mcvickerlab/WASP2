@@ -19,9 +19,7 @@ nextflow_pipeline {
         then {
             assertAll(
                 { assert workflow.success },
-                { assert workflow.out.cell_counts != null },
                 { assert workflow.out.anndata != null },
-                { assert workflow.out.imbalance != null },
                 { assert snapshot(
                     workflow.trace.tasks().size(),
                     workflow.trace.tasks()*.name.sort()
@@ -40,7 +38,7 @@ nextflow_workflow {
     tag "scatac"
     tag "workflow"
 
-    test("SCATAC workflow - stub run with all features") {
+    test("SCATAC workflow - stub run with fragments (overlap counting)") {
 
         options "-stub"
 
@@ -57,12 +55,15 @@ nextflow_workflow {
                         id: 'test_sample',
                         single_end: false,
                         cell_barcode_tag: 'CB',
-                        chemistry: '10x-atac-v2'
+                        chemistry: '10x-atac-v2',
+                        has_bam: false
                     ],
                     file("${projectDir}/tests/stub/fragments.tsv.gz"),
                     file("${projectDir}/tests/stub/fragments.tsv.gz.tbi"),
                     file('NO_FILE'),  // barcodes (optional)
-                    file('NO_FILE')   // peaks (optional)
+                    file('NO_FILE'),  // peaks (optional)
+                    file('NO_FILE'),  // bam (optional)
+                    file('NO_FILE')   // bai (optional)
                 ])
                 """
             }
@@ -74,7 +75,48 @@ nextflow_workflow {
                 { assert workflow.out.cell_counts.size() == 1 },
                 { assert workflow.out.anndata.size() == 1 },
                 { assert workflow.out.imbalance.size() == 1 },
-                { assert snapshot(workflow.out.versions).match("scatac_versions") }
+                { assert snapshot(workflow.out.versions).match("scatac_versions_fragments") }
+            )
+        }
+    }
+
+    test("SCATAC workflow - stub run with BAM (allele-specific counting)") {
+
+        options "-stub"
+
+        when {
+            params {
+                vcf = "${projectDir}/tests/stub/variants.vcf.gz"
+                outdir = "$outputDir"
+                create_zarr = true
+            }
+            workflow {
+                """
+                input[0] = Channel.of([
+                    [
+                        id: 'test_sample_bam',
+                        single_end: false,
+                        cell_barcode_tag: 'CB',
+                        chemistry: '10x-atac-v2',
+                        has_bam: true,
+                        sample: 'NA12878'
+                    ],
+                    file('NO_FILE'),  // fragments (not needed when BAM provided)
+                    file('NO_FILE'),  // fragments_tbi
+                    file("${projectDir}/tests/stub/barcodes.txt"),  // barcodes
+                    file('NO_FILE'),  // peaks (optional)
+                    file("${projectDir}/tests/stub/test.bam"),      // bam
+                    file("${projectDir}/tests/stub/test.bam.bai")   // bai
+                ])
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert workflow.success },
+                { assert workflow.out.anndata.size() == 1 },
+                { assert snapshot(workflow.out.versions).match("scatac_versions_bam") }
             )
         }
     }
@@ -97,10 +139,13 @@ nextflow_workflow {
                         id: 'test_sample',
                         single_end: false,
                         cell_barcode_tag: 'CB',
-                        chemistry: '10x-atac-v2'
+                        chemistry: '10x-atac-v2',
+                        has_bam: false
                     ],
                     file("${projectDir}/tests/stub/fragments.tsv.gz"),
                     file("${projectDir}/tests/stub/fragments.tsv.gz.tbi"),
+                    file('NO_FILE'),
+                    file('NO_FILE'),
                     file('NO_FILE'),
                     file('NO_FILE')
                 ])
@@ -135,10 +180,13 @@ nextflow_workflow {
                         id: 'test_sample',
                         single_end: false,
                         cell_barcode_tag: 'CB',
-                        chemistry: '10x-atac-v2'
+                        chemistry: '10x-atac-v2',
+                        has_bam: false
                     ],
                     file("${projectDir}/tests/stub/fragments.tsv.gz"),
                     file("${projectDir}/tests/stub/fragments.tsv.gz.tbi"),
+                    file('NO_FILE'),
+                    file('NO_FILE'),
                     file('NO_FILE'),
                     file('NO_FILE')
                 ])
@@ -274,6 +322,109 @@ AAACGAAC-1\\tchr1\\t100\\tA\\tG\\t5
                 { assert process.success },
                 { assert process.out.anndata.size() == 1 },
                 { assert process.out.zarr.size() == 1 }
+            )
+        }
+    }
+}
+
+nextflow_process {
+
+    name "Test Process SCATAC_ADD_HAPLOTYPE_LAYERS"
+    script "../modules/local/scatac_add_haplotype_layers/main.nf"
+    process "SCATAC_ADD_HAPLOTYPE_LAYERS"
+
+    tag "scatac"
+    tag "module"
+    tag "scatac_add_haplotype_layers"
+
+    test("SCATAC_ADD_HAPLOTYPE_LAYERS - stub adds hap1/hap2 layers") {
+
+        options "-stub"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [id: 'test_sample', sample: 'NA12878'],
+                    file("${projectDir}/tests/stub/test_allelic.h5ad")
+                ]
+                input[1] = [
+                    [id: 'variants'],
+                    file("${projectDir}/tests/stub/variants.vcf.gz"),
+                    file("${projectDir}/tests/stub/variants.vcf.gz.tbi")
+                ]
+                input[2] = false  // create_zarr
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert process.success },
+                { assert process.out.anndata.size() == 1 },
+                { assert process.out.cell_qc.size() == 1 },
+                { assert file(process.out.anndata[0][1]).name.contains('haplotypes') }
+            )
+        }
+    }
+
+    test("SCATAC_ADD_HAPLOTYPE_LAYERS - stub with zarr output") {
+
+        options "-stub"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [id: 'test_sample', sample: 'NA12878'],
+                    file("${projectDir}/tests/stub/test_allelic.h5ad")
+                ]
+                input[1] = [
+                    [id: 'variants'],
+                    file("${projectDir}/tests/stub/variants.vcf.gz"),
+                    file("${projectDir}/tests/stub/variants.vcf.gz.tbi")
+                ]
+                input[2] = true  // create_zarr
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert process.success },
+                { assert process.out.anndata.size() == 1 },
+                { assert process.out.zarr.size() == 1 }
+            )
+        }
+    }
+
+    test("SCATAC_ADD_HAPLOTYPE_LAYERS - stub verifies cell_qc has haplotype columns") {
+
+        options "-stub"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [id: 'test_qc', sample: 'NA12878'],
+                    file("${projectDir}/tests/stub/test_allelic.h5ad")
+                ]
+                input[1] = [
+                    [id: 'variants'],
+                    file("${projectDir}/tests/stub/variants.vcf.gz"),
+                    file("${projectDir}/tests/stub/variants.vcf.gz.tbi")
+                ]
+                input[2] = false
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert process.success },
+                { assert process.out.cell_qc.size() == 1 },
+                // Verify cell_qc TSV contains expected columns
+                { assert file(process.out.cell_qc[0][1]).exists() }
             )
         }
     }

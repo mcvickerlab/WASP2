@@ -3,14 +3,19 @@
     SCATAC WORKFLOW - Single-Cell ATAC-seq Allelic Imbalance
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     Allelic imbalance analysis on scATAC-seq data using WASP2.
-    Accepts 10x-format fragments files and VCF with heterozygous SNPs.
+
+    Supports two input modes:
+    1. BAM input: True allele-specific counting with ref/alt/hap layers
+    2. Fragments input: Overlap counting (total counts only)
 
     Features:
+    - 10x Genomics CellRanger ATAC output support
     - Cell barcode filtering (optional)
     - Peak region filtering (optional)
-    - AnnData H5AD output for scverse ecosystem
+    - AnnData H5AD output with layers (X, ref, alt, hap1, hap2)
     - Zarr output for GenVarLoader (optional)
     - Pseudo-bulk aggregation for statistical power
+    - Integration with ArchR/Signac via scverse ecosystem
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
 
@@ -19,7 +24,7 @@ include { WASP2_ML_OUTPUT } from '../../nf-modules/modules/wasp2/ml_output/main'
 
 workflow SCATAC {
     take:
-    samplesheet  // channel: [ val(meta), path(fragments.tsv.gz), path(fragments.tbi), path(barcodes), path(peaks) ]
+    samplesheet  // channel: [ val(meta), path(fragments), path(fragments_tbi), path(barcodes), path(peaks), path(bam), path(bai) ]
 
     main:
     ch_versions = Channel.empty()
