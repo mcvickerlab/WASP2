@@ -1,0 +1,66 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/meta-schema.json
+name: "outrider_fit"
+description: Fit OUTRIDER autoencoder model and detect expression outliers
+keywords:
+  - outrider
+  - outlier-detection
+  - autoencoder
+  - aberrant-expression
+  - rna-seq
+
+tools:
+  - outrider:
+      description: Detection of outlier gene expression using autoencoder-based normalization
+      homepage: https://bioconductor.org/packages/OUTRIDER
+      documentation: https://bioconductor.org/packages/release/bioc/vignettes/OUTRIDER/inst/doc/OUTRIDER.html
+      doi: "10.1016/j.ajhg.2018.10.025"
+      licence: ["MIT"]
+
+input:
+  - - count_matrix:
+        type: file
+        description: Gene x sample count matrix TSV file
+        pattern: "*.tsv"
+  - - padj_cutoff:
+        type: float
+        description: Adjusted p-value cutoff for outlier calling
+  - - zscore_cutoff:
+        type: float
+        description: Z-score cutoff for outlier calling
+  - - encoding_dim:
+        type: integer
+        description: Encoding dimension for autoencoder (null for auto-selection)
+  - - max_iterations:
+        type: integer
+        description: Maximum iterations for OUTRIDER fitting
+  - - convergence:
+        type: float
+        description: Convergence threshold for fitting
+
+output:
+  - model:
+      - "outrider_model.rds":
+          type: file
+          description: Fitted OUTRIDER model object (RDS format)
+          pattern: "outrider_model.rds"
+  - results:
+      - "outrider_results.tsv":
+          type: file
+          description: TSV file with outlier detection results including p-values
+          pattern: "outrider_results.tsv"
+  - summary:
+      - "outrider_summary.html":
+          type: file
+          description: HTML summary report of OUTRIDER analysis (optional)
+          pattern: "outrider_summary.html"
+          optional: true
+  - versions:
+      - "versions.yml":
+          type: file
+          description: File containing software versions
+          pattern: "versions.yml"
+
+authors:
+  - "@Jaureguy760"
+maintainers:
+  - "@Jaureguy760"

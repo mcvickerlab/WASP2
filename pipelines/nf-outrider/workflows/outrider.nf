@@ -23,10 +23,10 @@ include { WASP2_COUNT             } from '../../nf-modules/modules/wasp2/count/m
 include { WASP2_ML_OUTPUT         } from '../../nf-modules/modules/wasp2/ml_output/main'
 
 // Local modules
-include { AGGREGATE_COUNTS        } from '../modules/local/aggregate_counts'
-include { MERGE_COUNTS            } from '../modules/local/merge_counts'
-include { OUTRIDER_FIT            } from '../modules/local/outrider_fit'
-include { MAE_DETECT              } from '../modules/local/mae_detect'
+include { AGGREGATE_COUNTS        } from '../modules/local/aggregate_counts/main'
+include { MERGE_COUNTS            } from '../modules/local/merge_counts/main'
+include { OUTRIDER_FIT            } from '../modules/local/outrider_fit/main'
+include { MAE_DETECT              } from '../modules/local/mae_detect/main'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

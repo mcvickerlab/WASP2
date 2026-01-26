@@ -18,8 +18,8 @@ nextflow.enable.dsl = 2
 */
 
 include { OUTRIDER                  } from './workflows/outrider'
-include { PIPELINE_INITIALISATION   } from './subworkflows/local/utils_nfoutrider_pipeline'
-include { PIPELINE_COMPLETION       } from './subworkflows/local/utils_nfoutrider_pipeline'
+include { PIPELINE_INITIALISATION   } from './subworkflows/local/utils_nfoutrider_pipeline/main'
+include { PIPELINE_COMPLETION       } from './subworkflows/local/utils_nfoutrider_pipeline/main'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
