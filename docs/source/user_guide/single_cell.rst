@@ -199,6 +199,33 @@ Barcode Matching
 * Verify barcode format matches BAM file CB tags
 * Check for barcode format differences between tools
 
+Comparative Analysis
+--------------------
+
+After detecting allelic imbalance within individual cell populations, you can compare
+imbalance **between** groups to identify cell-type-specific or condition-dependent
+regulatory variation.
+
+**Quick example:**
+
+.. code-block:: bash
+
+   # Compare imbalance between two cell types
+   wasp2-analyze compare-imbalance \
+     allele_counts.h5ad \
+     barcode_celltype_map.tsv \
+     --groups "excitatory_neurons,inhibitory_neurons" \
+     --sample SAMPLE_ID \
+     --phased
+
+This identifies genomic regions where allelic imbalance differs significantly between
+the specified groups, using a likelihood ratio test with FDR correction.
+
+For comprehensive coverage of comparative analysis, see:
+
+* :doc:`/tutorials/comparative_imbalance` - Detailed comparative analysis tutorial
+* :doc:`analysis` - Statistical methods for comparative imbalance
+
 See Also
 --------
 

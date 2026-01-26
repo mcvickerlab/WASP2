@@ -66,6 +66,7 @@ Documentation
    :caption: Tutorials
 
    tutorials/scrna_seq
+   tutorials/comparative_imbalance
 
 .. toctree::
    :maxdepth: 2
