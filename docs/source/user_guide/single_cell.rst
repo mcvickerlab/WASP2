@@ -40,9 +40,124 @@ Format Specification
 
 10X Chromium barcodes follow a specific format:
 
-* 16 nucleotides followed by ``-1`` suffix (e.g., ``CACCCAAGTGAGTTGG-1``)
-* The ``-1`` suffix indicates the GEM well
-* Barcodes are from the 10X whitelist (~737,000 valid barcodes for v3 chemistry)
+* 16 nucleotides followed by ``-N`` suffix (e.g., ``CACCCAAGTGAGTTGG-1``)
+* The suffix indicates the GEM well (``-1`` for single sample, ``-2``, ``-3``, etc. for aggregated samples)
+* Barcodes are from the 10X whitelist (~3 million for v3 chemistry, ~737,000 for v2)
+
+**Chemistry Versions:**
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 25 55
+
+   * - Chemistry
+     - Barcode Length
+     - Notes
+   * - 10X v2
+     - 16 bp
+     - ~737,000 valid barcodes, older whitelist
+   * - 10X v3/v3.1
+     - 16 bp
+     - ~3.5 million valid barcodes, improved capture
+   * - 10X Multiome
+     - 16 bp
+     - Same as v3, paired ATAC+GEX
+
+**PBMC Example (10X v3):**
+
+.. code-block:: text
+
+   AAACCCAAGAAACACT-1	B_cell
+   AAACCCAAGAAAGCGA-1	CD4_T_cell
+   AAACCCAAGAACAACT-1	CD8_T_cell
+   AAACCCAAGAACCAAG-1	Monocyte
+   AAACCCAAGAACGATA-1	NK_cell
+
+**Multi-Sample Aggregated Example:**
+
+When using Cell Ranger ``aggr`` to combine multiple samples, barcodes are distinguished by suffix:
+
+.. code-block:: text
+
+   AAACCCAAGAAACACT-1	B_cell	sample1
+   AAACCCAAGAAACTGT-1	B_cell	sample1
+   AAACCCAAGAAACACT-2	B_cell	sample2
+   AAACCCAAGAAACTGT-2	B_cell	sample2
+   AAACCCAAGAAACACT-3	CD4_T_cell	sample3
+
+.. note::
+
+   For multi-sample experiments, WASP2 uses only the first two columns (barcode, cell_type).
+   The third column (sample origin) is optional metadata for your reference.
+
+Barcode Format Validation
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Before running WASP2, validate your barcode file format:
+
+.. code-block:: bash
+
+   # Check file structure (should show TAB separator)
+   head -5 barcodes.tsv | cat -A
+   # Expected output (^I = TAB):
+   # AAACCCAAGAAACACT-1^IB_cell$
+
+   # Verify barcode format matches 10X pattern
+   head -1 barcodes.tsv | cut -f1 | grep -E '^[ACGT]{16}-[0-9]+$'
+   # Should return the barcode if valid
+
+   # Count barcodes per cell type
+   cut -f2 barcodes.tsv | sort | uniq -c | sort -rn
+
+   # Check for common issues
+   # 1. No header row (first line should be a barcode, not "barcode")
+   head -1 barcodes.tsv
+
+   # 2. Correct delimiter (TAB not space/comma)
+   file barcodes.tsv  # Should mention "ASCII text"
+
+**Python Validation Script:**
+
+.. code-block:: python
+
+   import re
+
+   def validate_10x_barcode_file(filepath):
+       """Validate 10X scRNA-seq barcode file format."""
+       pattern = re.compile(r'^[ACGT]{16}-\d+$')
+       errors = []
+       i = 0
+
+       with open(filepath) as f:
+           for i, line in enumerate(f, 1):
+               parts = line.rstrip('\n').split('\t')
+
+               # Check column count
+               if len(parts) < 1:
+                   errors.append(f"Line {i}: Empty line")
+                   continue
+
+               barcode = parts[0]
+
+               # Check barcode format
+               if not pattern.match(barcode):
+                   errors.append(f"Line {i}: Invalid barcode format '{barcode}'")
+
+               # Check for header (common mistake)
+               if i == 1 and barcode.lower() in ('barcode', 'cell_barcode', 'cb'):
+                   errors.append(f"Line 1: Appears to be a header row, remove it")
+
+       if errors:
+           print(f"Found {len(errors)} errors:")
+           for err in errors[:10]:  # Show first 10
+               print(f"  {err}")
+           return False
+       else:
+           print(f"Validation passed: {i} barcodes")
+           return True
+
+   # Usage
+   validate_10x_barcode_file('barcodes.tsv')
 
 Cell Ranger Output
 ------------------
@@ -120,6 +235,29 @@ If you only need to filter by barcodes without cell type annotation, you can use
    CACCCAAGTGAGTTGG-1
    GCTTAAGCCGCGGCAT-1
    GTCACGGGTGGCCTAG-1
+
+Common Format Variations
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+**Cell Ranger Raw Barcodes:**
+
+.. code-block:: bash
+
+   # Extract filtered barcodes (single-column, add cell types later)
+   zcat cellranger_output/outs/filtered_feature_bc_matrix/barcodes.tsv.gz > barcodes_raw.txt
+
+**Barcode Suffix Handling:**
+
+Some tools strip the ``-1`` suffix. Ensure BAM and barcode file match:
+
+.. code-block:: bash
+
+   # Compare formats
+   samtools view sample.bam | head -1000 | grep -o 'CB:Z:[^\t]*' | cut -d: -f3 | head
+   cut -f1 barcodes.tsv | head
+
+   # Add suffix if missing
+   awk -F'\t' '{print $1"-1\t"$2}' barcodes_no_suffix.tsv > barcodes.tsv
 
 Single-Cell CLI Usage
 ---------------------
@@ -199,6 +337,18 @@ Barcode Matching
 * Verify barcode format matches BAM file CB tags
 * Check for barcode format differences between tools
 
+Example Files
+-------------
+
+WASP2 includes example barcode files in the ``tests/data/`` directory:
+
+* ``barcodes_10x_scrna.tsv`` - Standard PBMC cell types (B_cell, CD4_T_cell, etc.)
+* ``barcodes_example.tsv`` - Brain tissue cell types (Neurons, Astrocytes, etc.)
+* ``barcodes_10x_multi_sample.tsv`` - Multi-sample aggregated experiment with -1, -2, -3 suffixes
+* ``barcodes_10x_hierarchical.tsv`` - Hierarchical cell type naming (T_cell.CD4.Naive, etc.)
+
+These files can be used as templates or for testing your WASP2 installation.
+
 Comparative Analysis
 --------------------
 
@@ -227,6 +377,7 @@ For comprehensive coverage of comparative analysis, see:
 * :doc:`analysis` - Statistical methods for comparative imbalance
 
 See Also
+
 --------
 
 * :doc:`/tutorials/scrna_seq` - Complete 10X scRNA-seq tutorial
