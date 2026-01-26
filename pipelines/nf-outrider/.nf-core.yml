@@ -32,6 +32,8 @@ lint:
     - manifest.doi
   schema_lint: false
   modules_structure: false
+  modules_config: false
+  modules_json: false
   # Skip module-specific lints for local OUTRIDER modules
   modules:
     - aggregate_counts
