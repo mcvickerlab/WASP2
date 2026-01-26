@@ -107,10 +107,18 @@ jobs:
           key: cargo-target-${{ runner.os }}-${{ hashFiles('rust/Cargo.lock', 'rust/src/**/*.rs') }}
           restore-keys: cargo-target-${{ runner.os }}-
 
+      - name: Install build dependencies
+        run: |
+          # cmake is required for building zlib-ng (dependency of rust-htslib)
+          command -v cmake >/dev/null 2>&1 || brew install cmake
+          # Add x86_64 target for cross-compilation if Python is x86_64
+          rustup target add x86_64-apple-darwin 2>/dev/null || true
+
       - name: Show environment
         run: |
           echo "Python: $(python3 --version)"
           echo "Rust: $(cargo --version)"
+          echo "cmake: $(cmake --version | head -1)"
           echo "Samtools: $(samtools --version | head -1 || echo 'not found')"
 
       - name: Install Python dependencies
@@ -120,7 +128,9 @@ jobs:
 
       - name: Build Rust extension
         run: |
-          maturin build --release -m rust/Cargo.toml
+          # mambaforge Python is x86_64 (via Rosetta) on ARM64 runner
+          # Need BOTH: -i for correct Python detection AND --target for cross-compilation
+          maturin build --release -m rust/Cargo.toml -i $(which python3) --target x86_64-apple-darwin
           pip install rust/target/wheels/*.whl --force-reinstall --quiet
 
       - name: Install package
