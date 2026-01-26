@@ -1,0 +1,348 @@
+{
+    "$schema": "https://json-schema.org/draft-07/schema",
+    "$id": "https://raw.githubusercontent.com/Jaureguy760/WASP2/master/pipelines/nf-outrider/nextflow_schema.json",
+    "title": "nf-outrider pipeline parameters",
+    "description": "WASP2 + OUTRIDER pipeline for aberrant expression and mono-allelic expression detection",
+    "type": "object",
+    "definitions": {
+        "input_output_options": {
+            "title": "Input/Output options",
+            "type": "object",
+            "fa_icon": "fas fa-terminal",
+            "description": "Define where the pipeline should find input data and save output data.",
+            "required": ["input"],
+            "properties": {
+                "input": {
+                    "type": "string",
+                    "format": "file-path",
+                    "exists": true,
+                    "mimetype": "text/csv",
+                    "pattern": "^\\S+\\.csv$",
+                    "description": "Path to samplesheet CSV file containing sample information.",
+                    "help_text": "The samplesheet must have columns for sample name and BAM file paths.",
+                    "fa_icon": "fas fa-file-csv"
+                },
+                "outdir": {
+                    "type": "string",
+                    "format": "directory-path",
+                    "description": "The output directory where results will be saved.",
+                    "default": "./results",
+                    "fa_icon": "fas fa-folder-open"
+                },
+                "publish_dir_mode": {
+                    "type": "string",
+                    "default": "copy",
+                    "description": "Method used to save pipeline results to output directory.",
+                    "help_text": "The Nextflow `publishDir` option specifies which intermediate files should be saved to the output directory. Options: 'symlink', 'rellink', 'link', 'copy', 'copyNoFollow', 'move'.",
+                    "fa_icon": "fas fa-copy",
+                    "enum": ["symlink", "rellink", "link", "copy", "copyNoFollow", "move"]
+                }
+            }
+        },
+        "reference_genome_options": {
+            "title": "Reference genome options",
+            "type": "object",
+            "fa_icon": "fas fa-dna",
+            "description": "Reference genome and annotation files.",
+            "required": ["gtf"],
+            "properties": {
+                "gtf": {
+                    "type": "string",
+                    "format": "file-path",
+                    "exists": true,
+                    "pattern": "^\\S+\\.gtf(\\.gz)?$",
+                    "description": "Path to gene annotation GTF file.",
+                    "help_text": "Required for gene-level aggregation of allele counts.",
+                    "fa_icon": "fas fa-file-alt"
+                },
+                "fasta": {
+                    "type": "string",
+                    "format": "file-path",
+                    "pattern": "^\\S+\\.fa(sta)?(\\.gz)?$",
+                    "description": "Path to reference genome FASTA file (optional, for validation).",
+                    "fa_icon": "fas fa-file"
+                }
+            }
+        },
+        "variant_options": {
+            "title": "Variant data options",
+            "type": "object",
+            "fa_icon": "fas fa-exchange-alt",
+            "description": "Variant data required for WASP2 allelic analysis.",
+            "properties": {
+                "vcf": {
+                    "type": "string",
+                    "format": "file-path",
+                    "exists": true,
+                    "pattern": "^\\S+\\.(vcf|bcf|pgen)(\\.gz)?$",
+                    "description": "Path to VCF/BCF/PGEN variant file with sample genotypes.",
+                    "help_text": "Required for WASP2 mapping bias correction and mono-allelic expression detection.",
+                    "fa_icon": "fas fa-file-code"
+                },
+                "vcf_tbi": {
+                    "type": "string",
+                    "format": "file-path",
+                    "description": "Path to VCF tabix index (.tbi).",
+                    "fa_icon": "fas fa-file"
+                }
+            }
+        },
+        "wasp2_options": {
+            "title": "WASP2 options",
+            "type": "object",
+            "fa_icon": "fas fa-balance-scale",
+            "description": "Options for WASP2 mapping bias correction.",
+            "properties": {
+                "skip_wasp_filter": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Skip WASP mapping bias filter (use original BAMs).",
+                    "help_text": "Disables mapping bias correction; original aligned BAM will be used.",
+                    "fa_icon": "fas fa-fast-forward"
+                },
+                "wasp_threads": {
+                    "type": "integer",
+                    "default": 4,
+                    "minimum": 1,
+                    "description": "Number of threads for WASP2 internal processing.",
+                    "fa_icon": "fas fa-microchip"
+                },
+                "wasp_use_rust": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Use Rust acceleration for WASP2 (61x faster).",
+                    "help_text": "Enables the high-performance Rust backend for WASP2 filtering.",
+                    "fa_icon": "fas fa-bolt"
+                }
+            }
+        },
+        "allele_counting_options": {
+            "title": "Allele counting options",
+            "type": "object",
+            "fa_icon": "fas fa-calculator",
+            "description": "Options for allele counting and filtering.",
+            "properties": {
+                "min_reads": {
+                    "type": "integer",
+                    "default": 10,
+                    "minimum": 1,
+                    "description": "Minimum total reads for a variant.",
+                    "help_text": "Variants with fewer total reads will be excluded.",
+                    "fa_icon": "fas fa-sort-numeric-up"
+                },
+                "min_allele_count": {
+                    "type": "integer",
+                    "default": 3,
+                    "minimum": 1,
+                    "description": "Minimum count for the minor allele.",
+                    "help_text": "Variants where the minor allele has fewer reads will be excluded.",
+                    "fa_icon": "fas fa-sort-numeric-up"
+                }
+            }
+        },
+        "gene_aggregation_options": {
+            "title": "Gene aggregation options",
+            "type": "object",
+            "fa_icon": "fas fa-layer-group",
+            "description": "Options for aggregating variant-level counts to genes.",
+            "properties": {
+                "aggregation_method": {
+                    "type": "string",
+                    "default": "sum",
+                    "description": "Method to aggregate variant counts to genes.",
+                    "help_text": "How to combine allele counts from multiple variants within a gene.",
+                    "enum": ["sum", "mean", "max"],
+                    "fa_icon": "fas fa-calculator"
+                },
+                "feature_type": {
+                    "type": "string",
+                    "default": "gene",
+                    "description": "GTF feature type for aggregation.",
+                    "help_text": "Which GTF feature to use for grouping variants (e.g., 'gene', 'transcript').",
+                    "fa_icon": "fas fa-tag"
+                }
+            }
+        },
+        "outrider_options": {
+            "title": "OUTRIDER options",
+            "type": "object",
+            "fa_icon": "fas fa-chart-line",
+            "description": "Options for OUTRIDER aberrant expression detection.",
+            "properties": {
+                "outrider_padj": {
+                    "type": "number",
+                    "default": 0.05,
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Adjusted p-value cutoff for outlier calling.",
+                    "fa_icon": "fas fa-percentage"
+                },
+                "outrider_zScore": {
+                    "type": "number",
+                    "default": 2,
+                    "minimum": 0,
+                    "description": "Z-score cutoff for outlier calling.",
+                    "fa_icon": "fas fa-chart-bar"
+                },
+                "outrider_min_samples": {
+                    "type": "integer",
+                    "default": 10,
+                    "minimum": 2,
+                    "description": "Minimum samples required for OUTRIDER model fitting.",
+                    "help_text": "OUTRIDER requires sufficient samples for robust covariate estimation.",
+                    "fa_icon": "fas fa-users"
+                },
+                "outrider_q": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Encoding dimension for OUTRIDER autoencoder.",
+                    "help_text": "If not specified, will be auto-estimated from the data.",
+                    "fa_icon": "fas fa-compress"
+                },
+                "outrider_iterations": {
+                    "type": "integer",
+                    "default": 15,
+                    "minimum": 1,
+                    "description": "Maximum OUTRIDER iterations.",
+                    "fa_icon": "fas fa-redo"
+                },
+                "outrider_convergence": {
+                    "type": "number",
+                    "default": 1e-5,
+                    "minimum": 0,
+                    "description": "Convergence threshold for OUTRIDER fitting.",
+                    "fa_icon": "fas fa-bullseye"
+                }
+            }
+        },
+        "mae_options": {
+            "title": "Mono-allelic expression (MAE) options",
+            "type": "object",
+            "fa_icon": "fas fa-balance-scale-right",
+            "description": "Options for mono-allelic expression detection.",
+            "properties": {
+                "skip_mae": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Skip MAE analysis.",
+                    "fa_icon": "fas fa-fast-forward"
+                },
+                "mae_min_count": {
+                    "type": "integer",
+                    "default": 10,
+                    "minimum": 1,
+                    "description": "Minimum allele count for MAE test.",
+                    "help_text": "Variants with fewer reads will be excluded from MAE analysis.",
+                    "fa_icon": "fas fa-sort-numeric-up"
+                },
+                "mae_padj": {
+                    "type": "number",
+                    "default": 0.05,
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Adjusted p-value cutoff for MAE detection.",
+                    "fa_icon": "fas fa-percentage"
+                },
+                "mae_alt_ratio": {
+                    "type": "number",
+                    "default": 0.8,
+                    "minimum": 0.5,
+                    "maximum": 1,
+                    "description": "Alternative allele ratio threshold for MAE calling.",
+                    "help_text": "Variants with alt ratio above this threshold may indicate mono-allelic expression.",
+                    "fa_icon": "fas fa-sliders-h"
+                }
+            }
+        },
+        "processing_options": {
+            "title": "Processing options",
+            "type": "object",
+            "fa_icon": "fas fa-cogs",
+            "description": "Options to skip specific pipeline steps.",
+            "properties": {
+                "skip_multiqc": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Skip MultiQC report generation.",
+                    "fa_icon": "fas fa-fast-forward"
+                },
+                "output_format": {
+                    "type": "string",
+                    "description": "ML output formats (comma-separated): zarr, parquet, anndata.",
+                    "help_text": "Specify multiple formats separated by commas for ML-ready outputs.",
+                    "fa_icon": "fas fa-cogs"
+                }
+            }
+        },
+        "max_job_request_options": {
+            "title": "Max resource options",
+            "type": "object",
+            "fa_icon": "fas fa-server",
+            "description": "Set the maximum resource limits for pipeline processes.",
+            "properties": {
+                "max_cpus": {
+                    "type": "integer",
+                    "default": 16,
+                    "minimum": 1,
+                    "description": "Maximum number of CPUs that can be requested for any single process.",
+                    "fa_icon": "fas fa-microchip"
+                },
+                "max_memory": {
+                    "type": "string",
+                    "default": "128.GB",
+                    "pattern": "^\\d+(\\.\\d+)?\\.?\\s*(K|M|G|T)?B$",
+                    "description": "Maximum amount of memory that can be requested for any single process.",
+                    "fa_icon": "fas fa-memory"
+                },
+                "max_time": {
+                    "type": "string",
+                    "default": "240.h",
+                    "pattern": "^(\\d+\\.?\\s*(s|m|h|d)\\.?\\s*)+$",
+                    "description": "Maximum amount of time that can be requested for any single process.",
+                    "fa_icon": "fas fa-clock"
+                }
+            }
+        },
+        "generic_options": {
+            "title": "Generic options",
+            "type": "object",
+            "fa_icon": "fas fa-file-import",
+            "description": "Less common options for the pipeline.",
+            "properties": {
+                "help": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Display help text.",
+                    "fa_icon": "fas fa-question-circle",
+                    "hidden": true
+                },
+                "version": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Display version and exit.",
+                    "fa_icon": "fas fa-info-circle",
+                    "hidden": true
+                },
+                "tracedir": {
+                    "type": "string",
+                    "default": "${params.outdir}/pipeline_info",
+                    "description": "Directory to keep pipeline Nextflow trace, timeline, report, and DAG files.",
+                    "fa_icon": "fas fa-folder"
+                }
+            }
+        }
+    },
+    "allOf": [
+        { "$ref": "#/definitions/input_output_options" },
+        { "$ref": "#/definitions/reference_genome_options" },
+        { "$ref": "#/definitions/variant_options" },
+        { "$ref": "#/definitions/wasp2_options" },
+        { "$ref": "#/definitions/allele_counting_options" },
+        { "$ref": "#/definitions/gene_aggregation_options" },
+        { "$ref": "#/definitions/outrider_options" },
+        { "$ref": "#/definitions/mae_options" },
+        { "$ref": "#/definitions/processing_options" },
+        { "$ref": "#/definitions/max_job_request_options" },
+        { "$ref": "#/definitions/generic_options" }
+    ]
+}
