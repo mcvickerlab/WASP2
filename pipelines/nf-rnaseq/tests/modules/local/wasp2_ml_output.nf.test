@@ -1,0 +1,83 @@
+nextflow_process {
+
+    name "Test Process WASP2_ML_OUTPUT"
+    script "../../../modules/local/wasp2_ml_output/main.nf"
+    process "WASP2_ML_OUTPUT"
+
+    tag "modules"
+    tag "modules_local"
+    tag "wasp2"
+    tag "ml"
+
+    test("Should convert counts to zarr format - stub") {
+
+        options "-stub-run"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id:'test_sample', single_end:false ],
+                    file('counts.tsv')
+                ]
+                input[1] = 'zarr'
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.zarr
+            assert process.out.versions
+            assert snapshot(process.out).match()
+        }
+    }
+
+    test("Should convert counts to parquet format - stub") {
+
+        options "-stub-run"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id:'test_sample_parquet', single_end:false ],
+                    file('counts.tsv')
+                ]
+                input[1] = 'parquet'
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.parquet
+            assert process.out.versions
+            assert snapshot(process.out).match()
+        }
+    }
+
+    test("Should convert counts to anndata format - stub") {
+
+        options "-stub-run"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id:'test_sample_anndata', single_end:false ],
+                    file('counts.tsv')
+                ]
+                input[1] = 'anndata'
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.anndata
+            assert process.out.versions
+            assert snapshot(process.out).match()
+        }
+    }
+}

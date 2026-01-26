@@ -1,0 +1,72 @@
+nextflow_process {
+
+    name "Test Process SCATAC_ADD_HAPLOTYPE_LAYERS"
+    script "../../../modules/local/scatac_add_haplotype_layers/main.nf"
+    process "SCATAC_ADD_HAPLOTYPE_LAYERS"
+
+    tag "modules"
+    tag "modules_local"
+    tag "scatac"
+    tag "haplotype"
+
+    test("Should add haplotype layers to AnnData - stub") {
+
+        options "-stub-run"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id:'test_sample', sample:'NA12878' ],
+                    file('input.h5ad')
+                ]
+                input[1] = [
+                    [ id:'reference' ],
+                    file('phased.vcf.gz'),
+                    file('phased.vcf.gz.tbi')
+                ]
+                input[2] = false
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.anndata
+            assert process.out.cell_qc
+            assert process.out.versions
+            assert snapshot(process.out).match()
+        }
+    }
+
+    test("Should create Zarr output when requested - stub") {
+
+        options "-stub-run"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id:'test_sample_zarr', sample:'NA12878' ],
+                    file('input.h5ad')
+                ]
+                input[1] = [
+                    [ id:'reference' ],
+                    file('phased.vcf.gz'),
+                    file('phased.vcf.gz.tbi')
+                ]
+                input[2] = true
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.anndata
+            assert process.out.zarr
+            assert process.out.cell_qc
+            assert process.out.versions
+            assert snapshot(process.out).match()
+        }
+    }
+}

@@ -1,0 +1,63 @@
+nextflow_process {
+
+    name "Test Process MAE_DETECT"
+    script "../../../modules/local/mae_detect.nf"
+    process "MAE_DETECT"
+
+    tag "modules"
+    tag "modules_local"
+    tag "outrider"
+    tag "mae"
+
+    test("Should detect mono-allelic expression - stub") {
+
+        options "-stub-run"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id:'test_sample' ],
+                    file('allele_counts.tsv')
+                ]
+                input[1] = 10        // min_count
+                input[2] = 0.05      // padj_cutoff
+                input[3] = 0.9       // alt_ratio_threshold
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.mae_results
+            assert process.out.versions
+            assert snapshot(process.out).match()
+        }
+    }
+
+    test("Should apply stringent thresholds - stub") {
+
+        options "-stub-run"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id:'test_sample_stringent' ],
+                    file('allele_counts.tsv')
+                ]
+                input[1] = 20        // min_count (higher)
+                input[2] = 0.01      // padj_cutoff (stricter)
+                input[3] = 0.95      // alt_ratio_threshold (stricter)
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.mae_results
+            assert process.out.versions
+            assert snapshot(process.out).match()
+        }
+    }
+}

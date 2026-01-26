@@ -1,0 +1,70 @@
+nextflow_process {
+
+    name "Test Process WASP2_COUNT_ALLELES"
+    script "../../../modules/local/wasp2_count_alleles/main.nf"
+    process "WASP2_COUNT_ALLELES"
+
+    tag "modules"
+    tag "modules_local"
+    tag "wasp2"
+
+    test("Should count alleles at heterozygous SNPs - stub") {
+
+        options "-stub-run"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id:'test_sample', single_end:false, sample:'NA12878' ],
+                    file('test.bam'),
+                    file('test.bam.bai')
+                ]
+                input[1] = [
+                    [ id:'reference' ],
+                    file('variants.vcf.gz'),
+                    file('variants.vcf.gz.tbi')
+                ]
+                input[2] = file('genes.gtf')
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.counts
+            assert process.out.versions
+            assert snapshot(process.out).match()
+        }
+    }
+
+    test("Should count alleles without GTF - stub") {
+
+        options "-stub-run"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id:'test_sample_no_gtf', single_end:false, sample:'NA12878' ],
+                    file('test.bam'),
+                    file('test.bam.bai')
+                ]
+                input[1] = [
+                    [ id:'reference' ],
+                    file('variants.vcf.gz'),
+                    file('variants.vcf.gz.tbi')
+                ]
+                input[2] = []
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.counts
+            assert process.out.versions
+            assert snapshot(process.out).match()
+        }
+    }
+}
