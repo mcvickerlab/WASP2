@@ -1,0 +1,18 @@
+name: wasp2_ml_output
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11.*
+  - numpy
+  - pandas>=2.0.0
+  - scipy
+  - anndata>=0.8.0
+  - zarr>=2.16.0
+  - pyarrow>=14.0.0
+  - typer
+  - rich
+  - pip
+  - pip:
+    - wasp2

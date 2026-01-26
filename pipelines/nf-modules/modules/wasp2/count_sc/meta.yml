@@ -1,0 +1,86 @@
+name: "wasp2_count_sc"
+description: Count allele-specific reads at heterozygous SNPs for single-cell data using WASP2
+keywords:
+  - allele-specific
+  - single-cell
+  - variant
+  - counting
+  - scATAC-seq
+  - scRNA-seq
+  - wasp
+  - h5ad
+
+tools:
+  - wasp2:
+      description: |
+        WASP2 is a tool for allele-specific analysis of next-generation sequencing data
+        with high-performance single-cell support using cell barcodes.
+      homepage: https://github.com/Jaureguy760/WASP2-exp
+      documentation: https://Jaureguy760.github.io/WASP2-exp/
+      tool_dev_url: https://github.com/Jaureguy760/WASP2-exp
+      licence: ["MIT"]
+
+input:
+  - meta:
+      type: map
+      description: |
+        Groovy Map containing sample information.
+        e.g. `[ id:'sample1', sample:'NA12878' ]`
+  - bam:
+      type: file
+      description: Coordinate-sorted BAM file with cell barcode tags (CB/CR)
+      pattern: "*.{bam}"
+  - bai:
+      type: file
+      description: BAM index file
+      pattern: "*.{bai}"
+  - meta2:
+      type: map
+      description: |
+        Groovy Map containing VCF information.
+        e.g. `[ id:'variants' ]`
+  - vcf:
+      type: file
+      description: VCF file with genotype information (can be VCF, VCF.GZ, BCF, or PGEN)
+      pattern: "*.{vcf,vcf.gz,bcf,pgen}"
+  - vcf_index:
+      type: file
+      description: VCF index file (TBI for VCF.GZ, CSI for BCF)
+      pattern: "*.{tbi,csi}"
+  - barcodes:
+      type: file
+      description: Cell barcodes file (one barcode per line)
+      pattern: "*.{txt,tsv,csv}"
+  - features:
+      type: file
+      description: |
+        Optional region file to restrict counting.
+        Supports BED format.
+      pattern: "*.{bed}"
+
+output:
+  - meta:
+      type: map
+      description: |
+        Groovy Map containing sample information.
+        e.g. `[ id:'sample1', sample:'NA12878' ]`
+  - counts:
+      type: file
+      description: |
+        H5AD file with per-cell allele counts.
+        Contains layers 'ref' and 'alt' with count matrices.
+      pattern: "*.h5ad"
+  - stats:
+      type: file
+      description: |
+        TSV file with summary statistics (total_cells, total_snps, counts).
+      pattern: "*_stats.tsv"
+  - versions:
+      type: file
+      description: File containing software versions
+      pattern: "versions.yml"
+
+authors:
+  - "@Jaureguy760"
+maintainers:
+  - "@Jaureguy760"
