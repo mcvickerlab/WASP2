@@ -1,73 +1,73 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/subworkflows/yaml-schema.json
 name: "fastq_align_bwa"
-description: Align FASTQ reads to reference using BWA MEM, sort, index, and generate statistics
+description: Align reads with BWA-MEM and collect BAM statistics
 keywords:
-  - align
   - alignment
   - bwa
-  - fastq
   - bam
-  - samtools
-  - stats
+  - map
+  - fastq
+  - statistics
 components:
-  - bwa/index
   - bwa/mem
-  - bam_sort_stats_samtools
+  - bam_sort_stats_samtools  # includes samtools/sort, samtools/index, and bam_stats_samtools
 input:
-  - meta:
-      type: map
-      description: |
-        Groovy Map containing sample information
-        e.g. `[ id:'sample1', single_end:false ]`
   - reads:
-      type: file
-      description: FASTQ file(s) for alignment
-      pattern: "*.{fastq,fq,fastq.gz,fq.gz}"
-  - index:
-      type: directory
-      description: Pre-built BWA index (required)
-      pattern: "bwa/"
-  - fasta:
-      type: file
-      description: Reference FASTA file
-      pattern: "*.{fa,fasta}"
-  - sort_bam:
-      type: boolean
-      description: Whether to sort the output BAM file
-output:
-  - meta:
-      type: map
+      type: channel
       description: |
-        Groovy Map containing sample information
-        e.g. `[ id:'sample1', single_end:false ]`
+        Channel containing FASTQ reads
+        Structure: [ val(meta), path(reads) ]
+      pattern: "*.{fq,fastq,fq.gz,fastq.gz}"
+  - index:
+      type: channel
+      description: |
+        Channel containing BWA index files
+        Structure: [ val(meta), path(index) ]
+      pattern: "*.{amb,ann,bwt,pac,sa}"
+  - fasta:
+      type: channel
+      description: |
+        Channel containing reference FASTA
+        Structure: [ val(meta), path(fasta) ]
+      pattern: "*.{fa,fasta,fa.gz,fasta.gz}"
+output:
   - bam:
-      type: file
-      description: Sorted BAM file
-      pattern: "*.sorted.bam"
+      type: channel
+      description: |
+        Sorted aligned BAM file
+        Structure: [ val(meta), path(bam) ]
+      pattern: "*.bam"
   - bai:
-      type: file
-      description: BAM index file
-      pattern: "*.sorted.bam.bai"
-  - csi:
-      type: file
-      description: CSI index file (for large chromosomes)
-      pattern: "*.sorted.bam.csi"
+      type: channel
+      description: |
+        BAM index file
+        Structure: [ val(meta), path(bai) ]
+      pattern: "*.bai"
   - stats:
-      type: file
-      description: Samtools stats output
+      type: channel
+      description: |
+        Samtools stats output
+        Structure: [ val(meta), path(stats) ]
       pattern: "*.stats"
   - flagstat:
-      type: file
-      description: Samtools flagstat output
+      type: channel
+      description: |
+        Samtools flagstat output
+        Structure: [ val(meta), path(flagstat) ]
       pattern: "*.flagstat"
   - idxstats:
-      type: file
-      description: Samtools idxstats output
+      type: channel
+      description: |
+        Samtools idxstats output with per-chromosome counts
+        Structure: [ val(meta), path(idxstats) ]
       pattern: "*.idxstats"
   - versions:
-      type: file
-      description: File containing software versions
+      type: channel
+      description: |
+        Version information
+        Structure: path(versions.yml)
       pattern: "versions.yml"
 authors:
-  - "@wasp2-team"
+  - "@jjaureguy760"
 maintainers:
-  - "@wasp2-team"
+  - "@jjaureguy760"

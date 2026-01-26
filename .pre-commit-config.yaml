@@ -41,7 +41,17 @@ repos:
     hooks:
       - id: gitleaks
 
+  # Type checking: basedpyright (stricter Pyright fork)
+  - repo: local
+    hooks:
+      - id: basedpyright
+        name: basedpyright
+        entry: basedpyright
+        language: system
+        types: [python]
+        pass_filenames: false
+
 ci:
   autofix_prs: true
   autofix_commit_msg: 'style: auto-fix linting issues [pre-commit.ci]'
-  skip: [gitleaks]  # Gitleaks needs full git history, skip in pre-commit.ci
+  skip: [gitleaks, basedpyright]  # Gitleaks needs full git history; basedpyright requires local install
