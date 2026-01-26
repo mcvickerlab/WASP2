@@ -1,8 +1,8 @@
 # WASP2 Docker Build Workflow (Production Releases)
 # Builds and pushes container images to GitHub Container Registry
-# Uses GitHub-hosted runners for consistent, reproducible builds
+# Uses self-hosted Mac runner with Docker support (wasp2-mac-runner)
 #
-# NOTE: For PR testing, see containers.yml which uses self-hosted Mac runner
+# NOTE: For PR testing, see containers.yml (also uses self-hosted Mac runner)
 #       This workflow focuses on official releases and tag pushes only
 
 name: Docker
@@ -35,7 +35,9 @@ env:
 jobs:
   build:
     name: Build and Push
-    runs-on: ubuntu-latest
+    # Using self-hosted Mac runner with Docker support
+    runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
+    timeout-minutes: 45
     permissions:
       contents: read
       packages: write
@@ -76,11 +78,15 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # Using local cache for self-hosted runner
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
           platforms: linux/amd64
           build-args: |
             VERSION=${{ github.ref_name }}
+
+      - name: Rotate cache
+        run: rm -rf /tmp/.buildx-cache && mv /tmp/.buildx-cache-new /tmp/.buildx-cache 2>/dev/null || true
 
       - name: Summary
         env:
@@ -101,7 +107,9 @@ jobs:
   singularity:
     name: Build Singularity
     needs: build
-    runs-on: ubuntu-latest
+    # Using self-hosted Mac runner with Docker support
+    runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
+    timeout-minutes: 30
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
