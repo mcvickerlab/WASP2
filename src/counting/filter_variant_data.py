@@ -1,3 +1,7 @@
+"""Variant data filtering and conversion utilities."""
+
+from __future__ import annotations
+
 import subprocess
 from pathlib import Path
 
@@ -47,7 +51,30 @@ def vcf_to_bed(
     return str(result)
 
 
-def gtf_to_bed(gtf_file, out_bed, feature, attribute):
+def gtf_to_bed(
+    gtf_file: str | Path,
+    out_bed: str | Path,
+    feature: str,
+    attribute: str,
+) -> str | Path:
+    """Convert GTF/GFF3 file to BED format.
+
+    Parameters
+    ----------
+    gtf_file : str | Path
+        Path to GTF/GFF3 file.
+    out_bed : str | Path
+        Output BED file path.
+    feature : str
+        Feature type to extract (e.g., 'gene', 'exon').
+    attribute : str
+        Attribute to use as region name.
+
+    Returns
+    -------
+    str | Path
+        Path to output BED file.
+    """
     # Use gtf col names
     gtf_cols = [
         "seqname",
@@ -86,8 +113,22 @@ def gtf_to_bed(gtf_file, out_bed, feature, attribute):
     return out_bed
 
 
-# Perform intersection
-def intersect_vcf_region(vcf_file, region_file, out_file):
+def intersect_vcf_region(
+    vcf_file: str | Path,
+    region_file: str | Path,
+    out_file: str | Path,
+) -> None:
+    """Perform bedtools intersection of variants with regions.
+
+    Parameters
+    ----------
+    vcf_file : str | Path
+        Path to variant BED file.
+    region_file : str | Path
+        Path to region BED file.
+    out_file : str | Path
+        Output intersection file path.
+    """
     # Parse region file before or after???
     intersect_cmd = ["bedtools", "intersect", "-a", str(vcf_file), "-b", str(region_file), "-wb"]
 
@@ -96,11 +137,30 @@ def intersect_vcf_region(vcf_file, region_file, out_file):
         subprocess.run(intersect_cmd, stdout=file, check=True)
 
 
-# TODO, update old software to use this new version
-# Convert Intersect file to df
 def parse_intersect_region_new(
-    intersect_file, samples=None, use_region_names=False, region_col=None
-):
+    intersect_file: str | Path,
+    samples: list[str] | None = None,
+    use_region_names: bool = False,
+    region_col: str | None = None,
+) -> pl.DataFrame:
+    """Parse intersection file to DataFrame with typed columns.
+
+    Parameters
+    ----------
+    intersect_file : str | Path
+        Path to bedtools intersection output.
+    samples : list[str] | None, optional
+        Sample column names to include, by default None.
+    use_region_names : bool, optional
+        Use region names from fourth column, by default False.
+    region_col : str | None, optional
+        Column name for region, by default 'region'.
+
+    Returns
+    -------
+    pl.DataFrame
+        Parsed intersection data with typed columns.
+    """
     if region_col is None:
         region_col = "region"
 
@@ -150,7 +210,32 @@ def parse_intersect_region_new(
     return df.unique(maintain_order=True).collect()
 
 
-def parse_intersect_region(intersect_file, use_region_names=False, region_col=None):
+def parse_intersect_region(
+    intersect_file: str | Path,
+    use_region_names: bool = False,
+    region_col: str | None = None,
+) -> pl.DataFrame:
+    """Parse intersection file to DataFrame (legacy version).
+
+    Parameters
+    ----------
+    intersect_file : str | Path
+        Path to bedtools intersection output.
+    use_region_names : bool, optional
+        Use region names from fourth column, by default False.
+    region_col : str | None, optional
+        Column name for region, by default 'region'.
+
+    Returns
+    -------
+    pl.DataFrame
+        Parsed intersection data.
+
+    Raises
+    ------
+    ValueError
+        If BED format is not recognized.
+    """
     df = pl.scan_csv(intersect_file, separator="\t", has_header=False, infer_schema_length=0)
 
     # If we need to use coords as name

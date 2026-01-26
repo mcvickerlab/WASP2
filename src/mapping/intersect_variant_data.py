@@ -1,3 +1,11 @@
+"""Variant intersection and BAM filtering utilities.
+
+Provides functions for converting variants to BED format, filtering BAM files
+by variant overlap, and creating intersection files for the WASP pipeline.
+"""
+
+from __future__ import annotations
+
 import os
 import subprocess
 from pathlib import Path
@@ -5,14 +13,14 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 import pysam
-from wasp2_rust import filter_bam_by_variants_py as _rust_filter_bam
+
+# Multi-format variant support
+from wasp2.io import variants_to_bed as _variants_to_bed
 
 # Rust acceleration (required; no fallback)
+from wasp2_rust import filter_bam_by_variants_py as _rust_filter_bam
 from wasp2_rust import intersect_bam_bed as _rust_intersect
 from wasp2_rust import intersect_bam_bed_multi as _rust_intersect_multi
-
-# Import from new wasp2.io module for multi-format support
-from wasp2.io import variants_to_bed as _variants_to_bed
 
 
 def vcf_to_bed(
@@ -129,8 +137,26 @@ def intersect_reads(remap_bam: str, vcf_bed: str, out_bed: str, num_samples: int
 
 
 def make_intersect_df(
-    intersect_file: str, samples: list[str], is_paired: bool = True
+    intersect_file: str,
+    samples: list[str],
+    is_paired: bool = True,
 ) -> pl.DataFrame:
+    """Parse intersection file into a typed polars DataFrame.
+
+    Parameters
+    ----------
+    intersect_file : str
+        Path to intersection BED file.
+    samples : list[str]
+        List of sample column names.
+    is_paired : bool, optional
+        Whether reads are paired-end, by default True.
+
+    Returns
+    -------
+    pl.DataFrame
+        Parsed intersection data with alleles split by sample.
+    """
     # Create Dataframe
     df = pl.scan_csv(intersect_file, separator="\t", has_header=False, infer_schema_length=0)
 

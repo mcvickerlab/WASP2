@@ -1,3 +1,11 @@
+"""Single-cell allelic imbalance analysis functions.
+
+Provides functions for analyzing allelic imbalance in single-cell data
+stored in AnnData format with SNP counts in layers.
+"""
+
+from __future__ import annotations
+
 from typing import Any
 
 import numpy as np
@@ -11,8 +19,6 @@ from scipy.stats import betabinom, chi2, false_discovery_control, zscore
 from .as_analysis import opt_phased_new, opt_prob, opt_unphased_dp
 
 
-# Performs qc and prefilters anndata count data
-# Should this be a decorator instead?
 def adata_count_qc(
     adata: AnnData, z_cutoff: float | None = None, gt_error: Any | None = None
 ) -> AnnData:

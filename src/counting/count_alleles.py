@@ -1,7 +1,16 @@
+"""Allele counting functions using Rust-accelerated BAM processing."""
+
+from __future__ import annotations
+
 import os
 import timeit
+from collections.abc import Iterator
+from typing import TYPE_CHECKING
 
 import polars as pl
+
+if TYPE_CHECKING:
+    import pysam
 
 # Try to import Rust acceleration (required; no Python fallback)
 try:
@@ -12,7 +21,12 @@ except ImportError:
     RUST_AVAILABLE = False
 
 
-def count_snp_alleles_rust(bam_file, chrom, snp_list, threads: int | None = None):
+def count_snp_alleles_rust(
+    bam_file: str,
+    chrom: str,
+    snp_list: Iterator[tuple[int, str, str]],
+    threads: int | None = None,
+) -> list[tuple[str, int, int, int, int]]:
     """
     Rust-accelerated version of count_snp_alleles
 
@@ -50,15 +64,27 @@ def count_snp_alleles_rust(bam_file, chrom, snp_list, threads: int | None = None
     return allele_counts
 
 
-def make_count_df(bam_file, df, use_rust=True):
-    """
-    Make DF containing all intersections and allele counts
+def make_count_df(bam_file: str, df: pl.DataFrame, use_rust: bool = True) -> pl.DataFrame:
+    """Make DataFrame containing all intersections and allele counts.
 
-    :param str bam_file: Path to BAM file
-    :param DataFrame df: Dataframe of intersections, output from
-        parse_(intersect/gene)_df()
-    :param bool use_rust: Use Rust acceleration if available (default: True)
-    :return DataFrame: DataFrame of counts
+    Parameters
+    ----------
+    bam_file : str
+        Path to BAM file.
+    df : pl.DataFrame
+        DataFrame of intersections, output from parse_(intersect/gene)_df().
+    use_rust : bool, optional
+        Use Rust acceleration if available, by default True.
+
+    Returns
+    -------
+    pl.DataFrame
+        DataFrame of counts joined with input intersections.
+
+    Raises
+    ------
+    RuntimeError
+        If Rust BAM counter is not available.
     """
     count_list = []
 
@@ -132,9 +158,20 @@ def make_count_df(bam_file, df, use_rust=True):
 
 
 # Legacy helper retained for imports in counting/count_alleles_sc.py
-def find_read_aln_pos(read, pos):
-    """
-    Binary search over aligned pairs to find query position for a given reference pos.
+def find_read_aln_pos(read: pysam.AlignedSegment, pos: int) -> int | None:
+    """Find query position for a given reference position using binary search.
+
+    Parameters
+    ----------
+    read : pysam.AlignedSegment
+        Aligned read from BAM file.
+    pos : int
+        Reference position (0-based).
+
+    Returns
+    -------
+    int | None
+        Query position if found, None otherwise.
     """
     aln_list = read.get_aligned_pairs(True)
     # bisect_left using manual loop to avoid Python <3.10 key support

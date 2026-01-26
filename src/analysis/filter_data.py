@@ -1,20 +1,23 @@
-"""
-Author: Aaron Ho
-Python Version: 3.8
+"""Data filtering utilities for allele-specific analysis.
+
+Functions for filtering VCF, GTF, BAM files and creating intersection files.
 """
 
-# Default Python package Imports
+from __future__ import annotations
+
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pandas as pd
-
-# External package imports
 import pysam
 from pybedtools import BedTool
 from pysam import VariantFile
 
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
-def write_sample_snp(in_file, in_sample, out_dir):
+
+def write_sample_snp(in_file: str | Path, in_sample: str, out_dir: str | Path) -> None:
     """
     Filters heterozygous SNP's by sample and writes to new VCF
 
@@ -50,7 +53,22 @@ def write_sample_snp(in_file, in_sample, out_dir):
     print("Created Filtered VCF")
 
 
-def write_filter_gtf(gtf_file, feature, out_dir):
+def write_filter_gtf(
+    gtf_file: str | Path,
+    feature: Sequence[str] | None,
+    out_dir: str | Path | None,
+) -> None:
+    """Filter GTF file by feature type.
+
+    Parameters
+    ----------
+    gtf_file : str | Path
+        Path to GTF file.
+    feature : Sequence[str] | None
+        Feature types to keep (e.g., ['gene', 'exon']).
+    out_dir : str | Path | None
+        Output directory for filtered GTF.
+    """
     df = pd.read_csv(
         gtf_file,
         sep="\t",
@@ -77,7 +95,7 @@ def write_filter_gtf(gtf_file, feature, out_dir):
         print("GTF filtered by feature")
 
 
-def intersect_snp(vcf_file, region_file, out_dir):
+def intersect_snp(vcf_file: str | Path, region_file: str | Path, out_dir: str | Path) -> None:
     """
     Retrieves SNP's that intersect regions
 
@@ -93,7 +111,7 @@ def intersect_snp(vcf_file, region_file, out_dir):
     print("Created Intersection File")
 
 
-def parse_intersect_df(intersect_file):
+def parse_intersect_df(intersect_file: str | Path) -> pd.DataFrame:
     """
     Parses intersection file and creates Dataframe
 
@@ -116,7 +134,7 @@ def parse_intersect_df(intersect_file):
     return return_df
 
 
-def parse_gene_df(intersect_file):
+def parse_gene_df(intersect_file: str | Path) -> pd.DataFrame:
     """
     Parses intersection file and creates Dataframe
     Returns gene names
@@ -140,7 +158,7 @@ def parse_gene_df(intersect_file):
     return return_df
 
 
-def process_bam(bam_file, region_file, out_dir):
+def process_bam(bam_file: str | Path, region_file: str | Path, out_dir: str | Path) -> None:
     """
     Filter bam file to remove reads not overlapping regions of interest
 
@@ -148,7 +166,6 @@ def process_bam(bam_file, region_file, out_dir):
     :param str region_file: Path to region file (BED, Peaks, GTF)
     :param str out_dir: Path to output directory of filtered BAM
     """
-
     out_bam = Path(out_dir) / "filter.bam"
     sort_out = Path(out_dir) / "filter.sort.bam"
 

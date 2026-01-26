@@ -1,14 +1,15 @@
-"""
-Author: Aaron Ho
-Python Version: 3.9
+"""Allelic imbalance analysis pipeline.
+
+Main entry point for running the beta-binomial allelic imbalance analysis
+using the Rust-accelerated backend.
 """
 
-# Default Python package Imports
+from __future__ import annotations
+
 from csv import reader
 from pathlib import Path
 from typing import Literal
 
-# External package imports
 import pandas as pd
 
 # Rust analysis (required; no Python fallback)
@@ -18,10 +19,29 @@ except ImportError:
     rust_analyze_imbalance = None
 
 
-# TODO GOTTA IMPLEMENT THIS
-
-
 class WaspAnalysisData:
+    """Container for allelic imbalance analysis configuration.
+
+    Attributes
+    ----------
+    count_file : str | Path
+        Path to the count TSV file.
+    region_col : str | None
+        Column name for grouping variants by region.
+    groupby : str | None
+        Column name for additional grouping (e.g., parent gene).
+    out_file : str
+        Output file path for results.
+    phased : bool
+        Whether to use phased genotype information.
+    model : Literal["single", "linear"]
+        Dispersion model type.
+    min_count : int
+        Minimum total allele count threshold.
+    pseudocount : int
+        Pseudocount to add to allele counts.
+    """
+
     def __init__(
         self,
         count_file: str | Path,
@@ -40,28 +60,17 @@ class WaspAnalysisData:
         self.out_file = out_file
 
         # TODO parse vcf for phased instead of default unphased
-        if not phased:
-            self.phased: bool = False
-        else:
-            self.phased = phased
+        self.phased: bool = bool(phased)
 
         # Default to single dispersion model
-        if (model is None) or (model not in {"single", "linear"}):
-            self.model: Literal["single", "linear"] = "single"
+        if model in {"single", "linear"}:
+            self.model: Literal["single", "linear"] = model  # type: ignore[assignment]
         else:
-            self.model = model  # type: ignore[assignment]
+            self.model = "single"
 
-        # Default min count of 10
-        if min_count is None:
-            self.min_count: int = 10
-        else:
-            self.min_count = min_count
-
-        if pseudocount is None:
-            # self.pseudocount = 0 # either 0 or 1 for default
-            self.pseudocount: int = 1
-        else:
-            self.pseudocount = pseudocount
+        # Default min count of 10, pseudocount of 1
+        self.min_count: int = 10 if min_count is None else min_count
+        self.pseudocount: int = 1 if pseudocount is None else pseudocount
 
         # Read header only for validation
         with open(self.count_file) as f:
@@ -117,6 +126,32 @@ def run_ai_analysis(
     region_col: str | None = None,
     groupby: str | None = None,
 ) -> None:
+    """Run allelic imbalance analysis pipeline.
+
+    Parameters
+    ----------
+    count_file : str | Path
+        Path to TSV file with allele counts.
+    min_count : int | None, optional
+        Minimum total count threshold, by default 10.
+    pseudocount : int | None, optional
+        Pseudocount to add, by default 1.
+    phased : bool | None, optional
+        Use phased genotype information, by default False.
+    model : str | None, optional
+        Dispersion model ('single' or 'linear'), by default 'single'.
+    out_file : str | None, optional
+        Output file path, by default 'ai_results.tsv'.
+    region_col : str | None, optional
+        Column name for grouping variants.
+    groupby : str | None, optional
+        Additional grouping column.
+
+    Raises
+    ------
+    RuntimeError
+        If Rust analysis extension is not available.
+    """
     # Store analysis data and params
     ai_files = WaspAnalysisData(
         count_file,

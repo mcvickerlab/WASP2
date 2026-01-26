@@ -59,7 +59,7 @@ class Variant:
         return self.pos - 1
 
     def to_bed_line(self) -> str:
-        """Convert variant to BED format line.
+        r"""Convert variant to BED format line.
 
         BED format uses 0-based start, 1-based end coordinates.
         Format: chrom\\tstart\\tend\\tref\\talt
@@ -358,7 +358,7 @@ class VariantSource(ABC):
         het_only: bool = True,
         include_genotypes: bool = True,
     ) -> Path:
-        """Export variants to BED format file.
+        r"""Export variants to BED format file.
 
         BED format uses 0-based start, 1-based end coordinates.
         Format depends on include_genotypes:

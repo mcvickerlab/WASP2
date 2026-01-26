@@ -1,3 +1,11 @@
+"""WASP mapping bias correction pipeline.
+
+Main entry points for running the WASP allele-specific read filtering pipeline
+including the unified single-pass mode and traditional multi-pass mode.
+"""
+
+from __future__ import annotations
+
 import functools
 import json
 import os
@@ -264,7 +272,6 @@ def run_make_remap_reads(
     :param threads: Number of threads for BAM I/O, defaults to 1
     :type threads: int, optional
     """
-
     # Create Data Files
     wasp_files = WaspDataFiles(
         bam_file,
@@ -441,7 +448,6 @@ def run_wasp_filt(
     :param same_locus_slop: Tolerance (bp) for same locus test, defaults to 0
     :type same_locus_slop: int, optional
     """
-
     # Handle temp
     if remap_keep_bam is None:
         with tempfile.TemporaryDirectory() as tmpdir:

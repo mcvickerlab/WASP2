@@ -104,7 +104,6 @@ def opt_phased_new(
     :param gt_data: Array of genotype phase information
     :return: Negative log-likelihood value
     """
-
     # phase and prob with respect to snp1 as ref
     phased_ll = opt_prob(np.abs(prob - gt_data), disp, ref_data, n_data)
 
@@ -133,7 +132,6 @@ def opt_unphased_dp(
     :param phase_n: Array of total counts for subsequent positions
     :return: Negative log-likelihood value
     """
-
     # Get likelihood of first pos
     first_ll = opt_prob(prob, disp, first_ref[0], first_n[0])
 
@@ -164,7 +162,6 @@ def parse_opt(
     :param phased: Whether data is phased
     :return: Tuple of (alt_ll, mu) - likelihood of alternate model and imbalance proportion
     """
-
     snp_count = df.shape[0]
 
     # Create array used for AI analysis
@@ -230,7 +227,6 @@ def single_model(df: pd.DataFrame, region_col: str, phased: bool = False) -> pd.
     :param phased: Whether data is phased
     :return: Dataframe with imbalance likelihood
     """
-
     print("Running analysis with single dispersion model")
     opt_disp: Callable[..., float] = lambda rho, ref_data, n_data: -np.sum(
         betabinom.logpmf(ref_data, n_data, (0.5 * (1 - rho) / rho), (0.5 * (1 - rho) / rho))
@@ -290,7 +286,6 @@ def linear_model(df: pd.DataFrame, region_col: str, phased: bool = False) -> pd.
     :param phased: Whether data is phased
     :return: Dataframe with imbalance likelihood
     """
-
     print("Running analysis with linear dispersion model")
     in_data = df[["ref_count", "N"]].to_numpy().T
 
@@ -362,7 +357,6 @@ def get_imbalance(
     :param groupby: alternative grouping column (overrides region_col if provided)
     :return: DataFrame with imbalance statistics per region
     """
-
     model_dict: dict[str, Callable[[pd.DataFrame, str, bool], pd.DataFrame]] = {
         "single": single_model,
         "linear": linear_model,
