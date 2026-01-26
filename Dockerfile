@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y \
     liblzma-dev \
     zlib1g-dev \
     pkg-config \
+    cmake \
     && rm -rf /var/lib/apt/lists/*
 
 # Install maturin

@@ -15,10 +15,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install build dependencies
+        run: |
+          # cmake is required for building zlib-ng (dependency of rust-htslib)
+          command -v cmake >/dev/null 2>&1 || brew install cmake
+          # Add x86_64 target for cross-compilation if Python is x86_64
+          rustup target add x86_64-apple-darwin 2>/dev/null || true
+
       - name: Show environment
         run: |
-          echo "Python: $(python3 --version)"
+          echo "=== Python Environment ==="
+          echo "python3: $(which python3)"
+          echo "python: $(which python || echo 'not found')"
+          echo "pip: $(which pip)"
+          echo "Python version: $(python3 --version)"
+          python3 -c "import platform; print(f'Platform: {platform.platform()}')"
+          python3 -c "import platform; print(f'Machine: {platform.machine()}')"
+          python3 -c "import sys; print(f'sys.executable: {sys.executable}')"
+          echo "=== pip debug tags ==="
+          pip debug --verbose 2>/dev/null | grep -E "compatible tags|macos" | head -10 || echo "pip debug not available"
+          echo "=== Rust & cmake ==="
           echo "Rust: $(cargo --version)"
+          echo "cmake: $(cmake --version | head -1)"
 
       - name: Install Python package
         run: |
@@ -28,7 +46,10 @@ jobs:
 
       - name: Build Rust extension
         run: |
-          maturin develop --release -m rust/Cargo.toml
+          # mambaforge Python is x86_64 (via Rosetta) on ARM64 runner
+          # Need BOTH: -i for correct Python detection AND --target for cross-compilation
+          maturin build --release -m rust/Cargo.toml -i $(which python3) --target x86_64-apple-darwin
+          pip install rust/target/wheels/*.whl --force-reinstall --quiet
 
       - name: Run tests with coverage
         run: |
