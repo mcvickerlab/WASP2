@@ -37,14 +37,16 @@ jobs:
         run: |
           python -m pip install --upgrade pip --quiet
           pip install maturin pytest pytest-cov --quiet
-          pip install -e ".[dev]" --quiet || pip install -e "." --quiet
+          # Use --prefer-binary to avoid building llvmlite from source (requires LLVM)
+          pip install -e ".[dev]" --prefer-binary --quiet || pip install -e "." --prefer-binary --quiet
 
       - name: Build Rust extension
         run: |
-          # mambaforge Python is x86_64 (via Rosetta) on ARM64 runner
-          # Need BOTH: -i for correct Python detection AND --target for cross-compilation
-          maturin build --release -m rust/Cargo.toml -i $(which python3) --target x86_64-apple-darwin
-          pip install rust/target/wheels/*.whl --force-reinstall --quiet
+          # CRITICAL: Use mambaforge's python (not python3 which is Xcode Python 3.9)
+          # pip is from mambaforge Python 3.10, so we must build for that Python
+          MAMBAFORGE_PYTHON=/Users/jeffjaureguy/mambaforge/bin/python
+          maturin build --release -m rust/Cargo.toml -i $MAMBAFORGE_PYTHON
+          pip install rust/target/wheels/*.whl --force-reinstall --prefer-binary --quiet
 
       - name: Run tests
         run: |
