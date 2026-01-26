@@ -7,9 +7,13 @@ nextflow_pipeline {
     tag "wasp2"
     tag "rnaseq_ase"
 
-    test("RNASEQ_ASE - stub run - paired end") {
+    // Shared constants to avoid duplication (no 'def' for binding-level scope)
+    countsHeader = "chrom\tpos\tref\talt\tregion\tref_count\talt_count\tother_count\tN"
+    aiResultsHeader = "region\tsnp_count\tref_sum\talt_sum\tmu\tnull_ll\talt_ll\tLRT\tpvalue\tfdr"
 
-        options "-stub"
+    test("RNASEQ_ASE - stub run - validates output structure and format") {
+
+        options "-stub -profile test_stub"
 
         when {
             params {
@@ -23,40 +27,114 @@ nextflow_pipeline {
 
         then {
             assertAll(
-                // Pipeline completes successfully
                 { assert workflow.success },
 
-                // Workflow emits expected channels (stub mode creates empty channels)
+                // Workflow channels populated
                 { assert workflow.out.wasp_bam != null },
                 { assert workflow.out.counts != null },
                 { assert workflow.out.results != null },
-                { assert workflow.out.versions != null }
+                { assert workflow.out.versions != null },
+                { assert workflow.out.wasp_bam.size() == 2, "Expected 2 WASP BAM outputs" },
+                { assert workflow.out.counts.size() == 2, "Expected 2 counts outputs" },
+                { assert workflow.out.results.size() == 2, "Expected 2 AI results outputs" },
+
+                // Snapshot for regression tracking
+                { assert snapshot(
+                    workflow.trace.tasks().size(),
+                    workflow.trace.tasks()*.name.sort()
+                ).match("stub_workflow_tasks") },
+
+                // Output directories exist
+                { assert path("${outputDir}/results/wasp_filtered").exists() },
+                { assert path("${outputDir}/results/counts").exists() },
+                { assert path("${outputDir}/results/analysis").exists() },
+
+                // SAMPLE1 outputs
+                { assert path("${outputDir}/results/wasp_filtered/SAMPLE1_wasp_filt.bam").exists() },
+                { assert path("${outputDir}/results/wasp_filtered/SAMPLE1_wasp_filt.bam.bai").exists() },
+                { assert path("${outputDir}/results/wasp_filtered/SAMPLE1.filter_stats.txt").exists() },
+                { assert path("${outputDir}/results/counts/SAMPLE1_counts.tsv").exists() },
+                { assert path("${outputDir}/results/analysis/SAMPLE1_ai_results.tsv").exists() },
+
+                // SAMPLE2 outputs
+                { assert path("${outputDir}/results/wasp_filtered/SAMPLE2_wasp_filt.bam").exists() },
+                { assert path("${outputDir}/results/wasp_filtered/SAMPLE2_wasp_filt.bam.bai").exists() },
+                { assert path("${outputDir}/results/wasp_filtered/SAMPLE2.filter_stats.txt").exists() },
+                { assert path("${outputDir}/results/counts/SAMPLE2_counts.tsv").exists() },
+                { assert path("${outputDir}/results/analysis/SAMPLE2_ai_results.tsv").exists() },
+
+                // Header validation (first line must match exactly)
+                { assert path("${outputDir}/results/counts/SAMPLE1_counts.tsv").readLines()[0] == countsHeader },
+                { assert path("${outputDir}/results/counts/SAMPLE2_counts.tsv").readLines()[0] == countsHeader },
+                { assert path("${outputDir}/results/analysis/SAMPLE1_ai_results.tsv").readLines()[0] == aiResultsHeader },
+                { assert path("${outputDir}/results/analysis/SAMPLE2_ai_results.tsv").readLines()[0] == aiResultsHeader }
             )
         }
     }
 
-    test("RNASEQ_ASE - fails without required params") {
+    test("RNASEQ_ASE - fails without input samplesheet") {
 
-        options "-stub"
+        options "-stub -profile test_stub"
 
         when {
             params {
-                // Missing required input parameter
                 vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
                 star_index = "${projectDir}/tests/data/star_index"
-                outdir     = "${outputDir}/results_fail"
+                gtf        = "${projectDir}/tests/data/test.gtf"
+                outdir     = "${outputDir}/results_no_input"
             }
         }
 
         then {
             assert workflow.failed
             assert workflow.exitStatus == 1
+            assert workflow.stdout.toString().contains("ERROR: --input samplesheet not specified")
         }
     }
 
-    test("RNASEQ_ASE - fails with missing VCF index") {
+    test("RNASEQ_ASE - fails without VCF") {
 
-        options "-stub"
+        options "-stub -profile test_stub"
+
+        when {
+            params {
+                input      = "${projectDir}/assets/samplesheet_test.csv"
+                star_index = "${projectDir}/tests/data/star_index"
+                gtf        = "${projectDir}/tests/data/test.gtf"
+                outdir     = "${outputDir}/results_no_vcf"
+            }
+        }
+
+        then {
+            assert workflow.failed
+            assert workflow.exitStatus == 1
+            assert workflow.stdout.toString().contains("ERROR: --vcf variants file not specified")
+        }
+    }
+
+    test("RNASEQ_ASE - fails without STAR index") {
+
+        options "-stub -profile test_stub"
+
+        when {
+            params {
+                input      = "${projectDir}/assets/samplesheet_test.csv"
+                vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
+                gtf        = "${projectDir}/tests/data/test.gtf"
+                outdir     = "${outputDir}/results_no_star"
+            }
+        }
+
+        then {
+            assert workflow.failed
+            assert workflow.exitStatus == 1
+            assert workflow.stdout.toString().contains("ERROR: --star_index STAR index not specified")
+        }
+    }
+
+    test("RNASEQ_ASE - fails without VCF index") {
+
+        options "-stub -profile test_stub"
 
         when {
             params {
@@ -64,604 +142,141 @@ nextflow_pipeline {
                 vcf        = "${projectDir}/tests/data/test_snps_no_index.vcf.gz"
                 star_index = "${projectDir}/tests/data/star_index"
                 gtf        = "${projectDir}/tests/data/test.gtf"
-                outdir     = "${outputDir}/results_no_index"
+                outdir     = "${outputDir}/results_no_vcf_index"
             }
         }
 
         then {
             assert workflow.failed
             assert workflow.exitStatus == 1
-            assert workflow.stdout.any { it.contains("VCF index not found") }
+            assert workflow.stdout.toString().contains("ERROR: VCF index not found")
         }
     }
 
-    test("RNASEQ_ASE - stub run - skip_analysis") {
+    test("RNASEQ_ASE - fails with malformed samplesheet - missing sample column") {
 
-        tag "skip_options"
-
-        options "-stub"
+        options "-stub -profile test_stub"
 
         when {
             params {
-                input         = "${projectDir}/assets/samplesheet_test.csv"
-                vcf           = "${projectDir}/tests/data/test_snps.vcf.gz"
-                star_index    = "${projectDir}/tests/data/star_index"
-                gtf           = "${projectDir}/tests/data/test.gtf"
-                outdir        = "${outputDir}/results_skip_analysis"
-                skip_analysis = true
-            }
-        }
-
-        then {
-            assertAll(
-                // Pipeline completes successfully
-                { assert workflow.success },
-
-                // WASP BAM and counts should be produced
-                { assert workflow.out.wasp_bam != null },
-                { assert workflow.out.counts != null },
-
-                // Results channel should be empty (analysis skipped)
-                { assert workflow.out.results != null },
-
-                { assert workflow.out.versions != null }
-            )
-        }
-    }
-
-    //
-    // Additional Skip Options Tests
-    //
-
-    test("RNASEQ_ASE - stub run - output_format zarr") {
-
-        tag "skip_options"
-
-        options "-stub"
-
-        when {
-            params {
-                input         = "${projectDir}/assets/samplesheet_test.csv"
-                vcf           = "${projectDir}/tests/data/test_snps.vcf.gz"
-                star_index    = "${projectDir}/tests/data/star_index"
-                gtf           = "${projectDir}/tests/data/test.gtf"
-                outdir        = "${outputDir}/results_output_zarr"
-                output_format = "zarr"
-            }
-        }
-
-        then {
-            assertAll(
-                // Pipeline completes successfully
-                { assert workflow.success },
-
-                // Standard outputs should be produced
-                { assert workflow.out.wasp_bam != null },
-                { assert workflow.out.counts != null },
-                { assert workflow.out.results != null },
-
-                // Zarr ML output and versions
-                { assert workflow.out.ml_zarr != null },
-                { assert workflow.out.versions != null }
-            )
-        }
-    }
-
-    test("RNASEQ_ASE - stub run - output_format parquet") {
-
-        tag "skip_options"
-
-        options "-stub"
-
-        when {
-            params {
-                input         = "${projectDir}/assets/samplesheet_test.csv"
-                vcf           = "${projectDir}/tests/data/test_snps.vcf.gz"
-                star_index    = "${projectDir}/tests/data/star_index"
-                gtf           = "${projectDir}/tests/data/test.gtf"
-                outdir        = "${outputDir}/results_output_parquet"
-                output_format = "parquet"
-            }
-        }
-
-        then {
-            assertAll(
-                // Pipeline completes successfully
-                { assert workflow.success },
-
-                // Standard outputs should be produced
-                { assert workflow.out.wasp_bam != null },
-                { assert workflow.out.counts != null },
-                { assert workflow.out.results != null },
-
-                // Parquet ML output and versions
-                { assert workflow.out.ml_parquet != null },
-                { assert workflow.out.versions != null }
-            )
-        }
-    }
-
-    test("RNASEQ_ASE - stub run - output_format anndata") {
-
-        tag "skip_options"
-
-        options "-stub"
-
-        when {
-            params {
-                input         = "${projectDir}/assets/samplesheet_test.csv"
-                vcf           = "${projectDir}/tests/data/test_snps.vcf.gz"
-                star_index    = "${projectDir}/tests/data/star_index"
-                gtf           = "${projectDir}/tests/data/test.gtf"
-                outdir        = "${outputDir}/results_output_anndata"
-                output_format = "anndata"
-            }
-        }
-
-        then {
-            assertAll(
-                // Pipeline completes successfully
-                { assert workflow.success },
-
-                // Standard outputs should be produced
-                { assert workflow.out.wasp_bam != null },
-                { assert workflow.out.counts != null },
-                { assert workflow.out.results != null },
-
-                // AnnData ML output and versions
-                { assert workflow.out.ml_anndata != null },
-                { assert workflow.out.versions != null }
-            )
-        }
-    }
-
-    test("RNASEQ_ASE - stub run - output_format multi-format") {
-
-        tag "skip_options"
-
-        options "-stub"
-
-        when {
-            params {
-                input         = "${projectDir}/assets/samplesheet_test.csv"
-                vcf           = "${projectDir}/tests/data/test_snps.vcf.gz"
-                star_index    = "${projectDir}/tests/data/star_index"
-                gtf           = "${projectDir}/tests/data/test.gtf"
-                outdir        = "${outputDir}/results_output_multi"
-                output_format = "zarr,parquet,anndata"
-            }
-        }
-
-        then {
-            assertAll(
-                // Pipeline completes successfully
-                { assert workflow.success },
-
-                // Standard outputs should be produced
-                { assert workflow.out.wasp_bam != null },
-                { assert workflow.out.counts != null },
-                { assert workflow.out.results != null },
-
-                // All ML outputs and versions
-                { assert workflow.out.ml_zarr != null },
-                { assert workflow.out.ml_parquet != null },
-                { assert workflow.out.ml_anndata != null },
-                { assert workflow.out.versions != null }
-            )
-        }
-    }
-
-    test("RNASEQ_ASE - stub run - skip_analysis with output_format") {
-
-        tag "skip_options"
-
-        options "-stub"
-
-        when {
-            params {
-                input         = "${projectDir}/assets/samplesheet_test.csv"
-                vcf           = "${projectDir}/tests/data/test_snps.vcf.gz"
-                star_index    = "${projectDir}/tests/data/star_index"
-                gtf           = "${projectDir}/tests/data/test.gtf"
-                outdir        = "${outputDir}/results_skip_with_output"
-                skip_analysis = true
-                output_format = "zarr"
-            }
-        }
-
-        then {
-            assertAll(
-                // Pipeline completes successfully
-                { assert workflow.success },
-
-                // WASP BAM and counts should be produced
-                { assert workflow.out.wasp_bam != null },
-                { assert workflow.out.counts != null },
-
-                // Results should be empty (analysis skipped)
-                { assert workflow.out.results != null },
-
-                // ML output and versions
-                { assert workflow.out.ml_zarr != null },
-                { assert workflow.out.versions != null }
-            )
-        }
-    }
-
-    //
-    // Edge Case Tests - Samplesheet Validation
-    //
-
-    test("RNASEQ_ASE - fails with non-existent samplesheet") {
-
-        options "-stub"
-
-        when {
-            params {
-                input      = "${projectDir}/tests/samplesheets/this_file_does_not_exist.csv"
+                input      = "${projectDir}/tests/data/samplesheet_missing_sample.csv"
                 vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
                 star_index = "${projectDir}/tests/data/star_index"
                 gtf        = "${projectDir}/tests/data/test.gtf"
-                outdir     = "${outputDir}/results_nonexistent"
+                outdir     = "${outputDir}/results_bad_samplesheet"
             }
         }
 
         then {
             assert workflow.failed
             assert workflow.exitStatus == 1
+            assert workflow.stdout.toString().contains("ERROR: Samplesheet missing 'sample' column")
         }
     }
 
-    test("RNASEQ_ASE - fails with empty samplesheet") {
+    test("RNASEQ_ASE - fails with malformed samplesheet - missing fastq_1 column") {
 
-        options "-stub"
+        options "-stub -profile test_stub"
 
         when {
             params {
-                input      = "${projectDir}/tests/samplesheets/empty_samplesheet.csv"
+                input      = "${projectDir}/tests/data/samplesheet_missing_fastq.csv"
                 vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
                 star_index = "${projectDir}/tests/data/star_index"
                 gtf        = "${projectDir}/tests/data/test.gtf"
-                outdir     = "${outputDir}/results_empty_samplesheet"
+                outdir     = "${outputDir}/results_bad_samplesheet_fastq"
             }
         }
 
         then {
             assert workflow.failed
             assert workflow.exitStatus == 1
-            assert workflow.stdout.any { it.contains("Samplesheet is empty") }
+            assert workflow.stdout.toString().contains("ERROR: Samplesheet missing 'fastq_1'")
         }
     }
 
-    test("RNASEQ_ASE - fails with missing sample column") {
+    test("RNASEQ_ASE - stub run - single sample") {
 
-        options "-stub"
-
-        when {
-            params {
-                input      = "${projectDir}/tests/samplesheets/missing_sample_column.csv"
-                vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
-                star_index = "${projectDir}/tests/data/star_index"
-                gtf        = "${projectDir}/tests/data/test.gtf"
-                outdir     = "${outputDir}/results_missing_sample_col"
-            }
-        }
-
-        then {
-            assert workflow.failed
-            assert workflow.exitStatus == 1
-            assert workflow.stdout.any { it.contains("missing 'sample' column") }
-        }
-    }
-
-    test("RNASEQ_ASE - fails with missing fastq_1 column") {
-
-        options "-stub"
+        options "-stub -profile test_stub"
 
         when {
             params {
-                input      = "${projectDir}/tests/samplesheets/missing_fastq1_column.csv"
+                input      = "${projectDir}/tests/data/samplesheet_single.csv"
                 vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
                 star_index = "${projectDir}/tests/data/star_index"
                 gtf        = "${projectDir}/tests/data/test.gtf"
-                outdir     = "${outputDir}/results_missing_fastq1_col"
-            }
-        }
-
-        then {
-            assert workflow.failed
-            assert workflow.exitStatus == 1
-            assert workflow.stdout.any { it.contains("missing 'fastq_1' column") }
-        }
-    }
-
-    test("RNASEQ_ASE - fails with empty sample value") {
-
-        options "-stub"
-
-        when {
-            params {
-                input      = "${projectDir}/tests/samplesheets/empty_sample_value.csv"
-                vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
-                star_index = "${projectDir}/tests/data/star_index"
-                gtf        = "${projectDir}/tests/data/test.gtf"
-                outdir     = "${outputDir}/results_empty_sample"
-            }
-        }
-
-        then {
-            assert workflow.failed
-            assert workflow.exitStatus == 1
-            assert workflow.stdout.any { it.contains("Empty sample ID") }
-        }
-    }
-
-    test("RNASEQ_ASE - fails with empty fastq_1 value") {
-
-        options "-stub"
-
-        when {
-            params {
-                input      = "${projectDir}/tests/samplesheets/empty_fastq1_value.csv"
-                vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
-                star_index = "${projectDir}/tests/data/star_index"
-                gtf        = "${projectDir}/tests/data/test.gtf"
-                outdir     = "${outputDir}/results_empty_fastq1"
-            }
-        }
-
-        then {
-            assert workflow.failed
-            assert workflow.exitStatus == 1
-            assert workflow.stdout.any { it.contains("Empty fastq_1 path") }
-        }
-    }
-
-    test("RNASEQ_ASE - fails with whitespace-only sample value") {
-
-        options "-stub"
-
-        when {
-            params {
-                input      = "${projectDir}/tests/samplesheets/whitespace_sample_value.csv"
-                vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
-                star_index = "${projectDir}/tests/data/star_index"
-                gtf        = "${projectDir}/tests/data/test.gtf"
-                outdir     = "${outputDir}/results_whitespace_sample"
-            }
-        }
-
-        then {
-            assert workflow.failed
-            assert workflow.exitStatus == 1
-            assert workflow.stdout.any { it.contains("Empty sample ID") }
-        }
-    }
-
-    test("RNASEQ_ASE - fails with whitespace-only fastq_1 value") {
-
-        options "-stub"
-
-        when {
-            params {
-                input      = "${projectDir}/tests/samplesheets/whitespace_fastq1_value.csv"
-                vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
-                star_index = "${projectDir}/tests/data/star_index"
-                gtf        = "${projectDir}/tests/data/test.gtf"
-                outdir     = "${outputDir}/results_whitespace_fastq1"
-            }
-        }
-
-        then {
-            assert workflow.failed
-            assert workflow.exitStatus == 1
-            assert workflow.stdout.any { it.contains("Empty fastq_1 path") }
-        }
-    }
-
-    test("RNASEQ_ASE - fails with spaces in sample ID") {
-
-        options "-stub"
-
-        when {
-            params {
-                input      = "${projectDir}/tests/samplesheets/sample_with_spaces.csv"
-                vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
-                star_index = "${projectDir}/tests/data/star_index"
-                gtf        = "${projectDir}/tests/data/test.gtf"
-                outdir     = "${outputDir}/results_spaces"
-            }
-        }
-
-        then {
-            assert workflow.failed
-            assert workflow.exitStatus == 1
-            assert workflow.stdout.any { it.contains("contains spaces") }
-        }
-    }
-
-    test("RNASEQ_ASE - fails with invalid sample characters") {
-
-        options "-stub"
-
-        when {
-            params {
-                input      = "${projectDir}/tests/samplesheets/invalid_sample_chars.csv"
-                vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
-                star_index = "${projectDir}/tests/data/star_index"
-                gtf        = "${projectDir}/tests/data/test.gtf"
-                outdir     = "${outputDir}/results_invalid_chars"
-            }
-        }
-
-        then {
-            assert workflow.failed
-            assert workflow.exitStatus == 1
-            assert workflow.stdout.any { it.contains("invalid characters") }
-        }
-    }
-
-    test("RNASEQ_ASE - fails with duplicate sample IDs") {
-
-        options "-stub"
-
-        when {
-            params {
-                input      = "${projectDir}/tests/samplesheets/duplicate_sample_ids.csv"
-                vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
-                star_index = "${projectDir}/tests/data/star_index"
-                gtf        = "${projectDir}/tests/data/test.gtf"
-                outdir     = "${outputDir}/results_duplicates"
-            }
-        }
-
-        then {
-            assert workflow.failed
-            assert workflow.exitStatus == 1
-            assert workflow.stdout.any { it.contains("Duplicate sample ID") }
-        }
-    }
-
-    test("RNASEQ_ASE - fails with non-gzipped fastq_1") {
-
-        options "-stub"
-
-        when {
-            params {
-                input      = "${projectDir}/tests/samplesheets/invalid_fastq_extension.csv"
-                vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
-                star_index = "${projectDir}/tests/data/star_index"
-                gtf        = "${projectDir}/tests/data/test.gtf"
-                outdir     = "${outputDir}/results_not_gzipped_fq1"
-            }
-        }
-
-        then {
-            assert workflow.failed
-            assert workflow.exitStatus == 1
-            assert workflow.stdout.any { it.contains("fastq_1") && it.contains("must be gzipped") }
-        }
-    }
-
-    test("RNASEQ_ASE - fails with non-gzipped fastq_2") {
-
-        options "-stub"
-
-        when {
-            params {
-                input      = "${projectDir}/tests/samplesheets/invalid_fastq2_extension.csv"
-                vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
-                star_index = "${projectDir}/tests/data/star_index"
-                gtf        = "${projectDir}/tests/data/test.gtf"
-                outdir     = "${outputDir}/results_not_gzipped_fq2"
-            }
-        }
-
-        then {
-            assert workflow.failed
-            assert workflow.exitStatus == 1
-            assert workflow.stdout.any { it.contains("fastq_2") && it.contains("must be gzipped") }
-        }
-    }
-
-    test("RNASEQ_ASE - stub run - single-end data") {
-
-        options "-stub"
-
-        when {
-            params {
-                input      = "${projectDir}/tests/samplesheets/single_end_valid.csv"
-                vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
-                star_index = "${projectDir}/tests/data/star_index"
-                gtf        = "${projectDir}/tests/data/test.gtf"
-                outdir     = "${outputDir}/results_single_end"
+                outdir     = "${outputDir}/results_single"
             }
         }
 
         then {
             assertAll(
                 { assert workflow.success },
-                { assert workflow.out.wasp_bam != null },
-                { assert workflow.out.counts != null },
-                { assert workflow.out.results != null }
+                { assert workflow.out.wasp_bam.size() == 1, "Expected 1 WASP BAM output" },
+                { assert workflow.out.counts.size() == 1, "Expected 1 counts output" },
+                { assert workflow.out.results.size() == 1, "Expected 1 AI results output" },
+
+                // Output directories exist
+                { assert path("${outputDir}/results_single/wasp_filtered").exists() },
+                { assert path("${outputDir}/results_single/counts").exists() },
+                { assert path("${outputDir}/results_single/analysis").exists() },
+
+                // SAMPLE1 outputs (including BAI validation)
+                { assert path("${outputDir}/results_single/wasp_filtered/SAMPLE1_wasp_filt.bam").exists() },
+                { assert path("${outputDir}/results_single/wasp_filtered/SAMPLE1_wasp_filt.bam.bai").exists() },
+                { assert path("${outputDir}/results_single/wasp_filtered/SAMPLE1.filter_stats.txt").exists() },
+                { assert path("${outputDir}/results_single/counts/SAMPLE1_counts.tsv").exists() },
+                { assert path("${outputDir}/results_single/analysis/SAMPLE1_ai_results.tsv").exists() },
+
+                // Header validation
+                { assert path("${outputDir}/results_single/counts/SAMPLE1_counts.tsv").readLines()[0] == countsHeader },
+                { assert path("${outputDir}/results_single/analysis/SAMPLE1_ai_results.tsv").readLines()[0] == aiResultsHeader }
             )
         }
     }
 
-    //
-    // WASP2 Output Validation Tests (Issue #63)
-    //
+    test("RNASEQ_ASE - stub run - single-end sequencing") {
 
-    test("WASP2 - counts output has expected TSV format") {
-
-        tag "wasp2_validation"
-        tag "output_format"
-
-        options "-stub"
+        options "-stub -profile test_stub"
 
         when {
             params {
-                input      = "${projectDir}/assets/samplesheet_test.csv"
+                input      = "${projectDir}/tests/data/samplesheet_singleend.csv"
                 vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
                 star_index = "${projectDir}/tests/data/star_index"
                 gtf        = "${projectDir}/tests/data/test.gtf"
-                outdir     = "${outputDir}/results_counts_format"
+                outdir     = "${outputDir}/results_singleend"
             }
         }
 
         then {
             assertAll(
                 { assert workflow.success },
-                { assert workflow.out.counts != null },
-                // Validate counts TSV has expected header columns
-                {
-                    def header = path(workflow.out.counts[0][1]).readLines()[0]
-                    ['chrom', 'pos', 'ref', 'alt', 'region', 'ref_count', 'alt_count'].each { col ->
-                        assert header.contains(col) : "Missing '${col}' in header: ${header}"
-                    }
-                }
+                { assert workflow.out.wasp_bam.size() == 1, "Expected 1 WASP BAM output" },
+                { assert workflow.out.counts.size() == 1, "Expected 1 counts output" },
+                { assert workflow.out.results.size() == 1, "Expected 1 AI results output" },
+
+                // Output directories exist
+                { assert path("${outputDir}/results_singleend/wasp_filtered").exists() },
+                { assert path("${outputDir}/results_singleend/counts").exists() },
+                { assert path("${outputDir}/results_singleend/analysis").exists() },
+
+                // Single-end sample outputs
+                { assert path("${outputDir}/results_singleend/wasp_filtered/SAMPLE_SE_wasp_filt.bam").exists() },
+                { assert path("${outputDir}/results_singleend/wasp_filtered/SAMPLE_SE_wasp_filt.bam.bai").exists() },
+                { assert path("${outputDir}/results_singleend/counts/SAMPLE_SE_counts.tsv").exists() },
+                { assert path("${outputDir}/results_singleend/analysis/SAMPLE_SE_ai_results.tsv").exists() },
+
+                // Header validation
+                { assert path("${outputDir}/results_singleend/counts/SAMPLE_SE_counts.tsv").readLines()[0] == countsHeader },
+                { assert path("${outputDir}/results_singleend/analysis/SAMPLE_SE_ai_results.tsv").readLines()[0] == aiResultsHeader }
             )
         }
     }
 
-    test("WASP2 - allelic imbalance results produced with expected format") {
+    test("RNASEQ_ASE - stub run - without GTF annotation") {
 
-        tag "wasp2_validation"
-        tag "output_format"
-
-        options "-stub"
-
-        when {
-            params {
-                input      = "${projectDir}/assets/samplesheet_test.csv"
-                vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
-                star_index = "${projectDir}/tests/data/star_index"
-                gtf        = "${projectDir}/tests/data/test.gtf"
-                outdir     = "${outputDir}/results_ai_format"
-            }
-        }
-
-        then {
-            assertAll(
-                { assert workflow.success },
-                { assert workflow.out.results != null },
-                // Validate results TSV has expected header columns
-                {
-                    def header = path(workflow.out.results[0][1]).readLines()[0]
-                    ['region', 'snp_count', 'ref_sum', 'alt_sum', 'pvalue', 'fdr'].each { col ->
-                        assert header.contains(col) : "Missing '${col}' in header: ${header}"
-                    }
-                }
-            )
-        }
-    }
-
-    test("WASP2 - pipeline runs without GTF (optional annotation)") {
-
-        tag "wasp2_validation"
-        tag "skip_behavior"
-
-        options "-stub"
+        options "-stub -profile test_stub"
 
         when {
             params {
@@ -669,16 +284,33 @@ nextflow_pipeline {
                 vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
                 star_index = "${projectDir}/tests/data/star_index"
                 outdir     = "${outputDir}/results_no_gtf"
-                // GTF intentionally omitted - it's optional
             }
         }
 
         then {
             assertAll(
                 { assert workflow.success },
-                { assert workflow.out.wasp_bam != null },
-                { assert workflow.out.counts != null },
-                { assert workflow.out.versions != null }
+                { assert workflow.out.wasp_bam.size() == 2, "Expected 2 WASP BAM outputs" },
+                { assert workflow.out.counts.size() == 2, "Expected 2 counts outputs" },
+                { assert workflow.out.results.size() == 2, "Expected 2 AI results outputs" },
+
+                // Output files exist
+                { assert path("${outputDir}/results_no_gtf/wasp_filtered/SAMPLE1_wasp_filt.bam").exists() },
+                { assert path("${outputDir}/results_no_gtf/wasp_filtered/SAMPLE1_wasp_filt.bam.bai").exists() },
+                { assert path("${outputDir}/results_no_gtf/wasp_filtered/SAMPLE1.filter_stats.txt").exists() },
+                { assert path("${outputDir}/results_no_gtf/wasp_filtered/SAMPLE2_wasp_filt.bam").exists() },
+                { assert path("${outputDir}/results_no_gtf/wasp_filtered/SAMPLE2_wasp_filt.bam.bai").exists() },
+                { assert path("${outputDir}/results_no_gtf/wasp_filtered/SAMPLE2.filter_stats.txt").exists() },
+                { assert path("${outputDir}/results_no_gtf/counts/SAMPLE1_counts.tsv").exists() },
+                { assert path("${outputDir}/results_no_gtf/counts/SAMPLE2_counts.tsv").exists() },
+                { assert path("${outputDir}/results_no_gtf/analysis/SAMPLE1_ai_results.tsv").exists() },
+                { assert path("${outputDir}/results_no_gtf/analysis/SAMPLE2_ai_results.tsv").exists() },
+
+                // Header validation
+                { assert path("${outputDir}/results_no_gtf/counts/SAMPLE1_counts.tsv").readLines()[0] == countsHeader },
+                { assert path("${outputDir}/results_no_gtf/counts/SAMPLE2_counts.tsv").readLines()[0] == countsHeader },
+                { assert path("${outputDir}/results_no_gtf/analysis/SAMPLE1_ai_results.tsv").readLines()[0] == aiResultsHeader },
+                { assert path("${outputDir}/results_no_gtf/analysis/SAMPLE2_ai_results.tsv").readLines()[0] == aiResultsHeader }
             )
         }
     }

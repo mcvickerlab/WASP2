@@ -54,18 +54,41 @@ Get started in seconds with a fully configured cloud development environment:
 See [`.devcontainer/README.md`](.devcontainer/README.md) for details.
 
 ### Local Installation
-Recommended installation through conda, and given environment
-```shell script
-conda env create -f environment.yml
-```
 
-## Build the Rust extension (required)
+#### Option 1: Conda (Recommended for bioinformatics tools)
 ```bash
+# Create environment with bioinformatics tools (samtools, bcftools, bedtools, etc.)
+conda env create -f environment.yml
 conda activate WASP2
+
+# Build Rust extension
 export LIBCLANG_PATH=$CONDA_PREFIX/lib
 export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH
 export BINDGEN_EXTRA_CLANG_ARGS="-I/usr/include"
 maturin develop --release -m rust/Cargo.toml
+```
+
+#### Option 2: pip (Requires system tools)
+```bash
+# Install system dependencies (Ubuntu/Debian)
+sudo apt-get install samtools bcftools bedtools bwa libclang-dev
+
+# Install Rust if not already installed
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Install Python package (includes maturin build tool)
+pip install -e ".[dev]"
+
+# Build Rust extension
+maturin develop --release -m rust/Cargo.toml
+```
+
+#### Verify Installation
+```bash
+wasp2-count --help
+wasp2-map --help
+wasp2-analyze --help
+python -c "import wasp2_rust; print('Rust extension OK')"
 ```
 
 ## Supported Variant File Formats
