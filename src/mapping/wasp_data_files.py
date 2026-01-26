@@ -1,3 +1,11 @@
+"""File path management for WASP mapping pipeline.
+
+Provides the WaspDataFiles class for managing input/output paths
+and auto-detecting file properties.
+"""
+
+from __future__ import annotations
+
 import json
 import re
 from pathlib import Path
@@ -6,7 +14,6 @@ from pysam import VariantFile
 from pysam.libcalignmentfile import AlignmentFile
 
 
-# TODO, GOTTA INCLUDE ALL POSSIBLE DATA COMBOS
 class WaspDataFiles:
     """Manage file paths and auto-detection for WASP mapping pipeline."""
 
@@ -120,7 +127,6 @@ class WaspDataFiles:
         :param out_file: name for output file if not using default
         :type out_file: str, optional
         """
-
         if out_file is None:
             out_file = str(Path(str(self.out_dir)) / f"{self.bam_prefix}_wasp_data_files.json")
 

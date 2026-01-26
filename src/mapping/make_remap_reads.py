@@ -1,3 +1,11 @@
+"""Generate allele-swapped reads for remapping.
+
+Provides functions for creating FASTQ files with haplotype-swapped reads
+that need to be remapped to check for mapping bias.
+"""
+
+from __future__ import annotations
+
 import shutil
 import tempfile
 from pathlib import Path
@@ -54,7 +62,6 @@ def _write_remap_bam_rust(
     bam_file: str, intersect_file: str, r1_out: str, r2_out: str, max_seqs: int = 64
 ) -> None:
     """Rust-accelerated remapping implementation (5-7x faster than Python) - LEGACY per-chromosome version"""
-
     # Get chromosomes that have variants in the intersect file
     # This avoids processing ~170 empty chromosomes (major speedup!)
     intersect_chroms = set()
@@ -120,7 +127,6 @@ def _write_remap_bam_rust_multi(
     max_seqs: int = 64,
 ) -> None:
     """Rust-accelerated multi-sample remapping implementation"""
-
     # Get chromosomes that have variants in the intersect file
     intersect_chroms = set()
     with open(intersect_file) as f:

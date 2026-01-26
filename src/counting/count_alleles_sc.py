@@ -1,5 +1,10 @@
+"""Single-cell allele counting functions."""
+
+from __future__ import annotations
+
 import timeit
 from collections import defaultdict
+from collections.abc import Iterator
 
 import anndata as ad
 import numpy as np
@@ -12,9 +17,13 @@ from scipy.sparse import csr_matrix
 from .count_alleles import find_read_aln_pos
 
 
-# Create class that holds mutable and persistent stats
 class CountStatsSC:
-    def __init__(self):
+    """Container for mutable single-cell counting statistics.
+
+    Tracks allele counts and metadata per chromosome during counting.
+    """
+
+    def __init__(self) -> None:
         self.ref_count = defaultdict(int)
         self.alt_count = defaultdict(int)
         self.other_count = defaultdict(int)
@@ -31,7 +40,8 @@ class CountStatsSC:
         self.reads_skipped_barcode_no_index = defaultdict(int)
         self.reads_skipped_prev_counted = defaultdict(int)
 
-    def stats_to_df(self):
+    def stats_to_df(self) -> pd.DataFrame:
+        """Convert statistics to a pandas DataFrame."""
         stat_attributes = [
             "num_snps",
             "num_barcodes",
@@ -48,8 +58,33 @@ class CountStatsSC:
         return stat_df
 
 
-# Create sparse count matrix
-def make_count_matrix(bam_file, df, bc_dict, include_samples=None, include_features=None):
+def make_count_matrix(
+    bam_file: str,
+    df: pl.DataFrame,
+    bc_dict: dict[str, int],
+    include_samples: list[str] | None = None,
+    include_features: list[str] | None = None,
+) -> ad.AnnData:
+    """Create sparse count matrix from BAM and variant data.
+
+    Parameters
+    ----------
+    bam_file : str
+        Path to BAM file with cell barcodes.
+    df : pl.DataFrame
+        DataFrame with variant positions from intersection.
+    bc_dict : dict[str, int]
+        Mapping of cell barcodes to integer indices.
+    include_samples : list[str] | None, optional
+        Sample columns to include from variant data, by default None.
+    include_features : list[str] | None, optional
+        Feature columns to include, by default None.
+
+    Returns
+    -------
+    ad.AnnData
+        AnnData object with count matrices in layers (ref, alt, other).
+    """
     chrom_list = df.get_column("chrom").unique(maintain_order=True)
     # chrom_list = chrom_list[:3] # Testing purposes
 
@@ -149,7 +184,28 @@ def make_count_matrix(bam_file, df, bc_dict, include_samples=None, include_featu
     return adata
 
 
-def count_bc_snp_alleles(bam, bc_dict, chrom, snp_list, sc_counts):
+def count_bc_snp_alleles(
+    bam: AlignmentFile,
+    bc_dict: dict[str, int],
+    chrom: str,
+    snp_list: Iterator[tuple[int, int, str, str]],
+    sc_counts: CountStatsSC,
+) -> None:
+    """Count alleles at SNP positions for each cell barcode.
+
+    Parameters
+    ----------
+    bam : AlignmentFile
+        Open BAM file handle.
+    bc_dict : dict[str, int]
+        Mapping of cell barcodes to indices.
+    chrom : str
+        Chromosome to process.
+    snp_list : Iterator[tuple[int, int, str, str]]
+        Iterator of (index, pos, ref, alt) tuples.
+    sc_counts : CountStatsSC
+        Statistics container to update with counts.
+    """
     read_set = set()  # Keep track of reads seen
     bc_set = set()
 

@@ -303,7 +303,7 @@ class VCFSource(VariantSource):
         include_indels: bool = False,
         max_indel_len: int = 10,
     ) -> Path:
-        """Export variants to BED format file.
+        r"""Export variants to BED format file.
 
         Uses Rust acceleration when available (5-6x faster), falls back to
         bcftools subprocess. BED format uses 0-based start, 1-based end coordinates.

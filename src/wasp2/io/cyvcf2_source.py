@@ -373,7 +373,7 @@ if CYVCF2_AVAILABLE:
             het_only: bool = True,
             include_genotypes: bool = True,
         ) -> Path:
-            """Export variants to BED format file.
+            r"""Export variants to BED format file.
 
             Uses bcftools for efficient filtering and export. BED format uses
             0-based start, 1-based end coordinates.

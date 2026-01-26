@@ -1,27 +1,86 @@
-from collections import namedtuple
+"""Gene annotation parsing and data management."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import NamedTuple
 
 import polars as pl
 
 
-# Hold relevant gene data
+class ParsedGeneData(NamedTuple):
+    """Parsed gene data from GTF/GFF3 file."""
+
+    gene_df: pl.DataFrame
+    feature: str
+    attribute: str
+    parent_attribute: str
+
+
 class WaspGeneData:
-    def __init__(self, gene_file, feature=None, attribute=None, parent_attribute=None):
+    """Container for gene annotation file paths and configuration.
+
+    Attributes
+    ----------
+    gene_file : str | Path
+        Path to the gene annotation file.
+    feature : str | None
+        Feature type to extract.
+    attribute : str | None
+        Attribute for region names.
+    parent_attribute : str | None
+        Parent attribute for hierarchical features.
+    """
+
+    def __init__(
+        self,
+        gene_file: str | Path,
+        feature: str | None = None,
+        attribute: str | None = None,
+        parent_attribute: str | None = None,
+    ) -> None:
         self.gene_file = gene_file
         self.feature = feature
         self.attribute = attribute
         self.parent_attribute = parent_attribute
 
-        # Maybe should create dataframe in here...
+    def update_data(self, data: ParsedGeneData) -> None:
+        """Update attributes with parsed data.
 
-    def update_data(self, data):
-        # Update attributes with namedtuple after parsing
-        # Only updates matching keys
+        Parameters
+        ----------
+        data : ParsedGeneData
+            Parsed gene data to update from.
+        """
         for key in data._fields:
             if hasattr(self, key):
                 setattr(self, key, getattr(data, key))
 
 
-def parse_gene_file(gene_file, feature=None, attribute=None, parent_attribute=None):
+def parse_gene_file(
+    gene_file: str | Path,
+    feature: str | None = None,
+    attribute: str | None = None,
+    parent_attribute: str | None = None,
+) -> ParsedGeneData:
+    """Parse GTF/GFF3 gene annotation file.
+
+    Parameters
+    ----------
+    gene_file : str | Path
+        Path to GTF/GFF3 file.
+    feature : str | None, optional
+        Feature type to extract (auto-detected if None).
+    attribute : str | None, optional
+        Attribute for region names (auto-detected if None).
+    parent_attribute : str | None, optional
+        Parent attribute for hierarchical features (auto-detected if None).
+
+    Returns
+    -------
+    ParsedGeneData
+        Named tuple with (gene_df, feature, attribute, parent_attribute).
+    """
     # Use gtf col names
     gtf_cols = [
         "seqname",
@@ -101,21 +160,36 @@ def parse_gene_file(gene_file, feature=None, attribute=None, parent_attribute=No
         pl.col("attribute").str.extract(parent_regex).alias(parent_col),
     ).select(["seqname", "start", "end", attribute, parent_col])
 
-    # metadata...maybe should create a method
-    parsed_data = namedtuple("parsed_data", ["gene_df", "feature", "attribute", "parent_attribute"])
-
-    return parsed_data(df, feature, attribute, parent_col)
+    return ParsedGeneData(df, feature, attribute, parent_col)
 
 
-# Parse and create gtf_bed for intersection
-# and return parsed WaspGeneData obj
 def make_gene_data(
-    gene_file,
-    out_bed,
-    feature=None,
-    attribute=None,
-    parent_attribute=None,
-):
+    gene_file: str | Path,
+    out_bed: str | Path,
+    feature: str | None = None,
+    attribute: str | None = None,
+    parent_attribute: str | None = None,
+) -> WaspGeneData:
+    """Parse gene file and create BED for intersection.
+
+    Parameters
+    ----------
+    gene_file : str | Path
+        Path to GTF/GFF3 file.
+    out_bed : str | Path
+        Output BED file path.
+    feature : str | None, optional
+        Feature type to extract.
+    attribute : str | None, optional
+        Attribute for region names.
+    parent_attribute : str | None, optional
+        Parent attribute for hierarchical features.
+
+    Returns
+    -------
+    WaspGeneData
+        Container with parsed gene data and configuration.
+    """
     gene_data = WaspGeneData(
         gene_file=gene_file, feature=feature, attribute=attribute, parent_attribute=parent_attribute
     )
@@ -136,7 +210,27 @@ def make_gene_data(
     return gene_data
 
 
-def parse_intersect_genes(intersect_file, attribute=None, parent_attribute=None):
+def parse_intersect_genes(
+    intersect_file: str | Path,
+    attribute: str | None = None,
+    parent_attribute: str | None = None,
+) -> pl.DataFrame:
+    """Parse gene intersection file (legacy version).
+
+    Parameters
+    ----------
+    intersect_file : str | Path
+        Path to bedtools intersection output.
+    attribute : str | None, optional
+        Attribute column name, by default 'ID'.
+    parent_attribute : str | None, optional
+        Parent attribute column name, by default 'Parent'.
+
+    Returns
+    -------
+    pl.DataFrame
+        Parsed intersection data.
+    """
     if attribute is None:
         attribute = "ID"
 
@@ -159,7 +253,27 @@ def parse_intersect_genes(intersect_file, attribute=None, parent_attribute=None)
     return df.unique(maintain_order=True).collect()
 
 
-def parse_intersect_genes_new(intersect_file, attribute=None, parent_attribute=None):
+def parse_intersect_genes_new(
+    intersect_file: str | Path,
+    attribute: str | None = None,
+    parent_attribute: str | None = None,
+) -> pl.DataFrame:
+    """Parse gene intersection file with typed columns.
+
+    Parameters
+    ----------
+    intersect_file : str | Path
+        Path to bedtools intersection output.
+    attribute : str | None, optional
+        Attribute column name, by default 'ID'.
+    parent_attribute : str | None, optional
+        Parent attribute column name, by default 'Parent'.
+
+    Returns
+    -------
+    pl.DataFrame
+        Parsed intersection data with typed columns.
+    """
     if attribute is None:
         attribute = "ID"
 

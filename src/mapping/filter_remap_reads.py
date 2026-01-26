@@ -1,3 +1,11 @@
+"""Filter and merge remapped BAM reads using WASP algorithm.
+
+Provides functions for filtering reads that remap to the same locus
+after allele swapping and merging with non-remapped reads.
+"""
+
+from __future__ import annotations
+
 import subprocess
 import timeit
 

@@ -1,3 +1,7 @@
+"""Single-cell variant counting pipeline."""
+
+from __future__ import annotations
+
 import re
 from pathlib import Path
 
@@ -9,17 +13,35 @@ from .run_counting import tempdir_decorator
 
 
 class WaspCountSC:
+    """Container for single-cell WASP counting pipeline configuration.
+
+    Attributes
+    ----------
+    bam_file : str
+        Path to the BAM alignment file.
+    variant_file : str
+        Path to the variant file (VCF, BCF, or PGEN).
+    barcode_file : str
+        Path to cell barcode file.
+    feature_file : str | None
+        Optional path to feature/region file.
+    samples : list[str] | None
+        List of sample IDs to process.
+    out_file : str
+        Output file path for AnnData.
+    """
+
     def __init__(
         self,
-        bam_file,
-        variant_file,
-        barcode_file,
-        feature_file,
-        samples=None,
-        use_region_names=False,
-        out_file=None,
-        temp_loc=None,
-    ):
+        bam_file: str,
+        variant_file: str,
+        barcode_file: str,
+        feature_file: str | None,
+        samples: str | list[str] | None = None,
+        use_region_names: bool = False,
+        out_file: str | None = None,
+        temp_loc: str | None = None,
+    ) -> None:
         # TODO: ALSO ACCEPT .h5
 
         # User input files
@@ -116,15 +138,41 @@ class WaspCountSC:
 
 @tempdir_decorator
 def run_count_variants_sc(
-    bam_file,
-    variant_file,
-    barcode_file,
-    feature_file=None,
-    samples=None,
-    use_region_names=False,
-    out_file=None,
-    temp_loc=None,
-):
+    bam_file: str,
+    variant_file: str,
+    barcode_file: str,
+    feature_file: str | None = None,
+    samples: str | list[str] | None = None,
+    use_region_names: bool = False,
+    out_file: str | None = None,
+    temp_loc: str | None = None,
+) -> None:
+    """Run single-cell variant counting pipeline.
+
+    Parameters
+    ----------
+    bam_file : str
+        Path to the BAM alignment file with cell barcodes.
+    variant_file : str
+        Path to the variant file (VCF, BCF, or PGEN).
+    barcode_file : str
+        Path to cell barcode file (one barcode per line).
+    feature_file : str | None, optional
+        Path to feature/region file (BED, GTF, or GFF3).
+    samples : str | list[str] | None, optional
+        Sample ID(s) to process.
+    use_region_names : bool, optional
+        Whether to use region names from the feature file.
+    out_file : str | None, optional
+        Output file path. Defaults to 'allele_counts.h5ad'.
+    temp_loc : str | None, optional
+        Directory for temporary files.
+
+    Returns
+    -------
+    None
+        Results are written to out_file as AnnData.
+    """
     # Stores file names
     count_files = WaspCountSC(
         bam_file,
