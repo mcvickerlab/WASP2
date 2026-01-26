@@ -275,6 +275,18 @@ If you see "0 barcodes matched":
    # - Barcode file has header (should not)
    # - Different barcode versions (v2 vs v3)
 
+**Quick Diagnostic:**
+
+.. code-block:: bash
+
+   # Compare BAM barcodes with file
+   samtools view your.bam | head -10000 | grep -o 'CB:Z:[^\t]*' | cut -d: -f3 | sort -u > bam_bc.txt
+   cut -f1 barcodes.tsv | sort -u > file_bc.txt
+   comm -12 bam_bc.txt file_bc.txt | wc -l  # Should be > 0
+
+   # Fix suffix mismatch if needed
+   awk -F'\t' '{print $1"-1\t"$2}' barcodes_no_suffix.tsv > barcodes.tsv
+
 Low Read Counts
 ~~~~~~~~~~~~~~~
 
