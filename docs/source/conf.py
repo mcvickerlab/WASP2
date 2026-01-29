@@ -38,6 +38,10 @@ extensions = [
     "sphinx.ext.coverage",  # Coverage checker
     "sphinx.ext.todo",  # Support TODO items
     "sphinx.ext.mathjax",  # MathJax for equation rendering
+    "nbsphinx",  # Jupyter notebook support
+    "myst_parser",  # Markdown file support
+    "sphinx_copybutton",  # Copy button for code blocks
+    "sphinx_design",  # Cards, grids, and other UI components
 ]
 
 # Add any paths that contain templates here, relative to this directory
@@ -48,7 +52,10 @@ templates_path = ["_templates"]
 exclude_patterns = []
 
 # The suffix(es) of source filenames
-source_suffix = ".rst"
+source_suffix = {
+    ".rst": "restructuredtext",
+    ".md": "markdown",
+}
 
 # The master toctree document
 master_doc = "index"
@@ -164,3 +171,23 @@ mathjax3_config = {
         },
     },
 }
+
+# -- Options for nbsphinx extension ------------------------------------------
+
+# Don't execute notebooks during build (they should be pre-executed)
+nbsphinx_execute = "never"
+
+# -- Options for myst_parser extension ---------------------------------------
+
+myst_enable_extensions = [
+    "colon_fence",  # ::: directive syntax
+    "deflist",  # Definition lists
+    "dollarmath",  # $math$ syntax
+    "tasklist",  # Task lists
+]
+
+# -- Options for sphinx_copybutton extension ---------------------------------
+
+# Don't copy prompts from code blocks
+copybutton_prompt_text = r">>> |\.\.\. |\$ |In \[\d*\]: | {2,5}\.\.\.: | {5,8}: "
+copybutton_prompt_is_regexp = True
