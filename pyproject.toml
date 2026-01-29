@@ -130,9 +130,11 @@ addopts = "-v --strict-markers --tb=short"
 markers = [
     "unit: unit tests",
     "integration: integration tests",
-    "slow: slow tests",
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "rust: tests requiring Rust backend",
     "benchmark: performance benchmark tests",
+    "requires_plink2: marks tests that require plink2",
+    "requires_bcftools: marks tests that require bcftools",
 ]
 
 [tool.mypy]

@@ -1,0 +1,42 @@
+# Codecov configuration for WASP2
+# See: https://docs.codecov.com/docs/codecov-yaml
+
+codecov:
+  require_ci_to_pass: false
+  notify:
+    wait_for_ci: true
+
+coverage:
+  precision: 2
+  round: down
+  range: "60...100"
+  status:
+    project:
+      default:
+        target: 80%
+        threshold: 5%
+        informational: true
+    patch:
+      default:
+        target: 70%
+        threshold: 5%
+        informational: true
+
+comment:
+  layout: "header, diff, flags"
+  behavior: default
+  require_changes: false
+
+flags:
+  unittests:
+    paths:
+      - src/
+    carryforward: true
+
+ignore:
+  - "tests/**/*"
+  - "**/__pycache__/**"
+  - "**/benchmarks/**"
+  - "docs/**"
+  - "scripts/**"
+  - "pipelines/**"
