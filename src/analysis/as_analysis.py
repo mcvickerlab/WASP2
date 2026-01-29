@@ -20,6 +20,8 @@ from scipy.optimize import OptimizeResult, minimize, minimize_scalar
 from scipy.special import expit
 from scipy.stats import betabinom, chi2, false_discovery_control
 
+from wasp2.cli import create_spinner_progress, error, info, success
+
 
 def opt_linear(
     disp_params: NDArray[np.float64],
@@ -227,7 +229,7 @@ def single_model(df: pd.DataFrame, region_col: str, phased: bool = False) -> pd.
     :param phased: Whether data is phased
     :return: Dataframe with imbalance likelihood
     """
-    print("Running analysis with single dispersion model")
+    info("Running analysis with single dispersion model")
     opt_disp: Callable[..., float] = lambda rho, ref_data, n_data: -np.sum(
         betabinom.logpmf(ref_data, n_data, (0.5 * (1 - rho) / rho), (0.5 * (1 - rho) / rho))
     )
@@ -237,35 +239,39 @@ def single_model(df: pd.DataFrame, region_col: str, phased: bool = False) -> pd.
 
     disp_start = timeit.default_timer()
 
-    disp: float = minimize_scalar(
-        opt_disp, args=(ref_array, n_array), method="bounded", bounds=(0, 1)
-    )["x"]
+    with create_spinner_progress() as progress:
+        progress.add_task("Optimizing dispersion parameter", total=None)
+        disp: float = minimize_scalar(
+            opt_disp, args=(ref_array, n_array), method="bounded", bounds=(0, 1)
+        )["x"]
 
-    print(f"Optimized dispersion parameter in {timeit.default_timer() - disp_start:.2f} seconds")
+    success(f"Optimized dispersion parameter ({timeit.default_timer() - disp_start:.2f}s)")
 
     group_df = df.groupby(region_col, sort=False)
     include_groups_supported = "include_groups" in inspect.signature(group_df.apply).parameters
     apply_kwargs = {"include_groups": False} if include_groups_supported else {}
 
-    print("Optimizing imbalance likelihood")
     ll_start = timeit.default_timer()
-    null_test = group_df.apply(
-        lambda x: np.sum(
-            betabinom.logpmf(
-                x["ref_count"].to_numpy(),
-                x["N"].to_numpy(),
-                (0.5 * (1 - disp) / disp),
-                (0.5 * (1 - disp) / disp),
-            )
-        ),
-        **apply_kwargs,
-    )
 
-    # Optimize Alt
-    alt_test = group_df.apply(lambda x: parse_opt(x, disp, phased=phased), **apply_kwargs)
-    alt_df = pd.DataFrame(alt_test.tolist(), columns=["alt_ll", "mu"], index=alt_test.index)
+    with create_spinner_progress() as progress:
+        progress.add_task("Optimizing imbalance likelihood", total=None)
+        null_test = group_df.apply(
+            lambda x: np.sum(
+                betabinom.logpmf(
+                    x["ref_count"].to_numpy(),
+                    x["N"].to_numpy(),
+                    (0.5 * (1 - disp) / disp),
+                    (0.5 * (1 - disp) / disp),
+                )
+            ),
+            **apply_kwargs,
+        )
 
-    print(f"Optimized imbalance likelihood in {timeit.default_timer() - ll_start:.2f} seconds")
+        # Optimize Alt
+        alt_test = group_df.apply(lambda x: parse_opt(x, disp, phased=phased), **apply_kwargs)
+        alt_df = pd.DataFrame(alt_test.tolist(), columns=["alt_ll", "mu"], index=alt_test.index)
+
+    success(f"Optimized imbalance likelihood ({timeit.default_timer() - ll_start:.2f}s)")
 
     ll_df = pd.concat([null_test, alt_df], axis=1).reset_index()
     ll_df.columns = [region_col, "null_ll", "alt_ll", "mu"]
@@ -286,44 +292,50 @@ def linear_model(df: pd.DataFrame, region_col: str, phased: bool = False) -> pd.
     :param phased: Whether data is phased
     :return: Dataframe with imbalance likelihood
     """
-    print("Running analysis with linear dispersion model")
+    info("Running analysis with linear dispersion model")
     in_data = df[["ref_count", "N"]].to_numpy().T
 
-    print("Optimizing dispersion parameters...")
     disp_start = time.time()
 
-    res: OptimizeResult = minimize(
-        opt_linear, x0=(0, 0), method="Nelder-Mead", args=(in_data[0], in_data[1])
-    )
+    with create_spinner_progress() as progress:
+        progress.add_task("Optimizing dispersion parameters", total=None)
+        res: OptimizeResult = minimize(
+            opt_linear, x0=(0, 0), method="Nelder-Mead", args=(in_data[0], in_data[1])
+        )
     disp1: float
     disp2: float
     disp1, disp2 = res["x"]
     df["disp"] = expit(disp1 + (in_data[1] * disp2))
 
-    print(f"Optimized dispersion parameters in {time.time() - disp_start} seconds")
+    success(f"Optimized dispersion parameters ({time.time() - disp_start:.2f}s)")
 
     # Group by region
     group_df = df.groupby(region_col, sort=False)
+    include_groups_supported = "include_groups" in inspect.signature(group_df.apply).parameters
+    apply_kwargs = {"include_groups": False} if include_groups_supported else {}
 
     # Get null test
-    print("Optimizing imbalance likelihood")
     ll_start = time.time()
-    null_test = group_df.apply(
-        lambda x: np.sum(
-            betabinom.logpmf(
-                x["ref_count"].to_numpy(),
-                x["N"].to_numpy(),
-                (0.5 * (1 - x["disp"].to_numpy()) / x["disp"].to_numpy()),
-                (0.5 * (1 - x["disp"].to_numpy()) / x["disp"].to_numpy()),
-            )
+
+    with create_spinner_progress() as progress:
+        progress.add_task("Optimizing imbalance likelihood", total=None)
+        null_test = group_df.apply(
+            lambda x: np.sum(
+                betabinom.logpmf(
+                    x["ref_count"].to_numpy(),
+                    x["N"].to_numpy(),
+                    (0.5 * (1 - x["disp"].to_numpy()) / x["disp"].to_numpy()),
+                    (0.5 * (1 - x["disp"].to_numpy()) / x["disp"].to_numpy()),
+                )
+            ),
+            **apply_kwargs,
         )
-    )
 
-    # Optimize Alt
-    alt_test = group_df.apply(lambda x: parse_opt(x))
-    alt_df = pd.DataFrame(alt_test.tolist(), columns=["alt_ll", "mu"], index=alt_test.index)
+        # Optimize Alt
+        alt_test = group_df.apply(lambda x: parse_opt(x), **apply_kwargs)
+        alt_df = pd.DataFrame(alt_test.tolist(), columns=["alt_ll", "mu"], index=alt_test.index)
 
-    print(f"Optimized imbalance likelihood in {time.time() - ll_start} seconds")
+    success(f"Optimized imbalance likelihood ({time.time() - ll_start:.2f}s)")
 
     ll_df = pd.concat([null_test, alt_df], axis=1).reset_index()
     ll_df.columns = [region_col, "null_ll", "alt_ll", "mu"]
@@ -400,16 +412,16 @@ def get_imbalance(
 
     # Check validity of phasing info
     if phased:
-        # Check if GT are actually phased
+        # Check if GT are actually phased - use error() so always shown (even in quiet mode)
         if "GT" not in df.columns:
-            print("Genotypes not found: Switching to unphased model")
+            error("Genotypes not found: Switching to unphased model")
             phased = False
         elif len(df["GT"].unique()) <= 1:
-            print(f"All genotypes {df['GT'].unique()}: Switching to unphased model")
+            error(f"All genotypes {df['GT'].unique()}: Switching to unphased model")
             phased = False
         elif not any(i in ["1|0", "0|1"] for i in df["GT"].unique()):
-            print(f"Expected GT as 0|1 and 1|0 but found: {df['GT'].unique()}")
-            print("Switching to unphased model")
+            error(f"Expected GT as 0|1 and 1|0 but found: {df['GT'].unique()}")
+            error("Switching to unphased model")
             phased = False
         else:
             # GT is indeed phased

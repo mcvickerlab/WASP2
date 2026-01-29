@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from wasp2.cli import create_progress, detail, error, rust_status, success
+
 if TYPE_CHECKING:
     import pysam
 
@@ -103,34 +105,40 @@ def make_count_df(bam_file: str, df: pl.DataFrame, use_rust: bool = True) -> pl.
     except ValueError:
         rust_threads = 1
     rust_threads = max(1, rust_threads)
-    print(f"Using Rust acceleration for BAM counting 🦀 (threads={rust_threads})")
+    rust_status(f"Using Rust acceleration for BAM counting (threads={rust_threads})")
 
     total_start = timeit.default_timer()
+    total_chroms = len(chrom_list)
 
-    for chrom in chrom_list:
-        chrom_df = df.filter(pl.col("chrom") == chrom)
+    with create_progress() as progress:
+        task = progress.add_task("Counting alleles", total=total_chroms)
 
-        snp_list = (
-            chrom_df.select(["pos", "ref", "alt"])
-            .unique(subset=["pos"], maintain_order=True)
-            .iter_rows()
-        )
+        for chrom in chrom_list:
+            chrom_df = df.filter(pl.col("chrom") == chrom)
 
-        start = timeit.default_timer()
-
-        try:
-            count_list.extend(
-                count_snp_alleles_rust(bam_file, chrom, snp_list, threads=rust_threads)
+            snp_list = (
+                chrom_df.select(["pos", "ref", "alt"])
+                .unique(subset=["pos"], maintain_order=True)
+                .iter_rows()
             )
-        except Exception as e:
-            print(f"Skipping {chrom}: {e}\n")
-        else:
-            print(
-                f"{chrom}: Counted {chrom_df.height} SNP's in {timeit.default_timer() - start:.2f} seconds!"
-            )
+
+            start = timeit.default_timer()
+
+            try:
+                count_list.extend(
+                    count_snp_alleles_rust(bam_file, chrom, snp_list, threads=rust_threads)
+                )
+            except (RuntimeError, OSError) as e:
+                # Use error() not warning() - errors always shown even in quiet mode
+                error(f"Skipping {chrom}: {e}")
+            else:
+                elapsed = timeit.default_timer() - start
+                detail(f"{chrom}: Counted {chrom_df.height} SNPs in {elapsed:.2f}s")
+
+            progress.update(task, advance=1)
 
     total_end = timeit.default_timer()
-    print(f"Counted all SNP's in {total_end - total_start:.2f} seconds!")
+    success(f"Counted all SNPs in {total_end - total_start:.2f} seconds")
 
     # Previously used str as chrom instead of cat
     chrom_enum = pl.Enum(df.get_column("chrom").cat.get_categories())

@@ -1,23 +1,58 @@
-import sys
-from pathlib import Path
 from typing import Annotated
 
 import typer
 
-# Local Imports
+from wasp2.cli import create_version_callback, verbosity_callback
+
 from .run_analysis import run_ai_analysis
 from .run_analysis_sc import run_ai_analysis_sc
 from .run_compare_ai import run_ai_comparison
 
-# app = typer.Typer()
-# app = typer.Typer(pretty_exceptions_show_locals=False)
-app = typer.Typer(pretty_exceptions_short=False)
+
+def _get_analysis_deps() -> dict[str, str]:
+    """Get analysis-specific dependency versions."""
+    import polars
+    import scipy
+
+    return {"polars": polars.__version__, "scipy": scipy.__version__}
 
 
-# TODO GOTTA TEST THIS
+_version_callback = create_version_callback(_get_analysis_deps)
+
+app = typer.Typer(
+    pretty_exceptions_short=False,
+    rich_markup_mode="rich",
+    help="[bold]WASP2 Analysis[/bold] - Detect and compare allelic imbalance.",
+    epilog="[dim]Example: wasp2-analyze find-imbalance counts.tsv -o results.tsv[/dim]",
+)
 
 
-# What should i name this?
+@app.callback(invoke_without_command=True)
+def main(
+    ctx: typer.Context,
+    version: Annotated[
+        bool,
+        typer.Option(
+            "--version",
+            "-V",
+            callback=_version_callback,
+            is_eager=True,
+            help="Show version and dependency information.",
+        ),
+    ] = False,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Enable verbose output with detailed progress."),
+    ] = False,
+    quiet: Annotated[
+        bool,
+        typer.Option("--quiet", "-q", help="Suppress all output except errors."),
+    ] = False,
+) -> None:
+    """WASP2 allelic imbalance analysis commands."""
+    verbosity_callback(verbose, quiet)
+
+
 @app.command()
 def find_imbalance(
     counts: Annotated[str, typer.Argument(help="Count File")],
@@ -26,7 +61,7 @@ def find_imbalance(
         typer.Option(
             "--min",
             "--min_count",
-            help=("Minimum allele count for measuring imbalance. (Default: 10)"),
+            help="Minimum allele count for measuring imbalance. (Default: 10)",
         ),
     ] = None,
     pseudocount: Annotated[
@@ -36,7 +71,7 @@ def find_imbalance(
             "--ps",
             "--pseudo",
             "--pseudocount",
-            help=("Pseudocount added when measuring allelic imbalance. (Default: 1)"),
+            help="Pseudocount added when measuring allelic imbalance. (Default: 1)",
         ),
     ] = None,
     out_file: Annotated[
@@ -47,7 +82,7 @@ def find_imbalance(
             "--output",
             "--out",
             "-o",
-            help=("Output file for analysis. Defaults to ai_results.tsv"),
+            help="Output file for analysis. Defaults to ai_results.tsv",
         ),
     ] = None,
     phased: Annotated[
@@ -69,8 +104,7 @@ def find_imbalance(
             help=(
                 "Model used for measuring optimization parameter when finding imbalance. "
                 "HIGHLY RECOMMENDED TO LEAVE AS DEFAULT FOR SINGLE DISPERSION MODEL. "
-                "Choice of 'single' or 'linear'. "
-                "(Default: 'single')"
+                "Choice of 'single' or 'linear'. (Default: 'single')"
             ),
         ),
     ] = None,
@@ -78,12 +112,7 @@ def find_imbalance(
         str | None,
         typer.Option(
             "--region_col",
-            help=(
-                "Name of region column for current data..."
-                "'region' for ATAC-seq. "
-                "Attribute name for RNA-seq."
-                "(Default: Auto-parses if none provided)"
-            ),
+            help="Name of region column for current data. 'region' for ATAC-seq. Attribute name for RNA-seq. (Default: Auto-parses if none provided)",
         ),
     ] = None,
     groupby: Annotated[
@@ -94,14 +123,13 @@ def find_imbalance(
             "--parent_col",
             "--parent",
             help=(
-                "Report allelic imbalance by parent group instead of feature level in RNA-seq counts. \n"
-                "Name of parent column. Not valid if no parent column or if using ATAC-seq peaks. \n"
+                "Report allelic imbalance by parent group instead of feature level in RNA-seq counts. "
+                "Name of parent column. Not valid if no parent column or if using ATAC-seq peaks. "
                 "(Default: Report by feature level instead of parent level)"
             ),
         ),
     ] = None,
 ) -> None:
-    # Run
     run_ai_analysis(
         count_file=counts,
         min_count=min,
@@ -113,8 +141,6 @@ def find_imbalance(
         groupby=groupby,
     )
 
-    # TODO TEST CASES FOR TYPER
-
 
 @app.command()
 def find_imbalance_sc(
@@ -122,10 +148,7 @@ def find_imbalance_sc(
     bc_map: Annotated[
         str,
         typer.Argument(
-            help=(
-                "Two Column TSV file mapping specific barcodes to some grouping/celltype. "
-                "Each line following format [BARCODE]\t[GROUP]"
-            )
+            help="Two Column TSV file mapping specific barcodes to some grouping/celltype. Each line following format [BARCODE]\\t[GROUP]"
         ),
     ],
     min: Annotated[
@@ -133,7 +156,7 @@ def find_imbalance_sc(
         typer.Option(
             "--min",
             "--min_count",
-            help=("Minimum allele count per region for measuring imbalance. (Default: 10)"),
+            help="Minimum allele count per region for measuring imbalance. (Default: 10)",
         ),
     ] = None,
     pseudocount: Annotated[
@@ -143,7 +166,7 @@ def find_imbalance_sc(
             "--ps",
             "--pseudo",
             "--pseudocount",
-            help=("Pseudocount added when measuring allelic imbalance. (Default: 1)"),
+            help="Pseudocount added when measuring allelic imbalance. (Default: 1)",
         ),
     ] = None,
     sample: Annotated[
@@ -152,11 +175,7 @@ def find_imbalance_sc(
             "--sample",
             "--samp",
             "-s",
-            help=(
-                "Use heterozygous genotypes for this sample in count file. "
-                "Automatically parses if data contains 0 or 1 sample. "
-                "REQUIRED IF COUNT DATA CONTAINS MULTIPLE SAMPLES."
-            ),
+            help="Use heterozygous genotypes for this sample in count file. Automatically parses if data contains 0 or 1 sample. REQUIRED IF COUNT DATA CONTAINS MULTIPLE SAMPLES.",
         ),
     ] = None,
     groups: Annotated[
@@ -166,21 +185,14 @@ def find_imbalance_sc(
             "--group",
             "--celltypes",
             "--g",
-            help=(
-                "Specific groups in barcode file/bc_map to analyze allelic imbalance in. "
-                "Uses all groups in barcode file/bc_map by default."
-            ),
+            help="Specific groups in barcode file/bc_map to analyze allelic imbalance in. Uses all groups in barcode file/bc_map by default.",
         ),
     ] = None,
     phased: Annotated[
         bool | None,
         typer.Option(
             "--phased/--unphased",
-            help=(
-                "If genotypes are phased use phasing information to measure imbalance.\n"
-                "Otherwise or if --unphased selected, assume all haplotypes are equally likely during analysis.\n"
-                "Autoparses genotype data by default if not denoted."
-            ),
+            help="If genotypes are phased use phasing information to measure imbalance. Otherwise assume all haplotypes are equally likely. Autoparses genotype data by default.",
         ),
     ] = None,
     out_file: Annotated[
@@ -191,7 +203,7 @@ def find_imbalance_sc(
             "--output",
             "--out",
             "-o",
-            help=("Output file for analysis. Defaults to ai_results_[GROUP].tsv"),
+            help="Output file for analysis. Defaults to ai_results_[GROUP].tsv",
         ),
     ] = None,
     z_cutoff: Annotated[
@@ -204,21 +216,11 @@ def find_imbalance_sc(
             "--remove_extreme",
             "--z_boundary",
             "--zcore_boundary",
-            help=(
-                "Remove SNPs and associated regions whose counts exceed Z-Score cutoff.\n"
-                "Removing extreme outliers can provide extra layer of QC when measuring allelic imbalance. "
-                "(Default: None)"
-            ),
+            help="Remove SNPs and associated regions whose counts exceed Z-Score cutoff. (Default: None)",
         ),
     ] = None,
 ) -> None:
-    groups_value: str | list[str] | None
-    if groups is not None and len(groups) > 0:
-        groups_value = groups[0]
-    else:
-        groups_value = None
-
-    # Run single cell analysis
+    groups_value = groups[0] if groups else None
     run_ai_analysis_sc(
         count_file=counts,
         bc_map=bc_map,
@@ -238,10 +240,7 @@ def compare_imbalance(
     bc_map: Annotated[
         str,
         typer.Argument(
-            help=(
-                "Two Column TSV file mapping specific barcodes to some grouping/celltype. "
-                "Each line following format [BARCODE]\t[GROUP]"
-            )
+            help="Two Column TSV file mapping specific barcodes to some grouping/celltype. Each line following format [BARCODE]\\t[GROUP]"
         ),
     ],
     min: Annotated[
@@ -249,7 +248,7 @@ def compare_imbalance(
         typer.Option(
             "--min",
             "--min_count",
-            help=("Minimum allele count for measuring imbalance. (Default: 10)"),
+            help="Minimum allele count for measuring imbalance. (Default: 10)",
         ),
     ] = None,
     pseudocount: Annotated[
@@ -259,7 +258,7 @@ def compare_imbalance(
             "--ps",
             "--pseudo",
             "--pseudocount",
-            help=("Pseudocount added when measuring allelic imbalance. (Default: 1)"),
+            help="Pseudocount added when measuring allelic imbalance. (Default: 1)",
         ),
     ] = None,
     sample: Annotated[
@@ -268,11 +267,7 @@ def compare_imbalance(
             "--sample",
             "--samp",
             "-s",
-            help=(
-                "Use heterozygous genotypes for this sample in count file. "
-                "Automatically parses if data contains 0 or 1 sample. "
-                "REQUIRED IF COUNT DATA CONTAINS MULTIPLE SAMPLES."
-            ),
+            help="Use heterozygous genotypes for this sample in count file. Automatically parses if data contains 0 or 1 sample. REQUIRED IF COUNT DATA CONTAINS MULTIPLE SAMPLES.",
         ),
     ] = None,
     groups: Annotated[
@@ -282,22 +277,14 @@ def compare_imbalance(
             "--group",
             "--celltypes",
             "--g",
-            help=(
-                "Specific groups in barcode file/bc_map to compare allelic imbalance between. "
-                "If providing input, requires a minimum of 2 groups. "
-                "Uses all group combinations in barcode file/bc_map by default."
-            ),
+            help="Specific groups in barcode file/bc_map to compare allelic imbalance between. If providing input, requires a minimum of 2 groups. Uses all group combinations by default.",
         ),
     ] = None,
     phased: Annotated[
         bool | None,
         typer.Option(
             "--phased/--unphased",
-            help=(
-                "If genotypes are phased use phasing information to measure imbalance.\n"
-                "Otherwise or if --unphased selected, assume all haplotypes are equally likely during analysis.\n"
-                "Autoparses genotype data by default if not denoted."
-            ),
+            help="If genotypes are phased use phasing information to measure imbalance. Otherwise assume all haplotypes are equally likely. Autoparses genotype data by default.",
         ),
     ] = None,
     out_file: Annotated[
@@ -308,7 +295,7 @@ def compare_imbalance(
             "--output",
             "--out",
             "-o",
-            help=("Output file for comparisons. Defaults to ai_results_[GROUP1]_[GROUP2].tsv"),
+            help="Output file for comparisons. Defaults to ai_results_[GROUP1]_[GROUP2].tsv",
         ),
     ] = None,
     z_cutoff: Annotated[
@@ -321,21 +308,11 @@ def compare_imbalance(
             "--remove_extreme",
             "--z_boundary",
             "--zcore_boundary",
-            help=(
-                "Remove SNPs and associated regions whose counts exceed Z-Score cutoff.\n"
-                "Removing extreme outliers can provide extra layer of QC when measuring allelic imbalance. "
-                "(Default: None)"
-            ),
+            help="Remove SNPs and associated regions whose counts exceed Z-Score cutoff. (Default: None)",
         ),
     ] = None,
 ) -> None:
-    groups_value: str | list[str] | None
-    if groups is not None and len(groups) > 0:
-        groups_value = groups[0]
-    else:
-        groups_value = None
-
-    # Run comparison
+    groups_value = groups[0] if groups else None
     run_ai_comparison(
         count_file=counts,
         bc_map=bc_map,
@@ -347,9 +324,3 @@ def compare_imbalance(
         out_file=out_file,
         z_cutoff=z_cutoff,
     )
-
-
-if __name__ == "__main__":
-    root_dir = Path(__file__).parent
-    sys.path.append(str(root_dir))
-    app()

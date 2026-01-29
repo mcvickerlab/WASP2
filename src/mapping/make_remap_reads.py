@@ -12,6 +12,16 @@ from pathlib import Path
 
 import pysam
 
+from wasp2.cli import (
+    create_progress,
+    detail,
+    error,
+    print_file_path,
+    rust_status,
+    status,
+    success,
+)
+
 # Rust acceleration (required; no fallback)
 from wasp2_rust import remap_all_chromosomes, remap_chromosome, remap_chromosome_multi
 
@@ -34,9 +44,8 @@ def _write_remap_bam_rust_optimized(
     """
     import inspect
 
-    print(
-        f"Using optimized Rust remapper (parse-once, {'parallel' if parallel else 'sequential'})..."
-    )
+    mode = "parallel" if parallel else "sequential"
+    rust_status(f"Using optimized Rust remapper (parse-once, {mode})")
 
     # Check if the Rust function accepts 'parallel' parameter (backward compatibility)
     sig = inspect.signature(remap_all_chromosomes)
@@ -49,13 +58,14 @@ def _write_remap_bam_rust_optimized(
         )
     else:
         # Old version without parallel parameter (always runs in parallel)
-        print("  Note: Using Rust version without 'parallel' parameter (parallel by default)")
+        detail("Using Rust version without 'parallel' parameter (parallel by default)")
         pairs, haps = remap_all_chromosomes(
             bam_file, intersect_file, r1_out, r2_out, max_seqs=max_seqs
         )
 
-    print(f"\n✅ Rust remapper (optimized): {pairs} pairs → {haps} haplotypes")
-    print(f"Reads to remap written to:\n{r1_out}\n{r2_out}")
+    success(f"Rust remapper (optimized): {pairs:,} pairs → {haps:,} haplotypes")
+    print_file_path("R1 output", r1_out)
+    print_file_path("R2 output", r2_out)
 
 
 def _write_remap_bam_rust(
@@ -74,31 +84,33 @@ def _write_remap_bam_rust(
     with pysam.AlignmentFile(bam_file, "rb") as bam:
         chromosomes = [c for c in bam.header.references if c in intersect_chroms]
 
-    print(
-        f"Processing {len(chromosomes)} chromosomes with variants (filtered from {len(intersect_chroms)} in intersect)"
-    )
+    status(f"Processing {len(chromosomes)} chromosomes with variants")
 
     # Create temp directory for per-chromosome outputs
     with tempfile.TemporaryDirectory() as tmpdir:
         total_pairs = 0
         total_haps = 0
 
-        # Process each chromosome with Rust
-        for chrom in chromosomes:
-            chrom_r1 = f"{tmpdir}/{chrom}_r1.fq"
-            chrom_r2 = f"{tmpdir}/{chrom}_r2.fq"
+        with create_progress() as progress:
+            task = progress.add_task("Remapping chromosomes", total=len(chromosomes))
 
-            try:
-                pairs, haps = remap_chromosome(
-                    bam_file, intersect_file, chrom, chrom_r1, chrom_r2, max_seqs=max_seqs
-                )
-                total_pairs += pairs
-                total_haps += haps
-                if pairs > 0:
-                    print(f"  {chrom}: {pairs} pairs → {haps} haplotypes")
-            except Exception as e:
-                print(f"  {chrom}: Error - {e}")
-                continue
+            # Process each chromosome with Rust
+            for chrom in chromosomes:
+                chrom_r1 = f"{tmpdir}/{chrom}_r1.fq"
+                chrom_r2 = f"{tmpdir}/{chrom}_r2.fq"
+
+                try:
+                    pairs, haps = remap_chromosome(
+                        bam_file, intersect_file, chrom, chrom_r1, chrom_r2, max_seqs=max_seqs
+                    )
+                    total_pairs += pairs
+                    total_haps += haps
+                    if pairs > 0:
+                        detail(f"{chrom}: {pairs:,} pairs → {haps:,} haplotypes")
+                except (RuntimeError, OSError) as e:
+                    error(f"{chrom}: Error - {e}")
+
+                progress.update(task, advance=1)
 
         # Concatenate all R1 files
         r1_files = sorted(Path(tmpdir).glob("*_r1.fq"))
@@ -114,8 +126,9 @@ def _write_remap_bam_rust(
                 with open(f, "rb") as infile:
                     shutil.copyfileobj(infile, outfile)
 
-        print(f"\n✅ Rust remapper: {total_pairs} pairs → {total_haps} haplotypes")
-        print(f"Reads to remapped written to \n{r1_out}\n{r2_out}")
+        success(f"Rust remapper: {total_pairs:,} pairs → {total_haps:,} haplotypes")
+        print_file_path("R1 output", r1_out)
+        print_file_path("R2 output", r2_out)
 
 
 def _write_remap_bam_rust_multi(
@@ -138,35 +151,39 @@ def _write_remap_bam_rust_multi(
     with pysam.AlignmentFile(bam_file, "rb") as bam:
         chromosomes = [c for c in bam.header.references if c in intersect_chroms]
 
-    print(f"Processing {len(chromosomes)} chromosomes with variants ({num_samples} samples)")
+    status(f"Processing {len(chromosomes)} chromosomes with variants ({num_samples} samples)")
 
     # Create temp directory for per-chromosome outputs
     with tempfile.TemporaryDirectory() as tmpdir:
         total_pairs = 0
         total_haps = 0
 
-        # Process each chromosome with Rust multi-sample
-        for chrom in chromosomes:
-            chrom_r1 = f"{tmpdir}/{chrom}_r1.fq"
-            chrom_r2 = f"{tmpdir}/{chrom}_r2.fq"
+        with create_progress() as progress:
+            task = progress.add_task("Multi-sample remapping", total=len(chromosomes))
 
-            try:
-                pairs, haps = remap_chromosome_multi(
-                    bam_file,
-                    intersect_file,
-                    chrom,
-                    chrom_r1,
-                    chrom_r2,
-                    num_samples=num_samples,
-                    max_seqs=max_seqs,
-                )
-                total_pairs += pairs
-                total_haps += haps
-                if pairs > 0:
-                    print(f"  {chrom}: {pairs} pairs → {haps} haplotypes")
-            except Exception as e:
-                print(f"  {chrom}: Error - {e}")
-                continue
+            # Process each chromosome with Rust multi-sample
+            for chrom in chromosomes:
+                chrom_r1 = f"{tmpdir}/{chrom}_r1.fq"
+                chrom_r2 = f"{tmpdir}/{chrom}_r2.fq"
+
+                try:
+                    pairs, haps = remap_chromosome_multi(
+                        bam_file,
+                        intersect_file,
+                        chrom,
+                        chrom_r1,
+                        chrom_r2,
+                        num_samples=num_samples,
+                        max_seqs=max_seqs,
+                    )
+                    total_pairs += pairs
+                    total_haps += haps
+                    if pairs > 0:
+                        detail(f"{chrom}: {pairs:,} pairs → {haps:,} haplotypes")
+                except (RuntimeError, OSError) as e:
+                    error(f"{chrom}: Error - {e}")
+
+                progress.update(task, advance=1)
 
         # Concatenate all R1 files
         r1_files = sorted(Path(tmpdir).glob("*_r1.fq"))
@@ -182,8 +199,9 @@ def _write_remap_bam_rust_multi(
                 with open(f, "rb") as infile:
                     shutil.copyfileobj(infile, outfile)
 
-        print(f"\n✅ Rust multi-sample remapper: {total_pairs} pairs → {total_haps} haplotypes")
-        print(f"Reads to remapped written to \n{r1_out}\n{r2_out}")
+        success(f"Rust multi-sample remapper: {total_pairs:,} pairs → {total_haps:,} haplotypes")
+        print_file_path("R1 output", r1_out)
+        print_file_path("R2 output", r2_out)
 
 
 def write_remap_bam(
