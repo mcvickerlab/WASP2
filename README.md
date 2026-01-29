@@ -23,6 +23,9 @@
   </a>
   <img src="https://img.shields.io/badge/python-3.10+-blue" alt="Python">
   <img src="https://img.shields.io/badge/rust-1.70+-orange" alt="Rust">
+  <a href="https://github.com/Jaureguy760/WASP2-final/pkgs/container/wasp2-final">
+    <img src="https://img.shields.io/badge/container-ghcr.io-blue?logo=docker" alt="Container">
+  </a>
 </p>
 
 # WASP2: Allele-specific pipeline for unbiased read mapping and allelic-imbalance analysis
@@ -87,6 +90,39 @@ pip install -e ".[dev]"
 
 # Build Rust extension
 maturin develop --release -m rust/Cargo.toml
+```
+
+#### Option 3: Docker (Recommended for reproducibility)
+```bash
+# Pull from GitHub Container Registry
+docker pull ghcr.io/jaureguy760/wasp2-final:latest
+
+# Run WASP2 commands
+docker run --rm -v /path/to/data:/data ghcr.io/jaureguy760/wasp2-final:latest \
+    wasp2-count count-variants /data/reads.bam /data/variants.vcf.gz -o /data/counts.tsv
+
+# Interactive shell
+docker run --rm -it -v /path/to/data:/data ghcr.io/jaureguy760/wasp2-final:latest bash
+```
+
+#### Option 4: Singularity/Apptainer (HPC environments)
+```bash
+# Pull from GHCR and rename
+singularity pull wasp2.sif docker://ghcr.io/jaureguy760/wasp2-final:latest
+
+# Run WASP2 commands
+singularity exec wasp2.sif wasp2-count count-variants reads.bam variants.vcf.gz
+
+# Bind mount data directories for HPC
+singularity exec --bind /scratch:/scratch wasp2.sif \
+    wasp2-analyze find-imbalance /scratch/counts.tsv -o /scratch/results.tsv
+```
+
+#### Nextflow Integration
+```bash
+# Use container profile for reproducible pipelines
+nextflow run main.nf -profile docker    # Uses Docker
+nextflow run main.nf -profile singularity  # Uses Singularity
 ```
 
 #### Verify Installation
