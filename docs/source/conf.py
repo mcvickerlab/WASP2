@@ -37,6 +37,7 @@ extensions = [
     "sphinx.ext.autosummary",  # Generate summary tables
     "sphinx.ext.coverage",  # Coverage checker
     "sphinx.ext.todo",  # Support TODO items
+    "sphinx.ext.mathjax",  # MathJax for equation rendering
 ]
 
 # Add any paths that contain templates here, relative to this directory
@@ -152,3 +153,14 @@ napoleon_attr_annotations = True
 
 # If true, `todo` and `todoList` produce output, else they produce nothing
 todo_include_todos = True
+
+# -- Options for MathJax extension -------------------------------------------
+
+# MathJax configuration for equation rendering in statistical methods docs
+mathjax3_config = {
+    "tex": {
+        "macros": {
+            "text": [r"\textrm{#1}", 1],
+        },
+    },
+}
