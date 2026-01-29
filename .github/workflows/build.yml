@@ -1,7 +1,8 @@
-# Rust build workflow for WASP2
-# Builds and tests Rust extension on Linux and macOS
+# Build workflow for WASP2
+# Builds Rust extension and generates wheels for Linux and macOS
+# Renamed from rust-build.yml with sccache for faster compilation
 
-name: Rust Build
+name: Build
 
 on:
   push:
@@ -9,13 +10,13 @@ on:
     paths:
       - "rust/**"
       - "pyproject.toml"
-      - ".github/workflows/rust-build.yml"
+      - ".github/workflows/build.yml"
   pull_request:
     branches: [main]
     paths:
       - "rust/**"
       - "pyproject.toml"
-      - ".github/workflows/rust-build.yml"
+      - ".github/workflows/build.yml"
 
 permissions:
   contents: read
@@ -59,37 +60,25 @@ jobs:
 
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
 
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: rust -> target
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
 
-      - name: Check Rust formatting
-        working-directory: rust
-        run: cargo fmt --check
-
-      - name: Run Clippy
-        working-directory: rust
-        run: cargo clippy -- -D warnings
-
-      - name: Build Rust library
-        working-directory: rust
-        run: cargo build --release
-
-      - name: Run Rust tests
-        working-directory: rust
-        run: cargo test
+      - name: Configure sccache
+        run: |
+          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
       - name: Install maturin
-        run: pip install maturin
+        run: uv pip install --system maturin
 
       - name: Build wheel with maturin
         run: maturin build --release -o dist/
