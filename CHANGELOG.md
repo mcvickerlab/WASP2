@@ -2,6 +2,28 @@
 
 All notable changes to WASP2 will be documented in this file.
 
+## [1.3.0] - 2025-01-29
+
+### Added
+- **Nextflow pipeline ecosystem** with nf-core standards compliance
+  - nf-atacseq pipeline for ATAC-seq allelic imbalance analysis
+  - nf-rnaseq pipeline with validation and test suite
+  - nf-scatac pipeline for single-cell ATAC-seq analysis
+  - nf-outrider pipeline for WASP2+OUTRIDER integration
+- **Distribution packaging** for PyPI, Bioconda, and Galaxy (#82)
+- meta.yml documentation for Nextflow modules and subworkflows (#58)
+- Validation test suites for all Nextflow pipelines (#51, #52, #54)
+
+### Changed
+- Nextflow modules now follow full nf-core subworkflow pattern compliance (#55, #60)
+- Enhanced error handling in ATAC-seq Nextflow modules with warning logging and explicit error propagation
+- Updated sample VCF test data files for better test coverage
+
+### Fixed
+- INDEL counting logic in Rust module (synced from WASP2-exp branch)
+- Pandas and anndata version constraints for compatibility (#68)
+- nf-core module robustness issues identified in PR review (parameter types, VCF index documentation)
+
 ## [1.2.0] - 2025-01-23
 
 ### Added

@@ -21,9 +21,9 @@ copyright = "2025, Aaron Ho, Jeff Jaureguy, McVicker Lab"
 author = "Aaron Ho, Jeff Jaureguy, McVicker Lab"
 
 # The short X.Y version
-version = "1.2"
+version = "1.3"
 # The full version, including alpha/beta/rc tags
-release = "1.2.0"
+release = "1.3.0"
 
 # -- General configuration ---------------------------------------------------
 
@@ -80,7 +80,7 @@ html_theme_options = {
         },
     ],
     "use_edit_page_button": True,
-    "announcement": "WASP2 v1.2.0 with Rust acceleration is now available!",
+    "announcement": "WASP2 v1.3.0 with Nextflow pipelines is now available!",
 }
 
 html_context = {
