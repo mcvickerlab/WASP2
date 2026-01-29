@@ -140,3 +140,12 @@ cython_debug/
 # IDE specific
 .vscode
 .serena/
+
+# Benchmark data (large generated files)
+benchmarking/data/*.bam
+benchmarking/data/*.bam.bai
+benchmarking/data/*.vcf
+benchmarking/data/*.vcf.gz
+benchmarking/data/*.vcf.gz.tbi
+benchmarking/data/*.sam
+.benchmarks/

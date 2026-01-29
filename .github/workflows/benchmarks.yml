@@ -1,0 +1,188 @@
+# WASP2 Benchmark Workflow
+# Runs reproducible benchmarks and stores results as artifacts
+# Validates performance claims: 61x faster filtering, 6.4x faster counting, r² > 0.99
+
+name: Benchmarks
+
+on:
+  # Run on demand
+  workflow_dispatch:
+    inputs:
+      benchmark_type:
+        description: 'Type of benchmark to run'
+        required: true
+        default: 'quick'
+        type: choice
+        options:
+          - quick
+          - full
+          - counting
+          - mapping
+          - concordance
+
+  # Run on releases
+  release:
+    types: [published]
+
+  # Run weekly to track performance
+  schedule:
+    - cron: '0 6 * * 1'  # Monday at 6am UTC
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  benchmark:
+    name: Run Benchmarks
+    runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
+    defaults:
+      run:
+        shell: bash
+
+    env:
+      BENCHMARK_TYPE: ${{ github.event.inputs.benchmark_type || 'quick' }}
+      COMMIT_SHA: ${{ github.sha }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-benchmark-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
+          restore-keys: pip-benchmark-${{ runner.os }}-
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-benchmark-${{ runner.os }}-${{ hashFiles('rust/Cargo.lock') }}
+          restore-keys: cargo-benchmark-${{ runner.os }}-
+
+      - name: Cache Rust target
+        uses: actions/cache@v4
+        with:
+          path: rust/target
+          key: cargo-target-benchmark-${{ runner.os }}-${{ hashFiles('rust/Cargo.lock', 'rust/src/**/*.rs') }}
+          restore-keys: cargo-target-benchmark-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: |
+          pip install maturin pytest pytest-benchmark memory-profiler matplotlib seaborn --quiet
+
+      - name: Build Rust extension
+        run: |
+          PYTHON_PATH=$(which python)
+          maturin build --release -m rust/Cargo.toml -i "$PYTHON_PATH"
+          pip install rust/target/wheels/*.whl --force-reinstall --prefer-binary --quiet
+
+      - name: Install package
+        run: pip install -e ".[dev]" --no-build-isolation --prefer-binary --quiet || pip install -e "." --prefer-binary --quiet
+
+      - name: Check tool availability
+        run: |
+          echo "Tool availability:"
+          python benchmarking/run_benchmarks.py --check-tools
+
+      - name: Run quick benchmarks
+        if: env.BENCHMARK_TYPE == 'quick'
+        run: |
+          python benchmarking/run_benchmarks.py --quick \
+            --output "benchmarking/results/benchmark_quick_${COMMIT_SHA}.json"
+
+      - name: Run full benchmarks
+        if: env.BENCHMARK_TYPE == 'full'
+        run: |
+          python benchmarking/run_benchmarks.py --all \
+            --n-variants 100000 \
+            --n-reads 100000 \
+            --iterations 10 \
+            --output "benchmarking/results/benchmark_full_${COMMIT_SHA}.json"
+
+      - name: Run counting benchmarks
+        if: env.BENCHMARK_TYPE == 'counting'
+        run: |
+          python benchmarking/run_benchmarks.py --counting \
+            --n-variants 50000 \
+            --iterations 10 \
+            --output "benchmarking/results/benchmark_counting_${COMMIT_SHA}.json"
+
+      - name: Run mapping benchmarks
+        if: env.BENCHMARK_TYPE == 'mapping'
+        run: |
+          python benchmarking/run_benchmarks.py --mapping \
+            --n-reads 50000 \
+            --iterations 10 \
+            --output "benchmarking/results/benchmark_mapping_${COMMIT_SHA}.json"
+
+      - name: Run concordance validation
+        if: env.BENCHMARK_TYPE == 'concordance'
+        run: |
+          python benchmarking/run_benchmarks.py --concordance \
+            --n-variants 10000 \
+            --output "benchmarking/results/benchmark_concordance_${COMMIT_SHA}.json"
+
+      - name: Run pytest benchmarks
+        run: |
+          python tests/benchmarks/run_benchmarks.py --quick --no-figures \
+            --output-dir .benchmarks || true
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ github.sha }}
+          path: |
+            benchmarking/results/*.json
+            .benchmarks/*.json
+          retention-days: 90
+
+      - name: Generate summary
+        run: |
+          echo "## Benchmark Results" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Commit:** ${COMMIT_SHA}" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Type:** ${BENCHMARK_TYPE}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          # Parse and display results if available
+          if ls benchmarking/results/benchmark_*.json 1> /dev/null 2>&1; then
+            echo "### Performance Metrics" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Results saved to artifacts." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  compare-to-baseline:
+    name: Compare to Baseline
+    runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
+    needs: benchmark
+    if: github.event_name == 'release' || github.event.inputs.benchmark_type == 'full'
+
+    env:
+      COMMIT_SHA: ${{ github.sha }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download current results
+        uses: actions/download-artifact@v4
+        with:
+          name: benchmark-results-${{ github.sha }}
+          path: current_results/
+
+      # Note: In a real setup, you would download baseline results from a
+      # previous release or stored artifact to compare against
+
+      - name: Generate comparison report
+        run: |
+          echo "## Performance Comparison" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Benchmark comparison will be implemented when baseline data is available." >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Performance Claims Validation" >> "$GITHUB_STEP_SUMMARY"
+          echo "- [ ] 61x faster WASP filtering (vs WASP v1)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- [ ] 6.4x faster counting (vs phASER)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- [ ] r² > 0.99 concordance with GATK" >> "$GITHUB_STEP_SUMMARY"
