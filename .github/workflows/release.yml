@@ -1,5 +1,8 @@
 # WASP2 Release Workflow
 # Builds multi-platform wheels and publishes to PyPI on tag push
+#
+# Based on maturin generate-ci patterns with adaptations for rust-htslib
+# Note: Windows builds excluded due to rust-htslib C dependency (htslib)
 
 name: Release
 
@@ -19,34 +22,100 @@ permissions:
   contents: read
   id-token: write  # Required for trusted publishing (OIDC)
 
+env:
+  # Common htslib build dependencies for manylinux
+  HTSLIB_DEPS: "bzip2-devel xz-devel zlib-devel libcurl-devel openssl-devel clang-devel"
+
 jobs:
   # ===========================================================================
-  # Build Linux wheels (x86_64 and aarch64)
+  # Build Linux wheels (manylinux)
   # ===========================================================================
   linux:
     name: Linux (${{ matrix.target }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     strategy:
+      fail-fast: true  # All builds must succeed for release
       matrix:
         target: [x86_64, aarch64]
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
           args: --release --out dist -m rust/Cargo.toml
-          manylinux: "2014"
+          sccache: true
+          manylinux: ${{ matrix.target == 'aarch64' && 'manylinux_2_28' || '2014' }}
           before-script-linux: |
             # Install htslib build dependencies
-            yum install -y bzip2-devel xz-devel zlib-devel libcurl-devel openssl-devel clang-devel
+            yum install -y ${{ env.HTSLIB_DEPS }}
+
+      - name: Build free-threaded wheels (Python 3.13t)
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --out dist -m rust/Cargo.toml -i python3.13t
+          sccache: true
+          manylinux: ${{ matrix.target == 'aarch64' && 'manylinux_2_28' || '2014' }}
+          before-script-linux: |
+            yum install -y ${{ env.HTSLIB_DEPS }}
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
           name: wheels-linux-${{ matrix.target }}
           path: dist/*.whl
+          if-no-files-found: error  # Fail if no wheels built
+
+  # ===========================================================================
+  # Build Linux wheels (musllinux for Alpine/containers)
+  # ===========================================================================
+  musllinux:
+    name: Musllinux (${{ matrix.target }})
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: true  # All builds must succeed for release
+      matrix:
+        target: [x86_64, aarch64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --out dist -m rust/Cargo.toml
+          sccache: true
+          manylinux: musllinux_1_2
+          before-script-linux: |
+            # Install htslib build dependencies (Alpine/musl)
+            apk add --no-cache bzip2-dev xz-dev zlib-dev curl-dev openssl-dev clang-dev
+
+      - name: Build free-threaded wheels (Python 3.13t)
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --out dist -m rust/Cargo.toml -i python3.13t
+          sccache: true
+          manylinux: musllinux_1_2
+          before-script-linux: |
+            apk add --no-cache bzip2-dev xz-dev zlib-dev curl-dev openssl-dev clang-dev
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-musllinux-${{ matrix.target }}
+          path: dist/*.whl
+          if-no-files-found: error  # Fail if no wheels built
 
   # ===========================================================================
   # Build macOS wheels (x86_64 and arm64)
@@ -55,6 +124,7 @@ jobs:
     name: macOS (${{ matrix.target }})
     runs-on: ${{ matrix.runner }}
     strategy:
+      fail-fast: true  # All builds must succeed for release
       matrix:
         include:
           - target: x86_64-apple-darwin
@@ -64,6 +134,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
       - name: Install htslib (macOS)
         run: brew install htslib
 
@@ -71,13 +145,15 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist -m rust/Cargo.toml
+          args: --release --out dist -m rust/Cargo.toml --find-interpreter
+          sccache: true
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
           name: wheels-macos-${{ matrix.target }}
           path: dist/*.whl
+          if-no-files-found: error  # Fail if no wheels built
 
   # ===========================================================================
   # Build source distribution (sdist)
@@ -97,31 +173,68 @@ jobs:
       - name: Upload sdist
         uses: actions/upload-artifact@v4
         with:
-          name: sdist
+          name: wheels-sdist
           path: dist/*.tar.gz
+          if-no-files-found: error  # Fail if sdist not built
 
   # ===========================================================================
   # Publish to PyPI (trusted publishing via OIDC)
   # ===========================================================================
   publish:
     name: Publish to PyPI
-    needs: [linux, macos, sdist]
+    needs: [linux, musllinux, macos, sdist]
     runs-on: ubuntu-latest
     environment:
       name: pypi
       url: https://pypi.org/project/wasp2/
     # Only publish on tag push, not workflow_dispatch dry runs
     if: startsWith(github.ref, 'refs/tags/v') && github.event.inputs.dry_run != 'true'
+    permissions:
+      id-token: write
+      contents: write
+      attestations: write
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: dist
-          pattern: "{wheels-*,sdist}"
+          pattern: wheels-*
           merge-multiple: true
 
-      - name: List artifacts
-        run: ls -la dist/
+      - name: Validate artifacts
+        run: |
+          set -euo pipefail
+
+          echo "=== Built artifacts ==="
+          ls -la dist/
+
+          WHEEL_COUNT=$(find dist -name "*.whl" -type f | wc -l)
+          SDIST_COUNT=$(find dist -name "*.tar.gz" -type f | wc -l)
+
+          echo "Wheel count: $WHEEL_COUNT"
+          echo "Sdist count: $SDIST_COUNT"
+
+          # Expected: 2 Linux + 2 musllinux + 2 macOS = 6 wheels minimum (standard Python)
+          # Plus free-threaded variants (Python 3.13t): +4 more = 10 wheels
+          # macOS doesn't build 3.13t separately, so minimum is 6 standard + 4 free-threaded = 10
+          MIN_WHEELS=6
+
+          if [ "$WHEEL_COUNT" -lt "$MIN_WHEELS" ]; then
+            echo "::error::Expected at least $MIN_WHEELS wheels, found $WHEEL_COUNT"
+            exit 1
+          fi
+
+          if [ "$SDIST_COUNT" -lt 1 ]; then
+            echo "::error::Missing source distribution (sdist)"
+            exit 1
+          fi
+
+          echo "Artifact validation passed"
+
+      - name: Generate artifact attestation
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: "dist/*"
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
@@ -145,13 +258,14 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: dist
-          pattern: "{wheels-*,sdist}"
+          pattern: wheels-*
           merge-multiple: true
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: dist/*
           generate_release_notes: true
           draft: false
           prerelease: false
+          fail_on_unmatched_files: true  # Fail if no files to attach
