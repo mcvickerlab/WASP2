@@ -58,6 +58,57 @@ Conda Installation
    conda env create -f environment.yml
    conda activate wasp2
 
+Docker Installation
+~~~~~~~~~~~~~~~~~~~
+
+WASP2 is available as a Docker image with all dependencies pre-installed.
+This is the easiest way to get started, especially on systems where installing
+bioinformatics tools is challenging.
+
+**Pull from GitHub Container Registry:**
+
+.. code-block:: bash
+
+   docker pull ghcr.io/jaureguy760/wasp2:latest
+
+**Run WASP2 commands:**
+
+.. code-block:: bash
+
+   # Run counting
+   docker run -v /path/to/data:/data ghcr.io/jaureguy760/wasp2:latest \
+       wasp2-count count-variants /data/sample.bam /data/variants.vcf
+
+   # Interactive shell
+   docker run -it -v /path/to/data:/data ghcr.io/jaureguy760/wasp2:latest bash
+
+**Build locally (optional):**
+
+.. code-block:: bash
+
+   git clone https://github.com/Jaureguy760/WASP2-final
+   cd WASP2-final
+   docker build -t wasp2:local .
+
+For detailed Docker usage including GPU support and Singularity conversion,
+see the `Container Usage Guide <https://github.com/Jaureguy760/WASP2-final/blob/main/docs/CONTAINER_USAGE.md>`_.
+
+Singularity/Apptainer
+~~~~~~~~~~~~~~~~~~~~~
+
+For HPC environments that don't support Docker, use Singularity/Apptainer:
+
+.. code-block:: bash
+
+   # Pull from GitHub Container Registry
+   singularity pull wasp2.sif docker://ghcr.io/jaureguy760/wasp2:latest
+
+   # Run WASP2 commands
+   singularity exec wasp2.sif wasp2-count --help
+
+   # Build from definition file
+   singularity build wasp2.sif Singularity.def
+
 Verification
 ------------
 

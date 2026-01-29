@@ -1,0 +1,25 @@
+# Sphinx documentation build requirements
+# Used by ReadTheDocs for building documentation
+
+# Core Sphinx
+sphinx>=7.0
+pydata-sphinx-theme>=0.15
+
+# Docstring and type hint support
+sphinx-autodoc-typehints>=1.25
+
+# Jupyter notebook support
+nbsphinx>=0.9
+ipython>=8.0
+
+# Markdown support
+myst-parser>=2.0
+
+# UI enhancements
+sphinx-copybutton>=0.5
+sphinx-design>=0.5
+
+# Project dependencies needed for autodoc
+numpy>=1.24
+pandas>=2.0
+scipy>=1.10
