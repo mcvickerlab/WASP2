@@ -22,7 +22,7 @@ After the package is published to PyPI:
 3. **Update sha256 hash**
    Get the hash from PyPI:
    ```bash
-   curl -sL https://pypi.io/packages/source/w/wasp2/wasp2-1.2.0.tar.gz | sha256sum
+   curl -sL https://pypi.io/packages/source/w/wasp2/wasp2-1.3.0.tar.gz | sha256sum
    ```
    Update the `sha256:` field in `meta.yaml`.
 
@@ -45,7 +45,7 @@ After the package is published to PyPI:
    git add recipes/wasp2/
    git commit -m "Add wasp2 recipe"
    git push origin add-wasp2
-   gh pr create --title "Add wasp2 1.2.0" --body "New recipe for WASP2: allele-specific analysis of NGS data"
+   gh pr create --title "Add wasp2 1.3.0" --body "New recipe for WASP2: allele-specific analysis of NGS data"
    ```
 
 ## Recipe Notes

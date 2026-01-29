@@ -14,8 +14,8 @@ WASP2 images are available from:
 ### Available Tags
 
 - `:latest` - Most recent release
-- `:1.2.0` - Specific version
-- `:1.2` - Minor version (tracks patches)
+- `:1.3.0` - Specific version
+- `:1.3` - Minor version (tracks patches)
 - `:main` - Development builds from main branch
 
 ## Docker Usage
@@ -170,8 +170,8 @@ docker buildx create --name wasp2builder --use
 # Build with version argument
 docker buildx build \
     --platform linux/amd64 \
-    --build-arg VERSION=1.2.0 \
-    -t jaureguy760/wasp2:1.2.0 \
+    --build-arg VERSION=1.3.0 \
+    -t jaureguy760/wasp2:1.3.0 \
     -t jaureguy760/wasp2:latest \
     --push .
 ```
