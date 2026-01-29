@@ -1,18 +1,55 @@
-import sys
-from pathlib import Path
 from typing import Annotated
 
 import typer
 
-# Local Imports
+from wasp2.cli import create_version_callback, verbosity_callback
+
 from .run_counting import run_count_variants
 from .run_counting_sc import run_count_variants_sc
 
-# app = typer.Typer()
-# app = typer.Typer(pretty_exceptions_show_locals=False)
-app = typer.Typer(pretty_exceptions_short=False)
 
-# TODO GOTTA TEST THIS
+def _get_counting_deps() -> dict[str, str]:
+    """Get counting-specific dependency versions."""
+    import polars
+    import pysam
+
+    return {"polars": polars.__version__, "pysam": pysam.__version__}
+
+
+_version_callback = create_version_callback(_get_counting_deps)
+
+app = typer.Typer(
+    pretty_exceptions_short=False,
+    rich_markup_mode="rich",
+    help="[bold]WASP2 Counting[/bold] - Count alleles at variant positions in BAM files.",
+    epilog="[dim]Example: wasp2-count sample.bam variants.vcf.gz -o counts.tsv[/dim]",
+)
+
+
+@app.callback(invoke_without_command=True)
+def main(
+    ctx: typer.Context,
+    version: Annotated[
+        bool,
+        typer.Option(
+            "--version",
+            "-V",
+            callback=_version_callback,
+            is_eager=True,
+            help="Show version and dependency information.",
+        ),
+    ] = False,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Enable verbose output with detailed progress."),
+    ] = False,
+    quiet: Annotated[
+        bool,
+        typer.Option("--quiet", "-q", help="Suppress all output except errors."),
+    ] = False,
+) -> None:
+    """WASP2 allele counting commands."""
+    verbosity_callback(verbose, quiet)
 
 
 @app.command()
@@ -151,17 +188,7 @@ def count_variants(
         ),
     ] = False,
 ) -> None:
-    # Parse sample string
-    # print(samples)
-    sample_str: str | None
-    if samples is not None and len(samples) > 0:
-        sample_str = samples[0]
-    else:
-        sample_str = None
-
-    # print(sample_str)
-
-    # run
+    sample_str = samples[0] if samples else None
     run_count_variants(
         bam_file=bam,
         variant_file=variants,
@@ -178,9 +205,6 @@ def count_variants(
         precomputed_intersect=intersect_bed,
         include_indels=include_indels,
     )
-
-    # TODO TEST CASES FOR TYPER
-    # TODO UNIT TEST NEXT
 
 
 @app.command()
@@ -248,14 +272,7 @@ def count_variants_sc(
         ),
     ] = None,
 ) -> None:
-    # Parse sample string
-    sample_str: str | None
-    if samples is not None and len(samples) > 0:
-        sample_str = samples[0]
-    else:
-        sample_str = None
-
-    # run
+    sample_str = samples[0] if samples else None
     run_count_variants_sc(
         bam_file=bam,
         variant_file=variants,
@@ -265,9 +282,3 @@ def count_variants_sc(
         out_file=out_file,
         temp_loc=temp_loc,
     )
-
-
-if __name__ == "__main__":
-    root_dir = Path(__file__).parent
-    sys.path.append(str(root_dir))
-    app()
