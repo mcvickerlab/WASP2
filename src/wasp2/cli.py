@@ -17,6 +17,7 @@ from rich.console import Console
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
 from rich.progress import (
     BarColumn,
     Progress,
@@ -82,9 +83,7 @@ def info(message: str, verbose_only: bool = False) -> None:
     verbose_only : bool
         If True, only print in verbose mode.
     """
-    if is_quiet():
-        return
-    if verbose_only and not is_verbose():
+    if is_quiet() or (verbose_only and not is_verbose()):
         return
     console.print(f"[blue]{message}[/blue]")
 
