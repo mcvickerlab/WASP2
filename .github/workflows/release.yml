@@ -195,10 +195,11 @@ jobs:
 
           echo "Artifact validation passed"
 
-      - name: Generate artifact attestation
-        uses: actions/attest-build-provenance@v2
-        with:
-          subject-path: "dist/*"
+      # Note: Attestation disabled for private repos (enable when public)
+      # - name: Generate artifact attestation
+      #   uses: actions/attest-build-provenance@v2
+      #   with:
+      #     subject-path: "dist/*"
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
