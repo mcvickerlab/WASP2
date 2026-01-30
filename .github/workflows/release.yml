@@ -50,16 +50,6 @@ jobs:
             # Install htslib build dependencies
             yum install -y ${{ env.HTSLIB_DEPS }}
 
-      - name: Build free-threaded wheels (Python 3.13t)
-        uses: PyO3/maturin-action@v1
-        with:
-          target: ${{ matrix.target }}
-          args: --release --out dist -m rust/Cargo.toml -i python3.13t
-          sccache: true
-          manylinux: ${{ matrix.target == 'aarch64' && 'manylinux_2_28' || '2014' }}
-          before-script-linux: |
-            yum install -y ${{ env.HTSLIB_DEPS }}
-
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
@@ -89,16 +79,6 @@ jobs:
           manylinux: musllinux_1_2
           before-script-linux: |
             # Install htslib build dependencies (Alpine/musl)
-            apk add --no-cache bzip2-dev xz-dev zlib-dev curl-dev openssl-dev clang-dev
-
-      - name: Build free-threaded wheels (Python 3.13t)
-        uses: PyO3/maturin-action@v1
-        with:
-          target: ${{ matrix.target }}
-          args: --release --out dist -m rust/Cargo.toml -i python3.13t
-          sccache: true
-          manylinux: musllinux_1_2
-          before-script-linux: |
             apk add --no-cache bzip2-dev xz-dev zlib-dev curl-dev openssl-dev clang-dev
 
       - name: Upload wheels
@@ -197,9 +177,7 @@ jobs:
           echo "Wheel count: $WHEEL_COUNT"
           echo "Sdist count: $SDIST_COUNT"
 
-          # Expected: 2 Linux + 2 musllinux + 2 macOS = 6 wheels minimum (standard Python)
-          # Plus free-threaded variants (Python 3.13t): +4 more = 10 wheels
-          # macOS doesn't build 3.13t separately, so minimum is 6 standard + 4 free-threaded = 10
+          # Expected: 2 Linux + 2 musllinux + 2 macOS = 6 wheels minimum
           MIN_WHEELS=6
 
           if [ "$WHEEL_COUNT" -lt "$MIN_WHEELS" ]; then
