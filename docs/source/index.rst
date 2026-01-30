@@ -66,6 +66,7 @@ Documentation
    :caption: Tutorials
 
    tutorials/quickstart_counting
+   tutorials/quickstart_mapping
    tutorials/rna_seq
    tutorials/scrna_seq
    tutorials/scatac_workflow
