@@ -25,6 +25,8 @@ permissions:
 env:
   # Common htslib build dependencies for manylinux
   HTSLIB_DEPS: "bzip2-devel xz-devel zlib-devel libcurl-devel openssl-devel clang-devel"
+  # Redirect setup-python tool cache to runner work dir (self-hosted runner fix)
+  AGENT_TOOLSDIRECTORY: /Users/jeffjaureguy/actions-runner/_work/_tool
 
 jobs:
   # ===========================================================================
