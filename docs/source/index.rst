@@ -65,6 +65,7 @@ Documentation
    :maxdepth: 2
    :caption: Tutorials
 
+   tutorials/quickstart_counting
    tutorials/rna_seq
    tutorials/scrna_seq
    tutorials/scatac_workflow
