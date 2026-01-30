@@ -28,11 +28,11 @@ env:
 
 jobs:
   # ===========================================================================
-  # Build Linux wheels (manylinux)
+  # Build Linux wheels (manylinux) - uses Docker on self-hosted Mac runner
   # ===========================================================================
   linux:
     name: Linux (${{ matrix.target }})
-    runs-on: ubuntu-22.04
+    runs-on: [self-hosted, macOS, ARM64, docker]
     strategy:
       fail-fast: true  # All builds must succeed for release
       matrix:
@@ -73,11 +73,11 @@ jobs:
           if-no-files-found: error  # Fail if no wheels built
 
   # ===========================================================================
-  # Build Linux wheels (musllinux for Alpine/containers)
+  # Build Linux wheels (musllinux for Alpine/containers) - uses Docker
   # ===========================================================================
   musllinux:
     name: Musllinux (${{ matrix.target }})
-    runs-on: ubuntu-22.04
+    runs-on: [self-hosted, macOS, ARM64, docker]
     strategy:
       fail-fast: true  # All builds must succeed for release
       matrix:
@@ -118,19 +118,15 @@ jobs:
           if-no-files-found: error  # Fail if no wheels built
 
   # ===========================================================================
-  # Build macOS wheels (x86_64 and arm64)
+  # Build macOS wheels (x86_64 and arm64) - native ARM64 + cross-compile x86_64
   # ===========================================================================
   macos:
     name: macOS (${{ matrix.target }})
-    runs-on: ${{ matrix.runner }}
+    runs-on: [self-hosted, macOS, ARM64, docker]
     strategy:
       fail-fast: true  # All builds must succeed for release
       matrix:
-        include:
-          - target: x86_64-apple-darwin
-            runner: macos-13
-          - target: aarch64-apple-darwin
-            runner: macos-14
+        target: [x86_64-apple-darwin, aarch64-apple-darwin]
     steps:
       - uses: actions/checkout@v4
 
@@ -160,7 +156,7 @@ jobs:
   # ===========================================================================
   sdist:
     name: Source Distribution
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64, docker]
     steps:
       - uses: actions/checkout@v4
 
@@ -183,7 +179,7 @@ jobs:
   publish:
     name: Publish to PyPI
     needs: [linux, musllinux, macos, sdist]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64, docker]
     environment:
       name: pypi
       url: https://pypi.org/project/wasp2/
@@ -248,7 +244,7 @@ jobs:
   release:
     name: Create GitHub Release
     needs: [publish]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64, docker]
     permissions:
       contents: write
     steps:
