@@ -17,9 +17,9 @@
   <a href="https://jaureguy760.github.io/WASP2-final/">
     <img src="https://img.shields.io/badge/docs-GitHub%20Pages-blue" alt="Documentation">
   </a>
-  <!-- Package -->
-  <a href="https://pypi.org/project/wasp2/">
-    <img src="https://img.shields.io/pypi/v/wasp2.svg" alt="PyPI">
+  <!-- Package (Test PyPI until production release) -->
+  <a href="https://test.pypi.org/project/wasp2/">
+    <img src="https://img.shields.io/badge/PyPI-v1.3.0-orange?logo=pypi&logoColor=white" alt="PyPI">
   </a>
   <!-- License & Languages -->
   <a href="https://github.com/Jaureguy760/WASP2-final/blob/main/LICENSE">
