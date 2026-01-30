@@ -108,7 +108,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist -m rust/Cargo.toml --find-interpreter
+          args: --release --out dist -m rust/Cargo.toml -i python3.10 python3.11 python3.12
           sccache: true
 
       - name: Upload wheels
