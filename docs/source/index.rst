@@ -65,6 +65,7 @@ Documentation
    :maxdepth: 2
    :caption: Tutorials
 
+   tutorials/rna_seq
    tutorials/scrna_seq
    tutorials/comparative_imbalance
    tutorials/atac_seq_workflow
