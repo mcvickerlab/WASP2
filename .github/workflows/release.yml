@@ -25,6 +25,9 @@ permissions:
 env:
   # Common htslib build dependencies for manylinux
   HTSLIB_DEPS: "bzip2-devel xz-devel zlib-devel libcurl-devel openssl-devel clang-devel"
+  # Tool cache for self-hosted runners (avoid /Users/runner permission issues)
+  RUNNER_TOOL_CACHE: /tmp/runner-tool-cache
+
 jobs:
   # ===========================================================================
   # Build Linux wheels (manylinux) - uses Docker on self-hosted Mac runner
