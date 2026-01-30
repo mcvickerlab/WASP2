@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  GitHub Actions Runner launchd Service Template
+
+  This is a TEMPLATE file. The install-service.sh script will generate
+  a customized version with your actual paths.
+
+  Usage: RUNNER_DIR=~/actions-runner RUNNER_NAME=myrunner ./install-service.sh
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.github.actions.runner.RUNNER_NAME</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>RUNNER_DIR/run.sh</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>RUNNER_DIR</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <dict>
+        <!-- Restart if exits with non-zero -->
+        <key>SuccessfulExit</key>
+        <false/>
+        <!-- Also restart if crashes -->
+        <key>Crashed</key>
+        <true/>
+    </dict>
+
+    <!-- Restart throttling: wait 10 seconds between restart attempts -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <!-- Environment variables -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>HOME</key>
+        <string>HOME_DIR</string>
+        <!-- Reduce TCP keepalive to detect dead connections faster -->
+        <key>DOTNET_SYSTEM_NET_SOCKETS_INLINE_COMPLETIONS</key>
+        <string>1</string>
+    </dict>
+
+    <!-- Logging -->
+    <key>StandardOutPath</key>
+    <string>RUNNER_DIR/_diag/launchd-stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>RUNNER_DIR/_diag/launchd-stderr.log</string>
+
+    <!-- Process settings -->
+    <key>ProcessType</key>
+    <string>Interactive</string>
+
+    <!-- Prevent macOS from killing it during memory pressure -->
+    <key>LowPriorityIO</key>
+    <false/>
+
+    <!-- Nice value (lower = higher priority) -->
+    <key>Nice</key>
+    <integer>-5</integer>
+</dict>
+</plist>
