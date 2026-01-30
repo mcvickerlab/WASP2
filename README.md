@@ -16,7 +16,7 @@
     <img src="https://img.shields.io/badge/docs-GitHub%20Pages-blue" alt="Documentation">
   </a>
   <a href="https://test.pypi.org/project/wasp2-rust/">
-    <img src="https://img.shields.io/badge/PyPI-v1.1.0-orange" alt="PyPI">
+    <img src="https://img.shields.io/badge/PyPI-v1.3.0-orange" alt="PyPI">
   </a>
   <a href="https://github.com/Jaureguy760/WASP2-final/blob/master/LICENSE">
     <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
