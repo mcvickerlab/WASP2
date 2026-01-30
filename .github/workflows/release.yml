@@ -25,9 +25,6 @@ permissions:
 env:
   # Common htslib build dependencies for manylinux
   HTSLIB_DEPS: "bzip2-devel xz-devel zlib-devel libcurl-devel openssl-devel clang-devel"
-  # Redirect setup-python tool cache to runner work dir (self-hosted runner fix)
-  AGENT_TOOLSDIRECTORY: /Users/jeffjaureguy/actions-runner/_work/_tool
-
 jobs:
   # ===========================================================================
   # Build Linux wheels (manylinux) - uses Docker on self-hosted Mac runner
@@ -41,10 +38,6 @@ jobs:
         target: [x86_64, aarch64]
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.x"
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1
@@ -87,10 +80,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.x"
-
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
@@ -131,10 +120,6 @@ jobs:
         target: [x86_64-apple-darwin, aarch64-apple-darwin]
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.x"
 
       - name: Install htslib (macOS)
         run: brew install htslib
