@@ -147,12 +147,12 @@ jobs:
   # Publish to PyPI (trusted publishing via OIDC)
   # ===========================================================================
   publish:
-    name: Publish to PyPI
+    name: Publish to Test PyPI
     needs: [linux, musllinux, macos, sdist]
     runs-on: ubuntu-latest  # PyPI publish action only works on Linux
     environment:
-      name: pypi
-      url: https://pypi.org/project/wasp2/
+      name: testpypi
+      url: https://test.pypi.org/project/wasp2/
     # Only publish on tag push, not workflow_dispatch dry runs
     if: startsWith(github.ref, 'refs/tags/v') && github.event.inputs.dry_run != 'true'
     permissions:
@@ -201,10 +201,11 @@ jobs:
       #   with:
       #     subject-path: "dist/*"
 
-      - name: Publish to PyPI
+      - name: Publish to Test PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
+          repository-url: https://test.pypi.org/legacy/
           # No password needed - uses trusted publishing (OIDC)
 
   # ===========================================================================
