@@ -206,7 +206,7 @@ jobs:
         with:
           packages-dir: dist/
           repository-url: https://test.pypi.org/legacy/
-          # No password needed - uses trusted publishing (OIDC)
+          password: ${{ secrets.TEST_PYPI_API_TOKEN }}
 
   # ===========================================================================
   # Create GitHub Release
