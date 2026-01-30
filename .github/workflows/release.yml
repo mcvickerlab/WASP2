@@ -149,7 +149,7 @@ jobs:
   publish:
     name: Publish to PyPI
     needs: [linux, musllinux, macos, sdist]
-    runs-on: [self-hosted, macOS, ARM64, docker]
+    runs-on: ubuntu-latest  # PyPI publish action only works on Linux
     environment:
       name: pypi
       url: https://pypi.org/project/wasp2/
@@ -212,7 +212,7 @@ jobs:
   release:
     name: Create GitHub Release
     needs: [publish]
-    runs-on: [self-hosted, macOS, ARM64, docker]
+    runs-on: ubuntu-latest  # No macOS-specific tools needed
     permissions:
       contents: write
     steps:
