@@ -17,9 +17,9 @@
   <a href="https://jaureguy760.github.io/WASP2-final/">
     <img src="https://img.shields.io/badge/docs-GitHub%20Pages-blue" alt="Documentation">
   </a>
-  <!-- Package (Test PyPI until production release) -->
-  <a href="https://test.pypi.org/project/wasp2/">
-    <img src="https://img.shields.io/badge/PyPI-v1.3.0-orange?logo=pypi&logoColor=white" alt="PyPI">
+  <!-- Package -->
+  <a href="https://pypi.org/project/wasp2/">
+    <img src="https://img.shields.io/pypi/v/wasp2?logo=pypi&logoColor=white" alt="PyPI">
   </a>
   <!-- License & Languages -->
   <a href="https://github.com/Jaureguy760/WASP2-final/blob/main/LICENSE">
@@ -74,7 +74,13 @@ See [`.devcontainer/README.md`](.devcontainer/README.md) for details.
 
 ### Local Installation
 
-#### Option 1: Conda (Recommended for bioinformatics tools)
+#### Option 1: pip (Easiest - Pre-built wheels)
+```bash
+pip install wasp2
+```
+Pre-built wheels are available for Linux (x86_64, aarch64) and macOS (Intel, Apple Silicon).
+
+#### Option 2: Conda (Recommended for bioinformatics tools)
 ```bash
 # Create environment with bioinformatics tools (samtools, bcftools, bedtools, etc.)
 conda env create -f environment.yml
@@ -87,22 +93,26 @@ export BINDGEN_EXTRA_CLANG_ARGS="-I/usr/include"
 maturin develop --release -m rust/Cargo.toml
 ```
 
-#### Option 2: pip (Requires system tools)
+#### Option 3: Development Install (From source)
 ```bash
+# Clone the repository
+git clone https://github.com/Jaureguy760/WASP2-final.git
+cd WASP2-final
+
 # Install system dependencies (Ubuntu/Debian)
 sudo apt-get install samtools bcftools bedtools bwa libclang-dev
 
 # Install Rust if not already installed
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-# Install Python package (includes maturin build tool)
+# Install Python package with dev dependencies
 pip install -e ".[dev]"
 
 # Build Rust extension
 maturin develop --release -m rust/Cargo.toml
 ```
 
-#### Option 3: Docker (Recommended for reproducibility)
+#### Option 4: Docker (Recommended for reproducibility)
 ```bash
 # Pull from GitHub Container Registry
 docker pull ghcr.io/jaureguy760/wasp2-final:latest
@@ -115,7 +125,7 @@ docker run --rm -v /path/to/data:/data ghcr.io/jaureguy760/wasp2-final:latest \
 docker run --rm -it -v /path/to/data:/data ghcr.io/jaureguy760/wasp2-final:latest bash
 ```
 
-#### Option 4: Singularity/Apptainer (HPC environments)
+#### Option 5: Singularity/Apptainer (HPC environments)
 ```bash
 # Pull from GHCR and rename
 singularity pull wasp2.sif docker://ghcr.io/jaureguy760/wasp2-final:latest
