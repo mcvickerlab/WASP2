@@ -128,6 +128,8 @@ jobs:
 
       - name: Build Rust extension
         run: |
+          # Clean old wheels to prevent version conflicts
+          rm -rf rust/target/wheels/*.whl
           # CRITICAL: Use mambaforge's python (not python3 which is Xcode Python 3.9)
           # pip is from mambaforge Python 3.10, so we must build for that Python
           MAMBAFORGE_PYTHON=/Users/jeffjaureguy/mambaforge/bin/python
