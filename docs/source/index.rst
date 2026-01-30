@@ -67,6 +67,7 @@ Documentation
 
    tutorials/rna_seq
    tutorials/scrna_seq
+   tutorials/scatac_workflow
    tutorials/comparative_imbalance
    tutorials/atac_seq_workflow
 
