@@ -67,6 +67,7 @@ Documentation
 
    tutorials/scrna_seq
    tutorials/comparative_imbalance
+   tutorials/atac_seq_workflow
 
 .. toctree::
    :maxdepth: 2
