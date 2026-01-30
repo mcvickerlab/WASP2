@@ -3,28 +3,38 @@
 </h1>
 
 <p align="center">
-  <a href="https://github.com/Jaureguy760/WASP2-final/actions/workflows/tests.yml">
-    <img src="https://github.com/Jaureguy760/WASP2-final/actions/workflows/tests.yml/badge.svg" alt="Tests">
+  <!-- CI/CD Status -->
+  <a href="https://github.com/Jaureguy760/WASP2-final/actions/workflows/ci.yml">
+    <img src="https://github.com/Jaureguy760/WASP2-final/actions/workflows/ci.yml/badge.svg" alt="CI">
+  </a>
+  <a href="https://github.com/Jaureguy760/WASP2-final/actions/workflows/build.yml">
+    <img src="https://github.com/Jaureguy760/WASP2-final/actions/workflows/build.yml/badge.svg" alt="Build">
   </a>
   <a href="https://codecov.io/gh/Jaureguy760/WASP2-final">
     <img src="https://codecov.io/gh/Jaureguy760/WASP2-final/graph/badge.svg" alt="Coverage">
   </a>
-  <a href="https://github.com/Jaureguy760/WASP2-final/actions/workflows/docs.yml">
-    <img src="https://github.com/Jaureguy760/WASP2-final/actions/workflows/docs.yml/badge.svg" alt="Docs">
-  </a>
+  <!-- Documentation -->
   <a href="https://jaureguy760.github.io/WASP2-final/">
     <img src="https://img.shields.io/badge/docs-GitHub%20Pages-blue" alt="Documentation">
   </a>
-  <a href="https://test.pypi.org/project/wasp2-rust/">
-    <img src="https://img.shields.io/badge/PyPI-v1.3.0-orange" alt="PyPI">
+  <!-- Package -->
+  <a href="https://pypi.org/project/wasp2/">
+    <img src="https://img.shields.io/pypi/v/wasp2.svg" alt="PyPI">
   </a>
-  <a href="https://github.com/Jaureguy760/WASP2-final/blob/master/LICENSE">
+  <!-- License & Languages -->
+  <a href="https://github.com/Jaureguy760/WASP2-final/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
   </a>
-  <img src="https://img.shields.io/badge/python-3.10+-blue" alt="Python">
-  <img src="https://img.shields.io/badge/rust-1.70+-orange" alt="Rust">
+  <img src="https://img.shields.io/badge/python-3.10+-blue?logo=python&logoColor=white" alt="Python">
+  <img src="https://img.shields.io/badge/rust-1.70+-orange?logo=rust&logoColor=white" alt="Rust">
+  <!-- Nextflow -->
+  <img src="https://img.shields.io/badge/nextflow-%E2%89%A524.04-23aa62?logo=nextflow&logoColor=white" alt="Nextflow">
+  <a href="https://nf-co.re/">
+    <img src="https://img.shields.io/badge/nf--core-compatible-green?logo=nfcore&logoColor=white" alt="nf-core">
+  </a>
+  <!-- Container -->
   <a href="https://github.com/Jaureguy760/WASP2-final/pkgs/container/wasp2-final">
-    <img src="https://img.shields.io/badge/container-ghcr.io-blue?logo=docker" alt="Container">
+    <img src="https://img.shields.io/badge/container-ghcr.io-blue?logo=docker&logoColor=white" alt="Container">
   </a>
 </p>
 
