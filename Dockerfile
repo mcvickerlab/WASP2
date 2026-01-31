@@ -73,15 +73,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=rust-builder /wheels/*.whl /tmp/
 RUN pip install --no-cache-dir /tmp/*.whl && rm -rf /tmp/*.whl
 
-# Copy Python source and install (non-editable for production)
-WORKDIR /app
-COPY src/ src/
-COPY pyproject.toml .
-COPY README.md .
-RUN pip install --no-cache-dir .
-
 # Remove build tools to reduce image size
 RUN apt-get purge -y --auto-remove g++ zlib1g-dev && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
 
 # Verify installation
 RUN wasp2-count --help && \
