@@ -78,7 +78,7 @@ WORKDIR /app
 COPY src/ src/
 COPY pyproject.toml .
 COPY README.md .
-RUN pip install --no-cache-dir . --no-build-isolation
+RUN pip install --no-cache-dir .
 
 # Remove build tools to reduce image size
 RUN apt-get purge -y --auto-remove g++ zlib1g-dev && rm -rf /var/lib/apt/lists/*
