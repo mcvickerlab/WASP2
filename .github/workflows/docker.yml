@@ -46,6 +46,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Use a temp Docker config dir to avoid macOS Keychain errors on self-hosted runners
+      - name: Configure Docker credentials store
+        run: |
+          export DOCKER_CONFIG="$HOME/.docker-ghaction"
+          mkdir -p "$DOCKER_CONFIG"
+          echo '{}' > "$DOCKER_CONFIG/config.json"
+          echo "DOCKER_CONFIG=$DOCKER_CONFIG" >> "$GITHUB_ENV"
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
