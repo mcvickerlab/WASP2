@@ -22,9 +22,10 @@ RUN apt-get update && apt-get install -y \
 # Install maturin
 RUN pip3 install --break-system-packages maturin>=1.4
 
-# Copy Rust source
+# Copy source files needed for maturin build
 WORKDIR /build
 COPY rust/ rust/
+COPY src/ src/
 COPY pyproject.toml .
 COPY README.md .
 COPY LICENSE .
