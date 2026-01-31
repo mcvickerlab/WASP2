@@ -4,7 +4,7 @@
 # ============================================================================
 # Stage 1: Build Rust extension
 # ============================================================================
-FROM rust:1.82-bookworm AS rust-builder
+FROM rust:1.85-bookworm AS rust-builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y \
