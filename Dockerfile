@@ -78,13 +78,10 @@ RUN apt-get purge -y --auto-remove g++ zlib1g-dev && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Verify installation
-RUN wasp2-count --help && \
-    wasp2-map --help && \
-    wasp2-analyze --help && \
-    python -c "import wasp2_rust; print('Rust extension loaded successfully')" && \
-    samtools --version && \
-    bcftools --version
+# Verify non-Python tools are available (Python tools skipped during build
+# because Polars uses AVX2 instructions that fail under QEMU emulation
+# on ARM64 CI runners building linux/amd64 images)
+RUN samtools --version && bcftools --version && bedtools --version
 
 # Create non-root user for security
 RUN groupadd -g 1000 wasp2 && \
