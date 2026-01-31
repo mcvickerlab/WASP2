@@ -49,7 +49,7 @@ LABEL org.opencontainers.image.title="WASP2"
 LABEL org.opencontainers.image.version="${VERSION}"
 LABEL maintainer="Jeff Jaureguy <jeffpjaureguy@gmail.com>"
 
-# Install runtime dependencies
+# Install runtime dependencies + temporary build deps for pybedtools (C++ extension)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # Bioinformatics tools
     samtools \
@@ -64,8 +64,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libcurl4 \
     # Procps for ps command (Nextflow needs it)
     procps \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
+    # Build tools needed to compile pybedtools C++ extension
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy wheel from builder and install
 COPY --from=rust-builder /wheels/*.whl /tmp/
@@ -77,6 +78,9 @@ COPY src/ src/
 COPY pyproject.toml .
 COPY README.md .
 RUN pip install --no-cache-dir . --no-build-isolation
+
+# Remove build tools to reduce image size
+RUN apt-get purge -y --auto-remove g++ && rm -rf /var/lib/apt/lists/*
 
 # Verify installation
 RUN wasp2-count --help && \
