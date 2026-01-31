@@ -66,6 +66,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     procps \
     # Build tools needed to compile pybedtools C++ extension
     g++ \
+    zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy wheel from builder and install
@@ -80,7 +81,7 @@ COPY README.md .
 RUN pip install --no-cache-dir . --no-build-isolation
 
 # Remove build tools to reduce image size
-RUN apt-get purge -y --auto-remove g++ && rm -rf /var/lib/apt/lists/*
+RUN apt-get purge -y --auto-remove g++ zlib1g-dev && rm -rf /var/lib/apt/lists/*
 
 # Verify installation
 RUN wasp2-count --help && \
