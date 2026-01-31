@@ -47,14 +47,22 @@ jobs:
         uses: actions/checkout@v4
 
       # Disable macOS Keychain credential helper to avoid Keychain Error (-61)
-      # on self-hosted runners without GUI access. Uses a temp config dir so we
-      # don't modify the runner's default Docker config.
+      # on self-hosted runners without GUI access. Docker Desktop on macOS sets
+      # credsStore=osxkeychain which requires GUI. We override the default config
+      # directly so all subsequent docker commands use file-based auth.
       - name: Configure Docker credentials store
         run: |
-          DOCKER_CONFIG="$RUNNER_TEMP/.docker"
-          mkdir -p "$DOCKER_CONFIG"
-          echo '{"credsStore":""}' > "$DOCKER_CONFIG/config.json"
-          echo "DOCKER_CONFIG=$DOCKER_CONFIG" >> "$GITHUB_ENV"
+          # Back up and patch the default Docker config
+          cp "$HOME/.docker/config.json" "$HOME/.docker/config.json.bak" 2>/dev/null || true
+          python3 -c "
+          import json, pathlib, os
+          p = pathlib.Path(os.path.expanduser('~/.docker/config.json'))
+          p.parent.mkdir(parents=True, exist_ok=True)
+          cfg = json.loads(p.read_text()) if p.exists() else {}
+          cfg.pop('credsStore', None)
+          cfg.pop('credStore', None)
+          p.write_text(json.dumps(cfg, indent=2))
+          "
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -97,6 +105,13 @@ jobs:
 
       - name: Rotate cache
         run: rm -rf /tmp/.buildx-cache && mv /tmp/.buildx-cache-new /tmp/.buildx-cache 2>/dev/null || true
+
+      - name: Restore Docker config
+        if: always()
+        run: |
+          if [ -f "$HOME/.docker/config.json.bak" ]; then
+            mv "$HOME/.docker/config.json.bak" "$HOME/.docker/config.json"
+          fi
 
       - name: Summary
         env:
