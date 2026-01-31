@@ -46,12 +46,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Use a temp Docker config dir to avoid macOS Keychain errors on self-hosted runners
+      # Disable macOS Keychain credential helper to avoid Keychain Error (-61)
+      # on self-hosted runners without GUI access. Uses a temp config dir so we
+      # don't modify the runner's default Docker config.
       - name: Configure Docker credentials store
         run: |
-          export DOCKER_CONFIG="$HOME/.docker-ghaction"
+          DOCKER_CONFIG="$RUNNER_TEMP/.docker"
           mkdir -p "$DOCKER_CONFIG"
-          echo '{}' > "$DOCKER_CONFIG/config.json"
+          echo '{"credsStore":""}' > "$DOCKER_CONFIG/config.json"
           echo "DOCKER_CONFIG=$DOCKER_CONFIG" >> "$GITHUB_ENV"
 
       - name: Set up Docker Buildx
