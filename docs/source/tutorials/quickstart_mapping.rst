@@ -216,16 +216,6 @@ WASP2 includes a high-performance Rust backend that accelerates the filter step:
 
 The Rust backend is used automatically when available.
 
-Jupyter Notebook
-----------------
-
-For an interactive version of this tutorial with visualizations, see the
-Jupyter notebook:
-
-.. code-block:: bash
-
-   tutorials/quickstart_mapping.ipynb
-
 Next Steps
 ----------
 

@@ -81,21 +81,23 @@ def run_make_remap_reads_unified(
         - bed_file: BED file used (created or provided)
         - pairs_processed, pairs_with_variants, haplotypes_written, etc.
 
-    Example:
-        # With VCF (converts to BED automatically)
-        stats = run_make_remap_reads_unified(
-            bam_file="input.bam",
-            variant_file="variants.vcf.gz",
-            samples=["NA12878"],
-            threads=8
-        )
+    Examples:
+        With VCF (converts to BED automatically)::
 
-        # With pre-existing BED (faster, skips conversion)
-        stats = run_make_remap_reads_unified(
-            bam_file="input.bam",
-            bed_file="variants.bed",
-            threads=8
-        )
+            stats = run_make_remap_reads_unified(
+                bam_file="input.bam",
+                variant_file="variants.vcf.gz",
+                samples=["NA12878"],
+                threads=8
+            )
+
+        With pre-existing BED (faster, skips conversion)::
+
+            stats = run_make_remap_reads_unified(
+                bam_file="input.bam",
+                bed_file="variants.bed",
+                threads=8
+            )
     """
     if not UNIFIED_AVAILABLE:
         raise ImportError("Unified pipeline requires wasp2_rust module")

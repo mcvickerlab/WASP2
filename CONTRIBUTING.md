@@ -5,16 +5,30 @@ Thank you for your interest in contributing to WASP2! This document provides gui
 ## Table of Contents
 
 - [Code of Conduct](#code-of-conduct)
+- [First-Time Contributors](#first-time-contributors)
 - [Development Setup](#development-setup)
 - [Running Tests](#running-tests)
 - [Code Style](#code-style)
 - [Branch Workflow](#branch-workflow)
 - [Issue Guidelines](#issue-guidelines)
 - [Pull Request Process](#pull-request-process)
+- [Troubleshooting](#troubleshooting)
+- [License](#license)
 
 ## Code of Conduct
 
 This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code. Please report unacceptable behavior to the project maintainers.
+
+## First-Time Contributors
+
+New to WASP2? Welcome! Here's how to get started:
+
+1. Look for issues labeled [`good first issue`](https://github.com/Jaureguy760/WASP2-final/labels/good%20first%20issue) or [`help wanted`](https://github.com/Jaureguy760/WASP2-final/labels/help%20wanted)
+2. Comment on the issue to let maintainers know you're working on it
+3. Fork the repository and follow the [Development Setup](#development-setup)
+4. Submit your PR following the [Pull Request Process](#pull-request-process)
+
+We welcome contributions of all sizes, from typo fixes to new features!
 
 ## Development Setup
 
@@ -22,9 +36,14 @@ WASP2 is a hybrid Python/Rust project. You'll need both toolchains to build from
 
 ### Prerequisites
 
-- **Python 3.10+**
-- **Rust 1.70+** (for Rust backend development)
-- **Git**
+| Requirement | Version | Notes |
+|-------------|---------|-------|
+| Python | 3.10+ | 3.10, 3.11, 3.12 supported (conda env uses 3.11) |
+| Rust | 1.70+ | Edition 2021 |
+| Git | 2.0+ | For version control |
+| C compiler | gcc/clang | Required for native extensions |
+
+> **Note:** WASP2 is developed and tested on Linux and macOS. Windows is not officially supported.
 
 ### Setting Up the Environment
 
@@ -47,8 +66,7 @@ WASP2 is a hybrid Python/Rust project. You'll need both toolchains to build from
    ```bash
    python -m venv .venv
    source .venv/bin/activate  # Linux/macOS
-   # .venv\Scripts\activate   # Windows
-   pip install -e ".[dev]"
+   pip install -e ".[dev]"    # Includes maturin and dev tools
    ```
 
 3. **Install the Rust toolchain** (if not already installed):
@@ -92,6 +110,7 @@ make rust-dev      # Build Rust extension in debug mode
 make test          # Run all tests
 make lint          # Run all linters
 make format        # Format all code
+make security      # Run security checks (bandit, cargo audit)
 ```
 
 ## Running Tests
@@ -180,18 +199,34 @@ pre-commit run --all-files
 
 The hooks include:
 - **ruff**: Python linting and formatting
-- **trailing-whitespace**: Remove trailing whitespace
-- **check-yaml**: Validate YAML files
+- **pre-commit-hooks**: File hygiene (trailing whitespace, end-of-file, YAML validation, large files, merge conflicts, private keys, AST validation)
 - **bandit**: Python security linting
 - **gitleaks**: Secret detection
 - **basedpyright**: Type checking
 
+### Security Scanning
+
+Run security checks before submitting PRs:
+
+```bash
+# Python security audit
+bandit -c pyproject.toml -r src/
+
+# Dependency vulnerability scan
+pip-audit
+
+# Rust security audit
+cd rust && cargo audit
+```
+
 ## Branch Workflow
 
-We follow a feature branch workflow:
+We use a feature branch workflow with PRs to `main`:
 
 ```
-feature/* → dev → main
+feature/* ─┐
+fix/*     ─┼──→ main
+docs/*    ─┘
 ```
 
 ### Branch Naming
@@ -229,13 +264,17 @@ feature/* → dev → main
 
 We follow [Conventional Commits](https://www.conventionalcommits.org/):
 
-- `feat:` - New feature
-- `fix:` - Bug fix
-- `docs:` - Documentation changes
-- `style:` - Code style changes (formatting, no logic change)
-- `refactor:` - Code refactoring
-- `test:` - Adding or updating tests
-- `chore:` - Maintenance tasks
+| Prefix | Purpose |
+|--------|---------|
+| `feat:` | New feature |
+| `fix:` | Bug fix |
+| `docs:` | Documentation changes |
+| `style:` | Code style changes (formatting, no logic change) |
+| `refactor:` | Code refactoring |
+| `test:` | Adding or updating tests |
+| `chore:` | Maintenance tasks |
+| `perf:` | Performance improvements |
+| `ci:` | CI/CD changes |
 
 ## Issue Guidelines
 
@@ -248,9 +287,9 @@ We follow [Conventional Commits](https://www.conventionalcommits.org/):
 ### Bug Reports
 
 Include:
-- WASP2 version (`pip show wasp2`)
+- WASP2 version (`pip show wasp2` or `python -c "import wasp2; print(wasp2.__version__)"`)
 - Python version (`python --version`)
-- Operating system
+- Operating system and version
 - Minimal reproducible example
 - Expected vs. actual behavior
 - Full error traceback
@@ -263,6 +302,8 @@ Include:
 - Example of how it would be used
 
 ## Pull Request Process
+
+No Contributor License Agreement (CLA) is required. By submitting a PR, you agree your contributions will be licensed under the MIT License.
 
 1. **Ensure your code passes all checks:**
 
@@ -288,14 +329,40 @@ Include:
 - [ ] Code follows the project's style guidelines
 - [ ] Tests pass locally (`make test`)
 - [ ] Linting passes (`make lint`)
+- [ ] Security checks pass (`make security`)
 - [ ] New code is tested
 - [ ] Documentation is updated (if applicable)
 - [ ] Commit messages follow conventional commits
 
-## Questions?
+## Troubleshooting
 
-If you have questions about contributing, feel free to:
-- Open a [GitHub Discussion](https://github.com/Jaureguy760/WASP2-final/discussions)
-- Create an issue with the "question" label
+### Common Issues
+
+**Maturin build fails with "cargo not found":**
+```bash
+source ~/.cargo/env  # Add Rust to PATH
+```
+
+**Pre-commit hooks fail on first run:**
+```bash
+pre-commit run --all-files  # Run once to cache hooks
+```
+
+**Import errors after building:**
+```bash
+pip install -e ".[dev]" --force-reinstall
+```
+
+**Rust extension not loading:**
+```bash
+maturin develop --release -m rust/Cargo.toml
+python -c "import wasp2_rust; print('OK')"
+```
+
+## License
+
+By contributing to WASP2, you agree that your contributions will be licensed under the [MIT License](LICENSE).
+
+---
 
 Thank you for contributing to WASP2!

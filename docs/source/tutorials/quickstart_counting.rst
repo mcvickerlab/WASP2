@@ -14,10 +14,6 @@ This tutorial demonstrates the basic WASP2 allele counting workflow using a mini
 - WASP2 installed (``pip install wasp2``)
 - Basic familiarity with BAM and VCF file formats
 
-.. note::
-
-   This tutorial is also available as a Jupyter notebook in ``tutorials/quickstart_counting.ipynb``.
-
 Setup
 -----
 
