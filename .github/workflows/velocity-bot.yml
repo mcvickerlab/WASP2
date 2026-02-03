@@ -14,6 +14,7 @@ permissions:
 jobs:
   check-trigger:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     if: github.actor != 'claude[bot]'
     outputs:
       should_run: ${{ steps.evaluate.outputs.should_run }}
@@ -105,7 +106,7 @@ jobs:
       TRIGGER_TYPE: ${{ needs.check-trigger.outputs.trigger_type }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           fetch-depth: 0
 
@@ -318,7 +319,7 @@ jobs:
 
       - name: Upload session log
         if: always()
-        uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4.3.1
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
         with:
           name: claude-session-log-${{ needs.check-trigger.outputs.issue_number }}
           path: /tmp/claude-session.log
