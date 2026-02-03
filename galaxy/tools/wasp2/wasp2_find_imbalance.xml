@@ -12,16 +12,10 @@
         wasp2-analyze find-imbalance
             counts.tsv
             --out '$output_results'
-            #if $min_count
-                --min $min_count
-            #end if
-            #if $pseudocount
-                --pseudocount $pseudocount
-            #end if
+            --min $min_count
+            --pseudocount $pseudocount
             $phased
-            #if str($model).strip()
-                --model '$model'
-            #end if
+            --model '$model'
             #if str($advanced.region_col).strip()
                 --region_col '$advanced.region_col'
             #end if
@@ -55,10 +49,14 @@
         <section name="advanced" title="Advanced Options" expanded="false">
             <param argument="--region_col" type="text" value="" optional="true"
                    label="Region column name"
-                   help="Name of region column (auto-detected if not specified)"/>
+                   help="Name of region column (auto-detected if not specified)">
+                <expand macro="sanitize_column_name"/>
+            </param>
             <param argument="--groupby" type="text" value="" optional="true"
                    label="Group by column"
-                   help="Report imbalance by parent/group instead of feature level (for RNA-seq)"/>
+                   help="Report imbalance by parent/group instead of feature level (for RNA-seq)">
+                <expand macro="sanitize_column_name"/>
+            </param>
         </section>
     </inputs>
 
