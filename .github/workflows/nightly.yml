@@ -39,6 +39,7 @@ jobs:
     name: Plan Tests
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions: {}
     outputs:
       run_unit: ${{ steps.plan.outputs.run_unit }}
       run_integration: ${{ steps.plan.outputs.run_integration }}
@@ -70,6 +71,8 @@ jobs:
     if: needs.plan.outputs.run_unit == 'true'
     runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
     timeout-minutes: 30
+    permissions:
+      contents: read
     defaults:
       run:
         shell: bash
@@ -126,6 +129,8 @@ jobs:
     if: needs.plan.outputs.run_integration == 'true'
     runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
     timeout-minutes: 60
+    permissions:
+      contents: read
     defaults:
       run:
         shell: bash
@@ -175,6 +180,8 @@ jobs:
     if: needs.plan.outputs.run_benchmarks == 'true'
     runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
     timeout-minutes: 90
+    permissions:
+      contents: read
     defaults:
       run:
         shell: bash
@@ -232,6 +239,8 @@ jobs:
     if: needs.plan.outputs.run_nextflow == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    permissions:
+      contents: read
     continue-on-error: true
 
     steps:
@@ -290,6 +299,7 @@ jobs:
     name: Nightly Summary
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions: {}
     needs: [unit-tests, integration-tests, benchmarks, nextflow-tests]
     if: always()
 

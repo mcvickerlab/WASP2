@@ -40,6 +40,8 @@ jobs:
     name: Run Benchmarks
     runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
     timeout-minutes: 60
+    permissions:
+      contents: read
     defaults:
       run:
         shell: bash
@@ -169,6 +171,8 @@ jobs:
     name: Compare to Baseline
     runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
     timeout-minutes: 10
+    permissions:
+      contents: read
     needs: benchmark
     if: github.event_name == 'release' || github.event.inputs.benchmark_type == 'full'
     defaults:
