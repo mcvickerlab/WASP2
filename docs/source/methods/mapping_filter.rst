@@ -286,14 +286,6 @@ The typical WASP2 workflow:
    wasp2-count count-variants wasp_filtered.bam variants.vcf \
      --samples SAMPLE1 --regions peaks.bed
 
-References
-----------
-
-.. [vandeGeijn2015] van de Geijn B, McVicker G, Gilad Y, Pritchard JK (2015).
-   WASP: allele-specific software for robust molecular quantitative trait
-   locus discovery. *Nature Methods* 12:1061-1063.
-   `doi:10.1038/nmeth.3582 <https://doi.org/10.1038/nmeth.3582>`_
-
 See Also
 --------
 

@@ -303,9 +303,5 @@ See Also
 References
 ----------
 
-.. [Skelly2011] Skelly DA, Johansson M, Madeoy J, Wakefield J, Akey JM (2011).
-   A powerful and flexible statistical framework for testing hypotheses of
-   allele-specific gene expression from RNA-seq data. *Genome Research* 21:1728-1737.
-
 .. [Mayba2014] Mayba O, Gilbert HN, Liu J, et al. (2014). MBASED: allele-specific
    expression detection in cancer tissues and cell lines. *Genome Biology* 15:405.

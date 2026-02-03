@@ -7,7 +7,7 @@
 # 3x Hardening applied: 2026-02-03
 #   - SARIF output for GitHub Security tab integration
 #   - Lockfile validation to prevent supply chain attacks
-#   - Semgrep path traversal checks
+#   - Semgrep OWASP Top 10 and security audit rules
 #
 # Suppressed warnings (audited 2026-02-03):
 #   pip-audit/bandit: exit code suppressed (|| true) because these are
@@ -60,7 +60,7 @@ jobs:
 
       - name: Upload SARIF results
         uses: github/codeql-action/upload-sarif@v3
-        if: always()
+        if: always() && hashFiles('bandit-results.sarif') != ''
         with:
           sarif_file: bandit-results.sarif
           category: bandit
@@ -172,7 +172,7 @@ jobs:
 
       - name: Upload Semgrep SARIF
         uses: github/codeql-action/upload-sarif@v3
-        if: always()
+        if: always() && hashFiles('semgrep-results.sarif') != ''
         with:
           sarif_file: semgrep-results.sarif
           category: semgrep

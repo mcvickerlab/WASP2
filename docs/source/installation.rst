@@ -46,8 +46,8 @@ Development Installation
 
 .. code-block:: bash
 
-   git clone https://github.com/Jaureguy760/WASP2-exp
-   cd WASP2-exp
+   git clone https://github.com/Jaureguy760/WASP2-final.git
+   cd WASP2-final
    pip install -e ".[dev]"
 
 Conda Installation
@@ -69,18 +69,18 @@ bioinformatics tools is challenging.
 
 .. code-block:: bash
 
-   docker pull ghcr.io/jaureguy760/wasp2:latest
+   docker pull ghcr.io/jaureguy760/wasp2-final:latest
 
 **Run WASP2 commands:**
 
 .. code-block:: bash
 
    # Run counting
-   docker run -v /path/to/data:/data ghcr.io/jaureguy760/wasp2:latest \
+   docker run -v /path/to/data:/data ghcr.io/jaureguy760/wasp2-final:latest \
        wasp2-count count-variants /data/sample.bam /data/variants.vcf
 
    # Interactive shell
-   docker run -it -v /path/to/data:/data ghcr.io/jaureguy760/wasp2:latest bash
+   docker run -it -v /path/to/data:/data ghcr.io/jaureguy760/wasp2-final:latest bash
 
 **Build locally (optional):**
 
@@ -101,7 +101,7 @@ For HPC environments that don't support Docker, use Singularity/Apptainer:
 .. code-block:: bash
 
    # Pull from GitHub Container Registry
-   singularity pull wasp2.sif docker://ghcr.io/jaureguy760/wasp2:latest
+   singularity pull wasp2.sif docker://ghcr.io/jaureguy760/wasp2-final:latest
 
    # Run WASP2 commands
    singularity exec wasp2.sif wasp2-count --help
