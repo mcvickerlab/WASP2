@@ -34,7 +34,7 @@ From: jaureguy760/wasp2:1.3.0
 
 %environment
     export LC_ALL=C
-    export PATH="/usr/local/bin:$PATH"
+    export PATH="/app/.venv/bin:/usr/local/bin:$PATH"
 
 %runscript
     exec "$@"

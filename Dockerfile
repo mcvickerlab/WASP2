@@ -7,7 +7,7 @@
 FROM rust:1.87-bookworm AS rust-builder
 
 # Install build dependencies
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-dev \
     python3-pip \
     libclang-dev \
@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install maturin
-RUN pip3 install --break-system-packages maturin>=1.4
+RUN pip3 install --break-system-packages --no-cache-dir maturin>=1.4
 
 # Copy source files needed for maturin build
 WORKDIR /build
@@ -90,6 +90,10 @@ RUN groupadd -g 1000 wasp2 && \
 
 # Switch to non-root user
 USER wasp2
+
+# Prevent Python from writing bytecode and ensure output is unbuffered
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 # Set working directory for Nextflow
 WORKDIR /data
