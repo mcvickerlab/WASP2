@@ -3,24 +3,24 @@
 # Security scans are informational - failures logged but don't block PRs
 # Exception: gitleaks (secret detection) will fail the build if secrets found
 #
-# Suppressed warnings (audited 2026-02-02):
+# Suppressed warnings (audited 2026-02-02, updated per #201):
 #   pip-audit/bandit: exit code suppressed (|| true) because these are
 #     informational scans. Findings are reviewed manually, not gated.
 #   cargo-audit: exit code suppressed (|| true). Known informational warnings:
 #     - RUSTSEC-2025-0058 (custom_derive unmaintained) - transitive dep via rust-htslib
-#     - RUSTSEC-2024-0436 (paste unmaintained) - transitive dep via rv, argmin
+#     - RUSTSEC-2024-0436 (paste unmaintained) - transitive dep via rv
 #     - RUSTSEC-2026-0002 (lru unsound IterMut) - transitive dep via rv; we
 #       don't call IterMut on the LRU cache
 #   Real vulnerability tracked:
-#     - RUSTSEC-2025-0020 (pyo3 buffer overflow) - fix via dependabot PR #217 (pending)
+#     - RUSTSEC-2025-0020 (pyo3 — risk of buffer overflow in PyString::from_object) - fix via PR #217
 
 name: Security
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
-    branches: [main]
+    branches: [main, dev]
   schedule:
     # Run weekly security scan on Monday at 5am UTC
     - cron: '0 5 * * 1'
@@ -90,10 +90,15 @@ jobs:
 
       - name: Install cargo-audit
         working-directory: .
-        run: cargo install cargo-audit --quiet 2>/dev/null || true
+        run: |
+          cargo install cargo-audit --quiet || echo "::warning::cargo-audit install failed"
 
       - name: Run cargo audit
         run: |
+          if ! command -v cargo-audit &>/dev/null; then
+            echo "::warning::cargo-audit not available, skipping audit"
+            exit 0
+          fi
           rm -f ~/.cargo/advisory-db.lock 2>/dev/null || true
           cargo audit || true
 
@@ -110,15 +115,21 @@ jobs:
           fetch-depth: 0
 
       - name: Install gitleaks
+        env:
+          GITLEAKS_VERSION: "8.24.0"
         run: |
-          if ! command -v gitleaks &> /dev/null; then
-            # Gitleaks v8.18.4 - review for updates quarterly
-            curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_darwin_arm64.tar.gz | tar xz
+          set -o pipefail
+          export PATH="$HOME/.local/bin:$PATH"
+          CURRENT="$(gitleaks version 2>/dev/null || echo none)"
+          if [ "$CURRENT" != "v${GITLEAKS_VERSION}" ]; then
+            echo "Installing gitleaks v${GITLEAKS_VERSION} (current: ${CURRENT})"
+            curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_darwin_arm64.tar.gz" | tar xz
             mkdir -p ~/.local/bin
             mv gitleaks ~/.local/bin/
+            echo "Installed: $(~/.local/bin/gitleaks version)"
           fi
 
       - name: Run Gitleaks
         run: |
           export PATH="$HOME/.local/bin:$PATH"
-          gitleaks detect --source . --verbose --redact
+          gitleaks detect --source . --config .gitleaks.toml --verbose --redact
