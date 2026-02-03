@@ -23,6 +23,12 @@
 
 WASP2 provides high-performance tools for allele-specific analysis of genomic data, correcting mapping biases and detecting allelic imbalance in bulk and single-cell experiments.
 
+## Authors
+
+- **Aaron Ho** — Creator of WASP2; wrote the original Python implementation
+- **Jeff Jaureguy** — Developer and maintainer; Rust extension, CI/CD, packaging
+- **[McVicker Lab](https://mcvicker.salk.edu/)**, Salk Institute for Biological Studies
+
 ## Features
 
 - **Allele-specific counting** - Count reads at heterozygous variants in RNA-seq and ATAC-seq data
