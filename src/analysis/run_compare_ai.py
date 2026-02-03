@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 import anndata as ad
@@ -7,6 +8,8 @@ from anndata import AnnData
 from .as_analysis_sc import adata_count_qc
 from .compare_ai import get_compared_imbalance
 from .run_analysis_sc import AdataInputs, WaspAnalysisSC, process_adata_inputs
+
+logger = logging.getLogger(__name__)
 
 
 def run_ai_comparison(
@@ -79,7 +82,8 @@ def run_ai_comparison(
             compare_out_file, sep="\t", header=True, index=False
         )
 
-    print(
-        f"Performed {len(df_dict)} allelic imbalance comparisons between {len(compared_set)} groups!\n"
-        f"Results written to: {out_path}/{ai_files.prefix}_[GROUP1]_[GROUP2].tsv"
+    logger.info(
+        "Performed %d allelic imbalance comparisons between %d groups. "
+        "Results written to: %s/%s_[GROUP1]_[GROUP2].tsv",
+        len(df_dict), len(compared_set), out_path, ai_files.prefix,
     )

@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import NamedTuple
 
 import polars as pl
+
+logger = logging.getLogger(__name__)
 
 
 class ParsedGeneData(NamedTuple):
@@ -110,7 +113,9 @@ def parse_gene_file(
         elif "gene" in feature_list:
             feature = "gene"
         else:
-            print(f"exon, gene or transcript not found in feature list: \n{feature_list}")
+            logger.warning("exon, gene or transcript not found in feature list: %s", feature_list)
+
+    assert feature is not None, "Could not determine feature type from gene file"
 
     # feature filter
     df = df.filter(pl.col("feature") == feature)
@@ -126,7 +131,7 @@ def parse_gene_file(
         else:
             # TODO return an error
             # TODO maybe just use region or coords as a feature
-            print(f"No 'ID', '{feature}_id' or 'Name' attribute found. Please include ID")
+            logger.warning("No 'ID', '%s_id' or 'Name' attribute found. Please include ID", feature)
 
     # TODO: Figure out best way to handle parent attribute
 
@@ -145,6 +150,8 @@ def parse_gene_file(
             parent_attribute = attribute
 
     # TODO: Allow for count output without parent column
+    assert attribute is not None, "Could not determine attribute from gene file"
+    assert parent_attribute is not None, "Could not determine parent_attribute from gene file"
     if parent_attribute == attribute:
         parent_col = f"groupby_{attribute}"
     else:

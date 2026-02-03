@@ -45,7 +45,7 @@ def run_make_remap_reads_unified(
     compression_threads: int = 1,
     use_parallel: bool = True,
     compress_output: bool = True,
-) -> dict:
+) -> dict[str, Any]:
     """
     FAST unified single-pass pipeline for generating remap reads.
 
@@ -126,6 +126,7 @@ def run_make_remap_reads_unified(
     # Determine BED file path
     if bed_file is None:
         # Create BED from VCF
+        assert isinstance(samples, list) and variant_file is not None  # validated above
         bed_file = f"{out_dir}/{bam_prefix}_{samples[0]}_het_only.bed"
         print("Step 1/2: Converting variants to BED...")
         vcf_to_bed(
@@ -202,7 +203,8 @@ def run_make_remap_reads_unified(
     stats["bed_file"] = bed_file
     stats["bam_file"] = bam_file
 
-    return stats
+    result: dict[str, Any] = stats
+    return result
 
 
 # Decorator and Parser for read generation step
@@ -443,7 +445,7 @@ def run_wasp_filt(
     :type remap_keep_file: _type_, optional
     :param threads: Number of threads for BAM I/O, defaults to 1
     :type threads: int, optional
-    :param use_rust: Use Rust acceleration if available, defaults to True
+    :param use_rust: Deprecated; Rust is now always used. Kept for backward compatibility.
     :type use_rust: bool, optional
     :param same_locus_slop: Tolerance (bp) for same locus test, defaults to 0
     :type same_locus_slop: int, optional
@@ -458,7 +460,6 @@ def run_wasp_filt(
                 remapped_bam,
                 remap_keep_bam,
                 keep_read_file=remap_keep_file,
-                use_rust=use_rust,
                 threads=threads,
                 same_locus_slop=same_locus_slop,
             )
@@ -470,7 +471,6 @@ def run_wasp_filt(
             remapped_bam,
             remap_keep_bam,
             keep_read_file=remap_keep_file,
-            use_rust=use_rust,
             threads=threads,
             same_locus_slop=same_locus_slop,
         )

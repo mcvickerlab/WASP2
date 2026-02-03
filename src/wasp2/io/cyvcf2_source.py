@@ -477,7 +477,7 @@ if CYVCF2_AVAILABLE:
                 self.vcf.close()
 else:
     # Create dummy class if cyvcf2 not available (for documentation/type checking)
-    class CyVCF2Source:
+    class CyVCF2Source:  # type: ignore[no-redef]
         """Placeholder class when cyvcf2 is not installed."""
 
         def __init__(self, *args, **kwargs):

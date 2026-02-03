@@ -6,11 +6,14 @@ after allele swapping and merging with non-remapped reads.
 
 from __future__ import annotations
 
+import logging
 import subprocess
 import timeit
 
 # Rust acceleration (required; no fallback)
 from wasp2_rust import filter_bam_wasp
+
+logger = logging.getLogger(__name__)
 
 
 def filt_remapped_reads(
@@ -62,9 +65,9 @@ def merge_filt_bam(keep_bam: str, remapped_filt_bam: str, out_bam: str, threads:
         ["samtools", "merge", "-@", str(threads), "-f", "-o", out_bam, keep_bam, remapped_filt_bam],
         check=True,
     )
-    print(f"Merged BAM in {timeit.default_timer() - start_time:.2f} seconds")
+    logger.info("Merged BAM in %.2f seconds", timeit.default_timer() - start_time)
 
     # Index the merged BAM (no sort needed - inputs were already sorted)
     start_index = timeit.default_timer()
     subprocess.run(["samtools", "index", "-@", str(threads), out_bam], check=True)
-    print(f"Indexed BAM in {timeit.default_timer() - start_index:.2f} seconds")
+    logger.info("Indexed BAM in %.2f seconds", timeit.default_timer() - start_index)

@@ -73,32 +73,28 @@ class WaspCountFiles:
         self.bam_file = bam_file
         self.variant_file = variant_file
         self.region_file = region_file
-        self.samples = samples
         self.use_region_names = use_region_names
-        self.out_file = out_file
-        self.temp_loc = temp_loc
 
         # gtf and gff specific
         self.is_gene_file = False  # check if using gff3/gtf
         self.gtf_bed = None
 
         # Make sure samples turned into str list
-        if isinstance(self.samples, str):
+        if isinstance(samples, str):
             # Check if sample file or comma delim string
-            if Path(self.samples).is_file():
-                with open(self.samples) as sample_file:
+            if Path(samples).is_file():
+                with open(samples) as sample_file:
                     self.samples = [l.strip() for l in sample_file]
-
             else:
-                self.samples = [s.strip() for s in self.samples.split(",")]
+                self.samples = [s.strip() for s in samples.split(",")]
+        else:
+            self.samples = samples
 
         # parse output?
-        if self.out_file is None:
-            self.out_file = str(Path.cwd() / "counts.tsv")
+        self.out_file: str = out_file if out_file is not None else str(Path.cwd() / "counts.tsv")
 
         # Failsafe if decorator doesnt create temp_loc
-        if self.temp_loc is None:
-            self.temp_loc = str(Path.cwd())
+        self.temp_loc: str = temp_loc if temp_loc is not None else str(Path.cwd())
 
         # Parse variant file prefix (handle VCF, BCF, PGEN)
         variant_name = Path(self.variant_file).name

@@ -72,8 +72,8 @@ def variants_to_bed(
         )
 
     # Use VariantSource for all formats
-    with VariantSource.open(variant_file) as source:
-        source.to_bed(
+    with VariantSource.open(str(variant_file)) as source:
+        source.to_bed(  # type: ignore[call-arg]  # subclass kwargs
             out_bed,
             samples=samples,
             het_only=het_only if samples else False,

@@ -5,11 +5,14 @@ This module provides core data structures and an abstract base class for reading
 variant data from different file formats (VCF, PGEN).
 """
 
+import logging
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 class Genotype(Enum):
@@ -255,7 +258,9 @@ class VariantSource(ABC):
 
         # Instantiate the appropriate handler
         handler_class = cls._registry[format_ext]
-        return handler_class(path, **kwargs)
+        instance = handler_class(path, **kwargs)
+        assert isinstance(instance, VariantSource)
+        return instance
 
     @property
     @abstractmethod
@@ -414,6 +419,7 @@ class VariantSource(ABC):
             _ = self.sample_count
             return True
         except Exception:
+            logger.warning("Variant source validation failed", exc_info=True)
             return False
 
     def close(self):  # noqa: B027

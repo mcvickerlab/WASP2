@@ -225,10 +225,10 @@ class PGENSource(VariantSource):
         # Try common sample ID columns
         for col in ["IID", "ID", "SAMPLE"]:
             if col in self._psam_df.columns:
-                return self._psam_df[col].tolist()
+                return list(self._psam_df[col].tolist())
 
         # Fallback to first column
-        return self._psam_df.iloc[:, 0].tolist()
+        return list(self._psam_df.iloc[:, 0].tolist())
 
     @property
     def variant_count(self) -> int:
@@ -237,7 +237,7 @@ class PGENSource(VariantSource):
         Returns:
             Number of variants in PGEN file
         """
-        return self._reader.get_variant_ct()
+        return int(self._reader.get_variant_ct())
 
     @property
     def sample_count(self) -> int:
@@ -246,7 +246,7 @@ class PGENSource(VariantSource):
         Returns:
             Number of samples in PGEN file
         """
-        return self._reader.get_raw_sample_ct()
+        return int(self._reader.get_raw_sample_ct())
 
     def iter_variants(
         self, samples: list[str] | None = None, het_only: bool = False
@@ -456,7 +456,7 @@ class PGENSource(VariantSource):
         """
         return self._normalize_chrom_name(str(chrom))
 
-    def _parse_alleles(self, allele_buf: np.ndarray, variant_row) -> tuple:
+    def _parse_alleles(self, allele_buf: np.ndarray, variant_row) -> tuple[Genotype, str | None, str | None]:
         """Convert allele buffer to Genotype and allele sequences.
 
         Args:

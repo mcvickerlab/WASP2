@@ -6,6 +6,7 @@ by variant overlap, and creating intersection files for the WASP pipeline.
 
 from __future__ import annotations
 
+import logging
 import os
 import subprocess
 from pathlib import Path
@@ -21,6 +22,8 @@ from wasp2.io import variants_to_bed as _variants_to_bed
 from wasp2_rust import filter_bam_by_variants_py as _rust_filter_bam
 from wasp2_rust import intersect_bam_bed as _rust_intersect
 from wasp2_rust import intersect_bam_bed_multi as _rust_intersect_multi
+
+logger = logging.getLogger(__name__)
 
 
 def vcf_to_bed(
@@ -87,17 +90,18 @@ def process_bam(
     Returns:
         Path to remap BAM file
     """
-    print("Using Rust acceleration for BAM filtering...")
+    logger.info("Using Rust acceleration for BAM filtering...")
     remap_count, keep_count, unique_names = _rust_filter_bam(
         bam_file, vcf_bed, remap_bam, keep_bam, is_paired, threads
     )
-    print(
-        f"✅ Rust filter: {remap_count:,} remap, {keep_count:,} keep, {unique_names:,} unique names"
+    logger.info(
+        "Rust filter: %s remap, %s keep, %s unique names",
+        f"{remap_count:,}", f"{keep_count:,}", f"{unique_names:,}",
     )
 
     # Write read names file for compatibility
     with pysam.AlignmentFile(remap_bam, "rb") as bam, open(remap_reads, "w") as f:
-        names = {read.query_name for read in bam.fetch(until_eof=True)}
+        names = {read.query_name for read in bam.fetch(until_eof=True) if read.query_name is not None}
         f.write("\n".join(names))
 
     # Sort the remap BAM (Rust outputs unsorted)
@@ -127,12 +131,12 @@ def intersect_reads(remap_bam: str, vcf_bed: str, out_bed: str, num_samples: int
         Path to output BED file
     """
     if num_samples == 1:
-        print("Using Rust acceleration for intersection...")
+        logger.info("Using Rust acceleration for intersection...")
         count = _rust_intersect(remap_bam, vcf_bed, out_bed)
     else:
-        print(f"Using Rust multi-sample intersection ({num_samples} samples)...")
+        logger.info("Using Rust multi-sample intersection (%d samples)...", num_samples)
         count = _rust_intersect_multi(remap_bam, vcf_bed, out_bed, num_samples)
-    print(f"✅ Rust intersect: {count} overlaps found")
+    logger.info("Rust intersect: %d overlaps found", count)
     return out_bed
 
 

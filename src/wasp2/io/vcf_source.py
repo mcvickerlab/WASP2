@@ -9,6 +9,7 @@ When available, uses Rust acceleration (wasp2_rust) for VCF → BED conversion
 which is 5-6x faster than bcftools subprocess.
 """
 
+import logging
 import os
 import subprocess
 from collections.abc import Iterator
@@ -30,6 +31,8 @@ try:
     RUST_VCF_AVAILABLE = True
 except ImportError:
     RUST_VCF_AVAILABLE = False
+
+logger = logging.getLogger(__name__)
 
 
 @VariantSource.register("vcf", "vcf.gz", "vcf.bgz", "bcf", "bcf.gz")
@@ -181,9 +184,11 @@ class VCFSource(VariantSource):
                 continue
 
             # Create Variant object (use first ALT if multi-allelic)
-            alt = record.alts[0] if record.alts else record.ref
+            ref = record.ref
+            assert ref is not None
+            alt = record.alts[0] if record.alts else ref
             variant = Variant(
-                chrom=record.chrom, pos=record.pos, ref=record.ref, alt=alt, id=record.id
+                chrom=record.chrom, pos=record.pos, ref=ref, alt=alt, id=record.id
             )
 
             # Get allele sequences
@@ -283,9 +288,11 @@ class VCFSource(VariantSource):
                 genotype = self._parse_gt(gt)
 
             # Create Variant (use first ALT)
-            alt = record.alts[0] if record.alts else record.ref
+            ref = record.ref
+            assert ref is not None
+            alt = record.alts[0] if record.alts else ref
             variant = Variant(
-                chrom=record.chrom, pos=record.pos, ref=record.ref, alt=alt, id=record.id
+                chrom=record.chrom, pos=record.pos, ref=ref, alt=alt, id=record.id
             )
 
             allele1, allele2 = self._get_alleles(record, gt)
@@ -349,7 +356,7 @@ class VCFSource(VariantSource):
                 )
                 return output
             except Exception as e:
-                print(f"Rust vcf_to_bed failed: {e}, falling back to bcftools")
+                logger.warning("Rust vcf_to_bed failed: %s, falling back to bcftools", e)
 
         # Fallback to bcftools subprocess
         return self._to_bed_bcftools(

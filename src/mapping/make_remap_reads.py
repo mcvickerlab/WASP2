@@ -115,15 +115,15 @@ def _write_remap_bam_rust(
         # Concatenate all R1 files
         r1_files = sorted(Path(tmpdir).glob("*_r1.fq"))
         with open(r1_out, "wb") as outfile:
-            for f in r1_files:
-                with open(f, "rb") as infile:
+            for fq_path in r1_files:
+                with open(fq_path, "rb") as infile:
                     shutil.copyfileobj(infile, outfile)
 
         # Concatenate all R2 files
         r2_files = sorted(Path(tmpdir).glob("*_r2.fq"))
         with open(r2_out, "wb") as outfile:
-            for f in r2_files:
-                with open(f, "rb") as infile:
+            for fq_path in r2_files:
+                with open(fq_path, "rb") as infile:
                     shutil.copyfileobj(infile, outfile)
 
         success(f"Rust remapper: {total_pairs:,} pairs → {total_haps:,} haplotypes")
@@ -188,15 +188,15 @@ def _write_remap_bam_rust_multi(
         # Concatenate all R1 files
         r1_files = sorted(Path(tmpdir).glob("*_r1.fq"))
         with open(r1_out, "wb") as outfile:
-            for f in r1_files:
-                with open(f, "rb") as infile:
+            for fq_path in r1_files:
+                with open(fq_path, "rb") as infile:
                     shutil.copyfileobj(infile, outfile)
 
         # Concatenate all R2 files
         r2_files = sorted(Path(tmpdir).glob("*_r2.fq"))
         with open(r2_out, "wb") as outfile:
-            for f in r2_files:
-                with open(f, "rb") as infile:
+            for fq_path in r2_files:
+                with open(fq_path, "rb") as infile:
                     shutil.copyfileobj(infile, outfile)
 
         success(f"Rust multi-sample remapper: {total_pairs:,} pairs → {total_haps:,} haplotypes")
