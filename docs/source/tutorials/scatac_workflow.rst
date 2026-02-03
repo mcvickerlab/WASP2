@@ -7,8 +7,6 @@ This tutorial provides a workflow for detecting allelic imbalance in single-cell
 
    **Estimated Time**: ~30 minutes
 
-   Interactive notebook available at ``tutorials/single_cell_workflow.ipynb``
-
 Overview
 --------
 

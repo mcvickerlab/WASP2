@@ -14,7 +14,7 @@ from scipy.optimize import OptimizeResult, minimize_scalar
 from scipy.stats import betabinom, chi2, false_discovery_control
 
 # Local imports
-from .as_analysis import opt_phased_new, opt_prob, opt_unphased_dp
+from .as_analysis import clamp_rho, opt_phased_new, opt_prob, opt_unphased_dp
 
 logger = logging.getLogger(__name__)
 
@@ -125,15 +125,28 @@ def get_compared_imbalance(
     n_counts: NDArray[np.uint16] = ref_counts + alt_counts
 
     # Calculate dispersion across dataset
-    opt_disp: Callable[[float, NDArray[np.uint16], NDArray[np.uint16]], float] = (
-        lambda rho, ref_data, n_data: -np.sum(
-            betabinom.logpmf(ref_data, n_data, (0.5 * (1 - rho) / rho), (0.5 * (1 - rho) / rho))
+    def opt_disp(
+        rho: float, ref_data: NDArray[np.uint16], n_data: NDArray[np.uint16]
+    ) -> float:
+        rho_safe = float(clamp_rho(rho))  # Prevent division by zero (Issue #228)
+        return float(
+            -np.sum(
+                betabinom.logpmf(
+                    ref_data,
+                    n_data,
+                    (0.5 * (1 - rho_safe) / rho_safe),
+                    (0.5 * (1 - rho_safe) / rho_safe),
+                )
+            )
+        )
+
+    disp: float = float(
+        clamp_rho(
+            minimize_scalar(
+                opt_disp, args=(ref_counts, n_counts), method="bounded", bounds=(0, 1)
+            )["x"]
         )
     )
-
-    disp: float = minimize_scalar(
-        opt_disp, args=(ref_counts, n_counts), method="bounded", bounds=(0, 1)
-    )["x"]
 
     if phased:
         gt_array: NDArray[np.uint8] | None = (
@@ -427,15 +440,31 @@ def get_compared_imbalance_diff_snps(
     ref_counts_filt, n_counts_filt = ref_counts[min_idx], n_counts[min_idx]
 
     # Calculate dispersion across dataset
-    opt_disp: Callable[[float, NDArray[np.uint16], NDArray[np.uint16]], float] = (
-        lambda rho, ref_data, n_data: -np.sum(
-            betabinom.logpmf(ref_data, n_data, (0.5 * (1 - rho) / rho), (0.5 * (1 - rho) / rho))
+    def opt_disp_filt(
+        rho: float, ref_data: NDArray[np.uint16], n_data: NDArray[np.uint16]
+    ) -> float:
+        rho_safe = float(clamp_rho(rho))  # Prevent division by zero (Issue #228)
+        return float(
+            -np.sum(
+                betabinom.logpmf(
+                    ref_data,
+                    n_data,
+                    (0.5 * (1 - rho_safe) / rho_safe),
+                    (0.5 * (1 - rho_safe) / rho_safe),
+                )
+            )
+        )
+
+    disp: float = float(
+        clamp_rho(
+            minimize_scalar(
+                opt_disp_filt,
+                args=(ref_counts_filt, n_counts_filt),
+                method="bounded",
+                bounds=(0, 1),
+            )["x"]
         )
     )
-
-    disp: float = minimize_scalar(
-        opt_disp, args=(ref_counts_filt, n_counts_filt), method="bounded", bounds=(0, 1)
-    )["x"]
 
     # process counts on a per group basis to avoid recalculating
     group_dict: dict[str, Any] = {}

@@ -2,6 +2,7 @@
 
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
+use pyo3::types::PyModule;
 
 // Modules
 mod analysis;
@@ -44,7 +45,7 @@ use mapping_filter::filter_bam_wasp;
 /// print(f"Parsed {len(variants)} reads")
 /// ```
 #[pyfunction]
-fn parse_intersect_bed(py: Python, intersect_bed: &str) -> PyResult<PyObject> {
+fn parse_intersect_bed(py: Python, intersect_bed: &str) -> PyResult<Py<PyAny>> {
     use pyo3::types::{PyDict, PyList};
 
     // Call Rust parser
@@ -73,7 +74,7 @@ fn parse_intersect_bed(py: Python, intersect_bed: &str) -> PyResult<PyObject> {
         py_dict.set_item(pyo3::types::PyBytes::new(py, read_name), py_list)?;
     }
 
-    Ok(py_dict.into())
+    Ok(py_dict.unbind().into_any())
 }
 
 /// Remap reads for a single chromosome (Rust implementation)
@@ -259,7 +260,7 @@ fn analyze_imbalance(
     min_count: u32,
     pseudocount: u32,
     method: &str,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     use pyo3::types::{PyDict, PyList};
     use std::fs::File;
     use std::io::{BufRead, BufReader};
@@ -351,7 +352,7 @@ fn analyze_imbalance(
         py_list.append(py_dict)?;
     }
 
-    Ok(py_list.into())
+    Ok(py_list.unbind().into_any())
 }
 
 // ============================================================================
@@ -474,7 +475,7 @@ fn filter_bam_by_variants_py(
 // NOTE: Update this function when adding fields to UnifiedStats.
 // ============================================================================
 
-fn stats_to_pydict(py: Python, stats: &unified_pipeline::UnifiedStats) -> PyResult<PyObject> {
+fn stats_to_pydict(py: Python, stats: &unified_pipeline::UnifiedStats) -> PyResult<Py<PyAny>> {
     use pyo3::types::PyDict;
     let d = PyDict::new(py);
     d.set_item("total_reads", stats.total_reads)?;
@@ -495,7 +496,7 @@ fn stats_to_pydict(py: Python, stats: &unified_pipeline::UnifiedStats) -> PyResu
     d.set_item("pair_process_ms", stats.pair_process_ms)?;
     d.set_item("send_ms", stats.send_ms)?;
     d.set_item("writer_thread_ms", stats.writer_thread_ms)?;
-    Ok(d.into())
+    Ok(d.unbind().into_any())
 }
 
 // ============================================================================
@@ -557,7 +558,7 @@ fn unified_make_reads_py(
     keep_no_flip_names_path: Option<String>,
     remap_names_path: Option<String>,
     pair_buffer_reserve: usize,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let config = unified_pipeline::UnifiedConfig {
         read_threads: threads,
         max_seqs,
@@ -632,7 +633,7 @@ fn unified_make_reads_parallel_py(
     keep_no_flip_names_path: Option<String>,
     remap_names_path: Option<String>,
     pair_buffer_reserve: usize,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let config = unified_pipeline::UnifiedConfig {
         read_threads: threads,
         max_seqs,
@@ -744,7 +745,7 @@ fn parse_intersect_bed_multi(
     py: Python,
     intersect_bed: &str,
     num_samples: usize,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     use pyo3::types::{PyDict, PyList};
 
     let variants = multi_sample::parse_intersect_bed_multi(intersect_bed, num_samples)
@@ -770,8 +771,8 @@ fn parse_intersect_bed_multi(
             // Convert sample_alleles to list of tuples
             let alleles_list = PyList::empty(py);
             for (h1, h2) in &span.sample_alleles {
-                let tuple = pyo3::types::PyTuple::new(py, &[h1.as_str(), h2.as_str()]);
-                alleles_list.append(tuple)?;
+                let tuple = pyo3::types::PyTuple::new(py, &[h1.as_str(), h2.as_str()])?;
+                alleles_list.append(&tuple)?;
             }
             span_dict.set_item("sample_alleles", alleles_list)?;
 
@@ -781,7 +782,7 @@ fn parse_intersect_bed_multi(
         py_dict.set_item(pyo3::types::PyBytes::new(py, read_name), py_list)?;
     }
 
-    Ok(py_dict.into())
+    Ok(py_dict.unbind().into_any())
 }
 
 /// Remap reads for a single chromosome - multi-sample version (Rust implementation)
@@ -866,7 +867,7 @@ fn sum_as_string(a: usize, b: usize) -> PyResult<String> {
 /// - parse_intersect_bed_multi: Multi-sample intersection parsing (IMPLEMENTED)
 /// - analyze_imbalance: Fast beta-binomial analysis for AI detection (IMPLEMENTED)
 #[pymodule]
-fn wasp2_rust(_py: Python, m: &PyModule) -> PyResult<()> {
+fn wasp2_rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Legacy test function
     m.add_function(wrap_pyfunction!(sum_as_string, m)?)?;
 

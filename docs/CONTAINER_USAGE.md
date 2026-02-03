@@ -8,8 +8,8 @@ WASP2 images are available from:
 
 | Registry | Image | Pull Command |
 |----------|-------|--------------|
-| **DockerHub** | `jaureguy760/wasp2` | `docker pull jaureguy760/wasp2:latest` |
-| **GitHub Container Registry** | `ghcr.io/jaureguy760/wasp2` | `docker pull ghcr.io/jaureguy760/wasp2:latest` |
+| **DockerHub** | `jaureguy760/wasp2-final` | `docker pull jaureguy760/wasp2-final:latest` |
+| **GitHub Container Registry** | `ghcr.io/jaureguy760/wasp2-final` | `docker pull ghcr.io/jaureguy760/wasp2-final:latest` |
 
 ### Available Tags
 
@@ -24,22 +24,22 @@ WASP2 images are available from:
 
 ```bash
 # Pull the image
-docker pull jaureguy760/wasp2:latest
+docker pull jaureguy760/wasp2-final:latest
 
 # Run WASP2 commands
-docker run --rm jaureguy760/wasp2 wasp2-count --help
-docker run --rm jaureguy760/wasp2 wasp2-map --help
-docker run --rm jaureguy760/wasp2 wasp2-analyze --help
+docker run --rm jaureguy760/wasp2-final wasp2-count --help
+docker run --rm jaureguy760/wasp2-final wasp2-map --help
+docker run --rm jaureguy760/wasp2-final wasp2-analyze --help
 
 # Process files (mount local directory)
-docker run --rm -v $(pwd):/data jaureguy760/wasp2 \
+docker run --rm -v $(pwd):/data jaureguy760/wasp2-final \
     wasp2-count /data/sample.bam /data/variants.vcf.gz -o /data/counts.tsv
 ```
 
 ### Interactive Shell
 
 ```bash
-docker run -it --rm -v $(pwd):/data jaureguy760/wasp2 /bin/bash
+docker run -it --rm -v $(pwd):/data jaureguy760/wasp2-final /bin/bash
 ```
 
 ## Singularity/Apptainer Usage (HPC)
@@ -48,10 +48,10 @@ docker run -it --rm -v $(pwd):/data jaureguy760/wasp2 /bin/bash
 
 ```bash
 # Pull and convert to SIF
-singularity pull wasp2.sif docker://jaureguy760/wasp2:latest
+singularity pull wasp2.sif docker://jaureguy760/wasp2-final:latest
 
 # Or from GHCR
-singularity pull wasp2.sif docker://ghcr.io/jaureguy760/wasp2:latest
+singularity pull wasp2.sif docker://ghcr.io/jaureguy760/wasp2-final:latest
 ```
 
 ### Build from Definition File
@@ -127,7 +127,7 @@ profiles {
 
 process {
     withLabel: 'wasp2' {
-        container = 'jaureguy760/wasp2:latest'
+        container = 'jaureguy760/wasp2-final:latest'
     }
 }
 ```
@@ -171,8 +171,8 @@ docker buildx create --name wasp2builder --use
 docker buildx build \
     --platform linux/amd64 \
     --build-arg VERSION=1.3.0 \
-    -t jaureguy760/wasp2:1.3.0 \
-    -t jaureguy760/wasp2:latest \
+    -t jaureguy760/wasp2-final:1.3.0 \
+    -t jaureguy760/wasp2-final:latest \
     --push .
 ```
 
@@ -220,7 +220,7 @@ Each tool has subcommands for different analysis modes:
 
 ```bash
 # Run as current user
-docker run --rm -u $(id -u):$(id -g) -v $(pwd):/data jaureguy760/wasp2 ...
+docker run --rm -u $(id -u):$(id -g) -v $(pwd):/data jaureguy760/wasp2-final ...
 ```
 
 ### Cache Issues (Singularity)
@@ -237,8 +237,8 @@ export SINGULARITY_CACHEDIR=/scratch/singularity_cache
 
 ```bash
 # Docker
-docker run --rm jaureguy760/wasp2 wasp2-count --version
-docker run --rm jaureguy760/wasp2 python -c "import wasp2_rust; print('Rust extension OK')"
+docker run --rm jaureguy760/wasp2-final wasp2-count --version
+docker run --rm jaureguy760/wasp2-final python -c "import wasp2_rust; print('Rust extension OK')"
 
 # Singularity
 singularity exec wasp2.sif wasp2-count --version
