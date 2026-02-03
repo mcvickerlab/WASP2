@@ -140,6 +140,8 @@ markers = [
     "benchmark: performance benchmark tests",
     "requires_plink2: marks tests that require plink2",
     "requires_bcftools: marks tests that require bcftools",
+    "sanity: Sanity tests using real chr21 HG00731 data",
+    "slow_sanity: Slow sanity tests (>30 seconds)",
 ]
 
 [tool.mypy]
