@@ -14,6 +14,7 @@ permissions:
 jobs:
   check-trigger:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     if: github.actor != 'claude[bot]'
     outputs:
       should_run: ${{ steps.evaluate.outputs.should_run }}
