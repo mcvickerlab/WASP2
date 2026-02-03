@@ -1,0 +1,14 @@
+# CODEOWNERS - Require review for security-sensitive files
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# CI/CD workflows - require owner review for any workflow changes
+.github/workflows/ @Jaureguy760
+
+# Dependabot configuration
+.github/dependabot.yml @Jaureguy760
+
+# Security configuration
+.gitleaks.toml @Jaureguy760
+
+# Dockerfile and container configs
+Dockerfile @Jaureguy760

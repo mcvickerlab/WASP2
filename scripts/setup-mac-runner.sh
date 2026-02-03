@@ -4,7 +4,7 @@
 # Sets up a self-hosted GitHub Actions runner on macOS with Docker support
 # ==============================================================================
 
-set -e
+set -eo pipefail
 
 # Configuration
 RUNNER_DIR="${HOME}/actions-runner"
@@ -103,14 +103,43 @@ cd "$RUNNER_DIR"
 
 # Get latest runner version
 RUNNER_VERSION=$(curl -s https://api.github.com/repos/actions/runner/releases/latest | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/')
+if [[ -z "$RUNNER_VERSION" ]]; then
+    echo "  ❌ Failed to determine latest runner version from GitHub API."
+    echo "     This may be caused by network issues or GitHub API rate limiting."
+    exit 1
+fi
 echo "  Latest runner version: v${RUNNER_VERSION}"
 
 # Download if not present or outdated
 if [[ ! -f "$RUNNER_DIR/run.sh" ]]; then
     echo "  ⏳ Downloading runner..."
-    curl -o actions-runner.tar.gz -L "https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-osx-arm64-${RUNNER_VERSION}.tar.gz"
-    tar xzf actions-runner.tar.gz
-    rm actions-runner.tar.gz
+    RUNNER_ARCHIVE="actions-runner-osx-arm64-${RUNNER_VERSION}.tar.gz"
+    curl -fSo "$RUNNER_ARCHIVE" -L "https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/${RUNNER_ARCHIVE}"
+
+    # Verify SHA256 checksum (supply chain protection)
+    # GitHub embeds checksums in release notes body; extract via API
+    echo "  ⏳ Verifying checksum..."
+    EXPECTED_HASH=$(curl -sL https://api.github.com/repos/actions/runner/releases/latest \
+        | grep -A1 "$RUNNER_ARCHIVE" \
+        | grep -oE '[a-f0-9]{64}' \
+        | head -1)
+    if [[ -z "$EXPECTED_HASH" ]] || [[ ! "$EXPECTED_HASH" =~ ^[a-f0-9]{64}$ ]]; then
+        echo "  ⚠️  Could not retrieve checksum from GitHub release notes."
+        echo "     Skipping verification (manual verification recommended)."
+    else
+        ACTUAL_HASH=$(shasum -a 256 "$RUNNER_ARCHIVE" | awk '{print $1}')
+        if [[ "$EXPECTED_HASH" != "$ACTUAL_HASH" ]]; then
+            echo "  ❌ Checksum verification failed!"
+            echo "     Expected: $EXPECTED_HASH"
+            echo "     Actual:   $ACTUAL_HASH"
+            rm -f "$RUNNER_ARCHIVE"
+            exit 1
+        fi
+        echo "  ✅ Checksum verified"
+    fi
+
+    tar xzf "$RUNNER_ARCHIVE"
+    rm "$RUNNER_ARCHIVE"
     echo "  ✅ Runner downloaded"
 else
     echo "  ✅ Runner already exists"

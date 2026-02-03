@@ -8,6 +8,10 @@ on:
 permissions:
   issues: write
 
+concurrency:
+  group: bot-status
+  cancel-in-progress: true
+
 jobs:
   update-dashboard:
     runs-on: ubuntu-latest
