@@ -154,11 +154,12 @@ jobs:
         # Use --prefer-binary to avoid building llvmlite from source (requires LLVM)
         run: pip install -e ".[dev]" --no-build-isolation --prefer-binary --quiet || pip install -e "." --prefer-binary --quiet
 
-      - name: Run tests
+      - name: Run tests with coverage
         run: |
           pytest tests/ -v --tb=short -x \
+            --cov=src --cov-report=term-missing --cov-fail-under=30 \
             --ignore=tests/test_benchmark*.py \
-            --ignore=tests/benchmarks/ || true
+            --ignore=tests/benchmarks/
 
       - name: Verify CLI tools
         run: |

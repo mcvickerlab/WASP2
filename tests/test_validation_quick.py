@@ -46,7 +46,7 @@ class TestQuickValidation:
         """Run the Rust vs Python parity tests."""
         test_file = ROOT / "tests" / "test_rust_python_match.py"
         if not test_file.exists():
-            pytest.skip("test_rust_python_match.py not found (removed in v1.2 refactor)")
+            pytest.skip("test_rust_python_match.py not found")
 
         result = subprocess.run(
             [sys.executable, "-m", "pytest", str(test_file), "-v", "--tb=short"],
@@ -54,10 +54,6 @@ class TestQuickValidation:
             text=True,
             cwd=ROOT,
         )
-
-        # returncode 5 means no tests collected (file is a script, not pytest tests)
-        if result.returncode == 5:
-            pytest.skip("test_rust_python_match.py has no pytest tests (script only)")
 
         if result.returncode != 0:
             print(result.stdout)
