@@ -70,15 +70,21 @@ jobs:
           key: cargo-target-benchmark-${{ runner.os }}-${{ hashFiles('rust/Cargo.lock', 'rust/src/**/*.rs') }}
           restore-keys: cargo-target-benchmark-${{ runner.os }}-
 
-      - name: Install dependencies
+      - name: Set up virtual environment
         run: |
-          pip install maturin pytest pytest-benchmark memory-profiler matplotlib seaborn --quiet
+          python -m venv .venv
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          .venv/bin/python --version
+          .venv/bin/pip --version
+
+      - name: Install dependencies
+        run: pip install maturin pytest pytest-benchmark memory-profiler matplotlib seaborn --quiet
 
       - name: Build Rust extension
-        run: |
-          PYTHON_PATH=$(which python)
-          maturin build --release -m rust/Cargo.toml -i "$PYTHON_PATH"
-          pip install rust/target/wheels/*.whl --force-reinstall --prefer-binary --quiet
+        run: cd rust && maturin develop --release
+
+      - name: Verify Rust extension
+        run: python -c "import wasp2_rust; print(f'wasp2_rust loaded from {wasp2_rust.__file__}')"
 
       - name: Install package
         run: pip install -e ".[dev]" --no-build-isolation --prefer-binary --quiet || pip install -e "." --prefer-binary --quiet
