@@ -135,21 +135,6 @@ Cross-reference ASE results with eQTL databases (e.g., GTEx):
        (integrated['effect_size'] > 0) != (integrated['slope'] > 0)
    )
 
-Interactive Notebook
---------------------
-
-For a complete, executable version of this tutorial with visualizations, see the
-Jupyter notebook:
-
-:download:`tutorials/rna_seq_workflow.ipynb <../../../tutorials/rna_seq_workflow.ipynb>`
-
-The notebook includes:
-
-* Example data generation for testing
-* Volcano plots and allele distribution visualizations
-* Imprinting heatmaps
-* ASE vs eQTL correlation plots
-
 Key Concepts
 ------------
 
