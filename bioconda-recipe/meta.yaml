@@ -70,7 +70,7 @@ test:
     - python -c "import wasp2_rust; print('Rust extension OK')"
 
 about:
-  home: https://github.com/Jaureguy760/WASP2-exp
+  home: https://github.com/Jaureguy760/WASP2-final
   license: MIT
   license_family: MIT
   license_file: LICENSE
@@ -80,8 +80,8 @@ about:
     It provides functionality for variant counting, read remapping for bias
     correction, and statistical analysis of allelic imbalance. The package
     includes a Rust extension for accelerated BAM processing.
-  doc_url: https://Jaureguy760.github.io/WASP2-exp/
-  dev_url: https://github.com/Jaureguy760/WASP2-exp
+  doc_url: https://Jaureguy760.github.io/WASP2-final/
+  dev_url: https://github.com/Jaureguy760/WASP2-final
 
 extra:
   recipe-maintainers:

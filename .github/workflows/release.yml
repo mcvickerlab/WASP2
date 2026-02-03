@@ -54,7 +54,7 @@ jobs:
             yum install -y ${{ env.HTSLIB_DEPS }}
 
       - name: Upload wheels
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: wheels-linux-${{ matrix.target }}
           path: dist/*.whl
@@ -85,7 +85,7 @@ jobs:
             apk add --no-cache bzip2-dev xz-dev zlib-dev curl-dev openssl-dev clang-dev
 
       - name: Upload wheels
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: wheels-musllinux-${{ matrix.target }}
           path: dist/*.whl
@@ -115,7 +115,7 @@ jobs:
           sccache: true
 
       - name: Upload wheels
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: wheels-macos-${{ matrix.target }}
           path: dist/*.whl
@@ -137,7 +137,7 @@ jobs:
           args: --out dist -m rust/Cargo.toml
 
       - name: Upload sdist
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: wheels-sdist
           path: dist/*.tar.gz
