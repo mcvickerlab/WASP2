@@ -28,6 +28,9 @@ on:
   schedule:
     - cron: '0 6 * * 1'  # Monday at 6am UTC
 
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
@@ -36,6 +39,7 @@ jobs:
   benchmark:
     name: Run Benchmarks
     runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
+    timeout-minutes: 60
     defaults:
       run:
         shell: bash
@@ -45,17 +49,17 @@ jobs:
       COMMIT_SHA: ${{ github.sha }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
       - name: Cache pip packages
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
         with:
           path: ~/.cache/pip
           key: pip-benchmark-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
           restore-keys: pip-benchmark-${{ runner.os }}-
 
       - name: Cache Cargo registry
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
         with:
           path: |
             ~/.cargo/registry
@@ -64,7 +68,7 @@ jobs:
           restore-keys: cargo-benchmark-${{ runner.os }}-
 
       - name: Cache Rust target
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
         with:
           path: rust/target
           key: cargo-target-benchmark-${{ runner.os }}-${{ hashFiles('rust/Cargo.lock', 'rust/src/**/*.rs') }}
@@ -138,7 +142,7 @@ jobs:
             --output-dir .benchmarks || true
 
       - name: Upload benchmark results
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
         with:
           name: benchmark-results-${{ github.sha }}
           path: |
@@ -164,6 +168,7 @@ jobs:
   compare-to-baseline:
     name: Compare to Baseline
     runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
+    timeout-minutes: 10
     needs: benchmark
     if: github.event_name == 'release' || github.event.inputs.benchmark_type == 'full'
 
@@ -171,10 +176,10 @@ jobs:
       COMMIT_SHA: ${{ github.sha }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
       - name: Download current results
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
         with:
           name: benchmark-results-${{ github.sha }}
           path: current_results/

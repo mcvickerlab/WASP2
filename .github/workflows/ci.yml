@@ -12,6 +12,9 @@ on:
     branches: [main, dev]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
@@ -25,11 +28,12 @@ jobs:
   lint:
     name: Lint
     runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
+    timeout-minutes: 10
     defaults:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
       - name: Set up virtual environment
         run: |
@@ -39,7 +43,7 @@ jobs:
           .venv/bin/pip --version
 
       - name: Cache pip packages
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
         with:
           path: ~/.cache/pip
           key: pip-lint-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
@@ -63,11 +67,12 @@ jobs:
   security:
     name: Security Scan
     runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
+    timeout-minutes: 10
     defaults:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
       - name: Set up virtual environment
         run: |
@@ -93,21 +98,22 @@ jobs:
   test:
     name: Test
     runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
+    timeout-minutes: 30
     defaults:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
       - name: Cache pip packages
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
         with:
           path: ~/.cache/pip
           key: pip-test-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
           restore-keys: pip-test-${{ runner.os }}-
 
       - name: Cache Cargo registry
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
         with:
           path: |
             ~/.cargo/registry
@@ -116,7 +122,7 @@ jobs:
           restore-keys: cargo-registry-${{ runner.os }}-
 
       - name: Cache Rust target
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
         with:
           path: rust/target
           key: cargo-target-${{ runner.os }}-${{ hashFiles('rust/Cargo.lock', 'rust/src/**/*.rs') }}
@@ -174,15 +180,16 @@ jobs:
   rust:
     name: Rust Checks
     runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
+    timeout-minutes: 20
     defaults:
       run:
         shell: bash
         working-directory: rust
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
       - name: Cache Cargo registry
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
         with:
           path: |
             ~/.cargo/registry
@@ -191,7 +198,7 @@ jobs:
           restore-keys: cargo-rust-${{ runner.os }}-
 
       - name: Cache Rust target
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
         with:
           path: rust/target
           key: cargo-target-rust-${{ runner.os }}-${{ hashFiles('rust/Cargo.lock', 'rust/src/**/*.rs') }}
@@ -213,16 +220,17 @@ jobs:
   sanity-test:
     name: Real Data Sanity Check (chr21)
     runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
+    timeout-minutes: 30
     needs: [test]  # Only run after main tests pass
     defaults:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
       - name: Cache sanity dataset
         id: cache-sanity
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
         with:
           path: tests/sanity/data
           key: wasp2-sanity-chr21-v1
@@ -247,14 +255,14 @@ jobs:
           test -f tests/sanity/data/expected_counts.tsv || exit 1
 
       - name: Cache pip packages
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
         with:
           path: ~/.cache/pip
           key: pip-sanity-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
           restore-keys: pip-sanity-${{ runner.os }}-
 
       - name: Cache Cargo registry
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
         with:
           path: |
             ~/.cargo/registry
@@ -263,7 +271,7 @@ jobs:
           restore-keys: cargo-registry-${{ runner.os }}-
 
       - name: Cache Rust target
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
         with:
           path: rust/target
           key: cargo-target-${{ runner.os }}-${{ hashFiles('rust/Cargo.lock', 'rust/src/**/*.rs') }}
@@ -291,20 +299,21 @@ jobs:
     name: Nextflow Integration Tests
     if: false  # Disabled - requires GitHub-hosted runners
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: [test]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
         with:
           python-version: "3.11"
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7  # stable
 
       - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@ad397744b0d591a723ab90405b7247fac0e6b8db  # v2
         with:
           workspaces: rust
 
@@ -322,7 +331,7 @@ jobs:
             tabix
 
       - name: Install Nextflow
-        uses: nf-core/setup-nextflow@v2
+        uses: nf-core/setup-nextflow@98e3b21a1c45e26529208849ec20e5cfb7086040  # v2
         with:
           version: "24.04.0"
 
@@ -355,7 +364,7 @@ jobs:
           wasp2-map --help
 
       - name: Cache integration test data
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
         id: cache-test-data
         with:
           path: |
@@ -381,7 +390,7 @@ jobs:
           NXF_ANSI_LOG: false
 
       - name: Upload test results
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
         if: always()
         with:
           name: nf-test-results
