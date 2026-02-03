@@ -184,35 +184,20 @@ impl ReadPairer {
     }
 }
 
-impl Iterator for ReadPairer {
-    type Item = (bam::Record, bam::Record);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        // TODO: Implement proper iterator that doesn't borrow self mutably
-        // For now, this is a placeholder
-        unimplemented!("ReadPairer iterator not yet implemented")
-    }
-}
+// NOTE: Iterator trait not implemented — use process_read() directly.
+// A previous stub called unimplemented!() which would panic at runtime.
 
 // ============================================================================
 // Convenience Functions
 // ============================================================================
 
-/// Pair all reads in a BAM file
+/// Create a ReadPairer for all reads in a BAM file
 ///
-/// Simple interface for basic use cases without statistics.
-///
-/// # Example
-/// ```ignore
-/// let pairs = pair_reads_from_bam("input.bam")?;
-/// for (read1, read2) in pairs {
-///     // Process pair
-/// }
-/// ```
+/// Use `process_read()` to feed records and collect pairs.
 #[allow(dead_code)]
 pub fn pair_reads_from_bam(
     bam_path: &str,
-) -> Result<impl Iterator<Item = (bam::Record, bam::Record)>, Box<dyn std::error::Error>> {
+) -> Result<ReadPairer, Box<dyn std::error::Error>> {
     ReadPairer::new(bam_path)
 }
 

@@ -15,7 +15,7 @@ mod multi_sample;
 mod read_pairer;
 mod seq_decode;
 mod unified_pipeline;
-mod vcf_to_bed; // Single-pass unified make-reads (5x faster)
+mod vcf_to_bed;
 
 pub use unified_pipeline::{unified_make_reads, unified_make_reads_parallel, UnifiedConfig, UnifiedStats};
 
@@ -470,6 +470,35 @@ fn filter_bam_by_variants_py(
 }
 
 // ============================================================================
+// Helper: UnifiedStats → PyDict
+// NOTE: Update this function when adding fields to UnifiedStats.
+// ============================================================================
+
+fn stats_to_pydict(py: Python, stats: &unified_pipeline::UnifiedStats) -> PyResult<PyObject> {
+    use pyo3::types::PyDict;
+    let d = PyDict::new(py);
+    d.set_item("total_reads", stats.total_reads)?;
+    d.set_item("pairs_processed", stats.pairs_processed)?;
+    d.set_item("pairs_with_variants", stats.pairs_with_variants)?;
+    d.set_item("pairs_with_snvs_only", stats.pairs_with_snvs_only)?;
+    d.set_item("pairs_with_indels_only", stats.pairs_with_indels_only)?;
+    d.set_item("pairs_with_snvs_and_indels", stats.pairs_with_snvs_and_indels)?;
+    d.set_item("haplotypes_written", stats.haplotypes_written)?;
+    d.set_item("pairs_kept", stats.pairs_kept)?;
+    d.set_item("pairs_keep_no_flip", stats.pairs_keep_no_flip)?;
+    d.set_item("pairs_skipped_unmappable", stats.pairs_skipped_unmappable)?;
+    d.set_item("pairs_haplotype_failed", stats.pairs_haplotype_failed)?;
+    d.set_item("orphan_reads", stats.orphan_reads)?;
+    d.set_item("tree_build_ms", stats.tree_build_ms)?;
+    d.set_item("bam_stream_ms", stats.bam_stream_ms)?;
+    d.set_item("overlap_query_ms", stats.overlap_query_ms)?;
+    d.set_item("pair_process_ms", stats.pair_process_ms)?;
+    d.set_item("send_ms", stats.send_ms)?;
+    d.set_item("writer_thread_ms", stats.writer_thread_ms)?;
+    Ok(d.into())
+}
+
+// ============================================================================
 // PyO3 Bindings for Unified Pipeline (Single-pass make-reads)
 // ============================================================================
 
@@ -529,8 +558,6 @@ fn unified_make_reads_py(
     remap_names_path: Option<String>,
     pair_buffer_reserve: usize,
 ) -> PyResult<PyObject> {
-    use pyo3::types::PyDict;
-
     let config = unified_pipeline::UnifiedConfig {
         read_threads: threads,
         max_seqs,
@@ -547,28 +574,7 @@ fn unified_make_reads_py(
     let stats = unified_pipeline::unified_make_reads(bam_path, bed_path, out_r1, out_r2, &config)
         .map_err(|e| PyRuntimeError::new_err(format!("Unified pipeline failed: {}", e)))?;
 
-    // Return stats as Python dict
-    let py_dict = PyDict::new(py);
-    py_dict.set_item("total_reads", stats.total_reads)?;
-    py_dict.set_item("pairs_processed", stats.pairs_processed)?;
-    py_dict.set_item("pairs_with_variants", stats.pairs_with_variants)?;
-    py_dict.set_item("pairs_with_snvs_only", stats.pairs_with_snvs_only)?;
-    py_dict.set_item("pairs_with_indels_only", stats.pairs_with_indels_only)?;
-    py_dict.set_item("pairs_with_snvs_and_indels", stats.pairs_with_snvs_and_indels)?;
-    py_dict.set_item("haplotypes_written", stats.haplotypes_written)?;
-    py_dict.set_item("pairs_kept", stats.pairs_kept)?;
-    py_dict.set_item("pairs_keep_no_flip", stats.pairs_keep_no_flip)?; // NEW: variant overlap but no flip
-    py_dict.set_item("pairs_skipped_unmappable", stats.pairs_skipped_unmappable)?;
-    py_dict.set_item("pairs_haplotype_failed", stats.pairs_haplotype_failed)?;
-    py_dict.set_item("orphan_reads", stats.orphan_reads)?;
-    py_dict.set_item("tree_build_ms", stats.tree_build_ms)?;
-    py_dict.set_item("bam_stream_ms", stats.bam_stream_ms)?;
-    py_dict.set_item("overlap_query_ms", stats.overlap_query_ms)?;
-    py_dict.set_item("pair_process_ms", stats.pair_process_ms)?;
-    py_dict.set_item("send_ms", stats.send_ms)?;
-    py_dict.set_item("writer_thread_ms", stats.writer_thread_ms)?;
-
-    Ok(py_dict.into())
+    stats_to_pydict(py, &stats)
 }
 
 /// Parallel unified pipeline - processes chromosomes in parallel for 3-8x speedup
@@ -627,8 +633,6 @@ fn unified_make_reads_parallel_py(
     remap_names_path: Option<String>,
     pair_buffer_reserve: usize,
 ) -> PyResult<PyObject> {
-    use pyo3::types::PyDict;
-
     let config = unified_pipeline::UnifiedConfig {
         read_threads: threads,
         max_seqs,
@@ -656,28 +660,7 @@ fn unified_make_reads_parallel_py(
     }
     .map_err(|e| PyRuntimeError::new_err(format!("Parallel unified pipeline failed: {}", e)))?;
 
-    // Return stats as Python dict
-    let py_dict = PyDict::new(py);
-    py_dict.set_item("total_reads", stats.total_reads)?;
-    py_dict.set_item("pairs_processed", stats.pairs_processed)?;
-    py_dict.set_item("pairs_with_variants", stats.pairs_with_variants)?;
-    py_dict.set_item("pairs_with_snvs_only", stats.pairs_with_snvs_only)?;
-    py_dict.set_item("pairs_with_indels_only", stats.pairs_with_indels_only)?;
-    py_dict.set_item("pairs_with_snvs_and_indels", stats.pairs_with_snvs_and_indels)?;
-    py_dict.set_item("haplotypes_written", stats.haplotypes_written)?;
-    py_dict.set_item("pairs_kept", stats.pairs_kept)?;
-    py_dict.set_item("pairs_keep_no_flip", stats.pairs_keep_no_flip)?; // NEW: variant overlap but no flip
-    py_dict.set_item("pairs_skipped_unmappable", stats.pairs_skipped_unmappable)?;
-    py_dict.set_item("pairs_haplotype_failed", stats.pairs_haplotype_failed)?;
-    py_dict.set_item("orphan_reads", stats.orphan_reads)?;
-    py_dict.set_item("tree_build_ms", stats.tree_build_ms)?;
-    py_dict.set_item("bam_stream_ms", stats.bam_stream_ms)?;
-    py_dict.set_item("overlap_query_ms", stats.overlap_query_ms)?;
-    py_dict.set_item("pair_process_ms", stats.pair_process_ms)?;
-    py_dict.set_item("send_ms", stats.send_ms)?;
-    py_dict.set_item("writer_thread_ms", stats.writer_thread_ms)?;
-
-    Ok(py_dict.into())
+    stats_to_pydict(py, &stats)
 }
 
 // ============================================================================
@@ -911,8 +894,6 @@ fn wasp2_rust(_py: Python, m: &PyModule) -> PyResult<()> {
     // Mapping filter (WASP remap filter)
     m.add_function(wrap_pyfunction!(filter_bam_wasp, m)?)?;
     // Mapping filter with explicit sidecar argument (CIGAR-aware expected positions)
-    m.add_function(wrap_pyfunction!(filter_bam_wasp_with_sidecar, m)?)?;
-    // Mapping filter with optional expected sidecar (explicit binding to ensure availability)
     m.add_function(wrap_pyfunction!(filter_bam_wasp_with_sidecar, m)?)?;
 
     // BAM filtering by variant overlap (replaces samtools process_bam, 4-5x faster)

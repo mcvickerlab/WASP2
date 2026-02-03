@@ -289,17 +289,9 @@ fn expected_start_upstream_only(
         let delta = alt_len - ref_len;
 
         match location {
-            VariantLocation::Upstream => {
-                // Fully upstream variant - shifts expected position
+            VariantLocation::Upstream | VariantLocation::SpansStart => {
+                // Upstream or spanning-start variants shift expected position
                 shift += delta;
-            }
-            VariantLocation::SpansStart => {
-                // Variant spans read start boundary
-                // Deletions and insertions starting before read shift position
-                if delta != 0 {
-                    shift += delta;
-                }
-                // SNVs at boundary: no shift
             }
             VariantLocation::WithinRead | VariantLocation::Downstream => {
                 // No shift for within-read or downstream variants
@@ -307,12 +299,7 @@ fn expected_start_upstream_only(
         }
     }
 
-    let exp = read_start + shift;
-    if exp < 0 {
-        0
-    } else {
-        exp as u32
-    }
+    (read_start + shift).max(0) as u32
 }
 
 fn build_querents_by_tid<'a>(
@@ -655,10 +642,15 @@ fn process_pair(
     }
 
     if outputs.is_empty() {
-        ProcessPairResult::KeepAsIs
-    } else {
-        ProcessPairResult::NeedsRemap(outputs)
+        // Invariant: total_seqs > 0 guarantees at least one output.
+        // If violated, log and fall back rather than propagate empty NeedsRemap.
+        eprintln!(
+            "[WARN] process_pair: outputs empty despite total_seqs={}; treating as KeepAsIs",
+            total_seqs
+        );
+        return ProcessPairResult::KeepAsIs;
     }
+    ProcessPairResult::NeedsRemap(outputs)
 }
 
 /// Process a complete read pair with coordinated trim combinations for INDEL support
@@ -1120,18 +1112,24 @@ pub fn unified_make_reads(
     });
 
     // Optional: Set up keep-no-flip names output
-    let mut keep_no_flip_writer: Option<BufWriter<File>> =
-        config.keep_no_flip_names_path.as_ref().map(|path| {
-            let file = File::create(path).expect("Failed to create keep_no_flip_names file");
-            BufWriter::with_capacity(1024 * 1024, file)
-        });
+    let mut keep_no_flip_writer: Option<BufWriter<File>> = config
+        .keep_no_flip_names_path
+        .as_ref()
+        .map(|path| -> Result<BufWriter<File>> {
+            let file = File::create(path).context("Failed to create keep_no_flip_names file")?;
+            Ok(BufWriter::with_capacity(1024 * 1024, file))
+        })
+        .transpose()?;
 
     // Optional: Set up remap names output (for creating correct reference BAM for filter)
-    let mut remap_names_writer: Option<BufWriter<File>> =
-        config.remap_names_path.as_ref().map(|path| {
-            let file = File::create(path).expect("Failed to create remap_names file");
-            BufWriter::with_capacity(1024 * 1024, file)
-        });
+    let mut remap_names_writer: Option<BufWriter<File>> = config
+        .remap_names_path
+        .as_ref()
+        .map(|path| -> Result<BufWriter<File>> {
+            let file = File::create(path).context("Failed to create remap_names file")?;
+            Ok(BufWriter::with_capacity(1024 * 1024, file))
+        })
+        .transpose()?;
 
     // Phase 3: Stream BAM and process pairs
     // OPTIMIZATION: Use pre-allocated Record with bam.read() instead of .records() iterator
