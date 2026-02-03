@@ -25,6 +25,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
@@ -35,6 +38,7 @@ jobs:
   plan:
     name: Plan Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       run_unit: ${{ steps.plan.outputs.run_unit }}
       run_integration: ${{ steps.plan.outputs.run_integration }}
@@ -72,7 +76,7 @@ jobs:
         python-version: ['3.10', '3.11', '3.12']
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           fetch-depth: 0
 
@@ -83,7 +87,7 @@ jobs:
           echo "Using Python $PYTHON_VERSION"
 
       - name: Cache pip
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
         with:
           path: ~/.cache/pip
           key: pip-nightly-${{ matrix.python-version }}-${{ hashFiles('pyproject.toml') }}
@@ -112,7 +116,7 @@ jobs:
             -n auto
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238  # v4
         with:
           files: ./coverage.xml
           flags: nightly-py${{ matrix.python-version }}
@@ -127,10 +131,10 @@ jobs:
     timeout-minutes: 60
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
       - name: Cache pip
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
         with:
           path: ~/.cache/pip
           key: pip-integration-${{ hashFiles('pyproject.toml') }}
@@ -166,10 +170,10 @@ jobs:
     timeout-minutes: 90
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
       - name: Cache benchmark data
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
         with:
           path: |
             tests/data/benchmark_cache/
@@ -196,7 +200,7 @@ jobs:
             --benchmark-json=benchmark-results.json || true
 
       - name: Upload benchmark results
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
         with:
           name: benchmark-results-${{ github.run_id }}
           path: |
@@ -213,18 +217,18 @@ jobs:
     continue-on-error: true
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
         with:
           python-version: "3.11"
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7  # stable
 
       - name: Cache Rust
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@ad397744b0d591a723ab90405b7247fac0e6b8db  # v2
         with:
           workspaces: rust
 
@@ -256,7 +260,7 @@ jobs:
 
       - name: Upload Nextflow logs
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
         with:
           name: nextflow-logs
           path: |
@@ -267,6 +271,7 @@ jobs:
   nightly-summary:
     name: Nightly Summary
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: [unit-tests, integration-tests, benchmarks, nextflow-tests]
     if: always()
 

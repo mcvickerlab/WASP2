@@ -18,6 +18,7 @@ jobs:
   analyze:
     name: Analyze Python
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     # Don't block PRs if GitHub-hosted runners aren't available
     continue-on-error: true
     permissions:
@@ -27,18 +28,18 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v4
+        uses: github/codeql-action/init@5049b573e2cbf31c2dbde702a60c24fe476f0766  # v4
         with:
           languages: python
           queries: security-extended
 
       - name: Autobuild
-        uses: github/codeql-action/autobuild@v4
+        uses: github/codeql-action/autobuild@5049b573e2cbf31c2dbde702a60c24fe476f0766  # v4
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v4
+        uses: github/codeql-action/analyze@5049b573e2cbf31c2dbde702a60c24fe476f0766  # v4
         with:
           category: "/language:python"

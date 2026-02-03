@@ -48,7 +48,7 @@ jobs:
     runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
       - name: Run bandit with SARIF output
         run: |
@@ -59,7 +59,7 @@ jobs:
           bandit -c pyproject.toml -r src/ -ll || true
 
       - name: Upload SARIF results
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@2d3fe93d4896727350828f23e48f5391e6d3f022  # v3
         if: always() && hashFiles('bandit-results.sarif') != ''
         with:
           sarif_file: bandit-results.sarif
@@ -70,7 +70,7 @@ jobs:
     runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
       - name: Run pip-audit
         run: |
@@ -87,7 +87,7 @@ jobs:
       run:
         working-directory: rust
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
       - name: Install cargo-audit
         working-directory: .
@@ -103,7 +103,7 @@ jobs:
     runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           fetch-depth: 0
 
@@ -128,7 +128,7 @@ jobs:
     runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
       - name: Verify Cargo.lock exists
         run: |
@@ -156,7 +156,7 @@ jobs:
     runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
       - name: Run Semgrep security rules
         run: |
@@ -171,7 +171,7 @@ jobs:
             src/ || true
 
       - name: Upload Semgrep SARIF
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@2d3fe93d4896727350828f23e48f5391e6d3f022  # v3
         if: always() && hashFiles('semgrep-results.sarif') != ''
         with:
           sarif_file: semgrep-results.sarif

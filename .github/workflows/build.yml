@@ -24,13 +24,14 @@ permissions:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
       - name: Install system dependencies (Linux)
         if: runner.os == 'Linux'
@@ -59,10 +60,10 @@ jobs:
           echo "CPATH=$(brew --prefix htslib)/include:$CPATH" >> $GITHUB_ENV
 
       - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7  # stable
 
       - name: Set up sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
+        uses: mozilla-actions/sccache-action@d651010b8da762cde178750d8eda7b5febfe147a  # v0.0.9
 
       - name: Configure sccache
         run: |
@@ -70,12 +71,12 @@ jobs:
           echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
         with:
           python-version: "3.11"
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@7eb50e6e20e1e2009087999ba91242e80253875f  # v7
 
       - name: Install maturin
         run: uv pip install --system maturin
@@ -84,7 +85,7 @@ jobs:
         run: maturin build --release -o dist/
 
       - name: Upload wheel artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
         with:
           name: wheel-${{ matrix.os }}
           path: dist/*.whl
