@@ -17,7 +17,7 @@ from scipy.optimize import OptimizeResult, minimize_scalar
 from scipy.stats import betabinom, chi2, false_discovery_control, zscore
 
 # Local imports
-from .as_analysis import opt_phased_new, opt_prob, opt_unphased_dp
+from .as_analysis import clamp_rho, opt_phased_new, opt_prob, opt_unphased_dp
 
 logger = logging.getLogger(__name__)
 
@@ -92,16 +92,22 @@ def get_imbalance_sc(
 
     # Calculate dispersion across dataset
     def opt_disp(rho: float, ref_data: NDArray[np.uint16], n_data: NDArray[np.uint16]) -> float:
+        rho_safe = float(clamp_rho(rho))  # Prevent division by zero
         return float(
             -np.sum(
-                betabinom.logpmf(ref_data, n_data, (0.5 * (1 - rho) / rho), (0.5 * (1 - rho) / rho))
+                betabinom.logpmf(
+                    ref_data,
+                    n_data,
+                    (0.5 * (1 - rho_safe) / rho_safe),
+                    (0.5 * (1 - rho_safe) / rho_safe),
+                )
             )
         )
 
     disp_result: OptimizeResult = minimize_scalar(
         opt_disp, args=(ref_counts, n_counts), method="bounded", bounds=(0, 1)
     )
-    disp: float = float(disp_result["x"])
+    disp: float = float(clamp_rho(disp_result["x"]))
 
     df_dict: dict[str, pd.DataFrame] = {}
 
@@ -180,6 +186,9 @@ def get_imbalance_per_group(
     disp: float,
     gt_array: NDArray[np.uint8] | None = None,
 ) -> pd.DataFrame:
+    # Clamp dispersion parameter defensively at function entry
+    disp = float(clamp_rho(disp))
+
     # Check if genotype phasing info available
     phased: bool
     if gt_array is None:

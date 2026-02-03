@@ -1,18 +1,18 @@
 # Build workflow for WASP2
 # Builds Rust extension and generates wheels for Linux and macOS
-# Uses PyO3/maturin-action for consistency with release.yml
+# Renamed from rust-build.yml with sccache for faster compilation
 
 name: Build
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main]
     paths:
       - "rust/**"
       - "pyproject.toml"
       - ".github/workflows/build.yml"
   pull_request:
-    branches: [main, dev]
+    branches: [main]
     paths:
       - "rust/**"
       - "pyproject.toml"
@@ -22,13 +22,18 @@ permissions:
   contents: read
 
 jobs:
-  build-linux:
-    name: Linux
-    runs-on: ubuntu-latest
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install system dependencies
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -41,44 +46,45 @@ jobs:
             pkg-config \
             libclang-dev
 
-      - name: Build wheel
-        uses: PyO3/maturin-action@v1
-        with:
-          args: --release --out dist -m rust/Cargo.toml
-          sccache: true
-
-      - name: Upload wheel artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: wheel-linux
-          path: dist/*.whl
-          if-no-files-found: error
-
-  build-macos:
-    name: macOS
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install system dependencies
+      - name: Install system dependencies (macOS)
+        if: runner.os == 'macOS'
         run: |
           brew install htslib xz bzip2 openssl@3 pkg-config llvm
 
       - name: Set macOS library paths
+        if: runner.os == 'macOS'
         run: |
           echo "PKG_CONFIG_PATH=$(brew --prefix htslib)/lib/pkgconfig:$(brew --prefix openssl@3)/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
           echo "LIBRARY_PATH=$(brew --prefix htslib)/lib:$(brew --prefix openssl@3)/lib:$LIBRARY_PATH" >> $GITHUB_ENV
           echo "CPATH=$(brew --prefix htslib)/include:$CPATH" >> $GITHUB_ENV
 
-      - name: Build wheel
-        uses: PyO3/maturin-action@v1
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Configure sccache
+        run: |
+          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
         with:
-          args: --release --out dist -m rust/Cargo.toml
-          sccache: true
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Install maturin
+        run: uv pip install --system maturin
+
+      - name: Build wheel with maturin
+        run: maturin build --release -o dist/
 
       - name: Upload wheel artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
-          name: wheel-macos
+          name: wheel-${{ matrix.os }}
           path: dist/*.whl
-          if-no-files-found: error

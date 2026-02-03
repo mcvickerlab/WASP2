@@ -42,6 +42,9 @@ class CountStatsSC:
         self.reads_skipped_no_barcode: defaultdict[str, int] = defaultdict(int)
         self.reads_skipped_barcode_no_index: defaultdict[str, int] = defaultdict(int)
         self.reads_skipped_prev_counted: defaultdict[str, int] = defaultdict(int)
+        self.reads_skipped_no_sequence: defaultdict[str, int] = defaultdict(int)
+        self.reads_skipped_no_aln_pos: defaultdict[str, int] = defaultdict(int)
+        self.reads_skipped_seq_error: defaultdict[str, int] = defaultdict(int)
 
     def stats_to_df(self) -> pd.DataFrame:
         """Convert statistics to a pandas DataFrame."""
@@ -52,6 +55,9 @@ class CountStatsSC:
             "reads_skipped_no_barcode",
             "reads_skipped_barcode_no_index",
             "reads_skipped_prev_counted",
+            "reads_skipped_no_sequence",
+            "reads_skipped_no_aln_pos",
+            "reads_skipped_seq_error",
         ]
 
         stat_df = pd.DataFrame({key: getattr(self, key) for key in stat_attributes}).reset_index(
@@ -234,11 +240,13 @@ def count_bc_snp_alleles(
 
             seq = read.query_sequence
             if seq is None:
+                sc_counts.reads_skipped_no_sequence[chrom] += 1
                 continue
 
-            # TEST binary search
+            # Binary search for alignment position
             qpos = find_read_aln_pos(read, pos - 1)
             if qpos is None:
+                sc_counts.reads_skipped_no_aln_pos[chrom] += 1
                 continue
 
             try:
@@ -249,7 +257,14 @@ def count_bc_snp_alleles(
                 else:
                     sc_counts.other_count[(idx, bc_dict[read_bc])] += 1
 
-            except TypeError:
+            except (TypeError, IndexError) as e:
+                # Narrow exception handling: only catch sequence access errors
+                # Log the actual exception for debugging unexpected errors
+                sc_counts.reads_skipped_seq_error[chrom] += 1
+                logger.debug(
+                    "Skipping read %s: sequence access error at %s:%d (qpos=%s): %s",
+                    read.query_name, chrom, pos, qpos, e
+                )
                 continue
             else:
                 read_set.add(read.query_name)

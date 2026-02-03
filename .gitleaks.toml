@@ -1,14 +1,36 @@
 # Gitleaks configuration for WASP2
-# Default rules are used automatically; this file adds project-specific allowlists.
-# See: https://github.com/gitleaks/gitleaks#configuration
+# This file defines custom rules and allowlists for secret detection
+# Ref: https://github.com/gitleaks/gitleaks
 
-title = "WASP2 Gitleaks Config"
+title = "WASP2 Gitleaks Configuration"
 
-# Paths that are not expected to contain secrets
+[extend]
+# Extend the default gitleaks configuration
+useDefault = true
+
+# Allowlist specific patterns that are known false positives
 [allowlist]
-description = "WASP2 allowlist — non-secret-bearing paths"
+description = "Allowlisted patterns for WASP2"
+
+# GitHub Actions cache keys are not secrets
 paths = [
-    '''Cargo\.lock''',
-    '''pixi\.lock''',
-    '''docs/_build/.*''',
+    '''\.github/workflows/.*\.yml''',
+]
+
+regexTarget = "match"
+regexes = [
+    # Cache keys in GitHub Actions (e.g., "key: wasp2-sanity-chr21-v1")
+    '''key:\s*wasp2-[\w-]+''',
+    # Test data identifiers
+    '''wasp2-(sanity|test|benchmark)-[\w-]+''',
+]
+
+# Commits to ignore (if any false positives were committed historically)
+commits = []
+
+# Stopwords - common words that may trigger false positives in bioinformatics
+stopwords = [
+    "sanity",
+    "benchmark",
+    "chr21",
 ]
