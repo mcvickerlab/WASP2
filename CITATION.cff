@@ -82,6 +82,17 @@ abstract: >-
 #     value: "10.5281/zenodo.XXXXXXX"
 #     description: "Zenodo archive of this version"
 
+# Zenodo dataset DOI - uncomment after Zenodo deposit is published (issue #246)
+# references:
+#   - type: data
+#     title: "WASP2 Sanity Test Dataset - chr21 HG00731"
+#     authors:
+#       - family-names: Jaureguy
+#         given-names: Jeff
+#     doi: "10.5281/zenodo.XXXXXXX"
+#     date-released: "2025-01-01"
+#     repository: "https://zenodo.org/records/XXXXXXX"
+
 references:
   - type: article
     authors:

@@ -17,6 +17,10 @@
   </a>
   <img src="https://img.shields.io/badge/python-3.10+-blue?logo=python&logoColor=white" alt="Python">
   <img src="https://img.shields.io/badge/rust-1.70+-orange?logo=rust&logoColor=white" alt="Rust">
+  <!-- Zenodo DOI badge: replace XXXXXXX in both href and src after deposit (issue #246) -->
+  <a href="https://doi.org/10.5281/zenodo.XXXXXXX">
+    <img src="https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXXX.svg" alt="DOI">
+  </a>
 </p>
 
 # WASP2: Allele-specific pipeline for unbiased read mapping and allelic imbalance analysis
