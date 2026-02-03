@@ -1,0 +1,14 @@
+# Gitleaks configuration for WASP2
+# Default rules are used automatically; this file adds project-specific allowlists.
+# See: https://github.com/gitleaks/gitleaks#configuration
+
+title = "WASP2 Gitleaks Config"
+
+# Paths that are not expected to contain secrets
+[allowlist]
+description = "WASP2 allowlist — non-secret-bearing paths"
+paths = [
+    '''Cargo\.lock''',
+    '''pixi\.lock''',
+    '''docs/_build/.*''',
+]
