@@ -2,6 +2,17 @@
 # Configured for self-hosted Mac runner with Docker
 # Security scans are informational - failures logged but don't block PRs
 # Exception: gitleaks (secret detection) will fail the build if secrets found
+#
+# Suppressed warnings (audited 2026-02-02):
+#   pip-audit/bandit: exit code suppressed (|| true) because these are
+#     informational scans. Findings are reviewed manually, not gated.
+#   cargo-audit: exit code suppressed (|| true). Known informational warnings:
+#     - RUSTSEC-2025-0058 (custom_derive unmaintained) - transitive dep via rust-htslib
+#     - RUSTSEC-2024-0436 (paste unmaintained) - transitive dep via rv, argmin
+#     - RUSTSEC-2026-0002 (lru unsound IterMut) - transitive dep via rv; we
+#       don't call IterMut on the LRU cache
+#   Real vulnerability tracked:
+#     - RUSTSEC-2025-0020 (pyo3 buffer overflow) - fix via dependabot PR #217 (pending)
 
 name: Security
 
@@ -30,6 +41,8 @@ jobs:
 
       - name: Run pip-audit
         run: |
+          python3 -m venv .venv-audit
+          source .venv-audit/bin/activate
           pip install pip-audit --quiet
           pip-audit --no-require-hashes --strict || true
 
@@ -45,6 +58,8 @@ jobs:
 
       - name: Run bandit
         run: |
+          python3 -m venv .venv-bandit
+          source .venv-bandit/bin/activate
           pip install "bandit[toml]" --quiet
           bandit -c pyproject.toml -r src/ -ll || true
 
