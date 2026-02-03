@@ -1,5 +1,5 @@
 use pyo3::prelude::*;
-use pyo3::types::PyList;
+use pyo3::types::{PyList, PyTuple};
 use rayon::prelude::*;
 use rust_htslib::{bam, bam::ext::BamRecordExtensions, bam::Read as BamRead};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -55,15 +55,15 @@ impl BamCounter {
     #[pyo3(signature = (regions, min_qual=0, threads=1))]
     fn count_alleles(
         &self,
-        py: Python,
-        regions: &PyList,
+        py: Python<'_>,
+        regions: &Bound<'_, PyList>,
         min_qual: u8,
         threads: usize,
     ) -> PyResult<Vec<(u32, u32, u32)>> {
         // Parse Python regions (supports both SNPs and INDELs)
         let mut rust_regions = Vec::new();
         for item in regions.iter() {
-            let tuple = item.downcast::<pyo3::types::PyTuple>()?;
+            let tuple = item.cast::<PyTuple>()?;
             let chrom: String = tuple.get_item(0)?.extract()?;
             let pos: u32 = tuple.get_item(1)?.extract()?;
             let ref_allele: String = tuple.get_item(2)?.extract()?;
@@ -90,7 +90,7 @@ impl BamCounter {
         }
 
         // Release GIL for parallel processing
-        py.allow_threads(|| self.count_alleles_impl(&rust_regions, min_qual, threads))
+        py.detach(|| self.count_alleles_impl(&rust_regions, min_qual, threads))
     }
 }
 

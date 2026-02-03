@@ -22,6 +22,33 @@ from scipy.stats import betabinom, chi2, false_discovery_control
 
 from wasp2.cli import create_spinner_progress, error, info, success
 
+# =============================================================================
+# BETA-BINOMIAL RHO PARAMETER BOUNDS (Issue #228)
+# =============================================================================
+# The beta-binomial parameterization uses alpha = mu * (1-rho) / rho, which
+# causes division by zero when rho=0 and produces zero alpha/beta when rho=1.
+# We clamp rho to (epsilon, 1-epsilon) to prevent numerical instability.
+# =============================================================================
+
+RHO_EPSILON: float = 1e-10
+
+
+def clamp_rho(rho: float | NDArray[np.float64]) -> float | NDArray[np.float64]:
+    """
+    Clamp dispersion parameter rho to safe range (epsilon, 1-epsilon).
+
+    The beta-binomial parameterization uses alpha = mu * (1-rho) / rho, which
+    causes division by zero when rho=0 and produces zero alpha/beta when rho=1.
+    This function prevents these boundary issues.
+
+    Args:
+        rho: Dispersion parameter (scalar or array), expected in [0, 1]
+
+    Returns:
+        Clamped rho in range (RHO_EPSILON, 1 - RHO_EPSILON)
+    """
+    return np.clip(rho, RHO_EPSILON, 1.0 - RHO_EPSILON)
+
 
 def opt_linear(
     disp_params: NDArray[np.float64],
@@ -42,7 +69,7 @@ def opt_linear(
     exp_in = disp1 + (n_array * disp2)
     exp_in = np.select([exp_in > 10, exp_in < -10], [10, -10], default=exp_in)
 
-    rho = expit(exp_in)
+    rho = clamp_rho(expit(exp_in))
 
     ll = -np.sum(
         betabinom.logpmf(ref_counts, n_array, (0.5 * (1 - rho) / rho), (0.5 * (1 - rho) / rho))
@@ -72,9 +99,10 @@ def opt_prob(
     :return: Negative log-likelihood (if log=True) or probability mass (if log=False)
     """
     prob = in_prob
+    rho = clamp_rho(in_rho)  # Prevent division by zero at boundaries
 
-    alpha = prob * (1 - in_rho) / in_rho
-    beta = (1 - prob) * (1 - in_rho) / in_rho
+    alpha = prob * (1 - rho) / rho
+    beta = (1 - prob) * (1 - rho) / rho
 
     if log is True:
         ll = -1 * betabinom.logpmf(k, n, alpha, beta)
@@ -230,9 +258,20 @@ def single_model(df: pd.DataFrame, region_col: str, phased: bool = False) -> pd.
     :return: Dataframe with imbalance likelihood
     """
     info("Running analysis with single dispersion model")
-    opt_disp: Callable[..., float] = lambda rho, ref_data, n_data: -np.sum(
-        betabinom.logpmf(ref_data, n_data, (0.5 * (1 - rho) / rho), (0.5 * (1 - rho) / rho))
-    )
+
+    def opt_disp(rho: float, ref_data: NDArray[Any], n_data: NDArray[Any]) -> float:
+        """Negative log-likelihood for dispersion optimization (rho clamped)."""
+        rho_safe = float(clamp_rho(rho))
+        return float(
+            -np.sum(
+                betabinom.logpmf(
+                    ref_data,
+                    n_data,
+                    (0.5 * (1 - rho_safe) / rho_safe),
+                    (0.5 * (1 - rho_safe) / rho_safe),
+                )
+            )
+        )
 
     ref_array = df["ref_count"].to_numpy()
     n_array = df["N"].to_numpy()
@@ -241,9 +280,13 @@ def single_model(df: pd.DataFrame, region_col: str, phased: bool = False) -> pd.
 
     with create_spinner_progress() as progress:
         progress.add_task("Optimizing dispersion parameter", total=None)
-        disp: float = minimize_scalar(
-            opt_disp, args=(ref_array, n_array), method="bounded", bounds=(0, 1)
-        )["x"]
+        disp: float = float(
+            clamp_rho(
+                minimize_scalar(
+                    opt_disp, args=(ref_array, n_array), method="bounded", bounds=(0, 1)
+                )["x"]
+            )
+        )
 
     success(f"Optimized dispersion parameter ({timeit.default_timer() - disp_start:.2f}s)")
 
@@ -305,7 +348,7 @@ def linear_model(df: pd.DataFrame, region_col: str, phased: bool = False) -> pd.
     disp1: float
     disp2: float
     disp1, disp2 = res["x"]
-    df["disp"] = expit(disp1 + (in_data[1] * disp2))
+    df["disp"] = clamp_rho(expit(disp1 + (in_data[1] * disp2)))
 
     success(f"Optimized dispersion parameters ({time.time() - disp_start:.2f}s)")
 

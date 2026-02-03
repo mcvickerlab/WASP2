@@ -66,6 +66,23 @@ impl Default for AnalysisConfig {
 }
 
 // ============================================================================
+// Rho Parameter Bounds (Issue #228)
+// ============================================================================
+
+/// Epsilon for clamping rho parameter to avoid division by zero.
+/// Matches Python's RHO_EPSILON in as_analysis.py.
+const RHO_EPSILON: f64 = 1e-10;
+
+/// Clamp rho to safe range (epsilon, 1-epsilon) to prevent division by zero.
+///
+/// The beta-binomial parameterization uses alpha = mu * (1-rho) / rho, which
+/// causes division by zero when rho=0 and produces zero alpha/beta when rho=1.
+#[inline]
+fn clamp_rho(rho: f64) -> f64 {
+    rho.clamp(RHO_EPSILON, 1.0 - RHO_EPSILON)
+}
+
+// ============================================================================
 // Core Statistical Functions
 // ============================================================================
 
@@ -75,13 +92,16 @@ impl Default for AnalysisConfig {
 ///
 /// # Arguments
 /// * `prob` - Probability parameter (0 to 1)
-/// * `rho` - Dispersion parameter (0 to 1)
+/// * `rho` - Dispersion parameter (0 to 1), will be clamped to safe range
 /// * `k` - Reference allele count
 /// * `n` - Total count
 ///
 /// # Returns
 /// Negative log-likelihood value (for minimization)
 pub fn opt_prob(prob: f64, rho: f64, k: u32, n: u32) -> Result<f64> {
+    // Clamp rho to prevent division by zero (Issue #228)
+    let rho = clamp_rho(rho);
+
     // Convert to alpha/beta parameters for beta-binomial
     let alpha = prob * (1.0 - rho) / rho;
     let beta = (1.0 - prob) * (1.0 - rho) / rho;
@@ -125,6 +145,8 @@ pub fn betabinom_logpmf_sum(
 fn optimize_dispersion(ref_counts: &[u32], n_array: &[u32]) -> Result<f64> {
     // Objective function: negative log-likelihood of null model (prob=0.5)
     let objective = |rho: f64| -> f64 {
+        // Clamp rho to prevent division by zero (Issue #228)
+        let rho = clamp_rho(rho);
         let alpha = 0.5 * (1.0 - rho) / rho;
         let beta = 0.5 * (1.0 - rho) / rho;
 
@@ -286,6 +308,8 @@ pub fn single_model(variants: Vec<VariantCounts>) -> Result<Vec<ImbalanceResult>
     );
 
     // Step 3: Calculate null and alternative likelihoods per region (parallel)
+    // Clamp disp before calculating null_param (Issue #228)
+    let disp = clamp_rho(disp);
     let null_param = 0.5 * (1.0 - disp) / disp;
 
     let results: Result<Vec<_>> = region_map
@@ -402,6 +426,41 @@ mod tests {
         let result = opt_prob(0.5, 0.1, 10, 20).unwrap();
         assert!(result.is_finite());
         assert!(result > 0.0); // Negative log-likelihood should be positive
+    }
+
+    #[test]
+    fn test_opt_prob_rho_boundary_zero() {
+        // Issue #228: rho=0 should not cause division by zero
+        let result = opt_prob(0.5, 0.0, 10, 20).unwrap();
+        assert!(result.is_finite(), "rho=0 should produce finite result after clamping");
+        assert!(!result.is_nan(), "rho=0 should not produce NaN");
+    }
+
+    #[test]
+    fn test_opt_prob_rho_boundary_one() {
+        // Issue #228: rho=1 should not produce zero alpha/beta
+        let result = opt_prob(0.5, 1.0, 10, 20).unwrap();
+        assert!(result.is_finite(), "rho=1 should produce finite result after clamping");
+        assert!(!result.is_nan(), "rho=1 should not produce NaN");
+    }
+
+    #[test]
+    fn test_opt_prob_rho_near_boundaries() {
+        // Test values very close to boundaries
+        for rho in [1e-15, 1e-12, 1e-10, 0.999999999, 0.9999999999999] {
+            let result = opt_prob(0.5, rho, 10, 20).unwrap();
+            assert!(result.is_finite(), "rho={} should produce finite result", rho);
+        }
+    }
+
+    #[test]
+    fn test_clamp_rho() {
+        // Test clamping function directly
+        assert!((clamp_rho(0.0) - RHO_EPSILON).abs() < 1e-15);
+        assert!((clamp_rho(1.0) - (1.0 - RHO_EPSILON)).abs() < 1e-15);
+        assert!((clamp_rho(0.5) - 0.5).abs() < 1e-15);
+        assert!((clamp_rho(-1.0) - RHO_EPSILON).abs() < 1e-15);
+        assert!((clamp_rho(2.0) - (1.0 - RHO_EPSILON)).abs() < 1e-15);
     }
 
     #[test]
