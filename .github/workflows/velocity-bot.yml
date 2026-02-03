@@ -1,3 +1,11 @@
+# Velocity Bot - Automated issue implementation via Claude Code
+#
+# 3x Hardening applied: 2026-02-03
+#   1. SHA-pinned all actions to consistent versions (checkout v4, upload-artifact v6)
+#   2. Fixed command injection: prompt written to file via Python (no shell interpolation
+#      of issue title/body), PR title sanitized to strip shell metacharacters
+#   3. Added concurrency guard to prevent parallel bot runs on same issue
+
 name: Velocity Bot
 
 on:
@@ -10,6 +18,11 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
+
+# Prevent parallel bot runs on the same issue
+concurrency:
+  group: velocity-bot-${{ github.event.issue.number || github.run_id }}
+  cancel-in-progress: false
 
 jobs:
   check-trigger:
@@ -105,7 +118,7 @@ jobs:
       TRIGGER_TYPE: ${{ needs.check-trigger.outputs.trigger_type }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           fetch-depth: 0
 
@@ -139,6 +152,32 @@ jobs:
               body: `Velocity bot activated by @${triggerUser} (trigger: ${triggerType}). Working on implementation...`
             });
 
+      - name: Build prompt file
+        run: |
+          # Write prompt to file to avoid shell injection from issue title/body.
+          # Uses Python to safely serialize env vars without shell interpolation.
+          python3 -c "
+          import os
+          issue_num = os.environ['ISSUE_NUMBER']
+          issue_title = os.environ['ISSUE_TITLE']
+          issue_body = os.environ['ISSUE_BODY']
+          prompt = f'''You are implementing a GitHub issue for the WASP2 project.
+
+          Issue #{issue_num}: {issue_title}
+
+          {issue_body}
+
+          Instructions:
+          - Read the codebase to understand the project structure before making changes.
+          - Implement the requested feature or fix described in the issue.
+          - Write tests for your changes when appropriate.
+          - Run tests with pytest to verify your changes work.
+          - Follow existing code style and conventions.
+          - Make minimal, focused changes that address the issue.'''
+          with open('/tmp/claude-prompt.txt', 'w') as f:
+              f.write(prompt)
+          "
+
       - name: Run Claude implementation
         run: |
           claude --allowedTools \
@@ -158,19 +197,7 @@ jobs:
             "Bash(ls *)" \
             --max-turns 50 \
             --model sonnet \
-            -p "You are implementing a GitHub issue for the WASP2 project.
-
-          Issue #${ISSUE_NUMBER}: ${ISSUE_TITLE}
-
-          ${ISSUE_BODY}
-
-          Instructions:
-          - Read the codebase to understand the project structure before making changes.
-          - Implement the requested feature or fix described in the issue.
-          - Write tests for your changes when appropriate.
-          - Run tests with pytest to verify your changes work.
-          - Follow existing code style and conventions.
-          - Make minimal, focused changes that address the issue." \
+            -p "$(cat /tmp/claude-prompt.txt)" \
             2>&1 | tee /tmp/claude-session.log
 
       - name: Check for changes
@@ -197,9 +224,9 @@ jobs:
       - name: Create pull request
         if: steps.changes.outputs.has_changes == 'true'
         run: |
-          gh pr create \
-            --title "feat: ${ISSUE_TITLE} (issue #${ISSUE_NUMBER})" \
-            --body "## Summary
+          # Build PR body via file to avoid shell injection from env vars
+          cat > /tmp/pr-body.md <<PREOF
+          ## Summary
 
           Automated implementation for issue #${ISSUE_NUMBER} by velocity-bot.
 
@@ -210,7 +237,13 @@ jobs:
           Resolves #${ISSUE_NUMBER}
 
           ---
-          *This PR was generated automatically by the velocity bot.*" \
+          *This PR was generated automatically by the velocity bot.*
+          PREOF
+          # Sanitize title: strip shell metacharacters
+          SAFE_TITLE="$(echo "${ISSUE_TITLE}" | tr -d '`$"'\''\\' | head -c 200)"
+          gh pr create \
+            --title "feat: ${SAFE_TITLE} (issue #${ISSUE_NUMBER})" \
+            --body-file /tmp/pr-body.md \
             --head "claude/issue-${ISSUE_NUMBER}" \
             --base main
         env:
@@ -318,7 +351,7 @@ jobs:
 
       - name: Upload session log
         if: always()
-        uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4.3.1
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
         with:
           name: claude-session-log-${{ needs.check-trigger.outputs.issue_number }}
           path: /tmp/claude-session.log
