@@ -3,6 +3,18 @@ name: Documentation
 on:
   push:
     branches: [main]
+    paths:
+      - 'docs/**'
+      - 'src/**'
+      - 'pyproject.toml'
+      - '.github/workflows/docs.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'src/**'
+      - 'pyproject.toml'
+      - '.github/workflows/docs.yml'
   workflow_dispatch:
 
 permissions:
@@ -11,8 +23,8 @@ permissions:
   id-token: write
 
 concurrency:
-  group: "pages"
-  cancel-in-progress: false
+  group: "pages-${{ github.ref }}"
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
@@ -26,10 +38,11 @@ jobs:
           python-version: "3.11"
 
       - name: Cache pip dependencies
-        uses: actions/cache@v5
+        uses: actions/cache@v4
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-docs-${{ hashFiles('pyproject.toml') }}
+          restore-keys: ${{ runner.os }}-pip-docs-
 
       - name: Install pandoc
         run: |
@@ -42,16 +55,17 @@ jobs:
           pip install -e ".[docs]"
 
       - name: Build Sphinx documentation
-        run: |
-          cd docs
-          make html
+        working-directory: docs
+        run: make html
 
       - name: Upload artifact
+        if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v4
         with:
           path: docs/build/html
 
   deploy:
+    if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
     environment:
