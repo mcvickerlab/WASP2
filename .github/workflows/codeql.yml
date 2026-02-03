@@ -14,6 +14,9 @@ on:
     # Run weekly on Monday at 6am UTC
     - cron: '0 6 * * 1'
 
+# Restrict default permissions; jobs declare their own
+permissions: {}
+
 jobs:
   analyze:
     name: Analyze Python
