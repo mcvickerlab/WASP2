@@ -149,3 +149,7 @@ benchmarking/data/*.vcf.gz
 benchmarking/data/*.vcf.gz.tbi
 benchmarking/data/*.sam
 .benchmarks/
+benchmark_figures/
+
+# Sanity test data (downloaded from GitHub releases)
+tests/sanity/data/
