@@ -28,6 +28,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false  # Don't cancel production deployments
 
+# Deny-all default; each job declares its own least-privilege permissions
+permissions: {}
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
@@ -157,6 +160,6 @@ jobs:
           singularity build wasp2_${VERSION}.sif docker://${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}
 
       - name: Upload Singularity image to release
-        uses: softprops/action-gh-release@26994186c0ac3ef5cae75ac16aa32e8153525f77  # v1
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b  # v2
         with:
           files: wasp2_*.sif
