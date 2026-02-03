@@ -17,7 +17,6 @@ use std::collections::HashMap;
 
 /// Allele count data for a single variant
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct VariantCounts {
     pub chrom: String,
     pub pos: u32,
@@ -268,9 +267,9 @@ pub fn single_model(variants: Vec<VariantCounts>) -> Result<Vec<ImbalanceResult>
     let n_array: Vec<u32> = variants.iter().map(|v| v.ref_count + v.alt_count).collect();
 
     // Step 1: Optimize global dispersion parameter
-    println!("Optimizing dispersion parameter...");
+    eprintln!("Optimizing dispersion parameter...");
     let disp = optimize_dispersion(&ref_counts, &n_array)?;
-    println!("  Dispersion: {:.6}", disp);
+    eprintln!("  Dispersion: {:.6}", disp);
 
     // Step 2: Group by region
     let mut region_map: HashMap<String, Vec<usize>> = HashMap::new();
@@ -281,14 +280,13 @@ pub fn single_model(variants: Vec<VariantCounts>) -> Result<Vec<ImbalanceResult>
             .push(i);
     }
 
-    println!(
+    eprintln!(
         "Optimizing imbalance likelihood for {} regions...",
         region_map.len()
     );
 
     // Step 3: Calculate null and alternative likelihoods per region (parallel)
-    let alpha_null = 0.5 * (1.0 - disp) / disp;
-    let beta_null = 0.5 * (1.0 - disp) / disp;
+    let null_param = 0.5 * (1.0 - disp) / disp;
 
     let results: Result<Vec<_>> = region_map
         .par_iter()
@@ -298,7 +296,7 @@ pub fn single_model(variants: Vec<VariantCounts>) -> Result<Vec<ImbalanceResult>
             let region_n: Vec<u32> = indices.iter().map(|&i| n_array[i]).collect();
 
             // Null model: prob = 0.5 (no imbalance)
-            let null_ll = betabinom_logpmf_sum(&region_ref, &region_n, alpha_null, beta_null)?;
+            let null_ll = betabinom_logpmf_sum(&region_ref, &region_n, null_param, null_param)?;
 
             // Alternative model: optimize prob
             let (alt_ll, mu) = optimize_prob(&region_ref, &region_n, disp)?;
@@ -365,11 +363,11 @@ pub fn analyze_imbalance(
         })
         .collect();
 
-    println!("Processing {} variants after filtering", filtered.len());
+    eprintln!("Processing {} variants after filtering", filtered.len());
 
     // Run analysis based on method
     let mut results = match config.method {
-        AnalysisMethod::Single => single_model(filtered.clone())?,
+        AnalysisMethod::Single => single_model(filtered)?,
         AnalysisMethod::Linear => {
             return Err(anyhow::anyhow!("Linear model not yet implemented"));
         }
@@ -377,15 +375,18 @@ pub fn analyze_imbalance(
 
     // Remove pseudocounts from results
     for result in results.iter_mut() {
-        if result.ref_count >= config.pseudocount {
-            result.ref_count -= config.pseudocount;
+        if result.ref_count < config.pseudocount
+            || result.alt_count < config.pseudocount
+            || result.n < 2 * config.pseudocount
+        {
+            eprintln!(
+                "[WARN] Counts smaller than pseudocount for region {}: ref={}, alt={}, n={}, pc={}",
+                result.region, result.ref_count, result.alt_count, result.n, config.pseudocount
+            );
         }
-        if result.alt_count >= config.pseudocount {
-            result.alt_count -= config.pseudocount;
-        }
-        if result.n >= 2 * config.pseudocount {
-            result.n -= 2 * config.pseudocount;
-        }
+        result.ref_count = result.ref_count.saturating_sub(config.pseudocount);
+        result.alt_count = result.alt_count.saturating_sub(config.pseudocount);
+        result.n = result.n.saturating_sub(2 * config.pseudocount);
     }
 
     Ok(results)

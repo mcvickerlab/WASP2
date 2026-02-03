@@ -3,11 +3,8 @@ use rust_htslib::bam::{self, Read, Writer};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::io::{BufRead, BufReader};
 
-/// Buffered record info for paired-read handling
-struct BufferedRead {
-    pos: i64,
-    mpos: i64,
-}
+/// Marker for buffered first mate (position data is obtained from the BAM record directly)
+struct BufferedRead;
 
 struct ExpectedPos {
     pos1: i64,
@@ -102,6 +99,26 @@ fn parse_wasp_name(qname: &[u8]) -> Option<WaspNameInfo<'_>> {
     })
 }
 
+/// Check if remapped positions match expected positions (mate-order agnostic)
+fn positions_match(rec_pos: i64, mate_pos: i64, exp_pos1: i64, exp_pos2: i64, slop: i64) -> bool {
+    if slop < 0 {
+        eprintln!("[WARN] positions_match: negative slop ({}), clamping to 0", slop);
+    }
+    let slop = slop.max(0);
+    if slop == 0 {
+        (rec_pos == exp_pos1 && mate_pos == exp_pos2)
+            || (rec_pos == exp_pos2 && mate_pos == exp_pos1)
+    } else {
+        let pos_diff1 = (rec_pos - exp_pos1).abs();
+        let mate_diff1 = (mate_pos - exp_pos2).abs();
+        let pos_diff2 = (rec_pos - exp_pos2).abs();
+        let mate_diff2 = (mate_pos - exp_pos1).abs();
+
+        (pos_diff1 <= slop && mate_diff1 <= slop)
+            || (pos_diff2 <= slop && mate_diff2 <= slop)
+    }
+}
+
 /// WASP-aware remap filter:
 /// - Reads the remapped BAM with `_WASP_`-encoded names
 /// - Buffers records until both mates of a pair arrive (like Python's paired_read_gen)
@@ -123,8 +140,7 @@ pub fn filter_bam_wasp(
     let expected_sidecar = expected_sidecar.or_else(|| {
         std::env::var("WASP2_EXPECTED_SIDECAR")
             .ok()
-            .map(|s| if s.is_empty() { None } else { Some(s) })
-            .flatten()
+            .filter(|s| !s.is_empty())
     });
 
     // Optional sidecar of expected positions keyed by full qname.
@@ -238,13 +254,7 @@ pub fn filter_bam_wasp(
 
         if !read_buffer.contains_key(qname) {
             // First mate of this pair - buffer it and continue
-            read_buffer.insert(
-                qname.to_vec(),
-                BufferedRead {
-                    pos: rec_pos,
-                    mpos: mate_pos,
-                },
-            );
+            read_buffer.insert(qname.to_vec(), BufferedRead);
             continue;
         }
 
@@ -278,61 +288,18 @@ pub fn filter_bam_wasp(
         // For indels, allow slop tolerance to handle micro-homology shifts
         if let Some(expect) = pos_map.get(name) {
             // Prefer expected positions from sidecar (variant-aware), else use slop
-            if let Some(ref m) = expected_map {
-                if let Some((e1, e2)) = m.get(qname) {
-                    // Require remap to land on expected coords (mate-order agnostic)
-                    if !((rec_pos == *e1 && mate_pos == *e2)
-                        || (rec_pos == *e2 && mate_pos == *e1))
-                    {
-                        keep_set.remove(name);
-                        removed_moved += 1;
-                        continue;
-                    }
-                } else {
-                    let slop = expect.slop;
-                    let matches = if slop == 0 {
-                        // Strict matching for SNPs
-                        (rec_pos == expect.pos1 && mate_pos == expect.pos2)
-                            || (rec_pos == expect.pos2 && mate_pos == expect.pos1)
-                    } else {
-                        // Allow slop tolerance for indels
-                        let pos_diff1 = (rec_pos - expect.pos1).abs();
-                        let mate_diff1 = (mate_pos - expect.pos2).abs();
-                        let pos_diff2 = (rec_pos - expect.pos2).abs();
-                        let mate_diff2 = (mate_pos - expect.pos1).abs();
+            let matches = expected_map
+                .as_ref()
+                .and_then(|m| m.get(qname))
+                .map(|(e1, e2)| positions_match(rec_pos, mate_pos, *e1, *e2, 0))
+                .unwrap_or_else(|| {
+                    positions_match(rec_pos, mate_pos, expect.pos1, expect.pos2, expect.slop)
+                });
 
-                        (pos_diff1 <= slop && mate_diff1 <= slop)
-                            || (pos_diff2 <= slop && mate_diff2 <= slop)
-                    };
-
-                    if !matches {
-                        keep_set.remove(name);
-                        removed_moved += 1;
-                        continue;
-                    }
-                }
-            } else {
-                let slop = expect.slop;
-                let matches = if slop == 0 {
-                    // Strict matching for SNPs
-                    (rec_pos == expect.pos1 && mate_pos == expect.pos2)
-                        || (rec_pos == expect.pos2 && mate_pos == expect.pos1)
-                } else {
-                    // Allow slop tolerance for indels
-                    let pos_diff1 = (rec_pos - expect.pos1).abs();
-                    let mate_diff1 = (mate_pos - expect.pos2).abs();
-                    let pos_diff2 = (rec_pos - expect.pos2).abs();
-                    let mate_diff2 = (mate_pos - expect.pos1).abs();
-
-                    (pos_diff1 <= slop && mate_diff1 <= slop)
-                        || (pos_diff2 <= slop && mate_diff2 <= slop)
-                };
-
-                if !matches {
-                    keep_set.remove(name);
-                    removed_moved += 1;
-                    continue;
-                }
+            if !matches {
+                keep_set.remove(name);
+                removed_moved += 1;
+                continue;
             }
         }
 
@@ -448,6 +415,60 @@ mod tests {
         assert_eq!(info.total_seqs, 10);
         assert_eq!(info.delta1, 0);
         assert_eq!(info.delta2, 0);
+    }
+
+    #[test]
+    fn test_positions_match_exact_forward() {
+        assert!(positions_match(100, 200, 100, 200, 0));
+    }
+
+    #[test]
+    fn test_positions_match_exact_swapped() {
+        assert!(positions_match(200, 100, 100, 200, 0));
+    }
+
+    #[test]
+    fn test_positions_match_exact_mismatch() {
+        assert!(!positions_match(100, 201, 100, 200, 0));
+    }
+
+    #[test]
+    fn test_positions_match_slop_within() {
+        assert!(positions_match(101, 199, 100, 200, 2));
+    }
+
+    #[test]
+    fn test_positions_match_slop_swapped_within() {
+        assert!(positions_match(199, 101, 100, 200, 2));
+    }
+
+    #[test]
+    fn test_positions_match_slop_at_boundary() {
+        assert!(positions_match(102, 198, 100, 200, 2));
+    }
+
+    #[test]
+    fn test_positions_match_slop_past_boundary() {
+        assert!(!positions_match(103, 200, 100, 200, 2));
+    }
+
+    #[test]
+    fn test_positions_match_slop_mixed_fail() {
+        // One within slop, the other outside
+        assert!(!positions_match(101, 210, 100, 200, 2));
+    }
+
+    #[test]
+    fn test_positions_match_negative_positions() {
+        assert!(positions_match(-5, 10, -5, 10, 0));
+        assert!(positions_match(10, -5, -5, 10, 0));
+    }
+
+    #[test]
+    fn test_positions_match_negative_slop_clamped() {
+        // Negative slop is clamped to 0, so exact match is required
+        assert!(positions_match(100, 200, 100, 200, -5));
+        assert!(!positions_match(101, 200, 100, 200, -5));
     }
 
     #[test]

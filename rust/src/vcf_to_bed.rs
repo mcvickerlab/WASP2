@@ -54,19 +54,6 @@ impl Default for VcfToBedConfig {
 }
 
 // ============================================================================
-// Genotype Classification
-// ============================================================================
-
-/// Genotype classification (matches Python Genotype enum)
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Genotype {
-    HomRef,  // 0/0, 0|0
-    Het,     // 0/1, 1/0, 0|1, 1|0
-    HomAlt,  // 1/1, 1|1
-    Missing, // ./., .|.
-}
-
-// ============================================================================
 // Main Entry Point
 // ============================================================================
 
@@ -106,7 +93,9 @@ pub fn vcf_to_bed<P: AsRef<Path>>(
         return Err(anyhow::anyhow!(
             "BCF format not supported in Rust, use bcftools fallback"
         ));
-    } else if is_gzipped {
+    }
+
+    if is_gzipped {
         vcf_to_bed_vcf_gz(vcf_path, bed_path.as_ref(), config)
     } else {
         vcf_to_bed_vcf_plain(vcf_path, bed_path.as_ref(), config)
