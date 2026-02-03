@@ -39,7 +39,7 @@ RUN maturin build --release -m rust/Cargo.toml -o /wheels
 FROM python:3.11-slim-bookworm
 
 # Build arguments for versioning (can be overridden at build time)
-ARG VERSION=1.2.0
+ARG VERSION=1.3.0
 
 LABEL org.opencontainers.image.source="https://github.com/Jaureguy760/WASP2-final"
 LABEL org.opencontainers.image.description="WASP2: Allele-specific analysis of NGS data with Rust acceleration"
@@ -85,7 +85,7 @@ RUN samtools --version && bcftools --version && bedtools --version
 
 # Create non-root user for security
 RUN groupadd -g 1000 wasp2 && \
-    useradd -u 1000 -g wasp2 -m -s /bin/bash wasp2 && \
+    useradd -u 1000 -g wasp2 -m -s /sbin/nologin wasp2 && \
     mkdir -p /data && chown wasp2:wasp2 /data
 
 # Switch to non-root user
