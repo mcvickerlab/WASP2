@@ -9,7 +9,7 @@ From: jaureguy760/wasp2:latest
 
 %labels
     Author Jeff Jaureguy <jeffpjaureguy@gmail.com>
-    Version 1.2.0
+    Version 1.3.0
     Description WASP2: Allele-specific analysis of NGS data with Rust acceleration
 
 %help

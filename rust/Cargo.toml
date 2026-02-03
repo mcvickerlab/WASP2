@@ -8,11 +8,11 @@ name = "wasp2_rust"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-pyo3 = { version = "0.20", features = ["extension-module"] }
+pyo3 = { version = "0.28", features = ["extension-module"] }
 rust-htslib = { version = "0.44", default-features = false }  # Keep stable version (0.47+ has NFS build issues)
 rayon = "1.8"
 anyhow = "1.0"
-rustc-hash = "1.1"
+rustc-hash = "2.1"
 statrs = "0.18"
 rv = "0.19"
 coitrees = "0.4"  # Fast interval tree for BAM-BED intersection (15-30x faster than pybedtools)
@@ -23,10 +23,10 @@ smallvec = "1.13" # Reduce heap allocs for small overlap/span vectors
 
 # VCF/BCF parsing (noodles - pure Rust, no C dependencies)
 # Note: noodles-bcf depends on noodles-vcf, so we use compatible versions
-noodles-vcf = "0.72"   # Match version used by noodles-bcf
-noodles-bcf = "0.68"
-noodles-core = "0.16"
-noodles-bgzf = "0.33"  # For compressed VCF (.vcf.gz)
+noodles-vcf = "0.83"   # Updated from 0.72
+noodles-bcf = "0.76"   # Updated to match noodles-vcf
+noodles-core = "0.16"  # Core types remain stable
+noodles-bgzf = "0.35"  # Updated for compatibility
 flate2 = "1.1"         # For gzip decompression
 
 [dev-dependencies]
