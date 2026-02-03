@@ -77,6 +77,13 @@ const RHO_EPSILON: f64 = 1e-10;
 ///
 /// The beta-binomial parameterization uses alpha = mu * (1-rho) / rho, which
 /// causes division by zero when rho=0 and produces zero alpha/beta when rho=1.
+///
+/// # Note on Silent Clamping
+///
+/// This function does not log warnings when clamping occurs because it is called
+/// in tight optimization loops where logging would impact performance. Extreme
+/// rho values (at boundaries) may indicate data quality issues. The Python
+/// implementation (`as_analysis.py`) supports optional warning via `warn=True`.
 #[inline]
 fn clamp_rho(rho: f64) -> f64 {
     rho.clamp(RHO_EPSILON, 1.0 - RHO_EPSILON)
