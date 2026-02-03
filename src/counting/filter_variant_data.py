@@ -181,7 +181,7 @@ def parse_intersect_region_new(
         has_header=False,
         infer_schema_length=0,
         new_columns=vcf_cols,
-        dtypes=vcf_schema,
+        schema_overrides=dict(zip(vcf_cols, vcf_schema)),
     )
 
     # Check how many region columns

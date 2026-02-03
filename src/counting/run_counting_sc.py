@@ -50,33 +50,27 @@ class WaspCountSC:
         self.barcode_file = barcode_file  # Maybe could be optional?
 
         self.feature_file = feature_file
-        self.samples = samples
         self.use_region_names = use_region_names
-        self.out_file = out_file
-        self.temp_loc = temp_loc
-
-        # Optional inputs and outputs?
-        # output_sparse_mtx = None
-        # SNP OUTPUT?!?!?
 
         # Make sure samples turned into str list
         # Ideally single sample for single cell
-        if isinstance(self.samples, str):
+        normalized_samples: list[str] | None
+        if isinstance(samples, str):
             # Check if sample file or comma delim string
-            if Path(self.samples).is_file():
-                with open(self.samples) as sample_file:
-                    self.samples = [l.strip() for l in sample_file]
-
+            if Path(samples).is_file():
+                with open(samples) as sample_file:
+                    normalized_samples = [l.strip() for l in sample_file]
             else:
-                self.samples = [s.strip() for s in self.samples.split(",")]
+                normalized_samples = [s.strip() for s in samples.split(",")]
+        else:
+            normalized_samples = samples
+        self.samples: list[str] | None = normalized_samples
 
         # parse output?
-        if self.out_file is None:
-            self.out_file = str(Path.cwd() / "allele_counts.h5ad")
+        self.out_file: str = out_file if out_file is not None else str(Path.cwd() / "allele_counts.h5ad")
 
         # Failsafe if decorator doesnt create temp_loc
-        if self.temp_loc is None:
-            self.temp_loc = str(Path.cwd())
+        self.temp_loc: str = temp_loc if temp_loc is not None else str(Path.cwd())
 
         # Parse variant file prefix (handle VCF, BCF, PGEN)
         variant_name = Path(self.variant_file).name
@@ -194,6 +188,7 @@ def run_count_variants_sc(
         include_gt=True,
     )
 
+    assert count_files.feature_file is not None
     intersect_vcf_region(
         vcf_file=count_files.vcf_bed,
         region_file=count_files.feature_file,

@@ -1,9 +1,12 @@
+import logging
 from collections.abc import Generator
 from typing import Any
 
 import numpy as np
 import polars as pl
 from pysam import AlignedSegment, AlignmentFile
+
+logger = logging.getLogger(__name__)
 
 
 # Generator for iterating through bam
@@ -73,6 +76,7 @@ def align_pos_gen(
         yield align_start
         yield align_stop
 
+    assert read.query_sequence is not None
     yield len(read.query_sequence)
 
 
@@ -129,7 +133,7 @@ def get_read_het_data(
     max_seqs: int | None = None,
     include_indels: bool = False,
     insert_qual: int = 30,
-) -> tuple[list[str], list[str], list[pl.Series]] | None:
+) -> tuple[list[str], list[Any], list[pl.Series]] | None:
     """Extract heterozygous variant data from read with indel support.
 
     Args:
@@ -147,6 +151,9 @@ def get_read_het_data(
         allele_series: List of polars Series with allele data
     """
     pos_list = read_df.select(["start", "stop"]).rows()
+
+    assert read.query_sequence is not None, "Read has no query sequence"
+    assert read.query_qualities is not None, "Read has no query qualities"
 
     try:
         if include_indels:
@@ -194,6 +201,7 @@ def get_read_het_data(
 
     except KeyError:
         # remove reads overlap unmapped/gap
+        logger.debug("Read %s overlaps unmapped/gap region, skipping", read.query_name)
         return None
 
 
@@ -434,8 +442,8 @@ def write_read(
         if old_len != new_len:
             # Sequence length changed due to indel, update CIGAR to simple match
             # These reads will be realigned anyway during remapping
-            read.cigartuples = [(0, new_len)]  # 0 = MATCH operation
+            read.cigartuples = [(0, new_len)]  # type: ignore[assignment]  # pysam stubs
         read.query_sequence = new_seq
         read.query_name = new_name
-        read.query_qualities = new_qual
+        read.query_qualities = new_qual  # type: ignore[assignment]  # pysam stubs
     out_bam.write(read)

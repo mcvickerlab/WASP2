@@ -349,10 +349,10 @@ def version_callback(
     import rich
     import typer
 
-    from wasp2 import __version__
+    from wasp2 import __version__  # type: ignore[attr-defined]  # defined in __init__.py
 
     deps = {
-        "rich": rich.__version__,
+        "rich": rich.__version__,  # type: ignore[attr-defined]
         "typer": typer.__version__,
     }
     if extra_deps:

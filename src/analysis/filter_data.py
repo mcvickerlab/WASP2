@@ -5,6 +5,7 @@ Functions for filtering VCF, GTF, BAM files and creating intersection files.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -16,6 +17,8 @@ from pysam import VariantFile
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+logger = logging.getLogger(__name__)
+
 
 def write_sample_snp(in_file: str | Path, in_sample: str, out_dir: str | Path) -> None:
     """
@@ -25,7 +28,7 @@ def write_sample_snp(in_file: str | Path, in_sample: str, out_dir: str | Path) -
     :param str in_sample: Name of sample column in VCF to check GT
     :param str out_dir: Name of output directory to write filtered VCF
     """
-    vcf = VariantFile(in_file)
+    vcf = VariantFile(str(in_file))
     vcf.subset_samples([in_sample])
 
     out_vcf = VariantFile(str(Path(out_dir) / "filter.vcf"), "w", header=vcf.header)
@@ -33,10 +36,14 @@ def write_sample_snp(in_file: str | Path, in_sample: str, out_dir: str | Path) -
     vcf_data = vcf.fetch()
 
     for record in vcf_data:
+        alts = record.alts
+        ref = record.ref
         if (
-            (len(record.ref) == 1)
-            and (len(record.alts) == 1)
-            and (len(record.alts[0]) == 1)
+            alts is not None
+            and ref is not None
+            and (len(ref) == 1)
+            and (len(alts) == 1)
+            and (len(alts[0]) == 1)
             and (
                 (
                     (record.samples[in_sample]["GT"][0] == 0)
@@ -50,7 +57,7 @@ def write_sample_snp(in_file: str | Path, in_sample: str, out_dir: str | Path) -
         ):
             out_vcf.write(record)
 
-    print("Created Filtered VCF")
+    logger.info("Created filtered VCF")
 
 
 def write_filter_gtf(
@@ -92,7 +99,7 @@ def write_filter_gtf(
 
     if out_dir is not None:
         df.to_csv(str(Path(out_dir) / "filter.gtf"), sep="\t", header=False, index=False)
-        print("GTF filtered by feature")
+        logger.info("GTF filtered by feature")
 
 
 def intersect_snp(vcf_file: str | Path, region_file: str | Path, out_dir: str | Path) -> None:
@@ -108,7 +115,7 @@ def intersect_snp(vcf_file: str | Path, region_file: str | Path, out_dir: str | 
 
     a.intersect(b, wb=True, output=str(Path(out_dir) / "intersect.bed"))
 
-    print("Created Intersection File")
+    logger.info("Created intersection file")
 
 
 def parse_intersect_df(intersect_file: str | Path) -> pd.DataFrame:
@@ -130,7 +137,7 @@ def parse_intersect_df(intersect_file: str | Path) -> pd.DataFrame:
 
     return_df = df[["chrom", "pos", "ref", "alt", "peak"]].drop_duplicates().reset_index(drop=True)
 
-    print("SNP DF Created")
+    logger.info("SNP DataFrame created")
     return return_df
 
 
@@ -154,7 +161,7 @@ def parse_gene_df(intersect_file: str | Path) -> pd.DataFrame:
         .reset_index(drop=True)
     )
 
-    print("SNP DF Created")
+    logger.info("SNP DataFrame created")
     return return_df
 
 
@@ -169,9 +176,9 @@ def process_bam(bam_file: str | Path, region_file: str | Path, out_dir: str | Pa
     out_bam = Path(out_dir) / "filter.bam"
     sort_out = Path(out_dir) / "filter.sort.bam"
 
-    print("Filtering reads that overlap regions of interest")
+    logger.info("Filtering reads that overlap regions of interest")
     pysam.view("-L", str(region_file), "-o", str(out_bam), str(bam_file), catch_stdout=False)
     pysam.sort(str(out_bam), "-o", str(sort_out), catch_stdout=False)
     pysam.index(str(sort_out), catch_stdout=False)
 
-    print("Bam file filtered!")
+    logger.info("BAM file filtered")

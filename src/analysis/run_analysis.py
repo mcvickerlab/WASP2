@@ -6,6 +6,7 @@ using the Rust-accelerated backend.
 
 from __future__ import annotations
 
+import logging
 from csv import reader
 from pathlib import Path
 from typing import Literal
@@ -17,6 +18,8 @@ try:
     from wasp2_rust import analyze_imbalance as rust_analyze_imbalance
 except ImportError:
     rust_analyze_imbalance = None
+
+logger = logging.getLogger(__name__)
 
 
 class WaspAnalysisData:
@@ -63,8 +66,8 @@ class WaspAnalysisData:
         self.phased: bool = bool(phased)
 
         # Default to single dispersion model
-        if model in {"single", "linear"}:
-            self.model: Literal["single", "linear"] = model  # type: ignore[assignment]
+        if model == "linear":
+            self.model: Literal["single", "linear"] = "linear"
         else:
             self.model = "single"
 
@@ -108,7 +111,7 @@ class WaspAnalysisData:
                 self.groupby = count_cols[region_idx + 1]  # Set group
             else:
                 # Maybe throw error instead
-                print(f"{self.groupby} not found in columns \n{count_cols}")
+                logger.warning("%s not found in columns %s", self.groupby, count_cols)
                 self.groupby = None
 
         # Create default outfile

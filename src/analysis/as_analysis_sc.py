@@ -6,6 +6,7 @@ stored in AnnData format with SNP counts in layers.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import numpy as np
@@ -17,6 +18,8 @@ from scipy.stats import betabinom, chi2, false_discovery_control, zscore
 
 # Local imports
 from .as_analysis import opt_phased_new, opt_prob, opt_unphased_dp
+
+logger = logging.getLogger(__name__)
 
 
 def adata_count_qc(
@@ -115,7 +118,7 @@ def get_imbalance_sc(
         nonzero_idx = np.where(n_counts_group > snp_cutoff)  # Get indices where counts were found
 
         if nonzero_idx[0].size == 0:
-            print(f"Skipping {group_name}: No SNP counts found")
+            logger.warning("Skipping %s: no SNP counts found", group_name)
             continue
 
         # Remove snps with 0 counts from regions
@@ -148,7 +151,7 @@ def get_imbalance_sc(
         # region_snp_dict = region_agg_df.loc[region_agg_df["N"] >= region_cutoff, "snp_idx"].to_dict()
 
         if not region_snp_dict:
-            print(f"Skipping {group_name}: No regions with total allele counts >= {min_count}")
+            logger.warning("Skipping %s: no regions with total allele counts >= %d", group_name, min_count)
             continue
 
         gt_array_typed: NDArray[np.uint8] | None

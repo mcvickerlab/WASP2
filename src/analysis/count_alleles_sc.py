@@ -4,12 +4,15 @@ Python Version: 3.8
 """
 
 # Default Python package Imports
+import logging
 import time
 from collections import Counter
 
 # External package imports
 import numpy as np
 from pysam.libcalignmentfile import AlignmentFile
+
+logger = logging.getLogger(__name__)
 
 
 def parse_barcode(bc_series, read):
@@ -25,6 +28,7 @@ def parse_barcode(bc_series, read):
         return bc_series.get(barcode)
 
     except KeyError:
+        logger.debug("Missing CB barcode tag on read %s", read.alignment.query_name)
         return None
 
 
@@ -49,6 +53,7 @@ def pileup_pos(bam, bc_series, chrom, snp_pos):
         )
 
     except StopIteration:
+        logger.debug("No pileup data at %s:%d", chrom, snp_pos)
         return None
 
 
@@ -159,7 +164,7 @@ def make_count_df_sc(bam_file, df, bc_series):
     total_start = time.time()
 
     for chrom in chrom_list:
-        print(f"Counting Alleles for {chrom}")
+        logger.info("Counting alleles for %s", chrom)
 
         snp_list = df.loc[df["chrom"] == chrom][["pos", "ref", "alt"]].to_records(index=False)
 
@@ -171,12 +176,12 @@ def make_count_df_sc(bam_file, df, bc_series):
             )
         except ValueError:
             skip_chrom.append(chrom)
-            print(f"Skipping {chrom}: Contig not found\n")
+            logger.warning("Skipping %s: contig not found", chrom)
         else:
-            print(f"Counted {len(snp_list)} SNP's in {time.time() - start} seconds!\n")
+            logger.info("Counted %d SNPs in %.2f seconds", len(snp_list), time.time() - start)
 
     total_end = time.time()
-    print(f"Counted all SNP's in {total_end - total_start} seconds!")
+    logger.info("Counted all SNPs in %.2f seconds", total_end - total_start)
 
     if skip_chrom:
         df = df.loc[not df["chrom"].isin(skip_chrom)]

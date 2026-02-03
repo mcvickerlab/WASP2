@@ -1,3 +1,4 @@
+import logging
 from collections import namedtuple
 from collections.abc import Callable
 from itertools import combinations
@@ -15,13 +16,15 @@ from scipy.stats import betabinom, chi2, false_discovery_control
 # Local imports
 from .as_analysis import opt_phased_new, opt_prob, opt_unphased_dp
 
+logger = logging.getLogger(__name__)
+
 
 # Use these functions to figure out how to optimize per group
 def get_imbalance_func(
     ref_count: NDArray[np.integer[Any]],
     n_count: NDArray[np.integer[Any]],
     phase_array: NDArray[np.integer[Any]] | None = None,
-) -> tuple[Callable[..., float], tuple[Any, ...]]:
+) -> tuple[Callable[..., Any], tuple[Any, ...]]:
     """
     Determine which imbalance function to use based on data characteristics.
 
@@ -30,6 +33,9 @@ def get_imbalance_func(
     :param phase_array: Optional phasing information array
     :return: Tuple of (likelihood function, function arguments)
     """
+    like_func: Callable[..., Any]
+    like_func_args: tuple[Any, ...]
+
     if len(ref_count) == 1:
         # Parse single opt
         like_func = opt_prob
@@ -38,17 +44,17 @@ def get_imbalance_func(
         like_func_args = (ref_count[0], n_count[0])
     elif phase_array is None:
         # Do unphased
-        like_func = opt_unphased_dp  # type: ignore[assignment]
+        like_func = opt_unphased_dp
         like_func_args = (
             ref_count[:1],
-            n_count[:1],  # type: ignore[assignment]
+            n_count[:1],
             ref_count[1:],
             n_count[1:],
         )
     else:
         # Do phased
-        like_func = opt_phased_new  # type: ignore[assignment]
-        like_func_args = (ref_count, n_count, phase_array)  # type: ignore[assignment]
+        like_func = opt_phased_new
+        like_func_args = (ref_count, n_count, phase_array)
 
     return like_func, like_func_args
 
@@ -102,7 +108,7 @@ def get_compared_imbalance(
     # Should I be comparing all combos by default??? Seems like a lot
     if groups is None:
         groups = list(adata.var["group"].dropna().unique())
-        print("Comparing all combinations of available groups")
+        logger.info("Comparing all combinations of available groups")
     elif len(groups) == 1:
         raise ValueError("Please provide 2 or more groups to compare.")
 
@@ -155,7 +161,7 @@ def get_compared_imbalance(
         )  # Get indices where no counts were found
 
         if nonzero_idx[0].size == 0:
-            print(f"Skipping {group_name}: No SNP counts found")
+            logger.warning("Skipping %s: no SNP counts found", group_name)
             continue
 
         # Remove snps with 0 counts from regions
@@ -214,9 +220,9 @@ def get_compared_imbalance(
         #     "snp_idx"].to_dict()
 
         if not region_snp_dict:
-            print(
-                f"Skipping {group1}-{group2} Comparison: "
-                f"No shared regions with allele counts >= {min_count}"
+            logger.warning(
+                "Skipping %s-%s comparison: no shared regions with allele counts >= %d",
+                group1, group2, min_count,
             )
 
             continue
@@ -269,6 +275,10 @@ def compare_imbalance_between_groups(
         region_n2 = n_counts2[snp_list,]
 
         # Process which model we'll use to process likelihood per group
+        like_func: Callable[..., Any]
+        like_func_args1: tuple[Any, ...]
+        like_func_args2: tuple[Any, ...]
+
         if len(snp_list) == 1:
             # Parse single opt
             like_func = opt_prob
@@ -279,18 +289,18 @@ def compare_imbalance_between_groups(
 
         elif gt_array is None:
             # Do unphased
-            like_func = opt_unphased_dp  # type: ignore[assignment]
+            like_func = opt_unphased_dp
 
             like_func_args1 = (
                 region_ref1[:1],
-                region_n1[:1],  # type: ignore[assignment]
+                region_n1[:1],
                 region_ref1[1:],
                 region_n1[1:],
             )
 
             like_func_args2 = (
                 region_ref2[:1],
-                region_n2[:1],  # type: ignore[assignment]
+                region_n2[:1],
                 region_ref2[1:],
                 region_n2[1:],
             )
@@ -305,10 +315,10 @@ def compare_imbalance_between_groups(
             if region_gt[0] > 0:
                 region_gt = 1 - region_gt
 
-            like_func = opt_phased_new  # type: ignore[assignment]
+            like_func = opt_phased_new
 
-            like_func_args1 = (region_ref1, region_n1, region_gt)  # type: ignore[assignment]
-            like_func_args2 = (region_ref2, region_n2, region_gt)  # type: ignore[assignment]
+            like_func_args1 = (region_ref1, region_n1, region_gt)
+            like_func_args2 = (region_ref2, region_n2, region_gt)
 
         # Null Hypothesis: Imbalance is the same
         null_res: OptimizeResult = minimize_scalar(
@@ -393,7 +403,7 @@ def get_compared_imbalance_diff_snps(
     # Should I be comparing all combos by default??? Seems like a lot
     if groups is None:
         groups = list(adata.var["group"].dropna().unique())
-        print("Comparing all combinations of available groups")
+        logger.info("Comparing all combinations of available groups")
     elif len(groups) == 1:
         raise ValueError("Please provide 2 or more groups to compare.")
 
@@ -488,7 +498,7 @@ def get_compared_imbalance_diff_snps(
         )
 
         if df.empty:
-            print(f"Skipping {group1} - {group2} comparison. No shared regions.")
+            logger.warning("Skipping %s - %s comparison: no shared regions", group1, group2)
         else:
             # Using a tuple as key
             df_dict[(group1, group2)] = df

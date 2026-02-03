@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import timeit
 from collections import defaultdict
 from collections.abc import Iterator
@@ -16,6 +17,8 @@ from scipy.sparse import csr_matrix
 # Local imports
 from .count_alleles import find_read_aln_pos
 
+logger = logging.getLogger(__name__)
+
 
 class CountStatsSC:
     """Container for mutable single-cell counting statistics.
@@ -24,21 +27,21 @@ class CountStatsSC:
     """
 
     def __init__(self) -> None:
-        self.ref_count = defaultdict(int)
-        self.alt_count = defaultdict(int)
-        self.other_count = defaultdict(int)
+        self.ref_count: defaultdict[tuple[int, int], int] = defaultdict(int)
+        self.alt_count: defaultdict[tuple[int, int], int] = defaultdict(int)
+        self.other_count: defaultdict[tuple[int, int], int] = defaultdict(int)
 
         # Keep track of metadata
 
         # Number
-        self.num_snps = defaultdict(int)
-        self.num_barcodes = defaultdict(int)
-        self.reads_counted = defaultdict(int)
+        self.num_snps: defaultdict[str, int] = defaultdict(int)
+        self.num_barcodes: defaultdict[str, int] = defaultdict(int)
+        self.reads_counted: defaultdict[str, int] = defaultdict(int)
 
         # Reads that were not counted
-        self.reads_skipped_no_barcode = defaultdict(int)
-        self.reads_skipped_barcode_no_index = defaultdict(int)
-        self.reads_skipped_prev_counted = defaultdict(int)
+        self.reads_skipped_no_barcode: defaultdict[str, int] = defaultdict(int)
+        self.reads_skipped_barcode_no_index: defaultdict[str, int] = defaultdict(int)
+        self.reads_skipped_prev_counted: defaultdict[str, int] = defaultdict(int)
 
     def stats_to_df(self) -> pd.DataFrame:
         """Convert statistics to a pandas DataFrame."""
@@ -115,10 +118,11 @@ def make_count_matrix(
                 )
 
             except ValueError:
-                print(f"Skipping {chrom}: Contig not found!")
+                logger.warning("Skipping %s: Contig not found!", chrom)
             else:
-                print(
-                    f"{chrom}: Counted {chrom_df.height} SNP's in {timeit.default_timer() - start:.2f} seconds!"
+                logger.info(
+                    "%s: Counted %d SNPs in %.2f seconds",
+                    chrom, chrom_df.height, timeit.default_timer() - start,
                 )
 
     # Create sparse matrices
@@ -218,7 +222,7 @@ def count_bc_snp_alleles(
 
             # Check if there is a read barcode
             try:
-                read_bc = read.get_tag("CB")
+                read_bc = str(read.get_tag("CB"))
             except KeyError:
                 sc_counts.reads_skipped_no_barcode[chrom] += 1
                 continue
@@ -229,9 +233,13 @@ def count_bc_snp_alleles(
                 continue
 
             seq = read.query_sequence
+            if seq is None:
+                continue
 
             # TEST binary search
             qpos = find_read_aln_pos(read, pos - 1)
+            if qpos is None:
+                continue
 
             try:
                 if seq[qpos] == ref:

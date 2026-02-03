@@ -7,11 +7,14 @@ and auto-detecting file properties.
 from __future__ import annotations
 
 import json
+import logging
 import re
 from pathlib import Path
 
 from pysam import VariantFile
 from pysam.libcalignmentfile import AlignmentFile
+
+logger = logging.getLogger(__name__)
 
 
 class WaspDataFiles:
@@ -38,7 +41,7 @@ class WaspDataFiles:
 
         # Autoparse args
         if self.is_paired is None:
-            with AlignmentFile(self.bam_file, "r") as bam:
+            with AlignmentFile(str(self.bam_file), "r") as bam:
                 self.is_paired = next(bam.head(1)).is_paired
 
         # Process samples as list
@@ -63,7 +66,7 @@ class WaspDataFiles:
             variant_path = Path(self.variant_file)
             suffix = variant_path.suffix.lower()
             if suffix in (".vcf", ".bcf") or str(variant_path).lower().endswith(".vcf.gz"):
-                with VariantFile(self.variant_file, "r") as vcf:
+                with VariantFile(str(self.variant_file), "r") as vcf:
                     vcf_samps = next(vcf.fetch()).samples
                     samps_phased = [vcf_samps[s].phased for s in self.samples]
 
@@ -133,4 +136,4 @@ class WaspDataFiles:
         with open(out_file, "w") as json_out:
             json.dump(self.__dict__, json_out)
 
-        print(f"File Data written to JSON...\n{out_file}")
+        logger.info("File data written to JSON: %s", out_file)
