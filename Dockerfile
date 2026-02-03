@@ -38,7 +38,8 @@ RUN maturin build --release -m rust/Cargo.toml -o /wheels
 # ============================================================================
 FROM python:3.11-slim-bookworm
 
-# Build arguments for versioning (can be overridden at build time)
+# Version: keep in sync with rust/Cargo.toml (single source of truth)
+# Run scripts/check-version-consistency.sh to verify
 ARG VERSION=1.3.0
 
 LABEL org.opencontainers.image.source="https://github.com/Jaureguy760/WASP2-final"
