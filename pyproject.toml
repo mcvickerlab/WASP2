@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "wasp2"
-version = "1.3.0"
+dynamic = ["version"]  # Version sourced from rust/Cargo.toml via maturin
 description = "Allele-specific analysis of next-generation sequencing data with high-performance multi-format variant support (VCF/cyvcf2/PGEN)"
 readme = "README.md"
 authors = [
