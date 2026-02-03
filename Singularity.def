@@ -1,6 +1,9 @@
 # WASP2 Singularity Definition File
 # Builds a Singularity/Apptainer container from the Docker image
 #
+# Version: keep in sync with rust/Cargo.toml (single source of truth)
+# Run scripts/check-version-consistency.sh to verify
+#
 # Build: singularity build wasp2.sif Singularity.def
 # Or pull directly: singularity pull docker://jaureguy760/wasp2:latest
 

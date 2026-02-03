@@ -1,6 +1,15 @@
 # Dependabot Auto-Approve and Auto-Merge
 # Automatically approves and merges patch/minor dependency updates
 # Based on GitHub's official documentation and best practices
+#
+# Safety model:
+#   - Patch updates: auto-approve + auto-merge (after required CI checks pass)
+#   - Minor updates: auto-approve only (manual merge required)
+#   - Major updates: labeled for manual review (no auto-approve or merge)
+#
+# IMPORTANT: This workflow relies on branch protection requiring CI status
+# checks (Lint, Security Scan, Rust Checks, Test) before merge.
+# The --auto flag in gh pr merge waits for these checks to pass.
 
 name: Dependabot Auto-Merge
 
