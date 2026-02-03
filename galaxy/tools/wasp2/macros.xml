@@ -57,7 +57,9 @@
     <xml name="sample_param">
         <param argument="--samples" type="text" value="" optional="true"
                label="Sample name(s)"
-               help="One or more samples to use from variant file. Comma-separated or leave empty for all samples."/>
+               help="One or more samples to use from variant file. Comma-separated or leave empty for all samples.">
+            <expand macro="sanitize_sample"/>
+        </param>
     </xml>
 
     <xml name="region_param">
@@ -72,25 +74,30 @@
                help="Use high-performance Rust backend for BAM processing (recommended)"/>
     </xml>
 
-    <xml name="threads_param">
-        <param argument="--threads" type="integer" value="1" min="1" max="32"
-               label="Number of threads"
-               help="Threads for BAM I/O operations"/>
-    </xml>
-
     <xml name="include_indels_param">
         <param argument="--include-indels" type="boolean" truevalue="--include-indels" falsevalue="--no-indels"
                checked="false" label="Include indels"
                help="Process indels in addition to SNPs"/>
     </xml>
 
-    <!-- Sanitizer for sample names -->
+    <!-- Sanitizer for sample names (letters, digits, underscore, hyphen, comma) -->
     <xml name="sanitize_sample">
         <sanitizer invalid_char="">
             <valid initial="string.letters,string.digits">
                 <add value="_"/>
                 <add value="-"/>
                 <add value=","/>
+            </valid>
+        </sanitizer>
+    </xml>
+
+    <!-- Sanitizer for column/attribute names (letters, digits, underscore, hyphen, dot) -->
+    <xml name="sanitize_column_name">
+        <sanitizer invalid_char="">
+            <valid initial="string.letters,string.digits">
+                <add value="_"/>
+                <add value="-"/>
+                <add value="."/>
             </valid>
         </sanitizer>
     </xml>

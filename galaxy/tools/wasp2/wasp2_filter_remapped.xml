@@ -69,7 +69,7 @@
             <param argument="--same-locus-slop" type="integer" value="0" min="0" max="10"
                    label="Same-locus tolerance (bp)"
                    help="Allow remapped reads to differ by this many bp. Use 2-3 for indels."/>
-            <param name="output_keep_info" type="boolean" truevalue="true" falsevalue="false"
+            <param name="output_keep_info" type="boolean" truevalue="true" falsevalue=""
                    checked="false" label="Output kept reads info"
                    help="Also output BAM and list of kept reads (for debugging)"/>
         </section>
