@@ -206,6 +206,82 @@ jobs:
         run: cargo test || true
 
   # ===========================================================================
+  # Real Data Sanity Check (chr21)
+  # Validates Rust pipeline produces consistent results on real HG00731 data
+  # ===========================================================================
+  sanity-test:
+    name: Real Data Sanity Check (chr21)
+    runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
+    needs: [test]  # Only run after main tests pass
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache sanity dataset
+        id: cache-sanity
+        uses: actions/cache@v4
+        with:
+          path: tests/sanity/data
+          key: wasp2-sanity-chr21-v1
+
+      - name: Download sanity dataset
+        if: steps.cache-sanity.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p tests/sanity/data
+          wget -q -O tests/sanity/data/wasp2-sanity-chr21-v1.tar.xz \
+            https://github.com/Jaureguy760/WASP2-final/releases/download/v1.3.0/wasp2-sanity-chr21-v1.tar.xz
+          cd tests/sanity/data
+          tar -xJf wasp2-sanity-chr21-v1.tar.xz --strip-components=1
+          rm -f wasp2-sanity-chr21-v1.tar.xz
+
+      - name: Verify sanity data
+        run: |
+          echo "Sanity data files:"
+          ls -lh tests/sanity/data/
+          # Verify required files exist
+          test -f tests/sanity/data/chr21.bam || exit 1
+          test -f tests/sanity/data/chr21.vcf.gz || exit 1
+          test -f tests/sanity/data/expected_counts.tsv || exit 1
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-sanity-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
+          restore-keys: pip-sanity-${{ runner.os }}-
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-registry-${{ runner.os }}-${{ hashFiles('rust/Cargo.lock') }}
+          restore-keys: cargo-registry-${{ runner.os }}-
+
+      - name: Cache Rust target
+        uses: actions/cache@v4
+        with:
+          path: rust/target
+          key: cargo-target-${{ runner.os }}-${{ hashFiles('rust/Cargo.lock', 'rust/src/**/*.rs') }}
+          restore-keys: cargo-target-${{ runner.os }}-
+
+      - name: Build Rust extension
+        run: |
+          MAMBAFORGE_PYTHON=/Users/jeffjaureguy/mambaforge/bin/python
+          pip install maturin --quiet
+          maturin build --release -m rust/Cargo.toml -i $MAMBAFORGE_PYTHON
+          pip install rust/target/wheels/*.whl --force-reinstall --prefer-binary --quiet
+
+      - name: Install package
+        run: pip install -e ".[dev]" --no-build-isolation --prefer-binary --quiet || pip install -e "." --prefer-binary --quiet
+
+      - name: Run sanity tests
+        run: pytest tests/sanity/ -v --tb=short -x
+
+  # ===========================================================================
   # Nextflow Integration Tests
   # NOTE: Disabled - requires GitHub-hosted runners (STAR, Nextflow, nf-test)
   # Re-enable when billing issue is resolved or self-hosted runner has these tools
