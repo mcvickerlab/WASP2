@@ -1,5 +1,5 @@
 # WASP2 Continuous Integration Workflow
-# Runs on all PRs and pushes to main
+# Runs on all PRs and pushes to main/dev
 # Configured for self-hosted Mac ARM64 runner
 # Optimized with caching for faster builds
 
@@ -7,9 +7,9 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, dev]
   pull_request:
-    branches: [main, develop]
+    branches: [main, dev]
   workflow_dispatch:
 
 env:
