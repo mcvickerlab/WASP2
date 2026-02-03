@@ -68,58 +68,55 @@ jobs:
     name: Extended Unit Tests
     needs: plan
     if: needs.plan.outputs.run_unit == 'true'
-    runs-on: [self-hosted, macOS, ARM64, python, testing]
+    runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ['3.10', '3.11', '3.12']
+    defaults:
+      run:
+        shell: bash
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           fetch-depth: 0
 
-      - name: Set up Python
-        env:
-          PYTHON_VERSION: ${{ matrix.python-version }}
+      - name: Set up virtual environment
         run: |
-          echo "Using Python $PYTHON_VERSION"
+          python -m venv .venv
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          .venv/bin/python --version
+          .venv/bin/pip --version
 
       - name: Cache pip
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
         with:
           path: ~/.cache/pip
-          key: pip-nightly-${{ matrix.python-version }}-${{ hashFiles('pyproject.toml') }}
+          key: pip-nightly-${{ hashFiles('pyproject.toml') }}
           restore-keys: |
-            pip-nightly-${{ matrix.python-version }}-
             pip-nightly-
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip --quiet
+          pip install --upgrade pip --quiet
           pip install maturin pytest pytest-cov pytest-xdist --quiet
 
       - name: Build Rust extension
-        run: |
-          maturin build --release -m rust/Cargo.toml
-          pip install rust/target/wheels/*.whl --force-reinstall --quiet
+        run: cd rust && maturin develop --release
 
       - name: Install package
-        run: pip install -e ".[dev]" --no-build-isolation --quiet || pip install -e "." --quiet
+        run: pip install -e ".[dev]" --no-build-isolation --prefer-binary --quiet || pip install -e "." --prefer-binary --quiet
 
       - name: Run unit tests with coverage
         run: |
           pytest tests/ -v --tb=short \
             --cov=src --cov-report=xml --cov-report=html \
             -m "not slow and not benchmark and not integration" \
-            -n auto
+            --ignore=tests/benchmarks/
 
       - name: Upload coverage
         uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238  # v4
         with:
           files: ./coverage.xml
-          flags: nightly-py${{ matrix.python-version }}
+          flags: nightly
           fail_ci_if_error: false
 
   # Integration tests
@@ -127,11 +124,21 @@ jobs:
     name: Integration Tests
     needs: plan
     if: needs.plan.outputs.run_integration == 'true'
-    runs-on: [self-hosted, macOS, ARM64, analysis, bioinformatics]
+    runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
     timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Set up virtual environment
+        run: |
+          python -m venv .venv
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          .venv/bin/python --version
+          .venv/bin/pip --version
 
       - name: Cache pip
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
@@ -141,14 +148,14 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip --quiet
+          pip install --upgrade pip --quiet
           pip install maturin pytest --quiet
 
-      - name: Build and install
-        run: |
-          maturin build --release -m rust/Cargo.toml
-          pip install rust/target/wheels/*.whl --force-reinstall --quiet
-          pip install -e ".[dev]" --no-build-isolation --quiet || pip install -e "." --quiet
+      - name: Build Rust extension
+        run: cd rust && maturin develop --release
+
+      - name: Install package
+        run: pip install -e ".[dev]" --no-build-isolation --prefer-binary --quiet || pip install -e "." --prefer-binary --quiet
 
       - name: Run integration tests
         run: |
@@ -166,11 +173,21 @@ jobs:
     name: Performance Benchmarks
     needs: plan
     if: needs.plan.outputs.run_benchmarks == 'true'
-    runs-on: [self-hosted, macOS, ARM64, analysis, bioinformatics]
+    runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
     timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Set up virtual environment
+        run: |
+          python -m venv .venv
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          .venv/bin/python --version
+          .venv/bin/pip --version
 
       - name: Cache benchmark data
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
@@ -182,14 +199,14 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip --quiet
+          pip install --upgrade pip --quiet
           pip install maturin pytest pytest-benchmark --quiet
 
-      - name: Build optimized
-        run: |
-          maturin build --release -m rust/Cargo.toml
-          pip install rust/target/wheels/*.whl --force-reinstall --quiet
-          pip install -e ".[dev]" --no-build-isolation --quiet || pip install -e "." --quiet
+      - name: Build Rust extension
+        run: cd rust && maturin develop --release
+
+      - name: Install package
+        run: pip install -e ".[dev]" --no-build-isolation --prefer-binary --quiet || pip install -e "." --prefer-binary --quiet
 
       - name: Run benchmarks
         run: |
@@ -197,7 +214,7 @@ jobs:
             --benchmark-only \
             --benchmark-autosave \
             --benchmark-compare \
-            --benchmark-json=benchmark-results.json || true
+            --benchmark-json=benchmark-results.json
 
       - name: Upload benchmark results
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
@@ -208,6 +225,7 @@ jobs:
             benchmark-results.json
 
   # Nextflow pipeline tests (optional, expensive)
+  # Uses GitHub-hosted runners since Nextflow/STAR aren't on the self-hosted runner
   nextflow-tests:
     name: Nextflow Pipeline Tests
     needs: plan
@@ -254,7 +272,7 @@ jobs:
       - name: Run Nextflow tests
         working-directory: pipelines/nf-rnaseq
         run: |
-          nextflow run . -profile test --outdir test_output || true
+          nextflow run . -profile test --outdir test_output
         env:
           NXF_ANSI_LOG: false
 
