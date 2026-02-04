@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0a0a0f"/>
+      <stop offset="100%" style="stop-color:#12121a"/>
+    </linearGradient>
+    <linearGradient id="amber" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#F5A623"/>
+      <stop offset="100%" style="stop-color:#FFB938"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <pattern id="honeycomb" patternUnits="userSpaceOnUse" width="56" height="100" patternTransform="scale(2)">
+      <path d="M28 66L0 50L0 16L28 0L56 16L56 50L28 66Z" fill="none" stroke="rgba(245,166,35,0.15)" stroke-width="1"/>
+      <path d="M28 100L0 84L0 50L28 34L56 50L56 84L28 100Z" fill="none" stroke="rgba(245,166,35,0.15)" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="400" fill="url(#bg)"/>
+  <rect width="1200" height="400" fill="url(#honeycomb)"/>
+
+  <!-- Glowing orbs -->
+  <circle cx="200" cy="100" r="150" fill="rgba(245,166,35,0.05)"/>
+  <circle cx="1000" cy="300" r="200" fill="rgba(245,166,35,0.03)"/>
+
+  <!-- Hexagon decorations -->
+  <g fill="none" stroke="rgba(245,166,35,0.3)" stroke-width="1">
+    <polygon points="100,200 130,183 130,148 100,131 70,148 70,183" transform="translate(-20, -50)"/>
+    <polygon points="100,200 130,183 130,148 100,131 70,148 70,183" transform="translate(1050, 100)"/>
+    <polygon points="100,200 130,183 130,148 100,131 70,148 70,183" transform="translate(950, -30) scale(0.7)"/>
+  </g>
+
+  <!-- Logo circle with glow -->
+  <circle cx="600" cy="160" r="72" fill="none" stroke="url(#amber)" stroke-width="3" filter="url(#glow)"/>
+  <circle cx="600" cy="160" r="82" fill="none" stroke="rgba(139,90,0,0.5)" stroke-width="1"/>
+
+  <!-- WASP2 text -->
+  <text x="600" y="290" text-anchor="middle" font-family="Georgia, serif" font-size="72" font-weight="bold" fill="#f4f0e8" filter="url(#glow)">
+    <tspan fill="#F5A623">WASP</tspan><tspan fill="#f4f0e8">2</tspan>
+  </text>
+
+  <!-- Tagline -->
+  <text x="600" y="340" text-anchor="middle" font-family="Georgia, serif" font-size="24" font-style="italic" fill="#a8a4a0" letter-spacing="2">
+    Allele-Specific Analysis Pipeline
+  </text>
+
+  <!-- Small floating particles -->
+  <circle cx="150" cy="80" r="3" fill="#F5A623" opacity="0.6"/>
+  <circle cx="300" cy="350" r="2" fill="#F5A623" opacity="0.4"/>
+  <circle cx="900" cy="60" r="2.5" fill="#F5A623" opacity="0.5"/>
+  <circle cx="1050" cy="280" r="3" fill="#F5A623" opacity="0.6"/>
+  <circle cx="450" cy="370" r="2" fill="#F5A623" opacity="0.4"/>
+  <circle cx="750" cy="50" r="2" fill="#F5A623" opacity="0.5"/>
+</svg>
