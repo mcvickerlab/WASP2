@@ -182,9 +182,9 @@ async def generate_with_edge_tts(text: str, output_file: Path) -> None:
         )
 
     # Voice configuration for Queen Bee character
-    voice = "en-US-JennyNeural"
+    voice = "en-US-AriaNeural"  # Try Aria instead of Jenny
     rate = "+0%"  # Normal rate
-    pitch = "+0Hz"  # Normal pitch (no modification to avoid artifacts)
+    pitch = "+0Hz"  # Normal pitch
 
     try:
         communicate = edge_tts.Communicate(text, voice, rate=rate, pitch=pitch)
