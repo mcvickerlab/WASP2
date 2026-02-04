@@ -1,8 +1,6 @@
-<h1 align="center">
-<img src="doc/wasp2_hex_logo_v1.png" width="300">
-</h1>
-
-<h3 align="center"><em>Allele-Specific Analysis Pipeline</em></h3>
+<p align="center">
+  <img src="doc/banner.svg" alt="WASP2 - Allele-Specific Analysis Pipeline" width="100%">
+</p>
 
 <p align="center">
   <a href="https://github.com/Jaureguy760/WASP2-final/actions/workflows/ci.yml">
