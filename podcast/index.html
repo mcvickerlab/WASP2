@@ -759,6 +759,304 @@
         audio {
             display: none;
         }
+
+        /* ===== ACCESSIBILITY FIXES ===== */
+
+        /* Focus indicators (WCAG 2.1) */
+        .play-pause-btn:focus-visible,
+        .skip-btn:focus-visible,
+        .mute-btn:focus-visible,
+        .nav-tab:focus-visible,
+        .close-btn:focus-visible,
+        .episode-card:focus-visible,
+        .speed-select:focus-visible,
+        .download-btn:focus-visible {
+            outline: 3px solid var(--amber-glow);
+            outline-offset: 3px;
+        }
+
+        .audio-progress:focus-visible {
+            outline: 3px solid var(--amber-glow);
+            outline-offset: 2px;
+        }
+
+        .volume-slider:focus-visible {
+            outline: 2px solid var(--amber-glow);
+        }
+
+        /* Reduced motion support */
+        @media (prefers-reduced-motion: reduce) {
+            .particle,
+            .waveform-bar {
+                animation: none !important;
+            }
+            .logo {
+                animation: none;
+            }
+            * {
+                transition-duration: 0.01ms !important;
+            }
+        }
+
+        /* ===== NEW AUDIO CONTROLS ===== */
+
+        .audio-controls-row {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .skip-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: var(--hive-cell);
+            border: 1px solid var(--hive-surface);
+            color: var(--text-soft);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+
+        .skip-btn:hover {
+            background: var(--amber-dim);
+            color: var(--text-bright);
+            border-color: var(--amber-glow);
+        }
+
+        .skip-btn svg {
+            width: 16px;
+            height: 16px;
+            fill: currentColor;
+        }
+
+        /* Volume control */
+        .volume-control {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-left: auto;
+            padding-left: 1rem;
+        }
+
+        .mute-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 4px;
+            background: transparent;
+            border: 1px solid var(--hive-cell);
+            color: var(--text-soft);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .mute-btn:hover {
+            color: var(--amber-glow);
+            border-color: var(--amber-dim);
+        }
+
+        .mute-btn.muted {
+            color: var(--text-dim);
+        }
+
+        .mute-btn svg {
+            width: 18px;
+            height: 18px;
+            fill: currentColor;
+        }
+
+        .volume-slider {
+            width: 80px;
+            height: 4px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: var(--hive-cell);
+            border-radius: 2px;
+            cursor: pointer;
+        }
+
+        .volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            background: var(--amber-glow);
+            border-radius: 50%;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .volume-slider::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        .volume-slider::-moz-range-thumb {
+            width: 14px;
+            height: 14px;
+            background: var(--amber-glow);
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+        }
+
+        /* Speed control */
+        .speed-control {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .speed-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            color: var(--text-dim);
+            letter-spacing: 0.1em;
+        }
+
+        .speed-select {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            background: var(--hive-cell);
+            color: var(--text-soft);
+            border: 1px solid var(--hive-surface);
+            border-radius: 4px;
+            padding: 0.4rem 0.6rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .speed-select:hover {
+            border-color: var(--amber-dim);
+            color: var(--text-bright);
+        }
+
+        /* Download button */
+        .download-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            letter-spacing: 0.1em;
+            background: transparent;
+            color: var(--amber-glow);
+            border: 1px solid var(--amber-dim);
+            padding: 0.6rem 1rem;
+            border-radius: 4px;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-top: 1rem;
+        }
+
+        .download-btn:hover {
+            background: var(--amber-glow);
+            color: var(--hive-dark);
+        }
+
+        .download-btn svg {
+            width: 14px;
+            height: 14px;
+            fill: currentColor;
+        }
+
+        /* Loading state */
+        .audio-player.loading .play-pause-btn {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        .audio-player.loading .play-pause-btn::after {
+            content: '';
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            border: 3px solid transparent;
+            border-top-color: var(--hive-dark);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Error state */
+        .audio-error {
+            background: rgba(255, 100, 100, 0.1);
+            border: 1px solid rgba(255, 100, 100, 0.3);
+            color: #ff6b6b;
+            padding: 1rem 1.5rem;
+            border-radius: 4px;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+        }
+
+        .audio-error::before {
+            content: '⚠ ';
+        }
+
+        /* Secondary controls row */
+        .audio-secondary-controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--hive-cell);
+        }
+
+        /* Progress bar improvements */
+        .audio-progress {
+            position: relative;
+        }
+
+        .audio-progress-handle {
+            position: absolute;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 14px;
+            height: 14px;
+            background: var(--amber-bright);
+            border-radius: 50%;
+            opacity: 0;
+            transition: opacity 0.2s;
+            pointer-events: none;
+        }
+
+        .audio-progress:hover .audio-progress-handle,
+        .audio-progress:focus .audio-progress-handle {
+            opacity: 1;
+        }
+
+        /* Transcript styles */
+        .transcript-content {
+            max-height: 500px;
+            overflow-y: auto;
+            padding-right: 1rem;
+        }
+
+        .transcript-content p {
+            margin-bottom: 1rem;
+            line-height: 1.8;
+        }
+
+        /* Improved text-dim for better contrast */
+        .episode-duration,
+        .audio-time,
+        .speed-label {
+            color: #8b8880; /* Improved contrast */
+        }
     </style>
 </head>
 <body>
@@ -853,8 +1151,12 @@
             }
         });
 
-        // Create floating particles
+        // Create floating particles (respects prefers-reduced-motion)
         function createParticles() {
+            // Skip particles if user prefers reduced motion
+            if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                return;
+            }
             const container = document.getElementById('particles');
             for (let i = 0; i < 30; i++) {
                 const particle = document.createElement('div');
@@ -867,11 +1169,16 @@
             }
         }
 
-        // Create episode card
+        // Create episode card with keyboard accessibility
         function createEpisodeCard(ep) {
             const card = document.createElement('div');
             card.className = 'episode-card';
             card.dataset.episode = ep.number;
+
+            // Accessibility: make focusable and act as button
+            card.setAttribute('tabindex', '0');
+            card.setAttribute('role', 'button');
+            card.setAttribute('aria-label', `Episode ${ep.number}: ${ep.title}. ${ep.subtitle}. ${ep.duration}`);
 
             const numEl = document.createElement('div');
             numEl.className = 'episode-number';
@@ -891,6 +1198,7 @@
 
             const topicsEl = document.createElement('div');
             topicsEl.className = 'episode-topics';
+            topicsEl.setAttribute('aria-label', 'Topics');
             ep.topics.forEach(t => {
                 const tag = document.createElement('span');
                 tag.className = 'topic-tag';
@@ -898,9 +1206,10 @@
                 topicsEl.appendChild(tag);
             });
 
-            const durationEl = document.createElement('div');
+            const durationEl = document.createElement('time');
             durationEl.className = 'episode-duration';
             durationEl.textContent = ep.duration;
+            durationEl.setAttribute('datetime', 'PT' + ep.duration.split('-')[0] + 'M');
 
             card.appendChild(numEl);
             card.appendChild(titleEl);
@@ -909,7 +1218,16 @@
             card.appendChild(topicsEl);
             card.appendChild(durationEl);
 
+            // Click handler
             card.addEventListener('click', () => loadEpisode(ep.number));
+
+            // Keyboard handler (Enter or Space)
+            card.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    loadEpisode(ep.number);
+                }
+            });
 
             return card;
         }
@@ -940,10 +1258,11 @@
             const tabs = document.getElementById('navTabs');
             tabs.replaceChildren();
 
-            ['Listen', 'Chronicle', 'Illumination'].forEach((name, i) => {
+            ['Listen', 'Transcript', 'Chronicle', 'Illumination'].forEach((name, i) => {
                 const tab = document.createElement('button');
                 tab.className = 'nav-tab' + (i === 0 ? ' active' : '');
                 tab.textContent = name.toUpperCase();
+                tab.setAttribute('aria-label', name + ' view');
                 tab.addEventListener('click', () => showTab(name.toLowerCase()));
                 tabs.appendChild(tab);
             });
@@ -951,6 +1270,15 @@
             await showTab('listen');
             viewer.scrollIntoView({ behavior: 'smooth' });
         }
+
+        // SVG icon templates (static, trusted content)
+        const SVG_PLAY = '<svg aria-hidden="true" viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21"/></svg>';
+        const SVG_PAUSE = '<svg aria-hidden="true" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
+        const SVG_SKIP_BACK = '<svg viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>';
+        const SVG_SKIP_FWD = '<svg viewBox="0 0 24 24"><path d="M12 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z"/></svg>';
+        const SVG_VOLUME = '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>';
+        const SVG_MUTED = '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>';
+        const SVG_DOWNLOAD = '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>';
 
         async function showTab(type) {
             const ep = episodes.find(e => e.number === currentEpisode);
@@ -960,56 +1288,120 @@
             tabs.forEach((tab, i) => {
                 tab.classList.toggle('active',
                     (type === 'listen' && i === 0) ||
-                    (type === 'chronicle' && i === 1) ||
-                    (type === 'illumination' && i === 2)
+                    (type === 'transcript' && i === 1) ||
+                    (type === 'chronicle' && i === 2) ||
+                    (type === 'illumination' && i === 3)
                 );
             });
 
             const contentArea = document.getElementById('contentArea');
 
+            // ===== LISTEN TAB - Fully Accessible Audio Player =====
             if (type === 'listen') {
                 contentArea.replaceChildren();
 
                 const player = document.createElement('div');
-                player.className = 'audio-player';
+                player.className = 'audio-player loading';
+                player.setAttribute('role', 'region');
+                player.setAttribute('aria-label', 'Audio Player');
 
                 const inner = document.createElement('div');
                 inner.className = 'audio-player-inner';
 
                 const title = document.createElement('h3');
-                title.innerHTML = '<span>Episode ' + String(ep.number).padStart(3, '0') + ':</span> ' + ep.title;
+                const titleSpan = document.createElement('span');
+                titleSpan.textContent = 'Episode ' + String(ep.number).padStart(3, '0') + ': ';
+                title.appendChild(titleSpan);
+                title.appendChild(document.createTextNode(ep.title));
 
                 const subtitle = document.createElement('div');
                 subtitle.className = 'audio-subtitle';
                 subtitle.textContent = ep.subtitle.toUpperCase();
 
-                // Custom audio player
+                // Custom audio player with full controls
                 const customPlayer = document.createElement('div');
                 customPlayer.className = 'custom-audio-player';
 
+                // Skip Back button
+                const skipBackBtn = document.createElement('button');
+                skipBackBtn.className = 'skip-btn';
+                skipBackBtn.setAttribute('aria-label', 'Skip back 15 seconds');
+                skipBackBtn.textContent = '−15';
+
+                // Play/Pause button with ARIA
                 const playBtn = document.createElement('button');
                 playBtn.className = 'play-pause-btn';
-                playBtn.innerHTML = '<svg viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21"/></svg>';
+                playBtn.setAttribute('aria-label', 'Play ' + ep.title);
+                playBtn.setAttribute('aria-pressed', 'false');
+                playBtn.innerHTML = SVG_PLAY;
+
+                // Skip Forward button
+                const skipFwdBtn = document.createElement('button');
+                skipFwdBtn.className = 'skip-btn';
+                skipFwdBtn.setAttribute('aria-label', 'Skip forward 15 seconds');
+                skipFwdBtn.textContent = '+15';
 
                 const audioInfo = document.createElement('div');
                 audioInfo.className = 'audio-info';
 
+                // Progress bar with ARIA slider role
                 const progress = document.createElement('div');
                 progress.className = 'audio-progress';
+                progress.setAttribute('role', 'slider');
+                progress.setAttribute('tabindex', '0');
+                progress.setAttribute('aria-label', 'Seek audio position');
+                progress.setAttribute('aria-valuemin', '0');
+                progress.setAttribute('aria-valuemax', '100');
+                progress.setAttribute('aria-valuenow', '0');
+                progress.setAttribute('aria-valuetext', '0 seconds');
+
                 const progressFill = document.createElement('div');
                 progressFill.className = 'audio-progress-fill';
+                const progressHandle = document.createElement('div');
+                progressHandle.className = 'audio-progress-handle';
                 progress.appendChild(progressFill);
+                progress.appendChild(progressHandle);
 
+                // Time display
                 const timeDisplay = document.createElement('div');
                 timeDisplay.className = 'audio-time';
-                timeDisplay.innerHTML = '<span class="current-time">0:00</span><span class="total-time">--:--</span>';
+                const currentTimeSpan = document.createElement('span');
+                currentTimeSpan.className = 'current-time';
+                currentTimeSpan.textContent = '0:00';
+                const totalTimeSpan = document.createElement('span');
+                totalTimeSpan.className = 'total-time';
+                totalTimeSpan.textContent = '--:--';
+                timeDisplay.appendChild(currentTimeSpan);
+                timeDisplay.appendChild(totalTimeSpan);
 
                 audioInfo.appendChild(progress);
                 audioInfo.appendChild(timeDisplay);
 
-                // Waveform
+                // Volume control
+                const volumeControl = document.createElement('div');
+                volumeControl.className = 'volume-control';
+
+                const muteBtn = document.createElement('button');
+                muteBtn.className = 'mute-btn';
+                muteBtn.setAttribute('aria-label', 'Mute');
+                muteBtn.setAttribute('aria-pressed', 'false');
+                muteBtn.innerHTML = SVG_VOLUME;
+
+                const volumeSlider = document.createElement('input');
+                volumeSlider.type = 'range';
+                volumeSlider.className = 'volume-slider';
+                volumeSlider.min = '0';
+                volumeSlider.max = '100';
+                volumeSlider.value = '80';
+                volumeSlider.setAttribute('aria-label', 'Volume');
+
+                volumeControl.appendChild(muteBtn);
+                volumeControl.appendChild(volumeSlider);
+
+                // Waveform visualization
                 const waveform = document.createElement('div');
                 waveform.className = 'waveform';
+                waveform.setAttribute('aria-hidden', 'true');
                 for (let i = 0; i < 12; i++) {
                     const bar = document.createElement('div');
                     bar.className = 'waveform-bar';
@@ -1018,65 +1410,270 @@
                     waveform.appendChild(bar);
                 }
 
+                // Assemble main controls
+                customPlayer.appendChild(skipBackBtn);
                 customPlayer.appendChild(playBtn);
+                customPlayer.appendChild(skipFwdBtn);
                 customPlayer.appendChild(audioInfo);
+                customPlayer.appendChild(volumeControl);
                 customPlayer.appendChild(waveform);
+
+                // Secondary controls row
+                const secondaryControls = document.createElement('div');
+                secondaryControls.className = 'audio-secondary-controls';
+
+                // Speed control
+                const speedControl = document.createElement('div');
+                speedControl.className = 'speed-control';
+                const speedLabel = document.createElement('span');
+                speedLabel.className = 'speed-label';
+                speedLabel.textContent = 'SPEED';
+                const speedSelect = document.createElement('select');
+                speedSelect.className = 'speed-select';
+                speedSelect.setAttribute('aria-label', 'Playback speed');
+                [0.5, 0.75, 1, 1.25, 1.5, 2].forEach(speed => {
+                    const opt = document.createElement('option');
+                    opt.value = speed;
+                    opt.textContent = speed + 'x';
+                    if (speed === 1) opt.selected = true;
+                    speedSelect.appendChild(opt);
+                });
+                speedControl.appendChild(speedLabel);
+                speedControl.appendChild(speedSelect);
+
+                // Download button
+                const downloadBtn = document.createElement('a');
+                downloadBtn.className = 'download-btn';
+                downloadBtn.href = ep.audioFile;
+                downloadBtn.download = 'WASP-Chronicles-E' + String(ep.number).padStart(2, '0') + '.mp3';
+                downloadBtn.setAttribute('aria-label', 'Download episode ' + ep.number);
+                downloadBtn.innerHTML = SVG_DOWNLOAD + ' DOWNLOAD';
+
+                secondaryControls.appendChild(speedControl);
+                secondaryControls.appendChild(downloadBtn);
 
                 const desc = document.createElement('p');
                 desc.className = 'audio-description';
                 desc.textContent = ep.description;
 
+                // Error container
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'audio-error';
+                errorDiv.style.display = 'none';
+                errorDiv.setAttribute('role', 'alert');
+
                 // Hidden audio element
                 audioElement = document.createElement('audio');
                 audioElement.src = ep.audioFile;
+                audioElement.volume = 0.8;
+                audioElement.preload = 'metadata';
+
+                let audioDuration = 0;
 
                 // Audio event handlers
                 audioElement.addEventListener('loadedmetadata', () => {
-                    const total = formatTime(audioElement.duration);
-                    timeDisplay.querySelector('.total-time').textContent = total;
+                    audioDuration = audioElement.duration;
+                    totalTimeSpan.textContent = formatTime(audioDuration);
+                    progress.setAttribute('aria-valuemax', Math.floor(audioDuration));
+                    player.classList.remove('loading');
                 });
 
                 audioElement.addEventListener('timeupdate', () => {
-                    const percent = (audioElement.currentTime / audioElement.duration) * 100;
+                    const currentTime = audioElement.currentTime;
+                    const percent = (currentTime / audioDuration) * 100;
                     progressFill.style.width = percent + '%';
-                    timeDisplay.querySelector('.current-time').textContent = formatTime(audioElement.currentTime);
+                    progressHandle.style.left = percent + '%';
+                    currentTimeSpan.textContent = formatTime(currentTime);
+                    progress.setAttribute('aria-valuenow', Math.floor(currentTime));
+                    progress.setAttribute('aria-valuetext', formatTimeVerbose(currentTime) + ' of ' + formatTimeVerbose(audioDuration));
                 });
 
                 audioElement.addEventListener('ended', () => {
                     isPlaying = false;
-                    playBtn.innerHTML = '<svg viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21"/></svg>';
+                    playBtn.setAttribute('aria-pressed', 'false');
+                    playBtn.setAttribute('aria-label', 'Play ' + ep.title);
+                    playBtn.innerHTML = SVG_PLAY;
                     waveform.querySelectorAll('.waveform-bar').forEach(b => b.classList.remove('active'));
                 });
 
-                playBtn.addEventListener('click', () => {
-                    if (isPlaying) {
-                        audioElement.pause();
-                        playBtn.innerHTML = '<svg viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21"/></svg>';
-                        waveform.querySelectorAll('.waveform-bar').forEach(b => b.classList.remove('active'));
-                    } else {
-                        audioElement.play();
-                        playBtn.innerHTML = '<svg viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
-                        waveform.querySelectorAll('.waveform-bar').forEach(b => b.classList.add('active'));
+                audioElement.addEventListener('error', () => {
+                    player.classList.remove('loading');
+                    let message = 'Could not load audio.';
+                    if (audioElement.error) {
+                        switch (audioElement.error.code) {
+                            case MediaError.MEDIA_ERR_ABORTED:
+                                message = 'Audio loading was aborted.';
+                                break;
+                            case MediaError.MEDIA_ERR_NETWORK:
+                                message = 'Network error while loading audio. Please check your connection.';
+                                break;
+                            case MediaError.MEDIA_ERR_DECODE:
+                                message = 'Audio file appears to be corrupted or in an unsupported format.';
+                                break;
+                            case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+                                message = 'Audio format not supported by your browser.';
+                                break;
+                        }
                     }
-                    isPlaying = !isPlaying;
+                    errorDiv.textContent = message;
+                    errorDiv.style.display = 'block';
                 });
 
+                audioElement.addEventListener('waiting', () => player.classList.add('loading'));
+                audioElement.addEventListener('canplay', () => player.classList.remove('loading'));
+
+                // Play/Pause toggle with proper Promise handling
+                function togglePlay() {
+                    if (isPlaying) {
+                        audioElement.pause();
+                        playBtn.setAttribute('aria-pressed', 'false');
+                        playBtn.setAttribute('aria-label', 'Play ' + ep.title);
+                        playBtn.innerHTML = SVG_PLAY;
+                        waveform.querySelectorAll('.waveform-bar').forEach(b => b.classList.remove('active'));
+                        isPlaying = false;
+                    } else {
+                        audioElement.play()
+                            .then(() => {
+                                playBtn.setAttribute('aria-pressed', 'true');
+                                playBtn.setAttribute('aria-label', 'Pause ' + ep.title);
+                                playBtn.innerHTML = SVG_PAUSE;
+                                waveform.querySelectorAll('.waveform-bar').forEach(b => b.classList.add('active'));
+                                isPlaying = true;
+                            })
+                            .catch((err) => {
+                                console.error('Playback failed:', err);
+                                errorDiv.textContent = err.name === 'NotAllowedError'
+                                    ? 'Please interact with the page first to enable audio.'
+                                    : 'Playback failed: ' + err.message;
+                                errorDiv.style.display = 'block';
+                            });
+                    }
+                }
+                playBtn.addEventListener('click', togglePlay);
+
+                // Skip buttons
+                skipBackBtn.addEventListener('click', () => {
+                    audioElement.currentTime = Math.max(0, audioElement.currentTime - 15);
+                });
+                skipFwdBtn.addEventListener('click', () => {
+                    audioElement.currentTime = Math.min(audioDuration, audioElement.currentTime + 15);
+                });
+
+                // Progress bar click
                 progress.addEventListener('click', (e) => {
                     const rect = progress.getBoundingClientRect();
                     const percent = (e.clientX - rect.left) / rect.width;
-                    audioElement.currentTime = percent * audioElement.duration;
+                    audioElement.currentTime = percent * audioDuration;
                 });
 
+                // Progress bar keyboard navigation (WCAG)
+                progress.addEventListener('keydown', (e) => {
+                    const step = e.shiftKey ? 30 : 5;
+                    switch (e.key) {
+                        case 'ArrowRight':
+                        case 'ArrowUp':
+                            e.preventDefault();
+                            audioElement.currentTime = Math.min(audioDuration, audioElement.currentTime + step);
+                            break;
+                        case 'ArrowLeft':
+                        case 'ArrowDown':
+                            e.preventDefault();
+                            audioElement.currentTime = Math.max(0, audioElement.currentTime - step);
+                            break;
+                        case 'Home':
+                            e.preventDefault();
+                            audioElement.currentTime = 0;
+                            break;
+                        case 'End':
+                            e.preventDefault();
+                            audioElement.currentTime = audioDuration;
+                            break;
+                    }
+                });
+
+                // Volume control
+                let savedVolume = 0.8;
+                volumeSlider.addEventListener('input', () => {
+                    const vol = volumeSlider.value / 100;
+                    audioElement.volume = vol;
+                    savedVolume = vol > 0 ? vol : savedVolume;
+                    muteBtn.innerHTML = vol === 0 ? SVG_MUTED : SVG_VOLUME;
+                    muteBtn.classList.toggle('muted', vol === 0);
+                });
+
+                muteBtn.addEventListener('click', () => {
+                    if (audioElement.volume > 0) {
+                        savedVolume = audioElement.volume;
+                        audioElement.volume = 0;
+                        volumeSlider.value = 0;
+                        muteBtn.innerHTML = SVG_MUTED;
+                        muteBtn.classList.add('muted');
+                        muteBtn.setAttribute('aria-pressed', 'true');
+                    } else {
+                        audioElement.volume = savedVolume;
+                        volumeSlider.value = savedVolume * 100;
+                        muteBtn.innerHTML = SVG_VOLUME;
+                        muteBtn.classList.remove('muted');
+                        muteBtn.setAttribute('aria-pressed', 'false');
+                    }
+                });
+
+                // Speed control
+                speedSelect.addEventListener('change', () => {
+                    audioElement.playbackRate = parseFloat(speedSelect.value);
+                });
+
+                // Assemble player
                 inner.appendChild(title);
                 inner.appendChild(subtitle);
                 inner.appendChild(customPlayer);
+                inner.appendChild(secondaryControls);
                 inner.appendChild(audioElement);
                 inner.appendChild(desc);
+                inner.appendChild(errorDiv);
                 player.appendChild(inner);
                 contentArea.appendChild(player);
                 return;
             }
 
+            // ===== TRANSCRIPT TAB =====
+            if (type === 'transcript') {
+                contentArea.replaceChildren();
+                const transcriptDiv = document.createElement('div');
+                transcriptDiv.className = 'transcript-content';
+
+                try {
+                    const response = await fetch(ep.chronicleFile);
+                    if (!response.ok) throw new Error('not found');
+                    let text = await response.text();
+
+                    // Clean for transcript
+                    text = text.replace(/^---[\s\S]*?---\s*/m, '');
+                    text = text.replace(/```[\s\S]*?```/g, '');
+                    text = text.replace(/## Episode Metadata[\s\S]*$/, '');
+                    text = text.replace(/\|.*\|/g, '');
+                    text = text.replace(/^#{1,6}\s*/gm, '');
+                    text = text.replace(/\*\*([^*]+)\*\*/g, '$1');
+                    text = text.replace(/\*([^*]+)\*/g, '$1');
+                    text = text.replace(/`[^`]+`/g, '');
+
+                    const paragraphs = text.split(/\n\n+/).filter(p => p.trim());
+                    paragraphs.forEach(p => {
+                        const pEl = document.createElement('p');
+                        pEl.textContent = p.trim();
+                        transcriptDiv.appendChild(pEl);
+                    });
+                } catch (err) {
+                    const errP = document.createElement('p');
+                    errP.style.color = '#ff6b6b';
+                    errP.textContent = 'Transcript not available.';
+                    transcriptDiv.appendChild(errP);
+                }
+                contentArea.appendChild(transcriptDiv);
+                return;
+            }
+
+            // ===== CHRONICLE / ILLUMINATION TABS =====
             const file = type === 'chronicle' ? ep.chronicleFile : ep.illuminationFile;
 
             try {
@@ -1088,9 +1685,19 @@
                 contentArea.replaceChildren();
                 const errorP = document.createElement('p');
                 errorP.style.color = '#ff6b6b';
-                errorP.textContent = 'Error loading content. Make sure you are serving this from a web server.';
+                errorP.textContent = 'Error loading content. Make sure you are serving from a web server.';
                 contentArea.appendChild(errorP);
             }
+        }
+
+        // Format time for verbose ARIA announcements
+        function formatTimeVerbose(seconds) {
+            if (isNaN(seconds)) return '0 seconds';
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            if (mins === 0) return secs + ' seconds';
+            if (secs === 0) return mins + ' minute' + (mins !== 1 ? 's' : '');
+            return mins + ' minute' + (mins !== 1 ? 's' : '') + ' ' + secs + ' seconds';
         }
 
         function formatTime(seconds) {
