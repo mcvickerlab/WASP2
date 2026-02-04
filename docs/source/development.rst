@@ -237,6 +237,28 @@ Release Process
 5. Push tag: ``git push origin v1.1.0``
 6. Publish to PyPI: ``python -m build && twine upload dist/*``
 
+AI-Assisted Development
+-----------------------
+
+WASP2 pipeline development benefits from AI tooling. See the full integration guide:
+:doc:`/seqera_ai_integration`
+
+Recommended Workflow
+~~~~~~~~~~~~~~~~~~~~
+
+1. **Design**: Use Claude Code for architecture and complex logic
+2. **Generate**: Use Seqera AI for DSL2 syntax and nf-test templates
+3. **Validate**: Use Anthropic life-sciences scripts for environment checks
+4. **Review**: Use Claude Code for code review and optimization
+
+Tool Selection
+~~~~~~~~~~~~~~
+
+* **Architecture and design** → Claude Code
+* **Nextflow DSL2 syntax** → Seqera AI
+* **nf-test generation** → Seqera AI
+* **Environment validation** → ``nextflow run . -profile test -preview``
+
 Getting Help
 ------------
 
