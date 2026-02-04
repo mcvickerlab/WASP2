@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The WASP's Nest - Podcast</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
+    <style>
+        :root {
+            --honey: #F5A623;
+            --honey-dark: #C47F17;
+            --hive-bg: #1a1a2e;
+            --hive-surface: #16213e;
+            --hive-card: #0f3460;
+            --text-primary: #e8e8e8;
+            --text-secondary: #b8b8b8;
+            --accent: #FFD700;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--hive-bg);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--hive-surface) 0%, var(--hive-card) 100%);
+            padding: 2rem;
+            text-align: center;
+            border-bottom: 3px solid var(--honey);
+        }
+
+        .header h1 {
+            color: var(--honey);
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .header .tagline {
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+
+        .logo {
+            width: 120px;
+            height: 120px;
+            margin-bottom: 1rem;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .series-banner {
+            background: var(--hive-card);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            border-left: 4px solid var(--honey);
+        }
+
+        .series-banner h2 {
+            color: var(--honey);
+            margin-bottom: 0.5rem;
+        }
+
+        .episode-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .episode-card {
+            background: var(--hive-surface);
+            border-radius: 12px;
+            overflow: hidden;
+            transition: transform 0.2s, box-shadow 0.2s;
+            cursor: pointer;
+            border: 1px solid rgba(245, 166, 35, 0.2);
+        }
+
+        .episode-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(245, 166, 35, 0.2);
+        }
+
+        .episode-card.active {
+            border: 2px solid var(--honey);
+        }
+
+        .episode-header {
+            background: var(--hive-card);
+            padding: 1rem 1.5rem;
+            border-bottom: 2px solid var(--honey);
+        }
+
+        .episode-number {
+            color: var(--honey);
+            font-size: 0.85rem;
+            font-weight: bold;
+        }
+
+        .episode-title {
+            font-size: 1.25rem;
+            margin: 0.25rem 0;
+        }
+
+        .episode-subtitle {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .episode-body {
+            padding: 1.5rem;
+        }
+
+        .episode-topics {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+        }
+
+        .topic-tag {
+            background: rgba(245, 166, 35, 0.2);
+            color: var(--honey);
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+        }
+
+        .episode-duration {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            margin-top: 1rem;
+        }
+
+        .content-viewer {
+            background: var(--hive-surface);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-top: 2rem;
+            display: none;
+        }
+
+        .content-viewer.visible {
+            display: block;
+        }
+
+        .content-viewer h1 {
+            color: var(--honey);
+            border-bottom: 2px solid var(--honey);
+            padding-bottom: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .content-viewer h2 {
+            color: var(--honey);
+            margin: 2rem 0 1rem;
+        }
+
+        .content-viewer h3 {
+            color: var(--accent);
+            margin: 1.5rem 0 0.75rem;
+        }
+
+        .content-viewer p {
+            margin-bottom: 1rem;
+        }
+
+        .content-viewer code {
+            background: var(--hive-card);
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+
+        .content-viewer pre {
+            background: var(--hive-card);
+            padding: 1rem;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 1rem 0;
+        }
+
+        .content-viewer pre code {
+            background: none;
+            padding: 0;
+        }
+
+        .content-viewer table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+        }
+
+        .content-viewer th,
+        .content-viewer td {
+            border: 1px solid var(--hive-card);
+            padding: 0.75rem;
+            text-align: left;
+        }
+
+        .content-viewer th {
+            background: var(--hive-card);
+            color: var(--honey);
+        }
+
+        .content-viewer blockquote {
+            border-left: 4px solid var(--honey);
+            padding-left: 1rem;
+            margin: 1rem 0;
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+
+        .content-viewer hr {
+            border: none;
+            border-top: 1px solid var(--hive-card);
+            margin: 2rem 0;
+        }
+
+        .content-viewer .mermaid {
+            background: var(--hive-card);
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+        }
+
+        .nav-tabs {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .nav-tab {
+            background: var(--hive-card);
+            color: var(--text-primary);
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .nav-tab:hover {
+            background: var(--honey-dark);
+        }
+
+        .nav-tab.active {
+            background: var(--honey);
+            color: var(--hive-bg);
+        }
+
+        .close-btn {
+            background: var(--honey);
+            color: var(--hive-bg);
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            float: right;
+            font-weight: bold;
+        }
+
+        .close-btn:hover {
+            background: var(--honey-dark);
+        }
+
+        .footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-secondary);
+            border-top: 1px solid var(--hive-card);
+            margin-top: 2rem;
+        }
+
+        .footer a {
+            color: var(--honey);
+        }
+
+        @media (max-width: 768px) {
+            .episode-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .header h1 {
+                font-size: 1.75rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <img src="artwork/wasp2_logo.png" alt="WASP2 Logo" class="logo" onerror="this.style.display='none'">
+        <h1>The WASP's Nest</h1>
+        <p class="tagline">Buzz from the Hive</p>
+    </header>
+
+    <div class="container">
+        <div class="series-banner">
+            <h2>The WASP Chronicles</h2>
+            <p>A 3-episode series tracing the evolution of WASP from its origins in 2015 to the modern Rust-accelerated implementation. Perfect for understanding the project's history and design philosophy.</p>
+        </div>
+
+        <div class="episode-grid" id="episodeGrid"></div>
+
+        <div class="content-viewer" id="contentViewer">
+            <button class="close-btn" id="closeBtn">Close</button>
+            <div class="nav-tabs" id="navTabs"></div>
+            <div id="contentArea"></div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>Keep building, keep buzzing. Buzz out!</p>
+        <p>WASP2 v1.3.0 | <a href="https://github.com/Jaureguy760/WASP2-final">GitHub</a></p>
+    </footer>
+
+    <script>
+        // Episode data - static, trusted content
+        const episodes = [
+            {
+                number: 1,
+                title: "The Origin Swarm",
+                subtitle: "Original WASP (2015)",
+                description: "The story of the original WASP published in Nature Methods 2015. Learn how van de Geijn, McVicker, Gilad, and Pritchard solved the mapping bias problem.",
+                duration: "8-10 minutes",
+                topics: ["mapping bias", "allele swapping", "Combined Haplotype Test", "HDF5"],
+                chronicleFile: "chronicles/episode-001-origin-swarm.md",
+                illuminationFile: "illuminations/illumination-001-wasp-mapping.md"
+            },
+            {
+                number: 2,
+                title: "Building the New Hive",
+                subtitle: "McVicker Lab WASP2",
+                description: "How the McVicker Lab rebuilt WASP for the modern era. No more HDF5 conversion, unified CLI, single-cell support.",
+                duration: "8-10 minutes",
+                topics: ["modernization", "VCF/BCF native", "Typer CLI", "AnnData"],
+                chronicleFile: "chronicles/episode-002-new-hive.md",
+                illuminationFile: "illuminations/illumination-002-architecture.md"
+            },
+            {
+                number: 3,
+                title: "The Rust Metamorphosis",
+                subtitle: "WASP2 High Performance and Deployment",
+                description: "The transformation to Rust-accelerated performance. 50-100x speedups, full INDEL support, Nextflow pipelines, Docker and Singularity containers.",
+                duration: "12-15 minutes",
+                topics: ["Rust", "INDEL support", "Nextflow", "Docker", "PyPI"],
+                chronicleFile: "chronicles/episode-003-rust-metamorphosis.md",
+                illuminationFile: "illuminations/illumination-003-performance.md"
+            }
+        ];
+
+        let currentEpisode = null;
+
+        // Initialize mermaid
+        mermaid.initialize({
+            startOnLoad: false,
+            theme: 'dark',
+            themeVariables: {
+                primaryColor: '#F5A623',
+                primaryTextColor: '#e8e8e8',
+                primaryBorderColor: '#F5A623',
+                lineColor: '#F5A623',
+                secondaryColor: '#0f3460',
+                tertiaryColor: '#16213e'
+            }
+        });
+
+        // Safely create episode card element
+        function createEpisodeCard(ep) {
+            const card = document.createElement('div');
+            card.className = 'episode-card';
+            card.dataset.episode = ep.number;
+
+            const header = document.createElement('div');
+            header.className = 'episode-header';
+
+            const numEl = document.createElement('div');
+            numEl.className = 'episode-number';
+            numEl.textContent = 'Episode ' + String(ep.number).padStart(3, '0');
+
+            const titleEl = document.createElement('h3');
+            titleEl.className = 'episode-title';
+            titleEl.textContent = ep.title;
+
+            const subtitleEl = document.createElement('div');
+            subtitleEl.className = 'episode-subtitle';
+            subtitleEl.textContent = ep.subtitle;
+
+            header.appendChild(numEl);
+            header.appendChild(titleEl);
+            header.appendChild(subtitleEl);
+
+            const body = document.createElement('div');
+            body.className = 'episode-body';
+
+            const descEl = document.createElement('p');
+            descEl.textContent = ep.description;
+
+            const topicsEl = document.createElement('div');
+            topicsEl.className = 'episode-topics';
+            ep.topics.forEach(t => {
+                const tag = document.createElement('span');
+                tag.className = 'topic-tag';
+                tag.textContent = t;
+                topicsEl.appendChild(tag);
+            });
+
+            const durationEl = document.createElement('div');
+            durationEl.className = 'episode-duration';
+            durationEl.textContent = 'Duration: ' + ep.duration;
+
+            body.appendChild(descEl);
+            body.appendChild(topicsEl);
+            body.appendChild(durationEl);
+
+            card.appendChild(header);
+            card.appendChild(body);
+
+            card.addEventListener('click', function() {
+                loadEpisode(ep.number);
+            });
+
+            return card;
+        }
+
+        // Render episode cards
+        function renderEpisodes() {
+            const grid = document.getElementById('episodeGrid');
+            grid.replaceChildren();
+            episodes.forEach(ep => {
+                grid.appendChild(createEpisodeCard(ep));
+            });
+        }
+
+        // Load episode content
+        async function loadEpisode(num) {
+            const ep = episodes.find(e => e.number === num);
+            if (!ep) return;
+
+            currentEpisode = num;
+
+            // Highlight active card
+            document.querySelectorAll('.episode-card').forEach(card => {
+                card.classList.toggle('active', parseInt(card.dataset.episode) === num);
+            });
+
+            // Show viewer
+            const viewer = document.getElementById('contentViewer');
+            viewer.classList.add('visible');
+
+            // Create tabs
+            const tabs = document.getElementById('navTabs');
+            tabs.replaceChildren();
+
+            const chronicleTab = document.createElement('button');
+            chronicleTab.className = 'nav-tab active';
+            chronicleTab.textContent = 'Chronicle';
+            chronicleTab.addEventListener('click', () => showTab('chronicle'));
+
+            const illuminationTab = document.createElement('button');
+            illuminationTab.className = 'nav-tab';
+            illuminationTab.textContent = 'Illumination';
+            illuminationTab.addEventListener('click', () => showTab('illumination'));
+
+            tabs.appendChild(chronicleTab);
+            tabs.appendChild(illuminationTab);
+
+            // Load chronicle by default
+            await showTab('chronicle');
+
+            // Scroll to viewer
+            viewer.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        async function showTab(type) {
+            const ep = episodes.find(e => e.number === currentEpisode);
+            if (!ep) return;
+
+            const file = type === 'chronicle' ? ep.chronicleFile : ep.illuminationFile;
+
+            // Update tab states
+            const tabs = document.querySelectorAll('.nav-tab');
+            tabs[0].classList.toggle('active', type === 'chronicle');
+            tabs[1].classList.toggle('active', type === 'illumination');
+
+            const contentArea = document.getElementById('contentArea');
+
+            try {
+                const response = await fetch(file);
+                if (!response.ok) throw new Error('File not found');
+                const markdown = await response.text();
+                await renderMarkdown(markdown);
+            } catch (error) {
+                contentArea.replaceChildren();
+                const errorP = document.createElement('p');
+                errorP.style.color = '#ff6b6b';
+                errorP.textContent = 'Error loading content. Make sure you are serving this from a web server.';
+
+                const helpP = document.createElement('p');
+                helpP.textContent = 'Try: python -m http.server 8000 in the podcast directory';
+
+                contentArea.appendChild(errorP);
+                contentArea.appendChild(helpP);
+            }
+        }
+
+        async function renderMarkdown(md) {
+            const contentArea = document.getElementById('contentArea');
+
+            // Configure marked
+            marked.setOptions({
+                breaks: true,
+                gfm: true
+            });
+
+            // Render markdown and sanitize with DOMPurify
+            let html = marked.parse(md);
+
+            // Extract mermaid blocks before sanitization
+            const mermaidBlocks = [];
+            html = html.replace(/<pre><code class="language-mermaid">([\s\S]*?)<\/code><\/pre>/g, function(match, code) {
+                const id = 'mermaid-' + mermaidBlocks.length;
+                const decoded = code.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+                mermaidBlocks.push({ id: id, code: decoded });
+                return '<div class="mermaid" id="' + id + '"></div>';
+            });
+
+            // Sanitize HTML using DOMPurify
+            const cleanHtml = DOMPurify.sanitize(html, {
+                ADD_TAGS: ['div'],
+                ADD_ATTR: ['class', 'id']
+            });
+
+            contentArea.replaceChildren();
+            const wrapper = document.createElement('div');
+            wrapper.innerHTML = cleanHtml;
+            contentArea.appendChild(wrapper);
+
+            // Render mermaid diagrams
+            for (const block of mermaidBlocks) {
+                try {
+                    const result = await mermaid.render(block.id + '-svg', block.code);
+                    const el = document.getElementById(block.id);
+                    if (el) {
+                        el.innerHTML = DOMPurify.sanitize(result.svg, { ADD_TAGS: ['svg', 'g', 'path', 'text', 'tspan', 'rect', 'circle', 'line', 'polygon', 'polyline', 'marker', 'defs', 'style', 'title', 'desc', 'foreignObject'], ADD_ATTR: ['viewBox', 'preserveAspectRatio', 'd', 'fill', 'stroke', 'stroke-width', 'transform', 'x', 'y', 'width', 'height', 'rx', 'ry', 'cx', 'cy', 'r', 'points', 'marker-end', 'marker-start', 'text-anchor', 'dominant-baseline', 'font-size', 'font-family', 'font-weight', 'class', 'id', 'style', 'xmlns'] });
+                    }
+                } catch (e) {
+                    const el = document.getElementById(block.id);
+                    if (el) {
+                        const pre = document.createElement('pre');
+                        pre.textContent = block.code;
+                        el.replaceChildren(pre);
+                    }
+                }
+            }
+        }
+
+        function closeViewer() {
+            document.getElementById('contentViewer').classList.remove('visible');
+            document.querySelectorAll('.episode-card').forEach(card => card.classList.remove('active'));
+            currentEpisode = null;
+        }
+
+        // Initialize
+        document.getElementById('closeBtn').addEventListener('click', closeViewer);
+        renderEpisodes();
+    </script>
+</body>
+</html>
