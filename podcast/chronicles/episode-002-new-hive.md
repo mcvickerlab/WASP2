@@ -6,226 +6,127 @@
 
 ## Opening
 
-[happy buzz]
+Welcome to the Hive, fellow worker bees.
 
-Welcome to the Hive, fellow worker bees!
+I'm the Queen Bee, and this is The WASP's Nest. Today we continue The WASP Chronicles with Episode Two... Building the New Hive.
 
-I'm the Queen Bee, and this is The WASP's Nest. Today we continue The WASP Chronicles with Episode Two: Building the New Hive.
+In our last episode, we explored the original WASP from 2015... a groundbreaking tool that solved mapping bias. But by 2021, the field had evolved. Single-cell technologies exploded. VCF files became the universal standard. And a new generation of researchers needed modern tools.
 
-In our last episode, we explored the original WASP from 2015 - a groundbreaking tool that solved mapping bias. But by 2021, the field had evolved. Single-cell technologies exploded. VCF files became the standard. And a new generation of researchers needed modern tools.
-
-This is the story of WASP2's birth at the McVicker Lab.
+This is the story of how WASP2 was born at the McVicker Lab.
 
 ---
 
 ## The Call to Rebuild
 
-[contemplative buzz]
+Let's set the scene. It's late 2021 at the Salk Institute. The original WASP is still widely used... but showing its age.
 
-Let's set the scene. It's late 2021. The original WASP is still widely used, but showing its age:
+The pain points were real. Researchers had to convert every VCF file to HDF5 format before running any analysis. Single-cell experiments? Not supported. The command-line tools were scattered Python scripts with inconsistent interfaces. Dependencies were becoming harder to manage. And performance bottlenecks were slowing down large-scale studies.
 
-**The Pain Points:**
-- HDF5 conversion required before every analysis
-- No support for single-cell data
-- CLI tools were scattered Python scripts
-- Dependencies becoming harder to manage
-- Performance bottlenecks in large-scale studies
+Researchers were spending more time wrestling with file formats... than doing actual biology.
 
-[frustrated tone]
-
-Researchers were spending more time wrestling with file formats than doing biology!
-
-**The Opportunity:**
-- VCF/BCF had become universal
-- Single-cell ATAC-seq and RNA-seq were mainstream
-- Modern Python packaging (pyproject.toml, typer, rich) made CLI development elegant
-- The core algorithms were still sound - just the interface needed modernization
+But there was opportunity. VCF and BCF had become universal standards. Single-cell ATAC-seq and RNA-seq were now mainstream. Modern Python packaging... with pyproject.toml, typer, and rich... had made CLI development elegant. The core algorithms were still sound. Only the interface needed modernization.
 
 ---
 
 ## Foraging: The New Design
 
-[excited waggle]
+Aaron Ho, working with the McVicker Lab, established a new repository... mcvickerlab WASP2. The vision was clear from day one.
 
-In December 2021, the McVicker Lab established a new repository: `mcvickerlab/WASP2`. The vision was clear:
+The design principles were straightforward. First... no format conversion. Read VCF and BCF files directly. Eliminate the HDF5 step entirely. Second... a unified CLI. One tool with many subcommands, like git. Third... single-cell native support. First-class handling for scATAC and scRNA experiments. Fourth... modern packaging. A simple pip install. Clean dependencies. No headaches.
 
-### Design Principles
+Here's what the transformation looked like in practice. The old way required multiple scripts... snp2h5 dot py to convert variants... find intersecting snps dot py to identify overlaps... filter remapped reads dot py for the filtering step. Multiple commands, multiple outputs, multiple opportunities for confusion.
 
-1. **No format conversion** - Read VCF/BCF directly, no HDF5 step
-2. **Unified CLI** - One tool, many subcommands (like `git`)
-3. **Single-cell native** - First-class support for scATAC and scRNA
-4. **Modern packaging** - pip-installable, clean dependencies
-
-### The New Interface
-
-```bash
-# The old way (multiple scripts)
-python snp2h5.py variants.vcf snps.h5
-python find_intersecting_snps.py reads.bam snps.h5 output/
-python filter_remapped_reads.py ...
-
-# The new way (unified CLI)
-wasp2-count reads.bam variants.vcf.gz -o counts.parquet
-wasp2-map reads.bam variants.vcf.gz -o filtered/
-wasp2-analyze counts.parquet -o results/
-```
-
-[satisfied tone]
-
-Clean. Intuitive. No HDF5 in sight!
+The new way is elegantly simple. wasp2-count for counting alleles at variant sites. wasp2-map for the mapping bias correction pipeline. wasp2-analyze for detecting allelic imbalance. Clean. Intuitive. No HDF5 in sight.
 
 ---
 
 ## Building: The Architecture
 
-[precise tone]
+The architects of WASP2 made thoughtful choices about the new hive's structure.
 
-The architects of WASP2 made thoughtful decisions about the new hive's structure:
+For the command-line interface, they chose Typer. Modern argument parsing with automatic help generation and shell completion. Each subcommand became a focused tool. wasp2-count handles allele counting at heterozygous variant sites. wasp2-map provides the unbiased read mapping pipeline. wasp2-analyze runs statistical analysis for detecting allelic imbalance. And wasp2-ipscore enables QTL scoring workflows.
 
-### Technology Choices
+For terminal output, they integrated Rich. Beautiful progress bars, colored output, and informative error messages. No more walls of text flooding the terminal.
 
-**Typer for CLI** - Modern argument parsing with automatic help generation and shell completion. Each subcommand became a focused tool:
-- `wasp2-count` - Allele counting at variant sites
-- `wasp2-map` - Unbiased read mapping pipeline
-- `wasp2-analyze` - Statistical analysis for QTL discovery
+For single-cell support, they built native AnnData integration. The scanpy ecosystem's data structure became a first-class citizen. Single-cell researchers could take WASP2 output and flow directly into downstream analysis.
 
-**Rich for Terminal Output** - Beautiful progress bars, colored output, and informative error messages. No more wall-of-text logs!
+The module organization reflects this clarity. The counting module handles allele counting at heterozygous sites. The mapping module manages the read filtering pipeline. The analysis module contains the statistical models... specifically the beta-binomial distribution for detecting allelic imbalance. And the I/O module supports VCF, BCF, and even the high-performance PGEN format.
 
-**AnnData Integration** - The `scanpy` ecosystem's data structure became native. Single-cell researchers could go from WASP2 output directly to downstream analysis.
-
-### Module Organization
-
-```
-src/wasp2/
-├── counting/        # Allele counting at het sites
-├── mapping/         # Read filtering pipeline
-├── analysis/        # Statistical tests (CHT, binomial)
-├── io/              # VCF, BAM, Parquet readers
-└── cli/             # typer-based command line
-```
-
-[thoughtful tone]
-
-Pure Python, cleanly organized, well-documented.
+Pure Python... cleanly organized... well-documented.
 
 ---
 
-## Defending: Staying True
+## Defending: The Statistical Heart
 
-[serious tone]
+One thing WASP2 never compromised on... the core science.
 
-One thing WASP2 never compromised on: the core science.
+The mapping bias correction strategy remained unchanged from the original. Find reads overlapping heterozygous variants. Swap the alleles in the read sequence. Remap both versions. Filter out any reads that map differently. Simple. Principled. Effective.
 
-The mapping bias correction strategy remained unchanged:
-1. Find reads overlapping heterozygous variants
-2. Swap alleles in the read sequence
-3. Remap and compare
-4. Filter reads that map differently
+But the statistical analysis evolved. While the original WASP used the Combined Haplotype Test... WASP2 took a different approach. The new analysis module centers on the beta-binomial distribution.
 
-The Combined Haplotype Test stayed at the heart of QTL discovery.
+Here's why this matters. When you count alleles at a heterozygous site, you expect roughly fifty-fifty between reference and alternate. But biological and technical variation create overdispersion... more variance than a simple binomial would predict. The beta-binomial model captures this elegantly with two parameters. Mu represents the mean imbalance probability. Rho captures the dispersion.
 
-[emphatic buzz]
+WASP2 fits these parameters using likelihood optimization, then runs a likelihood ratio test. The null hypothesis... no allelic imbalance, mu equals 0.5. The alternative... imbalance exists. The test statistic follows a chi-squared distribution... giving you a p-value you can trust.
 
-The algorithms that made WASP powerful in 2015? Still powerful in 2021. WASP2 just made them accessible.
+The model supports both phased and unphased genotypes. For phased data, the optimization is direct. For unphased data, a clever dynamic programming approach averages over possible phase configurations.
+
+This is the scientific heart of WASP2. Robust statistical testing... properly accounting for overdispersion... with principled inference.
 
 ---
 
 ## Deep Dive: VCF Native
 
-[technical tone]
+For the technically curious bees... let's explore the VCF handling innovation.
 
-For the technically curious bees, let's explore the VCF handling.
+The original WASP used HDF5 because random access to variants was critical. You need to quickly look up which variants overlap each read. HDF5 provided indexed arrays for this.
 
-The original WASP used HDF5 because random access to variants was critical - you need to quickly look up "what variants overlap this read?" HDF5 provided indexed arrays.
+WASP2 solved this problem differently. VCF indexing via tabix provides genomic coordinate indexing through the tbi files. Pysam's TabixFile class enables fast region queries without any format conversion. And for maximum speed, the cyvcf2 backend offers C-accelerated VCF parsing... roughly seven times faster than pure Python.
 
-WASP2 solved this differently:
-1. **VCF indexing via tabix** - `.vcf.gz.tbi` files provide genomic coordinate indexing
-2. **pysam's TabixFile** - Fast region queries without format conversion
-3. **cyvcf2 backend** - C-accelerated VCF parsing when needed
+But WASP2 went further. Beyond VCF, the BCF format... the binary version of VCF... offers another seven-fold speedup through native binary parsing. And for the ultimate performance, PGEN format support via Pgenlib delivers a stunning twenty-five times speedup over standard VCF.
 
-```python
-# Query variants overlapping a read's alignment
-with pysam.TabixFile(vcf_path) as vcf:
-    for record in vcf.fetch(chrom, start, end):
-        # Process variant record
-```
-
-This approach meant users could keep their existing VCF files - no conversion pipeline required.
+Users can keep their existing files... no conversion pipeline required. Just choose the format that matches your performance needs.
 
 ---
 
 ## Pollinating: The Ecosystem
 
-[playful buzz]
+WASP2 was designed to play nicely with the broader bioinformatics ecosystem.
 
-WASP2 was designed to play nicely with the broader bioinformatics ecosystem:
+For inputs... BAM or CRAM files from any aligner. VCF, BCF, or PGEN from any variant caller or imputation pipeline. Standard FASTQ for the remapping step.
 
-**Input Formats:**
-- BAM/CRAM from any aligner
-- VCF/BCF from any variant caller
-- Standard FASTQ for remapping
+For outputs... TSV files for simple downstream processing. Parquet for efficient columnar storage and fast queries. And AnnData in H5AD format for seamless single-cell integration.
 
-**Output Formats:**
-- Parquet for efficient columnar storage
-- AnnData for single-cell integration
-- TSV for simple downstream processing
+The interoperability is deliberate. Standard bcftools and samtools compatibility. Integration with the scanpy and AnnData ecosystem. Bioconda packaging for easy installation.
 
-**Interoperability:**
-- bcftools, samtools compatibility
-- scanpy/AnnData ecosystem
-- Standard Bioconda packaging
-
-[collaborative tone]
-
-WASP2 didn't reinvent wheels - it connected them.
+WASP2 didn't reinvent wheels... it connected them.
 
 ---
 
 ## The Timeline
 
-[narrative tone]
+The journey from concept to release tells a story of steady progress.
 
-The journey from concept to release:
+December 2021... the repository was established. Through 2022... the core counting and mapping modules took shape. In 2023... single-cell support arrived alongside robust testing infrastructure. September 2024 marked the v1.0.0 official release. November 2024 brought v1.1.0... and the beginning of Rust acceleration.
 
-**December 2021** - Repository established
-**2022** - Core counting and mapping modules developed
-**2023** - Single-cell support, testing infrastructure
-**September 2024** - v1.0.0 official release
-**November 2024** - v1.1.0 with Rust acceleration beginning
-
-[pause]
-
-The next chapter would bring a performance revolution. But that's a story for our next episode.
-
----
-
-## Illumination
-
-See: `illuminations/illumination-002-architecture.md` for the WASP2 architecture diagram showing the module organization and data flow.
+That performance revolution... that's a story for our next episode.
 
 ---
 
 ## Closing
 
-[pause]
+And that's the buzz on building the new hive, worker bees.
 
-And that's the buzz on building the new hive, worker bees!
+WASP2 represented a modern reimagining of the original vision. Same proven science for mapping bias correction. New accessible interface for modern workflows. The McVicker Lab took a decade of lessons learned and built something that feels native to 2020s research.
 
-WASP2 represented a modern reimagining of the original vision. Same proven science, new accessible interface. The McVicker Lab took a decade of lessons learned and built something that felt native to the 2020s research workflow.
+The key insights from this chapter... Modernization doesn't mean reinvention. The core science remained. Developer experience matters... unified CLI, no format conversion, clean outputs. And ecosystem integration accelerates adoption.
 
-Remember:
-- Modernization doesn't mean reinvention - the core science remained
-- Developer experience matters - unified CLI, no format conversion
-- Ecosystem integration accelerates adoption
+In our next episode... we'll witness the Rust metamorphosis. When WASP2 learned to fly at lightning speed.
 
-In our next episode, we'll witness the Rust metamorphosis - when WASP2 learned to fly at lightning speed.
+Keep building... keep buzzing. May your reads map true and your alleles balance.
 
-Keep building, keep buzzing!
-May your reads map true and your alleles balance.
+From the WASP's Nest... this is the Queen Bee.
 
-From the WASP's Nest, this is the Queen Bee.
-
-Buzz out!
+Buzz out.
 
 ---
 
@@ -238,12 +139,21 @@ episode:
   subtitle: "McVicker Lab WASP2"
   series: "The WASP Chronicles"
   date: "2026-02-03"
-  duration_estimate: "8-10 minutes"
+  duration_estimate: "10-12 minutes"
   source_repo: "https://github.com/mcvickerlab/WASP2"
+  authors:
+    - "Aaron Ho - Creator of WASP2"
+    - "Jeff Jaureguy - Developer and maintainer"
+    - "McVicker Lab, Salk Institute"
   timeline:
     established: "2021-12"
     v1_release: "2024-09"
     v1_1_release: "2024-11"
+  technical_highlights:
+    - "Beta-binomial model for allelic imbalance (NOT CHT)"
+    - "VCF/BCF/PGEN native support (no HDF5)"
+    - "Single-cell via AnnData/H5AD"
+    - "Unified CLI: wasp2-count, wasp2-map, wasp2-analyze, wasp2-ipscore"
   chapters:
     - name: "The Call"
       topics: ["modernization", "pain points", "opportunity"]
@@ -252,9 +162,9 @@ episode:
     - name: "Building"
       topics: ["Typer", "Rich", "AnnData", "module organization"]
     - name: "Defending"
-      topics: ["core science preserved", "CHT", "mapping bias"]
+      topics: ["beta-binomial model", "likelihood ratio test", "phased/unphased"]
     - name: "Deep Dive"
-      topics: ["VCF native", "tabix", "pysam"]
+      topics: ["VCF native", "BCF 7x", "PGEN 25x", "pysam", "cyvcf2"]
     - name: "Pollinating"
-      topics: ["ecosystem integration", "format support"]
+      topics: ["ecosystem integration", "format support", "AnnData output"]
 ```
