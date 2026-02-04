@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WASP2 - Allele-Specific Analysis Pipeline</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,700;1,6..96,400&family=JetBrains+Mono:wght@400;600&family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --amber-glow: #F5A623;
+            --amber-bright: #FFB938;
+            --amber-dim: #8B5A00;
+            --amber-deep: #5C3D00;
+            --hive-void: #0a0a0f;
+            --hive-dark: #12121a;
+            --hive-surface: #1a1a26;
+            --hive-cell: #222233;
+            --text-bright: #f4f0e8;
+            --text-soft: #a8a4a0;
+            --text-dim: #6b6860;
+            --glow-subtle: rgba(245, 166, 35, 0.15);
+            --glow-medium: rgba(245, 166, 35, 0.35);
+            --glow-intense: rgba(245, 166, 35, 0.6);
+            --rust-orange: #CE422B;
+            --python-blue: #3776AB;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0) rotate(0deg); opacity: 0.6; }
+            50% { transform: translateY(-20px) rotate(180deg); opacity: 1; }
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 20px var(--glow-subtle), inset 0 0 20px var(--glow-subtle); }
+            50% { box-shadow: 0 0 40px var(--glow-medium), inset 0 0 30px var(--glow-subtle); }
+        }
+
+        @keyframes fadeSlideUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--hive-void);
+            color: var(--text-bright);
+            line-height: 1.7;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Honeycomb background pattern */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background:
+                radial-gradient(ellipse at 20% 20%, rgba(245, 166, 35, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, rgba(245, 166, 35, 0.05) 0%, transparent 50%),
+                url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100' viewBox='0 0 56 100'%3E%3Cpath d='M28 66L0 50L0 16L28 0L56 16L56 50L28 66Z' fill='none' stroke='rgba(245,166,35,0.06)' stroke-width='1'/%3E%3Cpath d='M28 100L0 84L0 50L28 34L56 50L56 84L28 100Z' fill='none' stroke='rgba(245,166,35,0.06)' stroke-width='1'/%3E%3C/svg%3E");
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* Floating particles */
+        .particles {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+            overflow: hidden;
+        }
+
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: var(--amber-glow);
+            border-radius: 50%;
+            animation: float 8s ease-in-out infinite;
+            filter: blur(1px);
+        }
+
+        .header {
+            position: relative;
+            z-index: 10;
+            padding: 4rem 2rem 3rem;
+            text-align: center;
+            background: linear-gradient(180deg, var(--hive-dark) 0%, transparent 100%);
+        }
+
+        .logo-container {
+            position: relative;
+            display: inline-block;
+            margin-bottom: 1.5rem;
+        }
+
+        .logo {
+            width: 160px;
+            height: 160px;
+            border-radius: 50%;
+            border: 3px solid var(--amber-glow);
+            animation: pulse-glow 4s ease-in-out infinite;
+            position: relative;
+            z-index: 2;
+        }
+
+        .logo-ring {
+            position: absolute;
+            top: -10px;
+            left: -10px;
+            right: -10px;
+            bottom: -10px;
+            border: 1px solid var(--amber-dim);
+            border-radius: 50%;
+            animation: pulse-glow 4s ease-in-out infinite 0.5s;
+        }
+
+        .header h1 {
+            font-family: 'Bodoni Moda', serif;
+            font-size: clamp(3rem, 8vw, 5rem);
+            font-weight: 700;
+            color: var(--text-bright);
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+            text-shadow: 0 0 40px var(--glow-medium);
+        }
+
+        .header h1 span {
+            color: var(--amber-glow);
+        }
+
+        .tagline {
+            font-family: 'Bodoni Moda', serif;
+            font-style: italic;
+            font-size: 1.3rem;
+            color: var(--text-soft);
+            letter-spacing: 0.1em;
+            margin-bottom: 1rem;
+        }
+
+        .version-badge {
+            display: inline-block;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            background: var(--glow-subtle);
+            color: var(--amber-glow);
+            padding: 0.4rem 1rem;
+            border-radius: 2px;
+            letter-spacing: 0.1em;
+        }
+
+        .container {
+            position: relative;
+            z-index: 10;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* Hero section */
+        .hero {
+            text-align: center;
+            padding: 2rem 0 4rem;
+            animation: fadeSlideUp 0.8s ease-out;
+        }
+
+        .hero p {
+            font-size: 1.2rem;
+            color: var(--text-soft);
+            max-width: 700px;
+            margin: 0 auto 2rem;
+        }
+
+        .cta-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .cta-btn {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            letter-spacing: 0.1em;
+            padding: 1rem 2rem;
+            border: none;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .cta-btn.primary {
+            background: var(--amber-glow);
+            color: var(--hive-dark);
+        }
+
+        .cta-btn.primary:hover {
+            background: var(--amber-bright);
+            box-shadow: 0 0 30px var(--glow-medium);
+            transform: translateY(-2px);
+        }
+
+        .cta-btn.secondary {
+            background: transparent;
+            color: var(--amber-glow);
+            border: 1px solid var(--amber-dim);
+        }
+
+        .cta-btn.secondary:hover {
+            background: var(--glow-subtle);
+            border-color: var(--amber-glow);
+        }
+
+        /* Feature grid */
+        .features-section {
+            padding: 4rem 0;
+        }
+
+        .section-title {
+            font-family: 'Bodoni Moda', serif;
+            font-size: 2rem;
+            color: var(--amber-glow);
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+
+        .feature-card {
+            background: linear-gradient(135deg, var(--hive-surface) 0%, var(--hive-cell) 100%);
+            padding: 2rem;
+            position: relative;
+            animation: fadeSlideUp 0.8s ease-out backwards;
+        }
+
+        .feature-card:nth-child(1) { animation-delay: 0.1s; }
+        .feature-card:nth-child(2) { animation-delay: 0.2s; }
+        .feature-card:nth-child(3) { animation-delay: 0.3s; }
+        .feature-card:nth-child(4) { animation-delay: 0.4s; }
+        .feature-card:nth-child(5) { animation-delay: 0.5s; }
+        .feature-card:nth-child(6) { animation-delay: 0.6s; }
+
+        .feature-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--amber-glow), transparent);
+        }
+
+        .feature-icon {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .feature-card h3 {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 600;
+            font-size: 1.2rem;
+            color: var(--text-bright);
+            margin-bottom: 0.5rem;
+        }
+
+        .feature-card p {
+            font-size: 0.95rem;
+            color: var(--text-soft);
+        }
+
+        /* Stats section */
+        .stats-section {
+            padding: 4rem 0;
+            background: var(--hive-dark);
+            margin: 4rem -2rem;
+            padding-left: 2rem;
+            padding-right: 2rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 2rem;
+            text-align: center;
+        }
+
+        .stat-item h4 {
+            font-family: 'Bodoni Moda', serif;
+            font-size: 3rem;
+            color: var(--amber-glow);
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-item p {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        /* Install section */
+        .install-section {
+            padding: 4rem 0;
+            text-align: center;
+        }
+
+        .code-block {
+            background: var(--hive-dark);
+            border: 1px solid var(--hive-cell);
+            padding: 1.5rem 2rem;
+            border-radius: 4px;
+            max-width: 600px;
+            margin: 2rem auto;
+            text-align: left;
+            position: relative;
+        }
+
+        .code-block code {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            color: var(--amber-glow);
+        }
+
+        .code-block .comment {
+            color: var(--text-dim);
+        }
+
+        /* Links section */
+        .links-section {
+            padding: 4rem 0;
+        }
+
+        .links-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .link-card {
+            background: var(--hive-surface);
+            border: 1px solid var(--hive-cell);
+            padding: 1.5rem;
+            text-decoration: none;
+            color: var(--text-bright);
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .link-card:hover {
+            border-color: var(--amber-dim);
+            background: var(--hive-cell);
+            transform: translateY(-3px);
+        }
+
+        .link-card .icon {
+            font-size: 1.5rem;
+        }
+
+        .link-card h4 {
+            font-size: 1rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .link-card p {
+            font-size: 0.8rem;
+            color: var(--text-dim);
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 3rem 2rem;
+            background: var(--hive-dark);
+            margin-top: 4rem;
+        }
+
+        .footer-tagline {
+            font-family: 'Bodoni Moda', serif;
+            font-style: italic;
+            font-size: 1.1rem;
+            color: var(--amber-glow);
+            margin-bottom: 1rem;
+        }
+
+        .footer-meta {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            letter-spacing: 0.1em;
+        }
+
+        .footer-meta a {
+            color: var(--amber-dim);
+            text-decoration: none;
+        }
+
+        .footer-meta a:hover {
+            color: var(--amber-glow);
+        }
+
+        /* Tech badges */
+        .tech-badges {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-top: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .tech-badge {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            padding: 0.4rem 0.8rem;
+            border-radius: 2px;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .tech-badge.rust {
+            background: rgba(206, 66, 43, 0.2);
+            color: #CE422B;
+            border: 1px solid rgba(206, 66, 43, 0.3);
+        }
+
+        .tech-badge.python {
+            background: rgba(55, 118, 171, 0.2);
+            color: #3776AB;
+            border: 1px solid rgba(55, 118, 171, 0.3);
+        }
+
+        .tech-badge.nextflow {
+            background: rgba(36, 176, 100, 0.2);
+            color: #24B064;
+            border: 1px solid rgba(36, 176, 100, 0.3);
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .particle { animation: none !important; }
+            * { animation-duration: 0.01ms !important; }
+        }
+
+        @media (max-width: 768px) {
+            .header { padding: 2rem 1rem; }
+            .container { padding: 1rem; }
+            .cta-buttons { flex-direction: column; align-items: center; }
+        }
+    </style>
+</head>
+<body>
+    <div class="particles" id="particles"></div>
+
+    <header class="header">
+        <div class="logo-container">
+            <div class="logo-ring"></div>
+            <img src="podcast/artwork/wasp2_logo.png" alt="WASP2 Logo" class="logo" onerror="this.style.display='none'">
+        </div>
+        <h1><span>WASP</span>2</h1>
+        <p class="tagline">Allele-Specific Analysis Pipeline</p>
+        <span class="version-badge">v1.3.0</span>
+    </header>
+
+    <div class="container">
+        <section class="hero">
+            <p>A modern, Rust-accelerated pipeline for detecting allele-specific expression and chromatin accessibility. Corrects mapping bias with the proven WASP filtering strategy.</p>
+            <div class="cta-buttons">
+                <a href="https://github.com/Jaureguy760/WASP2-final" class="cta-btn primary">VIEW ON GITHUB</a>
+                <a href="podcast/" class="cta-btn secondary">LISTEN TO PODCAST</a>
+            </div>
+            <div class="tech-badges">
+                <span class="tech-badge rust">RUST</span>
+                <span class="tech-badge python">PYTHON</span>
+                <span class="tech-badge nextflow">NEXTFLOW</span>
+            </div>
+        </section>
+
+        <section class="features-section">
+            <h2 class="section-title">Features</h2>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">⚡</div>
+                    <h3>Rust Acceleration</h3>
+                    <p>50-100x faster BAM-variant intersection with COITrees. 61x faster WASP filtering with parallel processing.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🧬</div>
+                    <h3>Full INDEL Support</h3>
+                    <p>Variable-length insertions and deletions work throughout the pipeline - counting, filtering, and statistical testing.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📊</div>
+                    <h3>Beta-Binomial Model</h3>
+                    <p>Robust statistical testing with proper overdispersion handling. Supports both phased and unphased genotypes.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔬</div>
+                    <h3>Single-Cell Ready</h3>
+                    <p>Native AnnData integration for scATAC-seq and scRNA-seq. Process millions of cells without memory issues.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📁</div>
+                    <h3>Multi-Format Support</h3>
+                    <p>Auto-detects VCF, BCF, and PGEN files. No HDF5 conversion required - just point at your variants.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🚀</div>
+                    <h3>Production Pipelines</h3>
+                    <p>Four Nextflow DSL2 pipelines for RNA-seq, ATAC-seq, single-cell, and OUTRIDER integration.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="stats-section">
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <h4>61x</h4>
+                    <p>Faster WASP Filtering</p>
+                </div>
+                <div class="stat-item">
+                    <h4>50-100x</h4>
+                    <p>Faster Intersection</p>
+                </div>
+                <div class="stat-item">
+                    <h4>10k+</h4>
+                    <p>Lines of Rust</p>
+                </div>
+                <div class="stat-item">
+                    <h4>r² > 0.99</h4>
+                    <p>Validation Accuracy</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="install-section">
+            <h2 class="section-title">Quick Start</h2>
+            <div class="code-block">
+                <code><span class="comment"># Install from PyPI</span><br>
+pip install wasp2<br><br>
+<span class="comment"># Or with conda</span><br>
+conda install -c bioconda wasp2<br><br>
+<span class="comment"># Count alleles at variants</span><br>
+wasp2-count --bam reads.bam --vcf variants.vcf.gz</code>
+            </div>
+        </section>
+
+        <section class="links-section">
+            <h2 class="section-title">Resources</h2>
+            <div class="links-grid">
+                <a href="https://github.com/Jaureguy760/WASP2-final" class="link-card">
+                    <span class="icon">📦</span>
+                    <div>
+                        <h4>GitHub Repository</h4>
+                        <p>Source code, issues, and releases</p>
+                    </div>
+                </a>
+                <a href="https://wasp2.readthedocs.io" class="link-card">
+                    <span class="icon">📖</span>
+                    <div>
+                        <h4>Documentation</h4>
+                        <p>Guides, API reference, tutorials</p>
+                    </div>
+                </a>
+                <a href="podcast/" class="link-card">
+                    <span class="icon">🎙️</span>
+                    <div>
+                        <h4>The WASP's Nest Podcast</h4>
+                        <p>Three-part history of WASP</p>
+                    </div>
+                </a>
+                <a href="https://github.com/mcvickerlab/WASP2" class="link-card">
+                    <span class="icon">🔬</span>
+                    <div>
+                        <h4>McVicker Lab (Upstream)</h4>
+                        <p>Original WASP2 development</p>
+                    </div>
+                </a>
+            </div>
+        </section>
+    </div>
+
+    <footer class="footer">
+        <p class="footer-tagline">Keep building, keep buzzing.</p>
+        <p class="footer-meta">WASP2 v1.3.0 &nbsp;|&nbsp; McVicker Lab, Salk Institute &nbsp;|&nbsp; <a href="https://github.com/Jaureguy760/WASP2-final">GITHUB</a></p>
+    </footer>
+
+    <script>
+        // Create floating particles (respects prefers-reduced-motion)
+        function createParticles() {
+            if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+            const container = document.getElementById('particles');
+            for (let i = 0; i < 25; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.top = Math.random() * 100 + '%';
+                particle.style.animationDelay = Math.random() * 8 + 's';
+                particle.style.animationDuration = (6 + Math.random() * 4) + 's';
+                container.appendChild(particle);
+            }
+        }
+        createParticles();
+    </script>
+</body>
+</html>
