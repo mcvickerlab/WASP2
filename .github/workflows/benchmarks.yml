@@ -28,6 +28,9 @@ on:
   schedule:
     - cron: '0 6 * * 1'  # Monday at 6am UTC
 
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
@@ -36,6 +39,9 @@ jobs:
   benchmark:
     name: Run Benchmarks
     runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
+    timeout-minutes: 60
+    permissions:
+      contents: read
     defaults:
       run:
         shell: bash
@@ -45,17 +51,24 @@ jobs:
       COMMIT_SHA: ${{ github.sha }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Set up virtual environment
+        run: |
+          python -m venv .venv
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          .venv/bin/python --version
+          .venv/bin/pip --version
 
       - name: Cache pip packages
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
         with:
           path: ~/.cache/pip
           key: pip-benchmark-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
           restore-keys: pip-benchmark-${{ runner.os }}-
 
       - name: Cache Cargo registry
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
         with:
           path: |
             ~/.cargo/registry
@@ -64,18 +77,11 @@ jobs:
           restore-keys: cargo-benchmark-${{ runner.os }}-
 
       - name: Cache Rust target
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
         with:
           path: rust/target
           key: cargo-target-benchmark-${{ runner.os }}-${{ hashFiles('rust/Cargo.lock', 'rust/src/**/*.rs') }}
           restore-keys: cargo-target-benchmark-${{ runner.os }}-
-
-      - name: Set up virtual environment
-        run: |
-          python -m venv .venv
-          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
-          .venv/bin/python --version
-          .venv/bin/pip --version
 
       - name: Install dependencies
         run: pip install maturin pytest pytest-benchmark memory-profiler matplotlib seaborn --quiet
@@ -135,10 +141,10 @@ jobs:
       - name: Run pytest benchmarks
         run: |
           python tests/benchmarks/run_benchmarks.py --quick --no-figures \
-            --output-dir .benchmarks || true
+            --output-dir .benchmarks
 
       - name: Upload benchmark results
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
         with:
           name: benchmark-results-${{ github.sha }}
           path: |
@@ -164,31 +170,99 @@ jobs:
   compare-to-baseline:
     name: Compare to Baseline
     runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
+    timeout-minutes: 10
+    permissions:
+      contents: read
     needs: benchmark
     if: github.event_name == 'release' || github.event.inputs.benchmark_type == 'full'
+    defaults:
+      run:
+        shell: bash
 
     env:
       COMMIT_SHA: ${{ github.sha }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Set up virtual environment
+        run: |
+          python -m venv .venv
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
 
       - name: Download current results
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
         with:
           name: benchmark-results-${{ github.sha }}
           path: current_results/
 
-      # Note: In a real setup, you would download baseline results from a
-      # previous release or stored artifact to compare against
+      - name: Validate performance claims
+        run: |
+          python - <<'PYEOF'
+          import json, glob, sys
+
+          CLAIMS = {
+              "filtering_speedup": {"min": 61.0, "label": "61x faster WASP filtering (vs WASP v1)"},
+              "counting_speedup": {"min": 6.4, "label": "6.4x faster counting (vs phASER)"},
+              "concordance_r2": {"min": 0.99, "label": "r² > 0.99 concordance with GATK"},
+          }
+
+          results_files = glob.glob("current_results/**/*.json", recursive=True)
+          if not results_files:
+              print("❌ No benchmark result files found")
+              print("The benchmark job may have failed to produce output.")
+              sys.exit(1)
+
+          validated = {}
+          errors = []
+          for fpath in results_files:
+              try:
+                  with open(fpath) as f:
+                      data = json.load(f)
+              except (json.JSONDecodeError, OSError) as e:
+                  errors.append(f"⚠️  Skipping {fpath}: {e}")
+                  continue
+
+              for key in CLAIMS:
+                  for source in [data] + [data.get(s, {}) for s in ("summary", "metrics", "results")]:
+                      if isinstance(source, dict) and key in source:
+                          val = source[key]
+                          if isinstance(val, (int, float)):
+                              validated[key] = float(val)
+
+          lines = ["## Performance Claims Validation", ""]
+          if errors:
+              for err in errors:
+                  lines.append(err)
+              lines.append("")
+
+          passed = 0
+          for key, claim in CLAIMS.items():
+              if key in validated:
+                  value = validated[key]
+                  ok = value >= claim["min"]
+                  status = "✅" if ok else "❌"
+                  lines.append(f"- {status} {claim['label']}: **{value:.2f}** (threshold: {claim['min']})")
+                  if ok:
+                      passed += 1
+              else:
+                  lines.append(f"- ⚠️  {claim['label']}: not measured in this run")
+
+          lines.append("")
+          lines.append(f"**Result: {passed}/{len(CLAIMS)} claims validated**")
+
+          report = "\n".join(lines)
+          print(report)
+          with open("validation_report.md", "w") as f:
+              f.write(report)
+          PYEOF
 
       - name: Generate comparison report
         run: |
-          echo "## Performance Comparison" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Benchmark comparison will be implemented when baseline data is available." >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "### Performance Claims Validation" >> "$GITHUB_STEP_SUMMARY"
-          echo "- [ ] 61x faster WASP filtering (vs WASP v1)" >> "$GITHUB_STEP_SUMMARY"
-          echo "- [ ] 6.4x faster counting (vs phASER)" >> "$GITHUB_STEP_SUMMARY"
-          echo "- [ ] r² > 0.99 concordance with GATK" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f validation_report.md ]; then
+            cat validation_report.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## Performance Comparison" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "No benchmark results available for validation." >> "$GITHUB_STEP_SUMMARY"
+          fi

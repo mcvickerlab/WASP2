@@ -22,14 +22,15 @@
             --out counts.tsv
             $use_rust
             $include_indels
-            #if $advanced.use_region_names
-                --use_region_names
-            #end if
+            $advanced.use_region_names
             #if str($advanced.gene_feature).strip()
                 --gene_feature '$advanced.gene_feature'
             #end if
             #if str($advanced.gene_attribute).strip()
                 --gene_attribute '$advanced.gene_attribute'
+            #end if
+            #if str($advanced.gene_parent).strip()
+                --gene_parent '$advanced.gene_parent'
             #end if
     ]]></command>
 
@@ -42,15 +43,24 @@
         <expand macro="include_indels_param"/>
 
         <section name="advanced" title="Advanced Options" expanded="false">
-            <param argument="--use_region_names" type="boolean" truevalue="true" falsevalue="false"
+            <param argument="--use_region_names" type="boolean" truevalue="--use_region_names" falsevalue=""
                    checked="false" label="Use region names"
                    help="Use names from 4th column of BED file instead of coordinates"/>
             <param argument="--gene_feature" type="text" value="" optional="true"
                    label="Gene feature type"
-                   help="Feature type in GTF/GFF3 for counting (e.g., 'exon', 'gene')"/>
+                   help="Feature type in GTF/GFF3 for counting (e.g., 'exon', 'gene')">
+                <expand macro="sanitize_column_name"/>
+            </param>
             <param argument="--gene_attribute" type="text" value="" optional="true"
                    label="Gene attribute"
-                   help="Attribute name from GTF/GFF3 to use as ID"/>
+                   help="Attribute name from GTF/GFF3 to use as ID">
+                <expand macro="sanitize_column_name"/>
+            </param>
+            <param argument="--gene_parent" type="text" value="" optional="true"
+                   label="Gene parent attribute"
+                   help="Parent attribute in GTF/GFF3 for grouping features (e.g., 'transcript_id' in GTF, 'Parent' in GFF3)">
+                <expand macro="sanitize_column_name"/>
+            </param>
         </section>
     </inputs>
 

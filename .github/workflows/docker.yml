@@ -28,6 +28,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false  # Don't cancel production deployments
 
+# Deny-all default; each job declares its own least-privilege permissions
+permissions: {}
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
@@ -44,7 +47,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
       # Disable macOS Keychain credential helper to avoid Keychain Error (-61)
       # on self-hosted runners without GUI access. Docker Desktop on macOS sets
@@ -65,10 +68,10 @@ jobs:
           "
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
 
       - name: Log in to Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -76,7 +79,7 @@ jobs:
 
       - name: Extract metadata (tags, labels)
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051  # v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
@@ -89,7 +92,7 @@ jobs:
 
       - name: Build and push Docker image
         id: build-push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83  # v6
         with:
           context: .
           file: ./Dockerfile
@@ -139,10 +142,10 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
       - name: Set up Singularity
-        uses: eWaterCycle/setup-singularity@v7
+        uses: eWaterCycle/setup-singularity@931d4e31109e875b13309ae1d07c70ca8fbc8537  # v7
         with:
           singularity-version: 3.11.4
 
@@ -157,6 +160,6 @@ jobs:
           singularity build wasp2_${VERSION}.sif docker://${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}
 
       - name: Upload Singularity image to release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b  # v2
         with:
           files: wasp2_*.sif

@@ -32,3 +32,6 @@ categories:
     - Variant Analysis
     - Transcriptomics
     - Epigenetics
+auto_tool_repositories:
+    name_template: "{{ tool_id }}"
+    description_template: "Wrapper for {{ tool_name }}"

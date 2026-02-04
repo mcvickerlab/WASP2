@@ -1,0 +1,36 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Edit",
+      "Write",
+      "Grep",
+      "Glob",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git status)",
+      "Bash(git show *)",
+      "Bash(pytest *)",
+      "Bash(python *)",
+      "Bash(maturin *)",
+      "Bash(cargo *)",
+      "Bash(ruff *)",
+      "Bash(ls *)"
+    ],
+    "deny": [
+      "Bash(curl *)",
+      "Bash(wget *)",
+      "Bash(ssh *)",
+      "Bash(scp *)",
+      "Bash(rm -rf *)",
+      "Bash(rm -r *)",
+      "Bash(chmod 777 *)",
+      "Bash(sudo *)",
+      "WebFetch",
+      "Read(.env*)",
+      "Read(~/.ssh/*)",
+      "Read(~/.aws/*)",
+      "Read(~/.gnupg/*)"
+    ]
+  }
+}

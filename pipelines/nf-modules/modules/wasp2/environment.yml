@@ -1,3 +1,8 @@
+# WASP2 Conda Environment
+# Version: 1.2.1 (matches biocontainers/wasp2:1.2.1--pyhdfd78af_0)
+#
+# This environment should be kept in sync with the container version
+# defined in ../../../nextflow.config (wasp2_container_version)
 name: wasp2
 channels:
   - conda-forge
@@ -18,4 +23,4 @@ dependencies:
   - typer
   - rich
   - pip:
-    - wasp2
+    - wasp2==1.2.1
