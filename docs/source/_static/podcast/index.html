@@ -4,19 +4,53 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>The WASP's Nest - Podcast</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,700;1,6..96,400&family=JetBrains+Mono:wght@400;600&family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
     <style>
         :root {
-            --honey: #F5A623;
-            --honey-dark: #C47F17;
-            --hive-bg: #1a1a2e;
-            --hive-surface: #16213e;
-            --hive-card: #0f3460;
-            --text-primary: #e8e8e8;
-            --text-secondary: #b8b8b8;
-            --accent: #FFD700;
+            --amber-glow: #F5A623;
+            --amber-bright: #FFB938;
+            --amber-dim: #8B5A00;
+            --amber-deep: #5C3D00;
+            --hive-void: #0a0a0f;
+            --hive-dark: #12121a;
+            --hive-surface: #1a1a26;
+            --hive-cell: #222233;
+            --text-bright: #f4f0e8;
+            --text-soft: #a8a4a0;
+            --text-dim: #6b6860;
+            --glow-subtle: rgba(245, 166, 35, 0.15);
+            --glow-medium: rgba(245, 166, 35, 0.35);
+            --glow-intense: rgba(245, 166, 35, 0.6);
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0) rotate(0deg); opacity: 0.6; }
+            50% { transform: translateY(-20px) rotate(180deg); opacity: 1; }
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 20px var(--glow-subtle), inset 0 0 20px var(--glow-subtle); }
+            50% { box-shadow: 0 0 40px var(--glow-medium), inset 0 0 30px var(--glow-subtle); }
+        }
+
+        @keyframes shimmer {
+            0% { background-position: -200% center; }
+            100% { background-position: 200% center; }
+        }
+
+        @keyframes fadeSlideUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes waveform {
+            0%, 100% { height: 4px; }
+            50% { height: 24px; }
         }
 
         * {
@@ -25,312 +59,744 @@
             padding: 0;
         }
 
+        html {
+            scroll-behavior: smooth;
+        }
+
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: var(--hive-bg);
-            color: var(--text-primary);
-            line-height: 1.6;
+            font-family: 'Outfit', sans-serif;
+            background: var(--hive-void);
+            color: var(--text-bright);
+            line-height: 1.7;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Honeycomb background pattern */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background:
+                radial-gradient(ellipse at 20% 20%, rgba(245, 166, 35, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, rgba(245, 166, 35, 0.05) 0%, transparent 50%),
+                url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100' viewBox='0 0 56 100'%3E%3Cpath d='M28 66L0 50L0 16L28 0L56 16L56 50L28 66Z' fill='none' stroke='rgba(245,166,35,0.06)' stroke-width='1'/%3E%3Cpath d='M28 100L0 84L0 50L28 34L56 50L56 84L28 100Z' fill='none' stroke='rgba(245,166,35,0.06)' stroke-width='1'/%3E%3C/svg%3E");
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* Floating particles */
+        .particles {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+            overflow: hidden;
+        }
+
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: var(--amber-glow);
+            border-radius: 50%;
+            animation: float 8s ease-in-out infinite;
+            filter: blur(1px);
         }
 
         .header {
-            background: linear-gradient(135deg, var(--hive-surface) 0%, var(--hive-card) 100%);
-            padding: 2rem;
+            position: relative;
+            z-index: 10;
+            padding: 4rem 2rem 3rem;
             text-align: center;
-            border-bottom: 3px solid var(--honey);
+            background: linear-gradient(180deg, var(--hive-dark) 0%, transparent 100%);
         }
 
-        .header h1 {
-            color: var(--honey);
-            font-size: 2.5rem;
-            margin-bottom: 0.5rem;
-        }
-
-        .header .tagline {
-            color: var(--text-secondary);
-            font-style: italic;
+        .logo-container {
+            position: relative;
+            display: inline-block;
+            margin-bottom: 1.5rem;
         }
 
         .logo {
-            width: 120px;
-            height: 120px;
-            margin-bottom: 1rem;
+            width: 140px;
+            height: 140px;
+            border-radius: 50%;
+            border: 3px solid var(--amber-glow);
+            animation: pulse-glow 4s ease-in-out infinite;
+            position: relative;
+            z-index: 2;
+        }
+
+        .logo-ring {
+            position: absolute;
+            top: -10px;
+            left: -10px;
+            right: -10px;
+            bottom: -10px;
+            border: 1px solid var(--amber-dim);
+            border-radius: 50%;
+            animation: pulse-glow 4s ease-in-out infinite 0.5s;
+        }
+
+        .header h1 {
+            font-family: 'Bodoni Moda', serif;
+            font-size: clamp(2.5rem, 6vw, 4rem);
+            font-weight: 700;
+            color: var(--text-bright);
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+            text-shadow: 0 0 40px var(--glow-medium);
+        }
+
+        .header h1 span {
+            color: var(--amber-glow);
+        }
+
+        .tagline {
+            font-family: 'Bodoni Moda', serif;
+            font-style: italic;
+            font-size: 1.2rem;
+            color: var(--text-soft);
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
         }
 
         .container {
-            max-width: 1200px;
+            position: relative;
+            z-index: 10;
+            max-width: 1400px;
             margin: 0 auto;
             padding: 2rem;
         }
 
         .series-banner {
-            background: var(--hive-card);
-            border-radius: 12px;
-            padding: 1.5rem;
-            margin-bottom: 2rem;
-            border-left: 4px solid var(--honey);
+            background: linear-gradient(135deg, var(--hive-surface) 0%, var(--hive-cell) 100%);
+            border-radius: 2px;
+            padding: 2.5rem 3rem;
+            margin-bottom: 4rem;
+            position: relative;
+            overflow: hidden;
+            animation: fadeSlideUp 0.8s ease-out;
+        }
+
+        .series-banner::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--amber-glow), transparent);
+        }
+
+        .series-banner::after {
+            content: 'THE WASP CHRONICLES';
+            position: absolute;
+            top: 1rem;
+            right: 2rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            letter-spacing: 0.3em;
+            color: var(--amber-dim);
         }
 
         .series-banner h2 {
-            color: var(--honey);
-            margin-bottom: 0.5rem;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 800;
+            font-size: 1.8rem;
+            color: var(--amber-glow);
+            margin-bottom: 1rem;
+            letter-spacing: 0.02em;
         }
 
+        .series-banner p {
+            color: var(--text-soft);
+            max-width: 700px;
+            font-weight: 300;
+        }
+
+        /* Hexagonal episode grid */
         .episode-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-            gap: 1.5rem;
-            margin-bottom: 2rem;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 2rem;
+            margin-bottom: 4rem;
+            perspective: 1000px;
         }
 
         .episode-card {
+            width: 380px;
             background: var(--hive-surface);
-            border-radius: 12px;
-            overflow: hidden;
-            transition: transform 0.2s, box-shadow 0.2s;
+            position: relative;
             cursor: pointer;
-            border: 1px solid rgba(245, 166, 35, 0.2);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+            padding: 3rem 2rem;
+            text-align: center;
+            animation: fadeSlideUp 0.8s ease-out backwards;
+        }
+
+        .episode-card:nth-child(1) { animation-delay: 0.1s; }
+        .episode-card:nth-child(2) { animation-delay: 0.2s; }
+        .episode-card:nth-child(3) { animation-delay: 0.3s; }
+
+        .episode-card::before {
+            content: '';
+            position: absolute;
+            inset: 2px;
+            background: var(--hive-dark);
+            clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+            z-index: -1;
         }
 
         .episode-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 8px 24px rgba(245, 166, 35, 0.2);
+            transform: translateY(-10px) scale(1.02);
+            background: linear-gradient(135deg, var(--amber-glow), var(--amber-bright));
+            box-shadow: 0 20px 60px var(--glow-medium);
         }
 
         .episode-card.active {
-            border: 2px solid var(--honey);
-        }
-
-        .episode-header {
-            background: var(--hive-card);
-            padding: 1rem 1.5rem;
-            border-bottom: 2px solid var(--honey);
+            background: linear-gradient(135deg, var(--amber-glow), var(--amber-bright));
+            box-shadow: 0 0 60px var(--glow-intense);
         }
 
         .episode-number {
-            color: var(--honey);
-            font-size: 0.85rem;
-            font-weight: bold;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            letter-spacing: 0.3em;
+            color: var(--amber-glow);
+            margin-bottom: 1rem;
+            transition: color 0.3s;
+        }
+
+        .episode-card:hover .episode-number,
+        .episode-card.active .episode-number {
+            color: var(--hive-dark);
         }
 
         .episode-title {
-            font-size: 1.25rem;
-            margin: 0.25rem 0;
+            font-family: 'Bodoni Moda', serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            transition: color 0.3s;
+        }
+
+        .episode-card:hover .episode-title,
+        .episode-card.active .episode-title {
+            color: var(--hive-dark);
         }
 
         .episode-subtitle {
-            color: var(--text-secondary);
-            font-size: 0.9rem;
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            margin-bottom: 1.5rem;
+            transition: color 0.3s;
         }
 
-        .episode-body {
-            padding: 1.5rem;
+        .episode-card:hover .episode-subtitle,
+        .episode-card.active .episode-subtitle {
+            color: var(--hive-surface);
+        }
+
+        .episode-description {
+            font-size: 0.9rem;
+            color: var(--text-soft);
+            line-height: 1.6;
+            margin-bottom: 1.5rem;
+            transition: color 0.3s;
+        }
+
+        .episode-card:hover .episode-description,
+        .episode-card.active .episode-description {
+            color: var(--hive-dark);
         }
 
         .episode-topics {
             display: flex;
             flex-wrap: wrap;
-            gap: 0.5rem;
-            margin-top: 0.75rem;
+            justify-content: center;
+            gap: 0.4rem;
+            margin-bottom: 1rem;
         }
 
         .topic-tag {
-            background: rgba(245, 166, 35, 0.2);
-            color: var(--honey);
-            padding: 0.25rem 0.75rem;
-            border-radius: 20px;
-            font-size: 0.8rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            padding: 0.3rem 0.7rem;
+            background: var(--glow-subtle);
+            color: var(--amber-glow);
+            border-radius: 2px;
+            letter-spacing: 0.05em;
+            transition: all 0.3s;
+        }
+
+        .episode-card:hover .topic-tag,
+        .episode-card.active .topic-tag {
+            background: rgba(0,0,0,0.2);
+            color: var(--hive-dark);
         }
 
         .episode-duration {
-            color: var(--text-secondary);
-            font-size: 0.85rem;
-            margin-top: 1rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            transition: color 0.3s;
         }
 
+        .episode-card:hover .episode-duration,
+        .episode-card.active .episode-duration {
+            color: var(--hive-surface);
+        }
+
+        /* Content Viewer */
         .content-viewer {
-            background: var(--hive-surface);
-            border-radius: 12px;
-            padding: 2rem;
+            background: var(--hive-dark);
+            border: 1px solid var(--hive-cell);
+            border-radius: 4px;
+            padding: 0;
             margin-top: 2rem;
             display: none;
+            overflow: hidden;
+            animation: fadeSlideUp 0.5s ease-out;
         }
 
         .content-viewer.visible {
             display: block;
         }
 
+        .viewer-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem 2rem;
+            background: var(--hive-surface);
+            border-bottom: 1px solid var(--hive-cell);
+        }
+
+        .nav-tabs {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .nav-tab {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            background: transparent;
+            color: var(--text-dim);
+            border: 1px solid var(--hive-cell);
+            padding: 0.75rem 1.5rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .nav-tab:hover {
+            color: var(--amber-glow);
+            border-color: var(--amber-dim);
+        }
+
+        .nav-tab.active {
+            background: var(--amber-glow);
+            color: var(--hive-dark);
+            border-color: var(--amber-glow);
+        }
+
+        .close-btn {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            letter-spacing: 0.1em;
+            background: transparent;
+            color: var(--text-dim);
+            border: 1px solid var(--hive-cell);
+            padding: 0.6rem 1.2rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .close-btn:hover {
+            color: var(--text-bright);
+            border-color: var(--text-dim);
+        }
+
+        #contentArea {
+            padding: 2.5rem;
+            min-height: 300px;
+        }
+
+        /* Audio Player */
+        .audio-player {
+            background: linear-gradient(135deg, var(--hive-surface) 0%, var(--hive-cell) 100%);
+            border-radius: 4px;
+            padding: 3rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .audio-player::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100' viewBox='0 0 56 100'%3E%3Cpath d='M28 66L0 50L0 16L28 0L56 16L56 50L28 66Z' fill='none' stroke='rgba(245,166,35,0.08)' stroke-width='1'/%3E%3Cpath d='M28 100L0 84L0 50L28 34L56 50L56 84L28 100Z' fill='none' stroke='rgba(245,166,35,0.08)' stroke-width='1'/%3E%3C/svg%3E");
+            opacity: 0.5;
+        }
+
+        .audio-player-inner {
+            position: relative;
+            z-index: 1;
+        }
+
+        .audio-player h3 {
+            font-family: 'Bodoni Moda', serif;
+            font-size: 1.8rem;
+            color: var(--text-bright);
+            margin-bottom: 0.5rem;
+        }
+
+        .audio-player h3 span {
+            color: var(--amber-glow);
+        }
+
+        .audio-subtitle {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            letter-spacing: 0.2em;
+            color: var(--amber-dim);
+            margin-bottom: 2rem;
+        }
+
+        /* Custom Audio Controls */
+        .custom-audio-player {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            padding: 1.5rem 2rem;
+            background: var(--hive-dark);
+            border: 1px solid var(--hive-cell);
+            border-radius: 4px;
+            margin-bottom: 2rem;
+        }
+
+        .play-pause-btn {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: var(--amber-glow);
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+            flex-shrink: 0;
+        }
+
+        .play-pause-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 30px var(--glow-medium);
+        }
+
+        .play-pause-btn svg {
+            width: 24px;
+            height: 24px;
+            fill: var(--hive-dark);
+        }
+
+        .audio-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .audio-progress {
+            width: 100%;
+            height: 4px;
+            background: var(--hive-cell);
+            border-radius: 2px;
+            margin-bottom: 0.5rem;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .audio-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--amber-glow), var(--amber-bright));
+            border-radius: 2px;
+            width: 0%;
+            transition: width 0.1s linear;
+        }
+
+        .audio-time {
+            display: flex;
+            justify-content: space-between;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            color: var(--text-dim);
+        }
+
+        /* Waveform visualization */
+        .waveform {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            height: 40px;
+            margin-left: auto;
+            padding-left: 1.5rem;
+        }
+
+        .waveform-bar {
+            width: 3px;
+            background: var(--amber-glow);
+            border-radius: 2px;
+            opacity: 0.4;
+            transition: opacity 0.2s;
+        }
+
+        .waveform-bar.active {
+            opacity: 1;
+            animation: waveform 0.5s ease-in-out infinite;
+        }
+
+        .audio-description {
+            font-size: 0.95rem;
+            color: var(--text-soft);
+            line-height: 1.8;
+            max-width: 600px;
+        }
+
+        /* Content viewer typography */
         .content-viewer h1 {
-            color: var(--honey);
-            border-bottom: 2px solid var(--honey);
-            padding-bottom: 0.5rem;
+            font-family: 'Bodoni Moda', serif;
+            font-size: 2.2rem;
+            color: var(--amber-glow);
             margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--hive-cell);
         }
 
         .content-viewer h2 {
-            color: var(--honey);
-            margin: 2rem 0 1rem;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 600;
+            font-size: 1.4rem;
+            color: var(--amber-glow);
+            margin: 2.5rem 0 1rem;
+            letter-spacing: 0.02em;
         }
 
         .content-viewer h3 {
-            color: var(--accent);
+            font-family: 'Outfit', sans-serif;
+            font-weight: 600;
+            font-size: 1.1rem;
+            color: var(--amber-bright);
             margin: 1.5rem 0 0.75rem;
         }
 
         .content-viewer p {
-            margin-bottom: 1rem;
+            margin-bottom: 1.2rem;
+            color: var(--text-soft);
         }
 
         .content-viewer code {
-            background: var(--hive-card);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85em;
+            background: var(--hive-cell);
             padding: 0.2rem 0.5rem;
-            border-radius: 4px;
-            font-family: 'Consolas', 'Monaco', monospace;
+            border-radius: 2px;
+            color: var(--amber-bright);
         }
 
         .content-viewer pre {
-            background: var(--hive-card);
-            padding: 1rem;
-            border-radius: 8px;
+            background: var(--hive-void);
+            border: 1px solid var(--hive-cell);
+            padding: 1.5rem;
+            border-radius: 4px;
             overflow-x: auto;
-            margin: 1rem 0;
+            margin: 1.5rem 0;
         }
 
         .content-viewer pre code {
             background: none;
             padding: 0;
+            color: var(--text-bright);
         }
 
         .content-viewer table {
             width: 100%;
             border-collapse: collapse;
-            margin: 1rem 0;
+            margin: 1.5rem 0;
+            font-size: 0.9rem;
         }
 
         .content-viewer th,
         .content-viewer td {
-            border: 1px solid var(--hive-card);
-            padding: 0.75rem;
+            border: 1px solid var(--hive-cell);
+            padding: 0.75rem 1rem;
             text-align: left;
         }
 
         .content-viewer th {
-            background: var(--hive-card);
-            color: var(--honey);
+            background: var(--hive-surface);
+            color: var(--amber-glow);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
         }
 
         .content-viewer blockquote {
-            border-left: 4px solid var(--honey);
-            padding-left: 1rem;
-            margin: 1rem 0;
-            color: var(--text-secondary);
+            border-left: 3px solid var(--amber-glow);
+            padding: 1rem 1.5rem;
+            margin: 1.5rem 0;
+            background: var(--hive-surface);
+            color: var(--text-soft);
             font-style: italic;
         }
 
         .content-viewer hr {
             border: none;
-            border-top: 1px solid var(--hive-card);
-            margin: 2rem 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--hive-cell), transparent);
+            margin: 3rem 0;
         }
 
         .content-viewer .mermaid {
-            background: var(--hive-card);
-            padding: 1rem;
-            border-radius: 8px;
-            margin: 1rem 0;
+            background: var(--hive-void);
+            border: 1px solid var(--hive-cell);
+            padding: 2rem;
+            border-radius: 4px;
+            margin: 2rem 0;
+            overflow-x: auto;
         }
 
-        .nav-tabs {
-            display: flex;
-            gap: 1rem;
+        /* Footer */
+        .footer {
+            position: relative;
+            z-index: 10;
+            text-align: center;
+            padding: 4rem 2rem;
+            margin-top: 4rem;
+            border-top: 1px solid var(--hive-cell);
+        }
+
+        .footer-tagline {
+            font-family: 'Bodoni Moda', serif;
+            font-style: italic;
+            font-size: 1.2rem;
+            color: var(--text-soft);
             margin-bottom: 1rem;
         }
 
-        .nav-tab {
-            background: var(--hive-card);
-            color: var(--text-primary);
-            border: none;
-            padding: 0.75rem 1.5rem;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .nav-tab:hover {
-            background: var(--honey-dark);
-        }
-
-        .nav-tab.active {
-            background: var(--honey);
-            color: var(--hive-bg);
-        }
-
-        .close-btn {
-            background: var(--honey);
-            color: var(--hive-bg);
-            border: none;
-            padding: 0.5rem 1rem;
-            border-radius: 6px;
-            cursor: pointer;
-            float: right;
-            font-weight: bold;
-        }
-
-        .close-btn:hover {
-            background: var(--honey-dark);
-        }
-
-        .footer {
-            text-align: center;
-            padding: 2rem;
-            color: var(--text-secondary);
-            border-top: 1px solid var(--hive-card);
-            margin-top: 2rem;
+        .footer-meta {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            letter-spacing: 0.2em;
+            color: var(--text-dim);
         }
 
         .footer a {
-            color: var(--honey);
+            color: var(--amber-glow);
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+
+        .footer a:hover {
+            color: var(--amber-bright);
+        }
+
+        /* Responsive */
+        @media (max-width: 900px) {
+            .episode-card {
+                width: 320px;
+            }
         }
 
         @media (max-width: 768px) {
-            .episode-grid {
-                grid-template-columns: 1fr;
+            .episode-card {
+                width: 100%;
+                max-width: 380px;
+                clip-path: none;
+                border-radius: 4px;
+                padding: 2rem;
             }
 
-            .header h1 {
-                font-size: 1.75rem;
+            .episode-card::before {
+                clip-path: none;
+                border-radius: 4px;
             }
+
+            .custom-audio-player {
+                flex-wrap: wrap;
+            }
+
+            .waveform {
+                display: none;
+            }
+
+            .viewer-header {
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .nav-tabs {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+
+        /* Hidden native audio */
+        audio {
+            display: none;
         }
     </style>
 </head>
 <body>
+    <div class="particles" id="particles"></div>
+
     <header class="header">
-        <img src="artwork/wasp2_logo.png" alt="WASP2 Logo" class="logo" onerror="this.style.display='none'">
-        <h1>The WASP's Nest</h1>
+        <div class="logo-container">
+            <div class="logo-ring"></div>
+            <img src="artwork/wasp2_logo.png" alt="WASP2 Logo" class="logo" onerror="this.style.display='none'">
+        </div>
+        <h1>The <span>WASP's</span> Nest</h1>
         <p class="tagline">Buzz from the Hive</p>
     </header>
 
     <div class="container">
         <div class="series-banner">
-            <h2>The WASP Chronicles</h2>
-            <p>A 3-episode series tracing the evolution of WASP from its origins in 2015 to the modern Rust-accelerated implementation. Perfect for understanding the project's history and design philosophy.</p>
+            <h2>A Three-Part Chronicle</h2>
+            <p>Tracing the evolution of WASP from its origins in 2015 to the modern Rust-accelerated implementation. Perfect for understanding the project's history, design philosophy, and the science behind allele-specific analysis.</p>
         </div>
 
         <div class="episode-grid" id="episodeGrid"></div>
 
         <div class="content-viewer" id="contentViewer">
-            <button class="close-btn" id="closeBtn">Close</button>
-            <div class="nav-tabs" id="navTabs"></div>
+            <div class="viewer-header">
+                <div class="nav-tabs" id="navTabs"></div>
+                <button class="close-btn" id="closeBtn">CLOSE</button>
+            </div>
             <div id="contentArea"></div>
         </div>
     </div>
 
     <footer class="footer">
-        <p>Keep building, keep buzzing. Buzz out!</p>
-        <p>WASP2 v1.3.0 | <a href="https://github.com/Jaureguy760/WASP2-final">GitHub</a></p>
+        <p class="footer-tagline">Keep building, keep buzzing. Buzz out.</p>
+        <p class="footer-meta">WASP2 v1.3.0 &nbsp;|&nbsp; <a href="https://github.com/Jaureguy760/WASP2-final">GITHUB</a></p>
     </footer>
 
     <script>
-        // Episode data - static, trusted content
+        // Episode data
         const episodes = [
             {
                 number: 1,
@@ -340,7 +806,8 @@
                 duration: "8-10 minutes",
                 topics: ["mapping bias", "allele swapping", "Combined Haplotype Test", "HDF5"],
                 chronicleFile: "chronicles/episode-001-origin-swarm.md",
-                illuminationFile: "illuminations/illumination-001-wasp-mapping.md"
+                illuminationFile: "illuminations/illumination-001-wasp-mapping.md",
+                audioFile: "audio/episode-001-origin-swarm.mp3"
             },
             {
                 number: 2,
@@ -350,21 +817,25 @@
                 duration: "8-10 minutes",
                 topics: ["modernization", "VCF/BCF native", "Typer CLI", "AnnData"],
                 chronicleFile: "chronicles/episode-002-new-hive.md",
-                illuminationFile: "illuminations/illumination-002-architecture.md"
+                illuminationFile: "illuminations/illumination-002-architecture.md",
+                audioFile: "audio/episode-002-new-hive.mp3"
             },
             {
                 number: 3,
                 title: "The Rust Metamorphosis",
-                subtitle: "WASP2 High Performance and Deployment",
+                subtitle: "High Performance & Deployment",
                 description: "The transformation to Rust-accelerated performance. 50-100x speedups, full INDEL support, Nextflow pipelines, Docker and Singularity containers.",
                 duration: "12-15 minutes",
                 topics: ["Rust", "INDEL support", "Nextflow", "Docker", "PyPI"],
                 chronicleFile: "chronicles/episode-003-rust-metamorphosis.md",
-                illuminationFile: "illuminations/illumination-003-performance.md"
+                illuminationFile: "illuminations/illumination-003-performance.md",
+                audioFile: "audio/episode-003-rust-metamorphosis.mp3"
             }
         ];
 
         let currentEpisode = null;
+        let audioElement = null;
+        let isPlaying = false;
 
         // Initialize mermaid
         mermaid.initialize({
@@ -372,26 +843,39 @@
             theme: 'dark',
             themeVariables: {
                 primaryColor: '#F5A623',
-                primaryTextColor: '#e8e8e8',
+                primaryTextColor: '#f4f0e8',
                 primaryBorderColor: '#F5A623',
                 lineColor: '#F5A623',
-                secondaryColor: '#0f3460',
-                tertiaryColor: '#16213e'
+                secondaryColor: '#222233',
+                tertiaryColor: '#1a1a26',
+                background: '#12121a',
+                mainBkg: '#222233'
             }
         });
 
-        // Safely create episode card element
+        // Create floating particles
+        function createParticles() {
+            const container = document.getElementById('particles');
+            for (let i = 0; i < 30; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.top = Math.random() * 100 + '%';
+                particle.style.animationDelay = Math.random() * 8 + 's';
+                particle.style.animationDuration = (6 + Math.random() * 4) + 's';
+                container.appendChild(particle);
+            }
+        }
+
+        // Create episode card
         function createEpisodeCard(ep) {
             const card = document.createElement('div');
             card.className = 'episode-card';
             card.dataset.episode = ep.number;
 
-            const header = document.createElement('div');
-            header.className = 'episode-header';
-
             const numEl = document.createElement('div');
             numEl.className = 'episode-number';
-            numEl.textContent = 'Episode ' + String(ep.number).padStart(3, '0');
+            numEl.textContent = 'EPISODE ' + String(ep.number).padStart(3, '0');
 
             const titleEl = document.createElement('h3');
             titleEl.className = 'episode-title';
@@ -401,14 +885,8 @@
             subtitleEl.className = 'episode-subtitle';
             subtitleEl.textContent = ep.subtitle;
 
-            header.appendChild(numEl);
-            header.appendChild(titleEl);
-            header.appendChild(subtitleEl);
-
-            const body = document.createElement('div');
-            body.className = 'episode-body';
-
             const descEl = document.createElement('p');
+            descEl.className = 'episode-description';
             descEl.textContent = ep.description;
 
             const topicsEl = document.createElement('div');
@@ -422,68 +900,55 @@
 
             const durationEl = document.createElement('div');
             durationEl.className = 'episode-duration';
-            durationEl.textContent = 'Duration: ' + ep.duration;
+            durationEl.textContent = ep.duration;
 
-            body.appendChild(descEl);
-            body.appendChild(topicsEl);
-            body.appendChild(durationEl);
+            card.appendChild(numEl);
+            card.appendChild(titleEl);
+            card.appendChild(subtitleEl);
+            card.appendChild(descEl);
+            card.appendChild(topicsEl);
+            card.appendChild(durationEl);
 
-            card.appendChild(header);
-            card.appendChild(body);
-
-            card.addEventListener('click', function() {
-                loadEpisode(ep.number);
-            });
+            card.addEventListener('click', () => loadEpisode(ep.number));
 
             return card;
         }
 
-        // Render episode cards
         function renderEpisodes() {
             const grid = document.getElementById('episodeGrid');
             grid.replaceChildren();
-            episodes.forEach(ep => {
-                grid.appendChild(createEpisodeCard(ep));
-            });
+            episodes.forEach(ep => grid.appendChild(createEpisodeCard(ep)));
         }
 
-        // Load episode content
         async function loadEpisode(num) {
             const ep = episodes.find(e => e.number === num);
             if (!ep) return;
 
             currentEpisode = num;
+            if (audioElement) {
+                audioElement.pause();
+                isPlaying = false;
+            }
 
-            // Highlight active card
             document.querySelectorAll('.episode-card').forEach(card => {
                 card.classList.toggle('active', parseInt(card.dataset.episode) === num);
             });
 
-            // Show viewer
             const viewer = document.getElementById('contentViewer');
             viewer.classList.add('visible');
 
-            // Create tabs
             const tabs = document.getElementById('navTabs');
             tabs.replaceChildren();
 
-            const chronicleTab = document.createElement('button');
-            chronicleTab.className = 'nav-tab active';
-            chronicleTab.textContent = 'Chronicle';
-            chronicleTab.addEventListener('click', () => showTab('chronicle'));
+            ['Listen', 'Chronicle', 'Illumination'].forEach((name, i) => {
+                const tab = document.createElement('button');
+                tab.className = 'nav-tab' + (i === 0 ? ' active' : '');
+                tab.textContent = name.toUpperCase();
+                tab.addEventListener('click', () => showTab(name.toLowerCase()));
+                tabs.appendChild(tab);
+            });
 
-            const illuminationTab = document.createElement('button');
-            illuminationTab.className = 'nav-tab';
-            illuminationTab.textContent = 'Illumination';
-            illuminationTab.addEventListener('click', () => showTab('illumination'));
-
-            tabs.appendChild(chronicleTab);
-            tabs.appendChild(illuminationTab);
-
-            // Load chronicle by default
-            await showTab('chronicle');
-
-            // Scroll to viewer
+            await showTab('listen');
             viewer.scrollIntoView({ behavior: 'smooth' });
         }
 
@@ -491,14 +956,128 @@
             const ep = episodes.find(e => e.number === currentEpisode);
             if (!ep) return;
 
-            const file = type === 'chronicle' ? ep.chronicleFile : ep.illuminationFile;
-
-            // Update tab states
             const tabs = document.querySelectorAll('.nav-tab');
-            tabs[0].classList.toggle('active', type === 'chronicle');
-            tabs[1].classList.toggle('active', type === 'illumination');
+            tabs.forEach((tab, i) => {
+                tab.classList.toggle('active',
+                    (type === 'listen' && i === 0) ||
+                    (type === 'chronicle' && i === 1) ||
+                    (type === 'illumination' && i === 2)
+                );
+            });
 
             const contentArea = document.getElementById('contentArea');
+
+            if (type === 'listen') {
+                contentArea.replaceChildren();
+
+                const player = document.createElement('div');
+                player.className = 'audio-player';
+
+                const inner = document.createElement('div');
+                inner.className = 'audio-player-inner';
+
+                const title = document.createElement('h3');
+                title.innerHTML = '<span>Episode ' + String(ep.number).padStart(3, '0') + ':</span> ' + ep.title;
+
+                const subtitle = document.createElement('div');
+                subtitle.className = 'audio-subtitle';
+                subtitle.textContent = ep.subtitle.toUpperCase();
+
+                // Custom audio player
+                const customPlayer = document.createElement('div');
+                customPlayer.className = 'custom-audio-player';
+
+                const playBtn = document.createElement('button');
+                playBtn.className = 'play-pause-btn';
+                playBtn.innerHTML = '<svg viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21"/></svg>';
+
+                const audioInfo = document.createElement('div');
+                audioInfo.className = 'audio-info';
+
+                const progress = document.createElement('div');
+                progress.className = 'audio-progress';
+                const progressFill = document.createElement('div');
+                progressFill.className = 'audio-progress-fill';
+                progress.appendChild(progressFill);
+
+                const timeDisplay = document.createElement('div');
+                timeDisplay.className = 'audio-time';
+                timeDisplay.innerHTML = '<span class="current-time">0:00</span><span class="total-time">--:--</span>';
+
+                audioInfo.appendChild(progress);
+                audioInfo.appendChild(timeDisplay);
+
+                // Waveform
+                const waveform = document.createElement('div');
+                waveform.className = 'waveform';
+                for (let i = 0; i < 12; i++) {
+                    const bar = document.createElement('div');
+                    bar.className = 'waveform-bar';
+                    bar.style.height = (4 + Math.random() * 20) + 'px';
+                    bar.style.animationDelay = (i * 0.1) + 's';
+                    waveform.appendChild(bar);
+                }
+
+                customPlayer.appendChild(playBtn);
+                customPlayer.appendChild(audioInfo);
+                customPlayer.appendChild(waveform);
+
+                const desc = document.createElement('p');
+                desc.className = 'audio-description';
+                desc.textContent = ep.description;
+
+                // Hidden audio element
+                audioElement = document.createElement('audio');
+                audioElement.src = ep.audioFile;
+
+                // Audio event handlers
+                audioElement.addEventListener('loadedmetadata', () => {
+                    const total = formatTime(audioElement.duration);
+                    timeDisplay.querySelector('.total-time').textContent = total;
+                });
+
+                audioElement.addEventListener('timeupdate', () => {
+                    const percent = (audioElement.currentTime / audioElement.duration) * 100;
+                    progressFill.style.width = percent + '%';
+                    timeDisplay.querySelector('.current-time').textContent = formatTime(audioElement.currentTime);
+                });
+
+                audioElement.addEventListener('ended', () => {
+                    isPlaying = false;
+                    playBtn.innerHTML = '<svg viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21"/></svg>';
+                    waveform.querySelectorAll('.waveform-bar').forEach(b => b.classList.remove('active'));
+                });
+
+                playBtn.addEventListener('click', () => {
+                    if (isPlaying) {
+                        audioElement.pause();
+                        playBtn.innerHTML = '<svg viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21"/></svg>';
+                        waveform.querySelectorAll('.waveform-bar').forEach(b => b.classList.remove('active'));
+                    } else {
+                        audioElement.play();
+                        playBtn.innerHTML = '<svg viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
+                        waveform.querySelectorAll('.waveform-bar').forEach(b => b.classList.add('active'));
+                    }
+                    isPlaying = !isPlaying;
+                });
+
+                progress.addEventListener('click', (e) => {
+                    const rect = progress.getBoundingClientRect();
+                    const percent = (e.clientX - rect.left) / rect.width;
+                    audioElement.currentTime = percent * audioElement.duration;
+                });
+
+                inner.appendChild(title);
+                inner.appendChild(subtitle);
+                inner.appendChild(customPlayer);
+                inner.appendChild(audioElement);
+                inner.appendChild(desc);
+                player.appendChild(inner);
+                contentArea.appendChild(player);
+                return;
+            }
+
+            const file = type === 'chronicle' ? ep.chronicleFile : ep.illuminationFile;
 
             try {
                 const response = await fetch(file);
@@ -510,28 +1089,24 @@
                 const errorP = document.createElement('p');
                 errorP.style.color = '#ff6b6b';
                 errorP.textContent = 'Error loading content. Make sure you are serving this from a web server.';
-
-                const helpP = document.createElement('p');
-                helpP.textContent = 'Try: python -m http.server 8000 in the podcast directory';
-
                 contentArea.appendChild(errorP);
-                contentArea.appendChild(helpP);
             }
+        }
+
+        function formatTime(seconds) {
+            if (isNaN(seconds)) return '--:--';
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return mins + ':' + String(secs).padStart(2, '0');
         }
 
         async function renderMarkdown(md) {
             const contentArea = document.getElementById('contentArea');
 
-            // Configure marked
-            marked.setOptions({
-                breaks: true,
-                gfm: true
-            });
+            marked.setOptions({ breaks: true, gfm: true });
 
-            // Render markdown and sanitize with DOMPurify
             let html = marked.parse(md);
 
-            // Extract mermaid blocks before sanitization
             const mermaidBlocks = [];
             html = html.replace(/<pre><code class="language-mermaid">([\s\S]*?)<\/code><\/pre>/g, function(match, code) {
                 const id = 'mermaid-' + mermaidBlocks.length;
@@ -540,7 +1115,6 @@
                 return '<div class="mermaid" id="' + id + '"></div>';
             });
 
-            // Sanitize HTML using DOMPurify
             const cleanHtml = DOMPurify.sanitize(html, {
                 ADD_TAGS: ['div'],
                 ADD_ATTR: ['class', 'id']
@@ -551,13 +1125,15 @@
             wrapper.innerHTML = cleanHtml;
             contentArea.appendChild(wrapper);
 
-            // Render mermaid diagrams
             for (const block of mermaidBlocks) {
                 try {
                     const result = await mermaid.render(block.id + '-svg', block.code);
                     const el = document.getElementById(block.id);
                     if (el) {
-                        el.innerHTML = DOMPurify.sanitize(result.svg, { ADD_TAGS: ['svg', 'g', 'path', 'text', 'tspan', 'rect', 'circle', 'line', 'polygon', 'polyline', 'marker', 'defs', 'style', 'title', 'desc', 'foreignObject'], ADD_ATTR: ['viewBox', 'preserveAspectRatio', 'd', 'fill', 'stroke', 'stroke-width', 'transform', 'x', 'y', 'width', 'height', 'rx', 'ry', 'cx', 'cy', 'r', 'points', 'marker-end', 'marker-start', 'text-anchor', 'dominant-baseline', 'font-size', 'font-family', 'font-weight', 'class', 'id', 'style', 'xmlns'] });
+                        el.innerHTML = DOMPurify.sanitize(result.svg, {
+                            ADD_TAGS: ['svg', 'g', 'path', 'text', 'tspan', 'rect', 'circle', 'line', 'polygon', 'polyline', 'marker', 'defs', 'style', 'title', 'desc', 'foreignObject'],
+                            ADD_ATTR: ['viewBox', 'preserveAspectRatio', 'd', 'fill', 'stroke', 'stroke-width', 'transform', 'x', 'y', 'width', 'height', 'rx', 'ry', 'cx', 'cy', 'r', 'points', 'marker-end', 'marker-start', 'text-anchor', 'dominant-baseline', 'font-size', 'font-family', 'font-weight', 'class', 'id', 'style', 'xmlns']
+                        });
                     }
                 } catch (e) {
                     const el = document.getElementById(block.id);
@@ -573,11 +1149,16 @@
         function closeViewer() {
             document.getElementById('contentViewer').classList.remove('visible');
             document.querySelectorAll('.episode-card').forEach(card => card.classList.remove('active'));
+            if (audioElement) {
+                audioElement.pause();
+                isPlaying = false;
+            }
             currentEpisode = null;
         }
 
         // Initialize
         document.getElementById('closeBtn').addEventListener('click', closeViewer);
+        createParticles();
         renderEpisodes();
     </script>
 </body>
