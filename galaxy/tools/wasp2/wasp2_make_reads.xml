@@ -22,17 +22,11 @@
             --out_json wasp_data.json
             $is_paired
             $is_phased
-            $include_indels
+            $indels
             --threads \${GALAXY_SLOTS:-1}
-            #if $advanced.max_indel_len
-                --max-indel-len $advanced.max_indel_len
-            #end if
-            #if $advanced.max_seqs
-                --max-seqs $advanced.max_seqs
-            #end if
-            #if $advanced.insert_qual
-                --insert-qual $advanced.insert_qual
-            #end if
+            --max-indel-len $advanced.max_indel_len
+            --max-seqs $advanced.max_seqs
+            --insert-qual $advanced.insert_qual
     ]]></command>
 
     <inputs>
@@ -50,7 +44,9 @@
                checked="true" label="Phased genotypes"
                help="Variant file contains phased genotypes (strongly recommended)"/>
 
-        <expand macro="include_indels_param"/>
+        <param argument="--indels" type="boolean" truevalue="--indels" falsevalue="--snps-only"
+               checked="false" label="Include indels"
+               help="Process indels in addition to SNPs. Default is SNPs only."/>
 
         <section name="advanced" title="Advanced Options" expanded="false">
             <param argument="--max-indel-len" type="integer" value="10" min="1" max="50"

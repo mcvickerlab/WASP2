@@ -17,8 +17,8 @@ process SCATAC_PSEUDOBULK {
 
     conda "${projectDir}/../nf-modules/modules/wasp2/environment.yml"
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
-        'docker://ghcr.io/jaureguy760/wasp2:latest' :
-        'ghcr.io/jaureguy760/wasp2:latest' }"
+        'https://depot.galaxyproject.org/singularity/wasp2:1.2.1--pyhdfd78af_0' :
+        'biocontainers/wasp2:1.2.1--pyhdfd78af_0' }"
 
     input:
     tuple val(meta), path(cell_counts)

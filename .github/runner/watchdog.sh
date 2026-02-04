@@ -85,14 +85,26 @@ check_github_connectivity() {
 }
 
 watchdog_loop() {
+    # Validate runner directory exists
+    if [[ ! -d "$RUNNER_DIR" ]]; then
+        echo "ERROR: RUNNER_DIR does not exist: $RUNNER_DIR" >&2
+        exit 1
+    fi
+    if ! mkdir -p "$RUNNER_DIR/_diag"; then
+        echo "ERROR: Failed to create diagnostics directory: $RUNNER_DIR/_diag" >&2
+        exit 1
+    fi
+
     log "Watchdog started (PID $$)"
-    echo $$ > "$PID_FILE"
+    echo "$$" > "$PID_FILE"
 
     local consecutive_errors=0
     local max_consecutive_errors=3
+    local check_count=0
 
     while true; do
         sleep $CHECK_INTERVAL
+        check_count=$((check_count + 1))
 
         # Check if runner is running at all
         if ! is_runner_running; then
@@ -132,8 +144,8 @@ watchdog_loop() {
             consecutive_errors=0
         fi
 
-        # Periodic health log (every 10 checks = ~10 minutes)
-        if [[ $((RANDOM % 10)) -eq 0 ]]; then
+        # Deterministic health log every 10 checks (~10 minutes)
+        if [[ $((check_count % 10)) -eq 0 ]]; then
             local pid=$(get_runner_pid)
             log "Health check: Runner PID=$pid, Errors=$consecutive_errors, GitHub=${github_ok}"
         fi

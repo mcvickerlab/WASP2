@@ -21,7 +21,7 @@
 | ML Output Formats | [#36](../../issues/36) | ✅ Complete |
 | GenVarLoader | [#37](../../issues/37) | ✅ Complete |
 | nf-core Compliance | [#38](../../issues/38) | ✅ Complete |
-| Seqera AI | [#39](../../issues/39) | 🔄 Open |
+| Seqera AI | [#39](../../issues/39) | ✅ Complete |
 
 ## Module Inventory
 
@@ -86,7 +86,7 @@ pipelines/
                 nf-core Compliance ✅
                         │
                         ▼
-                   Seqera AI 🔄
+                   Seqera AI ✅
 ```
 
 ## Implementation Roadmap
@@ -105,7 +105,7 @@ pipelines/
 ### Phase 3: Integration ✅
 - [x] GenVarLoader integration (#37) - Via Zarr output format
 - [x] nf-core compliance (#38) - Pipeline structure compliance
-- [ ] Seqera AI compatibility (#39) - Documentation only
+- [x] Seqera AI compatibility (#39) - [Integration guide](./source/seqera_ai_integration.md)
 
 ## ML Output Formats
 
@@ -160,4 +160,4 @@ nextflow run . -profile test_stub -stub-run
 
 ---
 *Milestone: v1.3.0 - Pipeline Ecosystem*
-*Last updated: 2026-01-24*
+*Last updated: 2026-02-03*

@@ -5,7 +5,7 @@
 # Based on best practices from GenVarLoader, uv, pysam, and polars projects
 # ==============================================================================
 
-set -e
+set -eo pipefail
 
 # Configuration
 REPO="Jaureguy760/WASP2-final"
@@ -83,6 +83,11 @@ echo ""
 echo "[3/6] Downloading GitHub Actions runner..."
 
 RUNNER_VERSION=$(curl -s https://api.github.com/repos/actions/runner/releases/latest | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/')
+if [[ -z "$RUNNER_VERSION" ]]; then
+    echo "  ❌ Failed to determine latest runner version from GitHub API."
+    echo "     This may be caused by network issues or GitHub API rate limiting."
+    exit 1
+fi
 RUNNER_ARCHIVE="actions-runner-osx-arm64-${RUNNER_VERSION}.tar.gz"
 RUNNER_CACHE="${RUNNERS_BASE}/.cache"
 
@@ -90,8 +95,30 @@ mkdir -p "$RUNNER_CACHE"
 
 if [[ ! -f "${RUNNER_CACHE}/${RUNNER_ARCHIVE}" ]]; then
     echo "  ⏳ Downloading runner v${RUNNER_VERSION}..."
-    curl -o "${RUNNER_CACHE}/${RUNNER_ARCHIVE}" -L \
+    curl -fSo "${RUNNER_CACHE}/${RUNNER_ARCHIVE}" -L \
         "https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/${RUNNER_ARCHIVE}"
+
+    # Verify SHA256 checksum (supply chain protection)
+    # GitHub embeds checksums in release notes body; extract via API
+    echo "  ⏳ Verifying checksum..."
+    EXPECTED_HASH=$(curl -sL https://api.github.com/repos/actions/runner/releases/latest \
+        | grep -A1 "$RUNNER_ARCHIVE" \
+        | grep -oE '[a-f0-9]{64}' \
+        | head -1)
+    if [[ -z "$EXPECTED_HASH" ]] || [[ ! "$EXPECTED_HASH" =~ ^[a-f0-9]{64}$ ]]; then
+        echo "  ⚠️  Could not retrieve checksum from GitHub release notes."
+        echo "     Skipping verification (manual verification recommended)."
+    else
+        ACTUAL_HASH=$(shasum -a 256 "${RUNNER_CACHE}/${RUNNER_ARCHIVE}" | awk '{print $1}')
+        if [[ "$EXPECTED_HASH" != "$ACTUAL_HASH" ]]; then
+            echo "  ❌ Checksum verification failed!"
+            echo "     Expected: $EXPECTED_HASH"
+            echo "     Actual:   $ACTUAL_HASH"
+            rm -f "${RUNNER_CACHE}/${RUNNER_ARCHIVE}"
+            exit 1
+        fi
+        echo "  ✅ Checksum verified"
+    fi
     echo "  ✅ Downloaded runner"
 else
     echo "  ✅ Runner v${RUNNER_VERSION} already cached"
