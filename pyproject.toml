@@ -102,6 +102,7 @@ cyvcf2 = [
 wasp2-count = "counting.__main__:app"
 wasp2-map = "mapping.__main__:app"
 wasp2-analyze = "analysis.__main__:app"
+wasp2-ipscore = "ipscore.__main__:app"
 
 [project.urls]
 Homepage = "https://github.com/Jaureguy760/WASP2-final"
@@ -121,7 +122,7 @@ Issues = "https://github.com/Jaureguy760/WASP2-final/issues"
 [tool.maturin]
 manifest-path = "rust/Cargo.toml"
 python-source = "src"
-python-packages = ["counting", "mapping", "analysis", "wasp2"]
+python-packages = ["counting", "mapping", "analysis", "wasp2", "ipscore"]
 bindings = "pyo3"
 strip = true
 include = ["LICENSE", "README.md"]
@@ -205,7 +206,7 @@ ignore = [
 "tests/*" = ["F841"]  # unused variables OK in tests
 
 [tool.ruff.lint.isort]
-known-first-party = ["wasp2", "counting", "mapping", "analysis"]
+known-first-party = ["wasp2", "counting", "mapping", "analysis", "ipscore"]
 
 [tool.ruff.format]
 quote-style = "double"
