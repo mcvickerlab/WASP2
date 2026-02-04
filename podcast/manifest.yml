@@ -1,0 +1,157 @@
+# The WASP's Nest - Changelog Podcast
+# "Buzz from the Hive"
+#
+# 🐝 Dispatches from WASP2 Development 🐝
+
+realm:
+  name: "wasp2"
+  title: "The WASP's Nest"
+  tagline: "Buzz from the Hive"
+  description: |
+    Welcome to the Hive! The Queen Bee documents every release,
+    every feature, every bug squashed in WASP2 - the allele-specific
+    pipeline for unbiased read mapping and allelic imbalance analysis.
+
+    Each episode (Buzz Report) chronicles what's new in the hive,
+    from foraging expeditions into new features to defending against
+    pesky bugs. Join the swarm and stay informed!
+  author: "The Queen Bee"
+  website: "https://github.com/Jaureguy760/WASP2-final"
+  language: "en-us"
+  logo: "artwork/wasp2_logo.png"
+  logo_source: "doc/wasp2_hex_logo_v1.png"
+
+# Voice/narrator configuration
+voice:
+  persona: "queen_bee"
+  engine: "chatterbox"
+  emotion_level: 0.5
+
+# When to generate new episodes
+trigger:
+  type: "tag"
+  tag_pattern: "v*.*.*"
+  branch: "main"
+
+# Theming and style
+style:
+  theme: "hive"
+  sound_effects: true
+  diagrams: true
+  logo_symbolism: |
+    Two wasps facing each other represent paired alleles.
+    Red/blue colored bands symbolize allelic variants.
+    Hexagonal frame = honeycomb = the hive.
+  terminology:
+    narrator: "The Queen Bee"
+    realm: "The Hive"
+    episodes: "Buzz Reports"
+    updates: "Swarm Updates"
+    bugs_fixed: "Squashed Bugs"
+    celebration: "Buzz buzz!"
+    opening: "Welcome to the Hive, fellow worker bees..."
+    closing: "Keep building, keep buzzing. Buzz out!"
+
+# Episode chapters follow bee activities
+chapter_themes:
+  - name: "Foraging"
+    description: "New features and explorations"
+  - name: "Building"
+    description: "Infrastructure and improvements"
+  - name: "Defending"
+    description: "Bug fixes and security updates"
+  - name: "Pollinating"
+    description: "Community contributions and integrations"
+
+# Podcast metadata
+volume: 1
+episode_count: 3
+
+# Special series: The WASP Chronicles
+# A 3-part history of WASP's evolution from 2015 to 2026
+series:
+  - name: "The WASP Chronicles"
+    description: |
+      A special 3-episode series tracing the evolution of WASP from
+      its origins in 2015 to the modern Rust-accelerated implementation.
+      Perfect for new users wanting to understand the project's history
+      and design philosophy.
+    episodes: [1, 2, 3]
+
+episodes:
+  - number: 1
+    title: "The Origin Swarm"
+    subtitle: "Original WASP (2015)"
+    series: "The WASP Chronicles"
+    file: "chronicles/episode-001-origin-swarm.md"
+    illumination: "illuminations/illumination-001-wasp-mapping.md"
+    date: "2026-02-03"
+    duration_estimate: "8-10 minutes"
+    description: |
+      The story of the original WASP published in Nature Methods 2015.
+      Learn how van de Geijn, McVicker, Gilad, and Pritchard solved the
+      mapping bias problem that plagued allele-specific analysis.
+    topics:
+      - mapping bias
+      - allele swapping
+      - Combined Haplotype Test
+      - HDF5 format
+    references:
+      paper:
+        title: "WASP: allele-specific software for robust molecular QTL discovery"
+        authors: ["van de Geijn B", "McVicker G", "Gilad Y", "Pritchard JK"]
+        journal: "Nature Methods"
+        year: 2015
+        pmid: 26366987
+      repo: "https://github.com/bmvdgeijn/WASP"
+
+  - number: 2
+    title: "Building the New Hive"
+    subtitle: "McVicker Lab WASP2"
+    series: "The WASP Chronicles"
+    file: "chronicles/episode-002-new-hive.md"
+    illumination: "illuminations/illumination-002-architecture.md"
+    date: "2026-02-03"
+    duration_estimate: "8-10 minutes"
+    description: |
+      How the McVicker Lab rebuilt WASP for the modern era. No more
+      HDF5 conversion, unified CLI, single-cell support, and clean
+      Python architecture.
+    topics:
+      - modernization
+      - VCF/BCF native
+      - Typer CLI
+      - AnnData integration
+      - single-cell support
+    references:
+      repo: "https://github.com/mcvickerlab/WASP2"
+      timeline:
+        established: "2021-12"
+        v1_release: "2024-09"
+
+  - number: 3
+    title: "The Rust Metamorphosis"
+    subtitle: "WASP2-exp High Performance"
+    series: "The WASP Chronicles"
+    file: "chronicles/episode-003-rust-metamorphosis.md"
+    illumination: "illuminations/illumination-003-performance.md"
+    date: "2026-02-03"
+    duration_estimate: "10-12 minutes"
+    description: |
+      The transformation to Rust-accelerated performance. 50-100x speedups,
+      full INDEL support, beta-binomial statistics, and the philosophy of
+      surgical optimization.
+    topics:
+      - Rust acceleration
+      - COITree
+      - INDEL support
+      - beta-binomial model
+      - PyO3 integration
+      - performance benchmarks
+    references:
+      version: "1.2.1"
+      rust_lines: 10551
+      speedups:
+        bam_bed_intersect: "50-75x"
+        statistical_analysis: "5x"
+        full_pipeline: "10x"
