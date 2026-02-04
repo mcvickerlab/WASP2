@@ -72,6 +72,7 @@ Documentation
    tutorials/scatac_workflow
    tutorials/comparative_imbalance
    tutorials/atac_seq_workflow
+   tutorials/statistical_methods_tutorial
 
 .. toctree::
    :maxdepth: 2
