@@ -108,42 +108,33 @@ def build_ffmpeg_filter() -> str:
     """
     Build the ffmpeg audio filter chain for podcast enhancement.
 
-    Filter chain optimized to eliminate ringing artifacts:
-    1. afade in - Smooth fade-in (0.5s) to avoid abrupt TTS start
-    2. highpass - 1st-order filter to remove rumble (no resonance)
-    3. lowpass - 1st-order filter to remove hiss (no resonance)
-    4. equalizer - Boost voice presence (800Hz), cut harsh highs (6-8kHz)
-    5. afftdn - Gentle noise reduction with transient protection
-    6. acompressor - Gentle compression with slow attack
-    7. loudnorm - EBU R128 loudness normalization (-16 LUFS)
+    Filter chain:
+    1. afftdn - FFT-based noise reduction (reduces steady background noise)
+    2. highpass - Remove low-frequency rumble (< 80Hz)
+    3. lowpass - Remove high-frequency hiss (> 12kHz)
+    4. acompressor - Dynamic range compression (voice clarity)
+    5. loudnorm - EBU R128 loudness normalization (-16 LUFS for podcasts)
     """
     filters = [
-        # Fade in: smooth start to avoid jarring TTS beginning
-        "afade=t=in:st=0:d=0.5",
+        # Noise reduction: removes steady background noise
+        # nr=12 = noise reduction in dB, nf=-25 = noise floor
+        "afftdn=nr=12:nf=-25",
 
-        # High-pass filter: 1st-order (poles=1) eliminates resonant peak
-        # 6dB/octave rolloff instead of 12dB - no ringing on transients
-        "highpass=f=80:poles=1",
+        # High-pass filter: remove rumble below 80Hz
+        # Human voice is 85Hz-255Hz fundamental, so 80Hz is safe
+        "highpass=f=80",
 
-        # Low-pass filter: 1st-order to avoid ringing at cutoff
-        # Gentle rolloff preserves voice clarity
-        "lowpass=f=11000:poles=1",
+        # Low-pass filter: remove hiss above 12kHz
+        # Preserves voice clarity while removing high-freq artifacts
+        "lowpass=f=12000",
 
-        # EQ to fix inverted spectral balance (highs too loud, voice too quiet)
-        # Boost voice presence at 800Hz (+4dB), cut harsh 6kHz (-6dB)
-        "equalizer=f=800:width_type=o:width=1.5:g=4",
-        "equalizer=f=6000:width_type=o:width=1:g=-6",
-        "equalizer=f=8000:width_type=o:width=1:g=-4",
+        # Dynamic range compression for consistent volume
+        # threshold=-20dB, ratio=4:1, attack=5ms, release=50ms
+        "acompressor=threshold=-20dB:ratio=4:attack=5:release=50",
 
-        # Noise reduction: gentler settings with transient protection
-        # nr=8 (was 12), tn=1 protects speech transients from artifacts
-        "afftdn=nr=8:nf=-30:tn=1",
-
-        # Compression: gentler ratio, slower attack to avoid pumping
-        # attack=20ms (was 5ms), ratio=3:1 (was 4:1), longer release
-        "acompressor=threshold=-18dB:ratio=3:attack=20:release=200",
-
-        # Loudness normalization to podcast standard (-16 LUFS)
+        # Loudness normalization to podcast standard
+        # -16 LUFS is the standard for podcasts (Spotify, Apple Podcasts)
+        # TP=-1.5 = true peak limit to prevent clipping
         "loudnorm=I=-16:TP=-1.5:LRA=11",
     ]
 
