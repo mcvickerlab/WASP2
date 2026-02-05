@@ -1,0 +1,108 @@
+name: "Scientific Validation"
+description: "Report scientific accuracy concerns (for bioinformaticians/scientists)"
+title: "[SCIENCE] "
+labels: ["scientific-accuracy", "audit", "needs-domain-expert"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Scientific Validation Concern
+        Use this template to report scientific accuracy issues.
+        This template is designed for bioinformaticians, computational biologists, and wet lab scientists.
+
+  - type: dropdown
+    id: domain
+    attributes:
+      label: Scientific Domain
+      description: "Which area does this concern relate to?"
+      options:
+        - Statistical Model (beta-binomial, GLM)
+        - Variant Handling (SNPs, INDELs)
+        - Single-Cell Analysis
+        - WASP Bias Correction
+        - Output Interpretation
+        - Benchmark Discrepancy
+        - Genome/Annotation Handling
+        - Allele-Specific Expression Logic
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Scientific Impact
+      description: "How significant is this concern for research validity?"
+      options:
+        - Critical (produces incorrect biological conclusions)
+        - High (may affect results interpretation)
+        - Medium (edge case or minor accuracy issue)
+        - Low (cosmetic or documentation issue)
+    validations:
+      required: true
+
+  - type: textarea
+    id: location
+    attributes:
+      label: Code Location
+      description: "File path and line numbers (if applicable)"
+      placeholder: "src/analysis/as_analysis.py:200-250"
+
+  - type: textarea
+    id: concern
+    attributes:
+      label: Scientific Concern
+      description: "Describe the scientific issue in detail"
+      placeholder: |
+        Describe:
+        - What biological/statistical assumption appears incorrect
+        - What you expected based on domain knowledge
+        - What the code actually does
+    validations:
+      required: true
+
+  - type: textarea
+    id: literature
+    attributes:
+      label: Literature References
+      description: "Papers or methods that inform this concern"
+      placeholder: |
+        - van de Geijn et al., 2015 (original WASP paper)
+        - Castel et al., 2020 (ASE best practices)
+        - Add relevant citations...
+
+  - type: textarea
+    id: validation
+    attributes:
+      label: Suggested Validation
+      description: "How should we verify correctness?"
+      placeholder: |
+        Suggestions for validation:
+        - Compare against GATK ASEReadCounter output
+        - Run with known gold-standard dataset
+        - Verify statistical distribution matches expected...
+    validations:
+      required: true
+
+  - type: textarea
+    id: test-data
+    attributes:
+      label: Test Data
+      description: "Do you have test data that demonstrates this issue?"
+      placeholder: |
+        - Location of test data (if available)
+        - Expected vs actual results
+        - Steps to reproduce...
+
+  - type: checkboxes
+    id: expertise
+    attributes:
+      label: Domain Expertise
+      description: "Select areas of expertise relevant to this review"
+      options:
+        - label: Statistical genetics
+        - label: Single-cell genomics
+        - label: Variant calling/handling
+        - label: Allele-specific expression
+        - label: CRISPR/gene editing
+        - label: Wet lab validation
