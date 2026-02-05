@@ -1,0 +1,111 @@
+name: "Audit Finding"
+description: "Report an issue found during human review of AI-generated code"
+title: "[AUDIT] "
+labels: ["audit", "human-review", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## AI Code Audit Finding
+        Use this template to report issues discovered during human review of AI-generated code.
+        Please be as specific as possible about the location and nature of the concern.
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: "How critical is this finding?"
+      options:
+        - Critical (blocks release)
+        - High (must fix before release)
+        - Medium (should fix)
+        - Low (nice to have)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      description: "What type of issue is this?"
+      options:
+        - Scientific Accuracy
+        - Code Quality
+        - Security Concern
+        - Documentation
+        - Test Coverage Gap
+        - Performance Issue
+        - User Experience
+    validations:
+      required: true
+
+  - type: dropdown
+    id: reviewer-role
+    attributes:
+      label: Reviewer Role
+      description: "Your role on the audit team"
+      options:
+        - PI
+        - Software Engineer
+        - Bioinformatician
+        - Staff Research Scientist
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: location
+    attributes:
+      label: Location
+      description: "File path and line numbers where the issue was found"
+      placeholder: "src/analysis/as_analysis.py:150-175"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: "What did you find? Be specific about the problem."
+      placeholder: "Describe the issue in detail..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: "What should happen instead?"
+      placeholder: "Describe the correct behavior..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence/References
+      description: "Literature citations, benchmark comparisons, test results, or other supporting evidence"
+      placeholder: |
+        - Paper: Author et al., 2024, DOI: ...
+        - Benchmark: GATK ASEReadCounter shows r² = 0.95 vs expected 0.99
+        - Test output: ...
+
+  - type: textarea
+    id: suggested-fix
+    attributes:
+      label: Suggested Fix
+      description: "If you have ideas on how to resolve this, please share them"
+      placeholder: "Optional: Describe potential solutions..."
+
+  - type: checkboxes
+    id: verification
+    attributes:
+      label: Verification
+      description: "Confirm you've done the following"
+      options:
+        - label: I have read the relevant code section
+          required: true
+        - label: I have checked if this issue already exists
+          required: true
+        - label: I have provided enough detail for someone else to understand and fix this
+          required: true
