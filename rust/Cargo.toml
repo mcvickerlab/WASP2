@@ -31,7 +31,7 @@ flate2 = "1.1"         # For gzip decompression
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
-tempfile = "3.8"
+tempfile = "3.25"
 
 # Benchmarks removed for clean release (benchmark files in paper branch only)
 # [[bench]]
