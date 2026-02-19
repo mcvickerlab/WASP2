@@ -85,18 +85,13 @@ def run_make_remap_reads_unified(
         With VCF (converts to BED automatically)::
 
             stats = run_make_remap_reads_unified(
-                bam_file="input.bam",
-                variant_file="variants.vcf.gz",
-                samples=["NA12878"],
-                threads=8
+                bam_file="input.bam", variant_file="variants.vcf.gz", samples=["NA12878"], threads=8
             )
 
         With pre-existing BED (faster, skips conversion)::
 
             stats = run_make_remap_reads_unified(
-                bam_file="input.bam",
-                bed_file="variants.bed",
-                threads=8
+                bam_file="input.bam", bed_file="variants.bed", threads=8
             )
     """
     if not UNIFIED_AVAILABLE:

@@ -666,7 +666,9 @@ def generate_paper_figure(
                 sorted_indices = np.argsort(x_values)
                 x_values = np.array(x_values)[sorted_indices]
                 y_values = np.array(y_values)[sorted_indices]
-                ax3.plot(x_values, y_values, marker="o", label=tool_name, color=get_tool_color(tool_name))
+                ax3.plot(
+                    x_values, y_values, marker="o", label=tool_name, color=get_tool_color(tool_name)
+                )
         ax3.set_xscale("log")
         ax3.set_yscale("log")
         ax3.set_xlabel("Number of Variants")
@@ -797,8 +799,7 @@ def generate_all_figures(
 
     # Time vs memory comparison
     time_memory_results = [
-        r for r in results
-        if "peak_memory_mb" in r.extra_info and "n_variants" in r.extra_info
+        r for r in results if "peak_memory_mb" in r.extra_info and "n_variants" in r.extra_info
     ]
     if time_memory_results:
         for fmt in formats:

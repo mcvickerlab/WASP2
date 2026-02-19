@@ -16,13 +16,13 @@ def validate_samplesheet(samplesheet_path: str) -> bool:
     Expected format:
     sample,fastq_1,fastq_2,sample_name
     """
-    required_columns = ['sample', 'fastq_1', 'fastq_2']
-    optional_columns = ['sample_name', 'single_end']
+    required_columns = ["sample", "fastq_1", "fastq_2"]
+    optional_columns = ["sample_name", "single_end"]
 
     errors = []
     warnings = []
 
-    with open(samplesheet_path, 'r') as f:
+    with open(samplesheet_path) as f:
         reader = csv.DictReader(f)
 
         # Check columns
@@ -42,9 +42,9 @@ def validate_samplesheet(samplesheet_path: str) -> bool:
         # Validate rows
         sample_ids = set()
         for row_num, row in enumerate(reader, start=2):
-            sample_id = row.get('sample', '').strip()
-            fastq_1 = row.get('fastq_1', '').strip()
-            fastq_2 = row.get('fastq_2', '').strip()
+            sample_id = row.get("sample", "").strip()
+            fastq_1 = row.get("fastq_1", "").strip()
+            fastq_2 = row.get("fastq_2", "").strip()
 
             # Check sample ID
             if not sample_id:
@@ -55,8 +55,10 @@ def validate_samplesheet(samplesheet_path: str) -> bool:
                 sample_ids.add(sample_id)
 
             # Validate sample ID characters
-            if sample_id and not sample_id.replace('_', '').replace('-', '').isalnum():
-                errors.append(f"Row {row_num}: Sample ID '{sample_id}' contains invalid characters (use only alphanumeric, underscore, hyphen)")
+            if sample_id and not sample_id.replace("_", "").replace("-", "").isalnum():
+                errors.append(
+                    f"Row {row_num}: Sample ID '{sample_id}' contains invalid characters (use only alphanumeric, underscore, hyphen)"
+                )
 
             # Check FASTQ files
             if not fastq_1:
@@ -87,8 +89,8 @@ def validate_samplesheet(samplesheet_path: str) -> bool:
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Validate nf-atacseq samplesheet')
-    parser.add_argument('samplesheet', help='Path to samplesheet CSV')
+    parser = argparse.ArgumentParser(description="Validate nf-atacseq samplesheet")
+    parser.add_argument("samplesheet", help="Path to samplesheet CSV")
     args = parser.parse_args()
 
     if not Path(args.samplesheet).exists():
@@ -101,5 +103,5 @@ def main():
         sys.exit(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -102,7 +102,10 @@ fn parse_wasp_name(qname: &[u8]) -> Option<WaspNameInfo<'_>> {
 /// Check if remapped positions match expected positions (mate-order agnostic)
 fn positions_match(rec_pos: i64, mate_pos: i64, exp_pos1: i64, exp_pos2: i64, slop: i64) -> bool {
     if slop < 0 {
-        eprintln!("[WARN] positions_match: negative slop ({}), clamping to 0", slop);
+        eprintln!(
+            "[WARN] positions_match: negative slop ({}), clamping to 0",
+            slop
+        );
     }
     let slop = slop.max(0);
     if slop == 0 {
@@ -114,8 +117,7 @@ fn positions_match(rec_pos: i64, mate_pos: i64, exp_pos1: i64, exp_pos2: i64, sl
         let pos_diff2 = (rec_pos - exp_pos2).abs();
         let mate_diff2 = (mate_pos - exp_pos1).abs();
 
-        (pos_diff1 <= slop && mate_diff1 <= slop)
-            || (pos_diff2 <= slop && mate_diff2 <= slop)
+        (pos_diff1 <= slop && mate_diff1 <= slop) || (pos_diff2 <= slop && mate_diff2 <= slop)
     }
 }
 
@@ -145,60 +147,59 @@ pub fn filter_bam_wasp(
 
     // Optional sidecar of expected positions keyed by full qname.
     // Stored as bytes to avoid per-read UTF-8/String allocations in the hot loop.
-    let expected_map: Option<FxHashMap<Vec<u8>, (i64, i64)>> = if let Some(sidecar_path) =
-        expected_sidecar.as_ref()
-    {
-        let file = std::fs::File::open(sidecar_path).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
-                "Failed to open sidecar {}: {}",
-                sidecar_path, e
-            ))
-        })?;
-        let mut reader = BufReader::new(file);
-        let mut buf: Vec<u8> = Vec::new();
-        let mut map: FxHashMap<Vec<u8>, (i64, i64)> = FxHashMap::default();
-
-        loop {
-            buf.clear();
-            let n = reader.read_until(b'\n', &mut buf).map_err(|e| {
+    let expected_map: Option<FxHashMap<Vec<u8>, (i64, i64)>> =
+        if let Some(sidecar_path) = expected_sidecar.as_ref() {
+            let file = std::fs::File::open(sidecar_path).map_err(|e| {
                 PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
-                    "Failed to read sidecar {}: {}",
+                    "Failed to open sidecar {}: {}",
                     sidecar_path, e
                 ))
             })?;
-            if n == 0 {
-                break;
-            }
-            if buf.ends_with(b"\n") {
-                buf.pop();
-                if buf.ends_with(b"\r") {
-                    buf.pop();
-                }
-            }
+            let mut reader = BufReader::new(file);
+            let mut buf: Vec<u8> = Vec::new();
+            let mut map: FxHashMap<Vec<u8>, (i64, i64)> = FxHashMap::default();
 
-            let mut parts = buf.split(|&b| b == b'\t');
-            let q = match parts.next() {
-                Some(v) if !v.is_empty() => v,
-                _ => continue,
-            };
-            let p1 = match parts.next().and_then(parse_i64_ascii) {
-                Some(v) => v,
-                None => continue,
-            };
-            let p2 = match parts.next().and_then(parse_i64_ascii) {
-                Some(v) => v,
-                None => continue,
-            };
-            // Keep compatibility with older sidecars: require at least 5 columns (q, p1, p2, ...)
-            if parts.next().is_none() || parts.next().is_none() {
-                continue;
+            loop {
+                buf.clear();
+                let n = reader.read_until(b'\n', &mut buf).map_err(|e| {
+                    PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                        "Failed to read sidecar {}: {}",
+                        sidecar_path, e
+                    ))
+                })?;
+                if n == 0 {
+                    break;
+                }
+                if buf.ends_with(b"\n") {
+                    buf.pop();
+                    if buf.ends_with(b"\r") {
+                        buf.pop();
+                    }
+                }
+
+                let mut parts = buf.split(|&b| b == b'\t');
+                let q = match parts.next() {
+                    Some(v) if !v.is_empty() => v,
+                    _ => continue,
+                };
+                let p1 = match parts.next().and_then(parse_i64_ascii) {
+                    Some(v) => v,
+                    None => continue,
+                };
+                let p2 = match parts.next().and_then(parse_i64_ascii) {
+                    Some(v) => v,
+                    None => continue,
+                };
+                // Keep compatibility with older sidecars: require at least 5 columns (q, p1, p2, ...)
+                if parts.next().is_none() || parts.next().is_none() {
+                    continue;
+                }
+                map.insert(q.to_vec(), (p1, p2));
             }
-            map.insert(q.to_vec(), (p1, p2));
-        }
-        Some(map)
-    } else {
-        None
-    };
+            Some(map)
+        } else {
+            None
+        };
 
     // Track expected positions and remaining remapped copies
     let mut keep_set: FxHashSet<Vec<u8>> = FxHashSet::default();

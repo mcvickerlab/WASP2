@@ -18,7 +18,9 @@ mod seq_decode;
 mod unified_pipeline;
 mod vcf_to_bed;
 
-pub use unified_pipeline::{unified_make_reads, unified_make_reads_parallel, UnifiedConfig, UnifiedStats};
+pub use unified_pipeline::{
+    unified_make_reads, unified_make_reads_parallel, UnifiedConfig, UnifiedStats,
+};
 
 use bam_counter::BamCounter;
 use mapping_filter::filter_bam_wasp;
@@ -483,7 +485,10 @@ fn stats_to_pydict(py: Python, stats: &unified_pipeline::UnifiedStats) -> PyResu
     d.set_item("pairs_with_variants", stats.pairs_with_variants)?;
     d.set_item("pairs_with_snvs_only", stats.pairs_with_snvs_only)?;
     d.set_item("pairs_with_indels_only", stats.pairs_with_indels_only)?;
-    d.set_item("pairs_with_snvs_and_indels", stats.pairs_with_snvs_and_indels)?;
+    d.set_item(
+        "pairs_with_snvs_and_indels",
+        stats.pairs_with_snvs_and_indels,
+    )?;
     d.set_item("haplotypes_written", stats.haplotypes_written)?;
     d.set_item("pairs_kept", stats.pairs_kept)?;
     d.set_item("pairs_keep_no_flip", stats.pairs_keep_no_flip)?;
@@ -647,14 +652,18 @@ fn unified_make_reads_parallel_py(
         remap_names_path,
     };
 
-    let run = || unified_pipeline::unified_make_reads_parallel(bam_path, bed_path, out_r1, out_r2, &config);
+    let run = || {
+        unified_pipeline::unified_make_reads_parallel(bam_path, bed_path, out_r1, out_r2, &config)
+    };
 
     // Use a per-call Rayon thread pool so repeated calls can use different thread counts.
     let stats = if threads > 0 {
         let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(threads)
             .build()
-            .map_err(|e| PyRuntimeError::new_err(format!("Failed to build Rayon thread pool: {}", e)))?;
+            .map_err(|e| {
+                PyRuntimeError::new_err(format!("Failed to build Rayon thread pool: {}", e))
+            })?;
         pool.install(run)
     } else {
         run()

@@ -2037,8 +2037,12 @@ mod tests {
         // Verify mate 2 (should have two distinct variant overlaps; duplicate removed)
         let mate2: Vec<_> = read2_spans.iter().filter(|s| s.mate == 2).collect();
         assert_eq!(mate2.len(), 2);
-        assert!(mate2.iter().any(|s| s.vcf_start == 87400 && s.vcf_stop == 87401));
-        assert!(mate2.iter().any(|s| s.vcf_start == 87401 && s.vcf_stop == 87402));
+        assert!(mate2
+            .iter()
+            .any(|s| s.vcf_start == 87400 && s.vcf_stop == 87401));
+        assert!(mate2
+            .iter()
+            .any(|s| s.vcf_start == 87401 && s.vcf_stop == 87402));
     }
 
     #[test]
@@ -2327,7 +2331,9 @@ mod tests {
             hap2: "ATG",
         }];
         let cfg = RemapConfig::default();
-        let out = generate_haplotype_seqs_view(&rec, &view, &cfg).unwrap().unwrap();
+        let out = generate_haplotype_seqs_view(&rec, &view, &cfg)
+            .unwrap()
+            .unwrap();
 
         assert_eq!(out[0].0.len(), 50); // hap1: ref allele
         assert_eq!(out[1].0.len(), 52); // hap2: insertion allele, replaces 1 base with 3
@@ -2345,7 +2351,9 @@ mod tests {
             hap2: "A",
         }];
         let cfg = RemapConfig::default();
-        let out = generate_haplotype_seqs_view(&rec, &view, &cfg).unwrap().unwrap();
+        let out = generate_haplotype_seqs_view(&rec, &view, &cfg)
+            .unwrap()
+            .unwrap();
 
         assert_eq!(out[0].0.len(), 50); // hap1 matches ref length
         assert_eq!(out[1].0.len(), 49); // hap2 shorter by 1

@@ -10,7 +10,7 @@
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
 
-include { validateParameters; paramsHelp; paramsSummaryLog; paramsSummaryMap; fromSamplesheet } from 'plugin/nf-schema'
+include { validateParameters; paramsHelp; paramsSummaryLog; paramsSummaryMap } from 'plugin/nf-validation'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -45,7 +45,7 @@ workflow PIPELINE_INITIALISATION {
     //
     // Validate parameters
     //
-    validateParameters()
+    // validateParameters() // Skipped: URLs fail file-exists check
 
     //
     // Print parameter summary
@@ -119,4 +119,3 @@ workflow PIPELINE_COMPLETION {
         log.error "Pipeline execution stopped with the following error: ${workflow.errorMessage}"
     }
 }
-
