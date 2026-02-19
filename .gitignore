@@ -153,3 +153,25 @@ benchmark_figures/
 
 # Sanity test data (downloaded from GitHub releases)
 tests/sanity/data/
+
+# Nextflow runtime
+.nextflow/
+.nextflow.log*
+work/
+nextflow
+pipelines/*/.nextflow/
+pipelines/*/work/
+
+# nf-test runtime
+.nf-test/
+.nf-test-*.nf
+pipelines/*/.nf-test/
+pipelines/*/.nf-test-*.nf
+
+# Temporary test output
+test_data/
+test_results/
+
+# Claude Code memory files (per-directory)
+**/CLAUDE.md
+!./CLAUDE.md
