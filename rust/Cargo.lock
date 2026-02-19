@@ -848,17 +848,16 @@ dependencies = [
 
 [[package]]
 name = "noodles-bcf"
-version = "0.76.0"
+version = "0.82.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3a109796a544327b9f3386f3cd1a6b47d9f80be09fc21300c4841fce4e592fe"
+checksum = "ce9c5402d804cec2158e2e203f15bffa1c9102566c3ea921b4e1118646f22525"
 dependencies = [
- "byteorder",
  "indexmap",
  "memchr",
- "noodles-bgzf 0.41.0",
- "noodles-core 0.17.0",
- "noodles-csi 0.49.0",
- "noodles-vcf 0.79.0",
+ "noodles-bgzf 0.46.0",
+ "noodles-core 0.19.0",
+ "noodles-csi 0.54.0",
+ "noodles-vcf 0.84.0",
 ]
 
 [[package]]
@@ -866,18 +865,6 @@ name = "noodles-bgzf"
 version = "0.35.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c6786136e224bdb8550b077ad44ef2bd5ebc8b06d07fab69aaa7f47d06f0da75"
-dependencies = [
- "byteorder",
- "bytes",
- "crossbeam-channel",
- "flate2",
-]
-
-[[package]]
-name = "noodles-bgzf"
-version = "0.41.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f07e5d75eb7e00c1fe140acef39dea0aea2f48a05ab698a16c6797dd0c0db7e4"
 dependencies = [
  "byteorder",
  "bytes",
@@ -897,19 +884,21 @@ dependencies = [
 ]
 
 [[package]]
-name = "noodles-core"
-version = "0.16.0"
+name = "noodles-bgzf"
+version = "0.46.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "962b13b79312f773a12ffcb0cdaccab6327f8343b6f440a888eff10c749d52b0"
+checksum = "37290f565045fd2775b549e62dffca7e1afadc70d8d5a3a2ef19609eb3d8193b"
 dependencies = [
- "bstr",
+ "bytes",
+ "crossbeam-channel",
+ "flate2",
 ]
 
 [[package]]
 name = "noodles-core"
-version = "0.17.0"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce89752158657dd1d7195061e9d9190e2d3bb594eb71086762163d4a430b0b4b"
+checksum = "962b13b79312f773a12ffcb0cdaccab6327f8343b6f440a888eff10c749d52b0"
 dependencies = [
  "bstr",
 ]
@@ -924,17 +913,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "noodles-csi"
-version = "0.49.0"
+name = "noodles-core"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c291585d38573d80921a9b57b47f1da57fdf24969ed8fe0b0f79acc1cce18a42"
+checksum = "53e1e8a419dbba0e4000b0e60830b124138c7f2277ad556463506f1a81d32d17"
 dependencies = [
- "bit-vec",
  "bstr",
- "byteorder",
- "indexmap",
- "noodles-bgzf 0.41.0",
- "noodles-core 0.17.0",
 ]
 
 [[package]]
@@ -951,16 +935,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "noodles-tabix"
-version = "0.55.0"
+name = "noodles-csi"
+version = "0.54.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "461b6173ee2ec38d7ddbce206c31c83d8c7b61d6a5db2b2c4ff2ac74653ac751"
+checksum = "348b39ee45de200280706b1152a082f847cd258eed13105441c80b8f6097b489"
 dependencies = [
- "byteorder",
+ "bit-vec",
+ "bstr",
  "indexmap",
- "noodles-bgzf 0.41.0",
- "noodles-core 0.17.0",
- "noodles-csi 0.49.0",
+ "noodles-bgzf 0.46.0",
+ "noodles-core 0.19.0",
 ]
 
 [[package]]
@@ -977,18 +961,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "noodles-vcf"
-version = "0.79.0"
+name = "noodles-tabix"
+version = "0.60.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "66a25338ccdeafd3b96071b7b11c3ad03b6a735eaacab6589f62879203a59dc9"
+checksum = "79018e289d9e285c964bebcb5d99d9c3815b8707b1d727ed3f59852d80d8e253"
 dependencies = [
+ "bstr",
  "indexmap",
- "memchr",
- "noodles-bgzf 0.41.0",
- "noodles-core 0.17.0",
- "noodles-csi 0.49.0",
- "noodles-tabix 0.55.0",
- "percent-encoding",
+ "noodles-bgzf 0.46.0",
+ "noodles-core 0.19.0",
+ "noodles-csi 0.54.0",
 ]
 
 [[package]]
@@ -1003,6 +985,21 @@ dependencies = [
  "noodles-core 0.18.0",
  "noodles-csi 0.53.0",
  "noodles-tabix 0.59.0",
+ "percent-encoding",
+]
+
+[[package]]
+name = "noodles-vcf"
+version = "0.84.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a0d0806ea993fb8f6ed99564fbfcc3d708e2a00282d5ae58d6975416e213ecab"
+dependencies = [
+ "indexmap",
+ "memchr",
+ "noodles-bgzf 0.46.0",
+ "noodles-core 0.19.0",
+ "noodles-csi 0.54.0",
+ "noodles-tabix 0.60.0",
  "percent-encoding",
 ]
 
