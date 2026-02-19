@@ -88,7 +88,9 @@ def generate_allele_count_data(
 
     # Coverage scales with sample count
     mean_coverage = 30 * n_samples / 10
-    total_counts = rng.exponential(scale=mean_coverage, size=n_variants).astype(int) + max(10, n_samples)
+    total_counts = rng.exponential(scale=mean_coverage, size=n_variants).astype(int) + max(
+        10, n_samples
+    )
     ratios = rng.beta(10, 10, size=n_variants)
     ref_counts = (total_counts * ratios).astype(int)
     alt_counts = total_counts - ref_counts

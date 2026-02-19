@@ -346,13 +346,14 @@ def version_callback(
     if not value:
         return
 
-    import rich
+    import importlib.metadata
+
     import typer
 
     from wasp2 import __version__  # type: ignore[attr-defined]  # defined in __init__.py
 
     deps = {
-        "rich": rich.__version__,  # type: ignore[attr-defined]
+        "rich": importlib.metadata.version("rich"),
         "typer": typer.__version__,
     }
     if extra_deps:

@@ -220,6 +220,7 @@ def print_results_summary(results_path: Path) -> None:
 
     # Group by benchmark group
     from collections import defaultdict
+
     groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for b in benchmarks:
         groups[b.get("group", "ungrouped")].append(b)

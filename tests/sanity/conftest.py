@@ -8,7 +8,6 @@ This module provides:
 
 from __future__ import annotations
 
-import os
 import shutil
 import subprocess
 import tarfile
@@ -29,8 +28,7 @@ SANITY_DATA_DIR = Path(__file__).parent / "data"
 # GitHub Releases: Fast, CI-integrated, cached by Actions
 # Zenodo: DOI-backed archival for academic citation
 GITHUB_RELEASE_URL = (
-    "https://github.com/Jaureguy760/WASP2-final/releases/download/v1.3.0/"
-    f"{SANITY_TARBALL_NAME}"
+    f"https://github.com/Jaureguy760/WASP2-final/releases/download/v1.3.0/{SANITY_TARBALL_NAME}"
 )
 # Zenodo DOI URL for archival citation (update after Zenodo deposit)
 # To activate: replace None with the direct file URL from Zenodo, e.g.:
@@ -166,8 +164,8 @@ def sanity_data_dir() -> Path:
     """
     if not is_sanity_data_available():
         pytest.skip(
-            f"Sanity data not available. Run 'make download-sanity-data' "
-            f"or download from GitHub releases."
+            "Sanity data not available. Run 'make download-sanity-data' "
+            "or download from GitHub releases."
         )
     return SANITY_DATA_DIR
 

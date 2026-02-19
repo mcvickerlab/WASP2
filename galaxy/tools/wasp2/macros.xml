@@ -2,7 +2,7 @@
     <!-- WASP2 Galaxy Tool Macros -->
     <!-- Shared definitions for all WASP2 tools -->
 
-    <token name="@TOOL_VERSION@">1.2.0</token>
+    <token name="@TOOL_VERSION@">1.3.0</token>
     <token name="@VERSION_SUFFIX@">+galaxy0</token>
     <token name="@PROFILE@">23.0</token>
 

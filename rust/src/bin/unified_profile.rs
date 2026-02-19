@@ -21,7 +21,9 @@ fn parse_usize(flag: &str, default: usize) -> usize {
 fn main() -> Result<()> {
     let bam = parse_arg("--bam").context("Missing --bam")?;
     let bed = parse_arg("--bed").context("Missing --bed")?;
-    let out_dir = PathBuf::from(parse_arg("--out-dir").unwrap_or_else(|| "/tmp/wasp2_unified_profile".to_string()));
+    let out_dir = PathBuf::from(
+        parse_arg("--out-dir").unwrap_or_else(|| "/tmp/wasp2_unified_profile".to_string()),
+    );
 
     let threads = parse_usize("--threads", 8);
     let max_seqs = parse_usize("--max-seqs", 64);
@@ -86,6 +88,9 @@ fn main() -> Result<()> {
         run()?
     };
 
-    eprintln!("done: total_reads={} pairs={} haps={}", stats.total_reads, stats.pairs_processed, stats.haplotypes_written);
+    eprintln!(
+        "done: total_reads={} pairs={} haps={}",
+        stats.total_reads, stats.pairs_processed, stats.haplotypes_written
+    );
     Ok(())
 }

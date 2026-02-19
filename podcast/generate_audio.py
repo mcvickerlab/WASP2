@@ -31,8 +31,8 @@ import re
 import shutil
 import sys
 import time
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator
 
 # Configure logging
 logging.basicConfig(
@@ -55,45 +55,46 @@ TTS_TIMEOUT_SECONDS = 300
 
 class AudioGenerationError(Exception):
     """Raised when audio generation fails."""
+
     pass
 
 
 def clean_markdown(text: str) -> str:
     """Convert markdown to speakable text optimized for TTS."""
     # Remove YAML front matter
-    text = re.sub(r'^---.*?---\s*', '', text, flags=re.DOTALL)
+    text = re.sub(r"^---.*?---\s*", "", text, flags=re.DOTALL)
 
     # Remove code blocks
-    text = re.sub(r'```[\s\S]*?```', '', text)
+    text = re.sub(r"```[\s\S]*?```", "", text)
 
     # Remove inline code
-    text = re.sub(r'`[^`]+`', '', text)
+    text = re.sub(r"`[^`]+`", "", text)
 
     # Remove markdown headers but keep text
-    text = re.sub(r'^#{1,6}\s*', '', text, flags=re.MULTILINE)
+    text = re.sub(r"^#{1,6}\s*", "", text, flags=re.MULTILINE)
 
     # Remove bold/italic markers
-    text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)
-    text = re.sub(r'\*([^*]+)\*', r'\1', text)
+    text = re.sub(r"\*\*([^*]+)\*\*", r"\1", text)
+    text = re.sub(r"\*([^*]+)\*", r"\1", text)
 
     # Remove links but keep text
-    text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
 
     # Remove tables
-    text = re.sub(r'\|.*\|', '', text)
+    text = re.sub(r"\|.*\|", "", text)
 
     # Remove horizontal rules
-    text = re.sub(r'^---+$', '', text, flags=re.MULTILINE)
+    text = re.sub(r"^---+$", "", text, flags=re.MULTILINE)
 
     # Remove episode metadata section
-    text = re.sub(r'## Episode Metadata[\s\S]*$', '', text)
+    text = re.sub(r"## Episode Metadata[\s\S]*$", "", text)
 
     # Remove illumination references
-    text = re.sub(r'See:.*?\.md.*', '', text)
+    text = re.sub(r"See:.*?\.md.*", "", text)
 
     # Clean up whitespace
-    text = re.sub(r'\n{3,}', '\n\n', text)
-    text = re.sub(r'[ \t]+', ' ', text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = re.sub(r"[ \t]+", " ", text)
 
     return text.strip()
 
@@ -109,7 +110,7 @@ def chunk_text(text: str, max_chars: int = ELEVENLABS_CHAR_LIMIT) -> Iterator[st
         return
 
     # Split on sentence boundaries
-    sentences = re.split(r'(?<=[.!?])\s+', text)
+    sentences = re.split(r"(?<=[.!?])\s+", text)
     current_chunk = ""
 
     for sentence in sentences:
@@ -148,6 +149,7 @@ def retry_with_backoff(max_retries: int = 3, base_delay: float = 1.0):
     Only retries on transient errors (ConnectionError, TimeoutError, OSError).
     Non-retryable errors (ValueError, AuthenticationError, etc.) fail immediately.
     """
+
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
@@ -158,17 +160,18 @@ def retry_with_backoff(max_retries: int = 3, base_delay: float = 1.0):
                 except RETRYABLE_EXCEPTIONS as e:
                     last_exception = e
                     if attempt < max_retries - 1:
-                        delay = base_delay * (2 ** attempt)
+                        delay = base_delay * (2**attempt)
                         logger.warning(
-                            f"Attempt {attempt + 1} failed: {e}. "
-                            f"Retrying in {delay:.1f}s..."
+                            f"Attempt {attempt + 1} failed: {e}. Retrying in {delay:.1f}s..."
                         )
                         time.sleep(delay)
                 except Exception:
                     # Non-retryable error - fail immediately
                     raise
             raise last_exception
+
         return wrapper
+
     return decorator
 
 
@@ -177,9 +180,7 @@ async def generate_with_edge_tts(text: str, output_file: Path) -> None:
     try:
         import edge_tts
     except ImportError:
-        raise AudioGenerationError(
-            "edge-tts not installed. Install with: pip install edge-tts"
-        )
+        raise AudioGenerationError("edge-tts not installed. Install with: pip install edge-tts")
 
     # Voice configuration for Queen Bee character
     voice = "en-US-AriaNeural"  # Try Aria instead of Jenny
@@ -188,14 +189,9 @@ async def generate_with_edge_tts(text: str, output_file: Path) -> None:
 
     try:
         communicate = edge_tts.Communicate(text, voice, rate=rate, pitch=pitch)
-        await asyncio.wait_for(
-            communicate.save(str(output_file)),
-            timeout=TTS_TIMEOUT_SECONDS
-        )
+        await asyncio.wait_for(communicate.save(str(output_file)), timeout=TTS_TIMEOUT_SECONDS)
     except asyncio.TimeoutError:
-        raise AudioGenerationError(
-            f"edge-tts timed out after {TTS_TIMEOUT_SECONDS}s"
-        )
+        raise AudioGenerationError(f"edge-tts timed out after {TTS_TIMEOUT_SECONDS}s")
     except Exception as e:
         raise AudioGenerationError(f"edge-tts failed: {e}")
 
@@ -204,12 +200,10 @@ async def generate_with_edge_tts(text: str, output_file: Path) -> None:
 def generate_with_elevenlabs(text: str, output_file: Path) -> None:
     """Generate audio using ElevenLabs API (premium quality)."""
     try:
-        from elevenlabs.client import ElevenLabs
         from elevenlabs import save
+        from elevenlabs.client import ElevenLabs
     except ImportError:
-        raise AudioGenerationError(
-            "elevenlabs not installed. Install with: pip install elevenlabs"
-        )
+        raise AudioGenerationError("elevenlabs not installed. Install with: pip install elevenlabs")
 
     api_key = os.environ.get("ELEVEN_API_KEY")
     if not api_key:
@@ -236,7 +230,7 @@ def generate_with_elevenlabs(text: str, output_file: Path) -> None:
             voice_settings={
                 "stability": 0.5,
                 "similarity_boost": 0.75,
-            }
+            },
         )
         save(audio, str(output_file))
     else:
@@ -255,7 +249,7 @@ def generate_with_elevenlabs(text: str, output_file: Path) -> None:
                     voice_settings={
                         "stability": 0.5,
                         "similarity_boost": 0.75,
-                    }
+                    },
                 )
                 save(audio, str(temp_file))
                 temp_files.append(temp_file)
@@ -278,6 +272,7 @@ def _concatenate_audio_files(input_files: list[Path], output_file: Path) -> None
     """
     try:
         from pydub import AudioSegment
+
         combined = AudioSegment.empty()
         for f in input_files:
             combined += AudioSegment.from_mp3(str(f))
@@ -317,11 +312,22 @@ def _concatenate_audio_files(input_files: list[Path], output_file: Path) -> None
 
         try:
             result = subprocess.run(
-                [ffmpeg_cmd, "-y", "-f", "concat", "-safe", "0",
-                 "-i", str(list_file), "-c", "copy", str(output_file)],
+                [
+                    ffmpeg_cmd,
+                    "-y",
+                    "-f",
+                    "concat",
+                    "-safe",
+                    "0",
+                    "-i",
+                    str(list_file),
+                    "-c",
+                    "copy",
+                    str(output_file),
+                ],
                 capture_output=True,
                 text=True,
-                check=True
+                check=True,
             )
         except subprocess.CalledProcessError as e:
             stderr = e.stderr if e.stderr else "Unknown error"
@@ -332,9 +338,7 @@ def _concatenate_audio_files(input_files: list[Path], output_file: Path) -> None
 
 
 async def generate_episode_audio(
-    episode_file: Path,
-    output_file: Path,
-    engine: str = "edge-tts"
+    episode_file: Path, output_file: Path, engine: str = "edge-tts"
 ) -> Path:
     """Generate audio for a single episode."""
     logger.info(f"Processing: {episode_file.name}")
@@ -390,37 +394,25 @@ def validate_episode_number(value: str) -> int:
             )
         return episode
     except ValueError:
-        raise argparse.ArgumentTypeError(
-            f"Episode must be a number, got '{value}'"
-        )
+        raise argparse.ArgumentTypeError(f"Episode must be a number, got '{value}'")
 
 
 async def main() -> int:
     """Main entry point. Returns exit code."""
-    parser = argparse.ArgumentParser(
-        description="Generate podcast audio from episode scripts"
-    )
+    parser = argparse.ArgumentParser(description="Generate podcast audio from episode scripts")
     parser.add_argument(
         "--engine",
         choices=["edge-tts", "elevenlabs"],
         default="edge-tts",
-        help="TTS engine to use (default: edge-tts)"
+        help="TTS engine to use (default: edge-tts)",
     )
     parser.add_argument(
         "--episode",
         type=validate_episode_number,
-        help="Generate only specific episode number (1-999)"
+        help="Generate only specific episode number (1-999)",
     )
-    parser.add_argument(
-        "-v", "--verbose",
-        action="store_true",
-        help="Enable verbose output"
-    )
-    parser.add_argument(
-        "--debug",
-        action="store_true",
-        help="Enable debug output"
-    )
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output")
+    parser.add_argument("--debug", action="store_true", help="Enable debug output")
     args = parser.parse_args()
 
     # Configure logging level

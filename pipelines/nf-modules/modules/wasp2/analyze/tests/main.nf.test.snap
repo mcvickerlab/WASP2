@@ -1,0 +1,37 @@
+{
+    "phased_stub": {
+        "content": [
+            {
+                "0": [
+                    
+                ],
+                "1": [
+                    
+                ],
+                "stats": [
+                    
+                ],
+                "versions": [
+                    
+                ]
+            }
+        ],
+        "timestamp": "2026-02-18T22:38:40.751928268",
+        "meta": {
+            "nf-test": "0.9.4",
+            "nextflow": "25.10.3"
+        }
+    },
+    "versions_stub": {
+        "content": [
+            [
+                
+            ]
+        ],
+        "timestamp": "2026-02-18T22:18:32.769807432",
+        "meta": {
+            "nf-test": "0.9.4",
+            "nextflow": "25.10.3"
+        }
+    }
+}

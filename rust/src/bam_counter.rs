@@ -14,9 +14,9 @@ pub struct BamCounter {
 #[derive(Debug, Clone)]
 struct Region {
     chrom: String,
-    pos: u32, // 1-based position from Python
-    ref_allele: String,  // Full reference allele (supports INDELs)
-    alt_allele: String,  // Full alternate allele (supports INDELs)
+    pos: u32,           // 1-based position from Python
+    ref_allele: String, // Full reference allele (supports INDELs)
+    alt_allele: String, // Full alternate allele (supports INDELs)
 }
 
 impl Region {
@@ -63,7 +63,7 @@ impl BamCounter {
         // Parse Python regions (supports both SNPs and INDELs)
         let mut rust_regions = Vec::new();
         for item in regions.iter() {
-            let tuple = item.downcast::<PyTuple>()?;
+            let tuple = item.cast::<PyTuple>()?;
             let chrom: String = tuple.get_item(0)?.extract()?;
             let pos: u32 = tuple.get_item(1)?.extract()?;
             let ref_allele: String = tuple.get_item(2)?.extract()?;
@@ -71,14 +71,16 @@ impl BamCounter {
 
             // Validate alleles are non-empty
             if ref_allele.is_empty() {
-                return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-                    format!("Empty ref_allele for variant at {}:{}", chrom, pos)
-                ));
+                return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                    "Empty ref_allele for variant at {}:{}",
+                    chrom, pos
+                )));
             }
             if alt_allele.is_empty() {
-                return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-                    format!("Empty alt_allele for variant at {}:{}", chrom, pos)
-                ));
+                return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                    "Empty alt_allele for variant at {}:{}",
+                    chrom, pos
+                )));
             }
 
             rust_regions.push(Region {
@@ -214,7 +216,11 @@ impl BamCounter {
         if let Err(e) = bam.fetch((chrom, start, end)) {
             eprintln!(
                 "[WARN] Failed to fetch {}:{}-{}: {}. Skipping {} variants.",
-                chrom, start, end, e, regions.len()
+                chrom,
+                start,
+                end,
+                e,
+                regions.len()
             );
             return Ok(counts);
         }
@@ -227,10 +233,7 @@ impl BamCounter {
                 Err(e) => {
                     skipped_records += 1;
                     if skipped_records <= MAX_SKIP_WARNINGS {
-                        eprintln!(
-                            "[WARN] Skipped corrupted BAM record on {}: {}",
-                            chrom, e
-                        );
+                        eprintln!("[WARN] Skipped corrupted BAM record on {}: {}", chrom, e);
                     }
                     continue;
                 }
@@ -297,7 +300,8 @@ impl BamCounter {
                     let seq_len = seq.len();
 
                     // Extract enough bases to compare against both alleles
-                    let max_allele_len = std::cmp::max(region.ref_allele.len(), region.alt_allele.len());
+                    let max_allele_len =
+                        std::cmp::max(region.ref_allele.len(), region.alt_allele.len());
                     let end_pos = std::cmp::min(qpos + max_allele_len, seq_len);
 
                     if qpos >= seq_len {
@@ -369,7 +373,9 @@ impl BamCounter {
         if skipped_records > 0 {
             eprintln!(
                 "[WARN] Skipped {} corrupted BAM record(s) on {} (shown first {})",
-                skipped_records, chrom, MAX_SKIP_WARNINGS.min(skipped_records)
+                skipped_records,
+                chrom,
+                MAX_SKIP_WARNINGS.min(skipped_records)
             );
         }
 

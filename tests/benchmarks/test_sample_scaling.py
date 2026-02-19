@@ -201,9 +201,7 @@ class TestHighThroughputScaling:
         )
 
         benchmark.extra_info["coverage_multiplier"] = coverage_multiplier
-        benchmark.extra_info["mean_coverage"] = float(
-            (df["ref_count"] + df["alt_count"]).mean()
-        )
+        benchmark.extra_info["mean_coverage"] = float((df["ref_count"] + df["alt_count"]).mean())
         benchmark.extra_info["n_variants"] = n_variants
 
         assert isinstance(result, pd.DataFrame)

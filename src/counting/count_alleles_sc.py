@@ -128,7 +128,9 @@ def make_count_matrix(
             else:
                 logger.info(
                     "%s: Counted %d SNPs in %.2f seconds",
-                    chrom, chrom_df.height, timeit.default_timer() - start,
+                    chrom,
+                    chrom_df.height,
+                    timeit.default_timer() - start,
                 )
 
     # Create sparse matrices
@@ -263,7 +265,11 @@ def count_bc_snp_alleles(
                 sc_counts.reads_skipped_seq_error[chrom] += 1
                 logger.debug(
                     "Skipping read %s: sequence access error at %s:%d (qpos=%s): %s",
-                    read.query_name, chrom, pos, qpos, e
+                    read.query_name,
+                    chrom,
+                    pos,
+                    qpos,
+                    e,
                 )
                 continue
             else:
