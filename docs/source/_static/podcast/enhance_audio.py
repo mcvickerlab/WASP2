@@ -28,9 +28,9 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator
 
 # Configure logging
 logging.basicConfig(
@@ -49,6 +49,7 @@ PROCESS_TIMEOUT_SECONDS = 600
 
 class AudioEnhanceError(Exception):
     """Raised when audio enhancement fails."""
+
     pass
 
 
@@ -130,32 +131,29 @@ def build_ffmpeg_filter(add_fades: bool = True) -> str:
     if add_fades:
         filters.append("afade=t=in:st=0:d=0.5")
 
-    filters.extend([
-        # Noise reduction: removes steady background noise
-        # nr=12 = noise reduction strength, nf=-25 = noise floor threshold in dB
-        "afftdn=nr=12:nf=-25",
-
-        # High-pass filter: remove rumble below 80Hz
-        # Human voice fundamentals start ~85Hz, so 80Hz cutoff is safe
-        "highpass=f=80",
-
-        # Low-pass filter: attenuate frequencies above 12kHz
-        # Preserves voice clarity while removing high-freq artifacts
-        "lowpass=f=12000",
-
-        # De-esser: reduce sibilance (harsh 's' sounds common in TTS)
-        # Targets 4-8kHz range where sibilance occurs
-        "firequalizer=gain_entry='entry(4000,-2);entry(6000,-4);entry(8000,-2)'",
-
-        # Dynamic range compression for consistent volume
-        # threshold=-20dB, ratio=4:1, attack=5ms, release=50ms
-        "acompressor=threshold=-20dB:ratio=4:attack=5:release=50",
-
-        # Loudness normalization to podcast standard
-        # -16 LUFS is the standard for podcasts (Spotify, Apple Podcasts)
-        # TP=-1.5 = true peak limit to prevent clipping
-        "loudnorm=I=-16:TP=-1.5:LRA=11",
-    ])
+    filters.extend(
+        [
+            # Noise reduction: removes steady background noise
+            # nr=12 = noise reduction strength, nf=-25 = noise floor threshold in dB
+            "afftdn=nr=12:nf=-25",
+            # High-pass filter: remove rumble below 80Hz
+            # Human voice fundamentals start ~85Hz, so 80Hz cutoff is safe
+            "highpass=f=80",
+            # Low-pass filter: attenuate frequencies above 12kHz
+            # Preserves voice clarity while removing high-freq artifacts
+            "lowpass=f=12000",
+            # De-esser: reduce sibilance (harsh 's' sounds common in TTS)
+            # Targets 4-8kHz range where sibilance occurs
+            "firequalizer=gain_entry='entry(4000,-2);entry(6000,-4);entry(8000,-2)'",
+            # Dynamic range compression for consistent volume
+            # threshold=-20dB, ratio=4:1, attack=5ms, release=50ms
+            "acompressor=threshold=-20dB:ratio=4:attack=5:release=50",
+            # Loudness normalization to podcast standard
+            # -16 LUFS is the standard for podcasts (Spotify, Apple Podcasts)
+            # TP=-1.5 = true peak limit to prevent clipping
+            "loudnorm=I=-16:TP=-1.5:LRA=11",
+        ]
+    )
 
     # Note: Fade-out requires knowing audio duration, so we apply it separately
     # using areverse,afade,areverse trick if needed (computationally expensive)
@@ -195,9 +193,7 @@ def validate_audio_file(path: Path) -> None:
     # Check file size (minimum 1KB for valid audio)
     size = path.stat().st_size
     if size < 1024:
-        raise AudioEnhanceError(
-            f"File too small ({size} bytes), may be corrupted: {path}"
-        )
+        raise AudioEnhanceError(f"File too small ({size} bytes), may be corrupted: {path}")
 
     # Check file extension
     if path.suffix.lower() not in {".mp3", ".wav", ".m4a", ".ogg", ".flac"}:
@@ -205,10 +201,7 @@ def validate_audio_file(path: Path) -> None:
 
 
 def enhance_audio(
-    input_file: Path,
-    output_file: Path,
-    ffmpeg_path: str,
-    dry_run: bool = False
+    input_file: Path, output_file: Path, ffmpeg_path: str, dry_run: bool = False
 ) -> Path:
     """
     Apply audio enhancement to a single file.
@@ -233,12 +226,17 @@ def enhance_audio(
     cmd = [
         ffmpeg_path,
         "-y",  # Overwrite output
-        "-i", str(input_file),
-        "-af", filter_chain,
-        "-c:a", "libmp3lame",  # MP3 output
-        "-b:a", "192k",  # 192kbps bitrate
-        "-ar", "44100",  # 44.1kHz sample rate
-        str(output_file)
+        "-i",
+        str(input_file),
+        "-af",
+        filter_chain,
+        "-c:a",
+        "libmp3lame",  # MP3 output
+        "-b:a",
+        "192k",  # 192kbps bitrate
+        "-ar",
+        "44100",  # 44.1kHz sample rate
+        str(output_file),
     ]
 
     logger.info(f"Processing: {input_file.name}")
@@ -249,11 +247,7 @@ def enhance_audio(
 
     try:
         result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=PROCESS_TIMEOUT_SECONDS
+            cmd, capture_output=True, text=True, check=True, timeout=PROCESS_TIMEOUT_SECONDS
         )
         logger.debug(f"ffmpeg stdout: {result.stdout}")
     except subprocess.TimeoutExpired:
@@ -261,9 +255,7 @@ def enhance_audio(
             f"ffmpeg timed out after {PROCESS_TIMEOUT_SECONDS}s for {input_file.name}"
         )
     except subprocess.CalledProcessError as e:
-        raise AudioEnhanceError(
-            f"ffmpeg failed for {input_file.name}: {e.stderr}"
-        )
+        raise AudioEnhanceError(f"ffmpeg failed for {input_file.name}: {e.stderr}")
 
     # Validate output was created and is valid
     if not output_file.exists():
@@ -293,9 +285,7 @@ def validate_episode_number(value: str) -> int:
             )
         return episode
     except ValueError:
-        raise argparse.ArgumentTypeError(
-            f"Episode must be a number, got '{value}'"
-        )
+        raise argparse.ArgumentTypeError(f"Episode must be a number, got '{value}'")
 
 
 def main() -> int:
@@ -306,28 +296,18 @@ def main() -> int:
     parser.add_argument(
         "--episode",
         type=validate_episode_number,
-        help="Enhance only specific episode number (1-999)"
+        help="Enhance only specific episode number (1-999)",
     )
     parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Show ffmpeg commands without running"
+        "--dry-run", action="store_true", help="Show ffmpeg commands without running"
     )
     parser.add_argument(
         "--in-place",
         action="store_true",
-        help="Overwrite original files instead of creating enhanced copies"
+        help="Overwrite original files instead of creating enhanced copies",
     )
-    parser.add_argument(
-        "-v", "--verbose",
-        action="store_true",
-        help="Enable verbose output"
-    )
-    parser.add_argument(
-        "--debug",
-        action="store_true",
-        help="Enable debug output"
-    )
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output")
+    parser.add_argument("--debug", action="store_true", help="Enable debug output")
     args = parser.parse_args()
 
     # Configure logging level

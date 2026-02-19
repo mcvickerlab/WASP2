@@ -456,7 +456,9 @@ class PGENSource(VariantSource):
         """
         return self._normalize_chrom_name(str(chrom))
 
-    def _parse_alleles(self, allele_buf: np.ndarray, variant_row) -> tuple[Genotype, str | None, str | None]:
+    def _parse_alleles(
+        self, allele_buf: np.ndarray, variant_row
+    ) -> tuple[Genotype, str | None, str | None]:
         """Convert allele buffer to Genotype and allele sequences.
 
         Args:

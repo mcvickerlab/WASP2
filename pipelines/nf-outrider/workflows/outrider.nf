@@ -123,7 +123,7 @@ workflow OUTRIDER {
         MERGE_COUNTS.out.count_matrix,
         params.outrider_padj,
         params.outrider_zScore,
-        params.outrider_q,
+        params.outrider_q ?: 0,           // 0 = auto-estimate encoding dimension
         params.outrider_iterations,
         params.outrider_convergence
     )

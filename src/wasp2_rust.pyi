@@ -28,7 +28,6 @@ class UnifiedStats(TypedDict):
     send_ms: float
     writer_thread_ms: float
 
-
 class ImbalanceResult(TypedDict):
     """Result from allelic imbalance analysis."""
 
@@ -44,7 +43,6 @@ class ImbalanceResult(TypedDict):
     pval: float
     fdr_pval: float
 
-
 class VariantSpan(TypedDict):
     """Variant span information from intersection parsing."""
 
@@ -56,7 +54,6 @@ class VariantSpan(TypedDict):
     mate: int
     hap1: str
     hap2: str
-
 
 class MultiSampleVariantSpan(TypedDict):
     """Multi-sample variant span information."""
@@ -70,7 +67,6 @@ class MultiSampleVariantSpan(TypedDict):
     ref_allele: str
     alt_allele: str
     sample_alleles: list[tuple[str, str]]
-
 
 class BamCounter:
     """Fast BAM allele counter using Rust/htslib.
@@ -114,12 +110,10 @@ class BamCounter:
         """
         ...
 
-
 # Test function
 def sum_as_string(a: int, b: int) -> str:
     """Simple test function to verify PyO3 is working."""
     ...
-
 
 # BAM-BED intersection functions
 def intersect_bam_bed(bam_path: str, bed_path: str, out_path: str) -> int:
@@ -140,7 +134,6 @@ def intersect_bam_bed(bam_path: str, bed_path: str, out_path: str) -> int:
         Number of intersections found.
     """
     ...
-
 
 def intersect_bam_bed_multi(
     bam_path: str,
@@ -167,7 +160,6 @@ def intersect_bam_bed_multi(
         Number of intersections found.
     """
     ...
-
 
 # VCF/BCF to BED conversion
 def vcf_to_bed(
@@ -205,7 +197,6 @@ def vcf_to_bed(
     """
     ...
 
-
 # Intersection parsing functions
 def parse_intersect_bed(intersect_bed: str) -> dict[bytes, list[VariantSpan]]:
     """Parse intersection BED file.
@@ -221,7 +212,6 @@ def parse_intersect_bed(intersect_bed: str) -> dict[bytes, list[VariantSpan]]:
         Dictionary mapping read names (bytes) to list of variant spans.
     """
     ...
-
 
 def parse_intersect_bed_multi(
     intersect_bed: str,
@@ -242,7 +232,6 @@ def parse_intersect_bed_multi(
         Dictionary mapping read names to variant spans with all sample genotypes.
     """
     ...
-
 
 # Remapping functions
 def remap_chromosome(
@@ -276,7 +265,6 @@ def remap_chromosome(
         (pairs_processed, haplotypes_generated).
     """
     ...
-
 
 def remap_chromosome_multi(
     bam_path: str,
@@ -313,7 +301,6 @@ def remap_chromosome_multi(
     """
     ...
 
-
 def remap_all_chromosomes(
     bam_path: str,
     intersect_bed: str,
@@ -348,7 +335,6 @@ def remap_all_chromosomes(
         (pairs_processed, haplotypes_generated).
     """
     ...
-
 
 # BAM filtering functions
 def filter_bam_wasp(
@@ -386,7 +372,6 @@ def filter_bam_wasp(
     """
     ...
 
-
 def filter_bam_wasp_with_sidecar(
     to_remap_bam: str,
     remapped_bam: str,
@@ -422,7 +407,6 @@ def filter_bam_wasp_with_sidecar(
     """
     ...
 
-
 def filter_bam_by_variants(
     bam_path: str,
     bed_path: str,
@@ -454,7 +438,6 @@ def filter_bam_by_variants(
         (remap_count, keep_count, unique_names).
     """
     ...
-
 
 # Unified pipeline functions
 def unified_make_reads(
@@ -512,7 +495,6 @@ def unified_make_reads(
         Dictionary with processing statistics.
     """
     ...
-
 
 def unified_make_reads_parallel(
     bam_path: str,
@@ -572,7 +554,6 @@ def unified_make_reads_parallel(
         Dictionary with processing statistics.
     """
     ...
-
 
 # Analysis functions
 def analyze_imbalance(

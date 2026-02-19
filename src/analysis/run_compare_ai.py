@@ -85,5 +85,8 @@ def run_ai_comparison(
     logger.info(
         "Performed %d allelic imbalance comparisons between %d groups. "
         "Results written to: %s/%s_[GROUP1]_[GROUP2].tsv",
-        len(df_dict), len(compared_set), out_path, ai_files.prefix,
+        len(df_dict),
+        len(compared_set),
+        out_path,
+        ai_files.prefix,
     )
