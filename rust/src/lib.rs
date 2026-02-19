@@ -291,6 +291,14 @@ fn analyze_imbalance(
     let reader = BufReader::new(file);
 
     let mut variants = Vec::new();
+
+    // Detect column layout from header:
+    //   7-col: chrom, pos, ref, alt, ref_count, alt_count, other_count
+    //   9-col: chrom, pos0, pos, ref, alt, GT, ref_count, alt_count, other_count
+    let mut pos_idx: usize = 1;
+    let mut ref_count_idx: usize = 4;
+    let mut alt_count_idx: usize = 5;
+    let mut min_fields: usize = 7;
     let mut header_seen = false;
 
     for line in reader.lines() {
@@ -299,23 +307,30 @@ fn analyze_imbalance(
 
         if !header_seen {
             header_seen = true;
-            continue; // Skip header
-        }
-
-        let fields: Vec<&str> = line.split('\t').collect();
-        if fields.len() < 7 {
+            let headers: Vec<&str> = line.split('\t').collect();
+            if headers.len() >= 9 && headers.contains(&"GT") {
+                // 9-column format from wasp2-count CLI
+                pos_idx = 2;
+                ref_count_idx = 6;
+                alt_count_idx = 7;
+                min_fields = 9;
+            }
             continue;
         }
 
-        // Parse fields: chrom, pos, ref, alt, region, ref_count, alt_count, other_count
+        let fields: Vec<&str> = line.split('\t').collect();
+        if fields.len() < min_fields {
+            continue;
+        }
+
         let chrom = fields[0].to_string();
-        let pos = fields[1]
+        let pos = fields[pos_idx]
             .parse::<u32>()
             .map_err(|e| PyRuntimeError::new_err(format!("Invalid pos: {}", e)))?;
-        let ref_count = fields[5]
+        let ref_count = fields[ref_count_idx]
             .parse::<u32>()
             .map_err(|e| PyRuntimeError::new_err(format!("Invalid ref_count: {}", e)))?;
-        let alt_count = fields[6]
+        let alt_count = fields[alt_count_idx]
             .parse::<u32>()
             .map_err(|e| PyRuntimeError::new_err(format!("Invalid alt_count: {}", e)))?;
 

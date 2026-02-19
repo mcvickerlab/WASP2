@@ -127,18 +127,12 @@ echo ""
 # ─────────────────────────────────────────────────────────────────────────────
 echo "[5/5] Find imbalance..."
 if [[ -s "$TMP_DIR/counts.tsv" ]]; then
-    if wasp2-analyze find-imbalance \
+    wasp2-analyze find-imbalance \
         "$TMP_DIR/counts.tsv" \
         --out "$TMP_DIR/analysis.tsv" \
         --min 1 \
-        2>/dev/null; then
-        assert_file_not_empty "$TMP_DIR/analysis.tsv" "find-imbalance output"
-    else
-        # Known issue: Rust TSV parser may fail on header row parsing
-        # (wasp2_rust.analyze_imbalance doesn't skip CSV headers)
-        echo "  KNOWN ISSUE: find-imbalance Rust backend header parsing bug"
-        echo "  (Does not affect test data validity — count-variants works)"
-    fi
+        2>/dev/null || true
+    assert_file_not_empty "$TMP_DIR/analysis.tsv" "find-imbalance output"
 else
     echo "  SKIP: No counts output to analyze"
     FAIL=$((FAIL + 1))
