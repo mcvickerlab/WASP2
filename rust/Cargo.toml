@@ -24,7 +24,7 @@ smallvec = "1.13" # Reduce heap allocs for small overlap/span vectors
 # VCF/BCF parsing (noodles - pure Rust, no C dependencies)
 # Note: noodles-bcf depends on noodles-vcf, so we use compatible versions
 noodles-vcf = "0.83"   # Updated from 0.72
-noodles-bcf = "0.76"   # Updated to match noodles-vcf
+noodles-bcf = "0.82"   # Updated to match noodles-vcf
 noodles-core = "0.16"  # Core types remain stable
 noodles-bgzf = "0.35"  # Updated for compatibility
 flate2 = "1.1"         # For gzip decompression
