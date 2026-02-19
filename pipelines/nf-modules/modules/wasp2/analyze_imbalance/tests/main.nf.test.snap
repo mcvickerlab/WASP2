@@ -1,0 +1,14 @@
+{
+    "versions_stub": {
+        "content": [
+            [
+                
+            ]
+        ],
+        "timestamp": "2026-02-18T22:58:46.955210463",
+        "meta": {
+            "nf-test": "0.9.4",
+            "nextflow": "25.10.3"
+        }
+    }
+}

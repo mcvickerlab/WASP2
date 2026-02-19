@@ -1,0 +1,19 @@
+### /iblm/netapp/home/jjaureguy/mambaforge/envs/WASP2_dev2/bin/STAR-avx2   --runMode genomeGenerate      --runThreadN 2   --genomeDir star_index   --genomeFastaFiles chr_test.fa      --genomeSAindexNbases 6   --outFileNamePrefix star_index/
+### GstrandBit 32
+versionGenome	2.7.4a
+genomeType	Full
+genomeFastaFiles	chr_test.fa 
+genomeSAindexNbases	6
+genomeChrBinNbits	18
+genomeSAsparseD	1
+genomeTransformType	None
+genomeTransformVCF	-
+sjdbOverhang	0
+sjdbFileChrStartEnd	- 
+sjdbGTFfile	-
+sjdbGTFchrPrefix	-
+sjdbGTFfeatureExon	exon
+sjdbGTFtagExonParentTranscript	transcript_id
+sjdbGTFtagExonParentGene	gene_id
+sjdbInsertSave	Basic
+genomeFileSizes	262144 163353
