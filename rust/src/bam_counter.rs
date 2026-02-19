@@ -63,7 +63,7 @@ impl BamCounter {
         // Parse Python regions (supports both SNPs and INDELs)
         let mut rust_regions = Vec::new();
         for item in regions.iter() {
-            let tuple = item.downcast::<PyTuple>()?;
+            let tuple = item.cast::<PyTuple>()?;
             let chrom: String = tuple.get_item(0)?.extract()?;
             let pos: u32 = tuple.get_item(1)?.extract()?;
             let ref_allele: String = tuple.get_item(2)?.extract()?;

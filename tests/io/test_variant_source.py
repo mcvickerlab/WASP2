@@ -7,6 +7,8 @@ before implementation.
 Run with: pytest tests/io/test_variant_source.py -v
 """
 
+import importlib.util
+
 import pytest
 
 # These imports will fail until we implement the module
@@ -28,6 +30,11 @@ except ImportError:
     VariantGenotype = None
     Genotype = None
 
+PGENLIB_AVAILABLE = importlib.util.find_spec("pgenlib") is not None
+
+requires_pgenlib = pytest.mark.skipif(
+    not PGENLIB_AVAILABLE, reason="pgenlib not installed - install with: pip install pgenlib"
+)
 
 pytestmark = pytest.mark.skipif(
     not IMPORTS_AVAILABLE, reason="wasp2.io.variant_source not yet implemented"
@@ -168,6 +175,7 @@ class TestVariantSourceFactory:
         with VariantSource.open(sample_vcf) as source:
             assert source.__class__.__name__ == "VCFSource"
 
+    @requires_pgenlib
     def test_open_pgen_returns_correct_type(self, sample_pgen_files):
         """Test that opening PGEN returns PGENSource."""
         with VariantSource.open(sample_pgen_files["pgen"]) as source:
@@ -210,6 +218,8 @@ class TestVariantSourceInterface:
         if request.param == "vcf":
             return VariantSource.open(sample_vcf)
         else:
+            if not PGENLIB_AVAILABLE:
+                pytest.skip("pgenlib not installed")
             return VariantSource.open(sample_pgen_files["pgen"])
 
     def test_samples_property(self, variant_source):
@@ -294,6 +304,8 @@ class TestToBed:
         if request.param == "vcf":
             return VariantSource.open(sample_vcf)
         else:
+            if not PGENLIB_AVAILABLE:
+                pytest.skip("pgenlib not installed")
             return VariantSource.open(sample_pgen_files["pgen"])
 
     def test_to_bed_creates_file(self, variant_source, tmp_output_dir):
@@ -364,6 +376,8 @@ class TestQueryRegion:
         if request.param == "vcf":
             return VariantSource.open(sample_vcf_gz)
         else:
+            if not PGENLIB_AVAILABLE:
+                pytest.skip("pgenlib not installed")
             return VariantSource.open(sample_pgen_files["pgen"])
 
     def test_query_region_returns_variants(self, variant_source):
@@ -393,6 +407,7 @@ class TestQueryRegion:
 # ============================================================================
 
 
+@requires_pgenlib
 class TestOutputEquivalence:
     """Tests ensuring VCF and PGEN produce equivalent outputs."""
 
