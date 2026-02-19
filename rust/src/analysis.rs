@@ -17,6 +17,7 @@ use std::collections::HashMap;
 
 /// Allele count data for a single variant
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct VariantCounts {
     pub chrom: String,
     pub pos: u32,

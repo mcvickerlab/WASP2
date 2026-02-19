@@ -185,6 +185,7 @@ impl UnifiedStats {
 
 /// A haplotype read ready for FASTQ output
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct HaplotypeOutput {
     /// Read name with WASP suffix
     pub name: Vec<u8>,
