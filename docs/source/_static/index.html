@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WASP2 - Allele-Specific Analysis</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,700;1,6..96,400&family=JetBrains+Mono:wght@400;600&family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --amber-glow: #F5A623;
+            --amber-bright: #FFB938;
+            --amber-dim: #8B5A00;
+            --hive-void: #0a0a0f;
+            --hive-dark: #12121a;
+            --hive-surface: #1a1a26;
+            --hive-cell: #222233;
+            --text-bright: #f4f0e8;
+            --text-soft: #a8a4a0;
+            --text-dim: #6b6860;
+            --glow-subtle: rgba(245, 166, 35, 0.15);
+            --glow-medium: rgba(245, 166, 35, 0.35);
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0) rotate(0deg); opacity: 0.6; }
+            50% { transform: translateY(-20px) rotate(180deg); opacity: 1; }
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 20px var(--glow-subtle), inset 0 0 20px var(--glow-subtle); }
+            50% { box-shadow: 0 0 40px var(--glow-medium), inset 0 0 30px var(--glow-subtle); }
+        }
+
+        @keyframes fadeSlideUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--hive-void);
+            color: var(--text-bright);
+            line-height: 1.7;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background:
+                radial-gradient(ellipse at 20% 20%, rgba(245, 166, 35, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, rgba(245, 166, 35, 0.05) 0%, transparent 50%),
+                url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100' viewBox='0 0 56 100'%3E%3Cpath d='M28 66L0 50L0 16L28 0L56 16L56 50L28 66Z' fill='none' stroke='rgba(245,166,35,0.06)' stroke-width='1'/%3E%3Cpath d='M28 100L0 84L0 50L28 34L56 50L56 84L28 100Z' fill='none' stroke='rgba(245,166,35,0.06)' stroke-width='1'/%3E%3C/svg%3E");
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .particles {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 1;
+            overflow: hidden;
+        }
+
+        .particle {
+            position: absolute;
+            width: 4px; height: 4px;
+            background: var(--amber-glow);
+            border-radius: 50%;
+            animation: float 8s ease-in-out infinite;
+            filter: blur(1px);
+        }
+
+        .main {
+            position: relative;
+            z-index: 10;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            text-align: center;
+        }
+
+        .logo-container {
+            position: relative;
+            display: inline-block;
+            margin-bottom: 2rem;
+        }
+
+        .logo {
+            width: 180px; height: 180px;
+            border-radius: 50%;
+            border: 3px solid var(--amber-glow);
+            animation: pulse-glow 4s ease-in-out infinite;
+        }
+
+        .logo-ring {
+            position: absolute;
+            top: -12px; left: -12px; right: -12px; bottom: -12px;
+            border: 1px solid var(--amber-dim);
+            border-radius: 50%;
+            animation: pulse-glow 4s ease-in-out infinite 0.5s;
+        }
+
+        h1 {
+            font-family: 'Bodoni Moda', serif;
+            font-size: clamp(3.5rem, 10vw, 6rem);
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+            text-shadow: 0 0 40px var(--glow-medium);
+            animation: fadeSlideUp 0.8s ease-out;
+        }
+
+        h1 span { color: var(--amber-glow); }
+
+        .tagline {
+            font-family: 'Bodoni Moda', serif;
+            font-style: italic;
+            font-size: 1.4rem;
+            color: var(--text-soft);
+            letter-spacing: 0.1em;
+            margin-bottom: 3rem;
+            animation: fadeSlideUp 0.8s ease-out 0.1s backwards;
+        }
+
+        .links {
+            display: flex;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+            justify-content: center;
+            animation: fadeSlideUp 0.8s ease-out 0.2s backwards;
+        }
+
+        .link {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            letter-spacing: 0.1em;
+            padding: 1rem 2rem;
+            text-decoration: none;
+            transition: all 0.3s;
+            border: 1px solid var(--amber-dim);
+            color: var(--amber-glow);
+            background: transparent;
+        }
+
+        .link:hover {
+            background: var(--amber-glow);
+            color: var(--hive-dark);
+            transform: translateY(-3px);
+            box-shadow: 0 0 30px var(--glow-medium);
+        }
+
+        .link.primary {
+            background: var(--amber-glow);
+            color: var(--hive-dark);
+            border-color: var(--amber-glow);
+        }
+
+        .link.primary:hover {
+            background: var(--amber-bright);
+        }
+
+        .footer {
+            position: absolute;
+            bottom: 2rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            letter-spacing: 0.1em;
+        }
+
+        .footer a {
+            color: var(--amber-dim);
+            text-decoration: none;
+        }
+
+        .footer a:hover { color: var(--amber-glow); }
+
+        @media (prefers-reduced-motion: reduce) {
+            .particle { animation: none !important; }
+            * { animation-duration: 0.01ms !important; }
+        }
+    </style>
+</head>
+<body>
+    <div class="particles" id="particles"></div>
+
+    <main class="main">
+        <div class="logo-container">
+            <div class="logo-ring"></div>
+            <img src="podcast/artwork/wasp2_logo.png" alt="WASP2" class="logo" onerror="this.style.display='none'">
+        </div>
+
+        <h1><span>WASP</span>2</h1>
+        <p class="tagline">Allele-Specific Analysis Pipeline</p>
+
+        <div class="links">
+            <a href="https://github.com/Jaureguy760/WASP2-final" class="link primary">GITHUB</a>
+            <a href="https://github.com/mcvickerlab/WASP2" class="link">MCVICKER LAB</a>
+            <a href="https://github.com/bmvdgeijn/WASP" class="link">ORIGINAL WASP</a>
+            <a href="podcast/" class="link">PODCAST</a>
+        </div>
+
+        <p class="footer">McVicker Lab, Salk Institute &nbsp;|&nbsp; <a href="https://wasp2.readthedocs.io">DOCS</a></p>
+    </main>
+
+    <script>
+        (function() {
+            if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+            const c = document.getElementById('particles');
+            for (let i = 0; i < 20; i++) {
+                const p = document.createElement('div');
+                p.className = 'particle';
+                p.style.left = Math.random() * 100 + '%';
+                p.style.top = Math.random() * 100 + '%';
+                p.style.animationDelay = Math.random() * 8 + 's';
+                p.style.animationDuration = (6 + Math.random() * 4) + 's';
+                c.appendChild(p);
+            }
+        })();
+    </script>
+</body>
+</html>
