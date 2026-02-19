@@ -1,0 +1,11 @@
+chrom	pos	ref	alt	genotype	ref_count	alt_count	total_count	sample
+chr_test	750	C	T	0/1	15	12	27	SAMPLE1
+chr_test	1200	T	G	0/1	20	18	38	SAMPLE1
+chr_test	2800	A	C	0/1	8	14	22	SAMPLE1
+chr_test	3200	G	A	0/1	25	22	47	SAMPLE1
+chr_test	5000	G	T	0/1	11	13	24	SAMPLE1
+chr_test	10800	T	C	0/1	18	15	33	SAMPLE1
+chr_test	11200	A	G	0/1	22	19	41	SAMPLE1
+chr_test	12800	C	A	0/1	16	20	36	SAMPLE1
+chr_test	13200	G	T	0/1	14	12	26	SAMPLE1
+chr_test	15000	A	C	0/1	19	17	36	SAMPLE1

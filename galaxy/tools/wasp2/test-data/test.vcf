@@ -1,0 +1,19 @@
+##fileformat=VCFv4.2
+##fileDate=20260218
+##source=WASP2SharedTestData
+##reference=chr_test.fa
+##contig=<ID=chr_test,length=19800>
+##INFO=<ID=DP,Number=1,Type=Integer,Description="Total Depth">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Read Depth">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	SAMPLE1	SAMPLE2
+chr_test	750	snp001	C	T	100	PASS	DP=50	GT:DP	0/1:50	0/1:50
+chr_test	1200	snp002	T	G	100	PASS	DP=50	GT:DP	0/1:50	0/1:50
+chr_test	2800	snp003	A	C	100	PASS	DP=50	GT:DP	0/1:50	0/1:50
+chr_test	3200	snp004	G	A	100	PASS	DP=50	GT:DP	0/1:50	0/0:50
+chr_test	5000	snp005	G	T	100	PASS	DP=50	GT:DP	0/1:50	0/1:50
+chr_test	10800	snp006	T	C	100	PASS	DP=50	GT:DP	0/1:50	0/1:50
+chr_test	11200	snp007	A	G	100	PASS	DP=50	GT:DP	0/1:50	0/1:50
+chr_test	12800	snp008	C	A	100	PASS	DP=50	GT:DP	0/1:50	0/0:50
+chr_test	13200	snp009	G	T	100	PASS	DP=50	GT:DP	0/1:50	0/1:50
+chr_test	15000	snp010	A	C	100	PASS	DP=50	GT:DP	0/1:50	0/1:50

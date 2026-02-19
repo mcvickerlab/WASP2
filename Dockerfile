@@ -92,6 +92,19 @@ RUN groupadd -g 1000 wasp2 && \
 # Switch to non-root user
 USER wasp2
 
+# Bundle test data and smoke test for container validation (~300K)
+COPY --chown=wasp2:wasp2 tests/shared_data/chr_test.fa \
+     tests/shared_data/chr_test.fa.fai \
+     tests/shared_data/variants.vcf \
+     tests/shared_data/variants.vcf.gz \
+     tests/shared_data/variants.vcf.gz.tbi \
+     tests/shared_data/annotation.gtf \
+     tests/shared_data/regions.bed \
+     tests/shared_data/sample1.bam \
+     tests/shared_data/sample1.bam.bai \
+     /opt/wasp2/test-data/
+COPY --chown=wasp2:wasp2 scripts/container_smoke_test.sh /opt/wasp2/scripts/
+
 # Prevent Python from writing bytecode and ensure output is unbuffered
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1

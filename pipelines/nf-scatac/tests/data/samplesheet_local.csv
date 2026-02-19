@@ -1,0 +1,2 @@
+sample,fragments,cellranger_dir,bam,barcode_tag,chemistry,barcodes,peaks
+test_sample,/iblm/netapp/data3/jjaureguy/gvl_files/wasp2/WASP2-final/pipelines/nf-scatac/tests/data/fragments.tsv.gz,,,CB,10x-atac-v2,/iblm/netapp/data3/jjaureguy/gvl_files/wasp2/WASP2-final/pipelines/nf-scatac/tests/data/barcodes.txt,/iblm/netapp/data3/jjaureguy/gvl_files/wasp2/WASP2-final/pipelines/nf-scatac/tests/data/peaks.bed

@@ -1,0 +1,13 @@
+##description: Integration test GTF for WASP2 RNA-seq ASE pipeline
+##provider: WASP2 Test Suite
+##format: gtf
+chr_test	test	gene	500	5500	.	+	.	gene_id "INTGENE001"; gene_name "IntTestGene1"; gene_biotype "protein_coding";
+chr_test	test	transcript	500	5500	.	+	.	gene_id "INTGENE001"; transcript_id "INTTX001"; gene_name "IntTestGene1";
+chr_test	test	exon	500	1500	.	+	.	gene_id "INTGENE001"; transcript_id "INTTX001"; exon_number "1"; exon_id "INTEXON001";
+chr_test	test	exon	2500	3500	.	+	.	gene_id "INTGENE001"; transcript_id "INTTX001"; exon_number "2"; exon_id "INTEXON002";
+chr_test	test	exon	4500	5500	.	+	.	gene_id "INTGENE001"; transcript_id "INTTX001"; exon_number "3"; exon_id "INTEXON003";
+chr_test	test	gene	10500	15500	.	-	.	gene_id "INTGENE002"; gene_name "IntTestGene2"; gene_biotype "protein_coding";
+chr_test	test	transcript	10500	15500	.	-	.	gene_id "INTGENE002"; transcript_id "INTTX002"; gene_name "IntTestGene2";
+chr_test	test	exon	10500	11500	.	-	.	gene_id "INTGENE002"; transcript_id "INTTX002"; exon_number "1"; exon_id "INTEXON004";
+chr_test	test	exon	12500	13500	.	-	.	gene_id "INTGENE002"; transcript_id "INTTX002"; exon_number "2"; exon_id "INTEXON005";
+chr_test	test	exon	14500	15500	.	-	.	gene_id "INTGENE002"; transcript_id "INTTX002"; exon_number "3"; exon_id "INTEXON006";
