@@ -1,5 +1,17 @@
 # CODEOWNERS - Require review for security-sensitive files
 # See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+#
+# RELEASE AUDIT TEAM ROLES:
+# - PI (@Jaureguy760): Admin - strategic oversight, release approval
+# - Software Engineer (@SOFTWARE_ENGINEER_USERNAME): Maintain - CI/CD, Rust, build systems
+# - Bioinformatician (@BIOINFORMATICIAN_USERNAME): Write - statistical analysis, benchmarks
+# - Staff Research Scientist (@SCIENTIST_USERNAME): Write - test data, scientific validation
+#
+# NOTE: Replace placeholder usernames with actual GitHub usernames
+
+# =============================================================================
+# SECURITY-SENSITIVE FILES (require owner/admin review)
+# =============================================================================
 
 # CI/CD workflows - require owner review for any workflow changes
 .github/workflows/ @Jaureguy760
@@ -12,3 +24,63 @@
 
 # Dockerfile and container configs
 Dockerfile @Jaureguy760
+Dockerfile.optimized @Jaureguy760
+Singularity.def @Jaureguy760
+
+# =============================================================================
+# STATISTICAL ANALYSIS (require bioinformatician review)
+# =============================================================================
+
+# Core analysis module - statistical models
+/src/analysis/ @BIOINFORMATICIAN_USERNAME @Jaureguy760
+
+# Counting logic - allele counting accuracy
+/src/counting/ @BIOINFORMATICIAN_USERNAME
+
+# Benchmarking - validation against gold standards
+/benchmarking/ @BIOINFORMATICIAN_USERNAME
+
+# =============================================================================
+# RUST CODE (require software engineer review)
+# =============================================================================
+
+# Rust implementation - performance-critical code
+/rust/ @SOFTWARE_ENGINEER_USERNAME @Jaureguy760
+
+# Build configuration
+pyproject.toml @SOFTWARE_ENGINEER_USERNAME @Jaureguy760
+Makefile @SOFTWARE_ENGINEER_USERNAME
+
+# =============================================================================
+# SCIENTIFIC DOCUMENTATION (require PI approval)
+# =============================================================================
+
+# Main documentation
+/docs/*.md @Jaureguy760
+README.md @Jaureguy760
+CHANGELOG.md @Jaureguy760
+CITATION.cff @Jaureguy760
+
+# Security documentation
+SECURITY.md @Jaureguy760
+SECURITY_AUDIT.md @Jaureguy760
+
+# =============================================================================
+# TEST DATA VALIDATION (require wet lab scientist review)
+# =============================================================================
+
+# Test data and sanity checks
+/tests/data/ @SCIENTIST_USERNAME @BIOINFORMATICIAN_USERNAME
+/tests/sanity/ @SCIENTIST_USERNAME @BIOINFORMATICIAN_USERNAME
+
+# Tutorials - user-facing documentation
+/tutorials/ @SCIENTIST_USERNAME @Jaureguy760
+
+# =============================================================================
+# AUDIT INFRASTRUCTURE (any team member can review)
+# =============================================================================
+
+# Audit documentation
+/docs/AUDITOR_GUIDE.md @Jaureguy760 @SOFTWARE_ENGINEER_USERNAME @BIOINFORMATICIAN_USERNAME @SCIENTIST_USERNAME
+/docs/AUDIT_CHECKLIST.md @Jaureguy760 @SOFTWARE_ENGINEER_USERNAME @BIOINFORMATICIAN_USERNAME @SCIENTIST_USERNAME
+/.github/ISSUE_TEMPLATE/ @Jaureguy760

@@ -1,0 +1,12 @@
+{
+    "keep_bam": "test_keep.bam",
+    "to_remap_bam": "test_to_remap.bam",
+    "to_remap_fq1": "test_to_remap_R1.fq.gz",
+    "to_remap_fq2": "test_to_remap_R2.fq.gz",
+    "remap_num_reads": 50,
+    "keep_num_reads": 450,
+    "variant_source": "test.vcf",
+    "samples": ["SAMPLE1"],
+    "is_paired": true,
+    "is_phased": true
+}

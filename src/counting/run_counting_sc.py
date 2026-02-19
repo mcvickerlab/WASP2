@@ -67,7 +67,9 @@ class WaspCountSC:
         self.samples: list[str] | None = normalized_samples
 
         # parse output?
-        self.out_file: str = out_file if out_file is not None else str(Path.cwd() / "allele_counts.h5ad")
+        self.out_file: str = (
+            out_file if out_file is not None else str(Path.cwd() / "allele_counts.h5ad")
+        )
 
         # Failsafe if decorator doesnt create temp_loc
         self.temp_loc: str = temp_loc if temp_loc is not None else str(Path.cwd())

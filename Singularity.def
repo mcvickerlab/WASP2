@@ -47,4 +47,22 @@ From: jaureguy760/wasp2:1.3.0
     wasp2-map --version
     wasp2-analyze --version
     python -c "import wasp2_rust; print('Rust extension OK')"
+
+    # Data smoke test (if test data bundled in container)
+    if [ -f /opt/wasp2/test-data/sample1.bam ]; then
+        echo "Running data smoke test..."
+        wasp2-count count-variants \
+            /opt/wasp2/test-data/sample1.bam \
+            /opt/wasp2/test-data/variants.vcf.gz \
+            --samples SAMPLE1 \
+            --out /tmp/test_counts.tsv
+        if [ -s /tmp/test_counts.tsv ]; then
+            echo "Data smoke test PASSED"
+        else
+            echo "Data smoke test FAILED"
+            exit 1
+        fi
+        rm -f /tmp/test_counts.tsv
+    fi
+
     echo "All tests passed!"

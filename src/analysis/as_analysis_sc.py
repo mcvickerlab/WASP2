@@ -157,7 +157,9 @@ def get_imbalance_sc(
         # region_snp_dict = region_agg_df.loc[region_agg_df["N"] >= region_cutoff, "snp_idx"].to_dict()
 
         if not region_snp_dict:
-            logger.warning("Skipping %s: no regions with total allele counts >= %d", group_name, min_count)
+            logger.warning(
+                "Skipping %s: no regions with total allele counts >= %d", group_name, min_count
+            )
             continue
 
         gt_array_typed: NDArray[np.uint8] | None

@@ -1,0 +1,60 @@
+STAR version=2.7.11b
+STAR compilation time,server,dir=2024-01-29T15:15:38+0000 :/opt/conda/conda-bld/star_1706541070242/work/source
+##### Command Line:
+/iblm/netapp/home/jjaureguy/mambaforge/envs/WASP2_dev2/bin/STAR-avx2 --runMode genomeGenerate --genomeDir star_index --genomeFastaFiles chr_test.fa --genomeSAindexNbases 6 --runThreadN 2 --outFileNamePrefix star_index/
+##### Initial USER parameters from Command Line:
+outFileNamePrefix                 star_index/
+###### All USER parameters from Command Line:
+runMode                       genomeGenerate        ~RE-DEFINED
+genomeDir                     star_index     ~RE-DEFINED
+genomeFastaFiles              chr_test.fa        ~RE-DEFINED
+genomeSAindexNbases           6     ~RE-DEFINED
+runThreadN                    2     ~RE-DEFINED
+outFileNamePrefix             star_index/     ~RE-DEFINED
+##### Finished reading parameters from all sources
+
+##### Final user re-defined parameters-----------------:
+runMode                           genomeGenerate   
+runThreadN                        2
+genomeDir                         star_index
+genomeFastaFiles                  chr_test.fa   
+genomeSAindexNbases               6
+outFileNamePrefix                 star_index/
+
+-------------------------------
+##### Final effective command line:
+/iblm/netapp/home/jjaureguy/mambaforge/envs/WASP2_dev2/bin/STAR-avx2   --runMode genomeGenerate      --runThreadN 2   --genomeDir star_index   --genomeFastaFiles chr_test.fa      --genomeSAindexNbases 6   --outFileNamePrefix star_index/
+----------------------------------------
+
+Number of fastq files for each mate = 1
+ParametersSolo: --soloCellFilterType CellRanger2.2 filtering parameters:  3000 0.99 10
+Finished loading and checking parameters
+--genomeDir directory exists and will be overwritten: star_index/
+Feb 18 19:00:03 ... starting to generate Genome files
+chr_test.fa : chr # 0  "chr_test" chrStart: 0
+Chromosome sequence lengths: 
+chr_test	19800
+Genome sequence total length = 19800
+Genome size with padding = 262144
+Estimated genome size with padding and SJs: total=genome+SJ=201262144 = 262144 + 201000000
+GstrandBit=32
+Number of SA indices: 39600
+Feb 18 19:00:03 ... starting to sort Suffix Array. This may take a long time...
+Number of chunks: 1;   chunks size limit: 316800 bytes
+Feb 18 19:00:03 ... sorting Suffix Array chunks and saving them to disk...
+Writing 316800 bytes into star_index//SA_0 ; empty space on disk = 28695967629312 bytes ... done
+Feb 18 19:00:03 ... loading chunks from disk, packing SA...
+Feb 18 19:00:03 ... finished generating suffix array
+Feb 18 19:00:03 ... generating Suffix Array index
+Feb 18 19:00:03 ... completed Suffix Array index
+Feb 18 19:00:03 ... writing Genome to disk ...
+Writing 262144 bytes into star_index//Genome ; empty space on disk = 28695967629312 bytes ... done
+SA size in bytes: 163353
+Feb 18 19:00:03 ... writing Suffix Array to disk ...
+Writing 163353 bytes into star_index//SA ; empty space on disk = 28695967629312 bytes ... done
+Feb 18 19:00:03 ... writing SAindex to disk
+Writing 8 bytes into star_index//SAindex ; empty space on disk = 28695967629312 bytes ... done
+Writing 56 bytes into star_index//SAindex ; empty space on disk = 28695967629312 bytes ... done
+Writing 23891 bytes into star_index//SAindex ; empty space on disk = 28695967629312 bytes ... done
+Feb 18 19:00:03 ..... finished successfully
+DONE: Genome generation, EXITING

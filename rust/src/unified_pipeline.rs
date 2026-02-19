@@ -34,8 +34,8 @@ use std::time::Instant;
 use crate::bam_intersect::{build_variant_store, VariantStore};
 use crate::bam_remapper::{
     apply_trim_combination, calculate_indel_delta, classify_variant_location,
-    generate_haplotype_seqs_view_with_buffers, generate_trim_combinations, IndelConfig, RemapConfig,
-    VariantLocation, VariantSpanView,
+    generate_haplotype_seqs_view_with_buffers, generate_trim_combinations, IndelConfig,
+    RemapConfig, VariantLocation, VariantSpanView,
 };
 use crate::seq_decode::{copy_qual_into, decode_seq_into};
 
@@ -185,6 +185,7 @@ impl UnifiedStats {
 
 /// A haplotype read ready for FASTQ output
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct HaplotypeOutput {
     /// Read name with WASP suffix
     pub name: Vec<u8>,
@@ -511,7 +512,13 @@ fn generate_haplotypes_for_read(
         is_phased: true,
     };
 
-    match generate_haplotype_seqs_view_with_buffers(read, &spans, &remap_config, original_seq, original_qual) {
+    match generate_haplotype_seqs_view_with_buffers(
+        read,
+        &spans,
+        &remap_config,
+        original_seq,
+        original_qual,
+    ) {
         Ok(Some(haps)) => Some(haps),
         _ => None, // Unmappable or error: skip this read
     }
@@ -1538,8 +1545,7 @@ fn process_chromosome(
                         } else {
                             None
                         };
-                        let overlap_mask =
-                            overlap_mask_for_pair(&r1_variants, &r2_variants, store);
+                        let overlap_mask = overlap_mask_for_pair(&r1_variants, &r2_variants, store);
                         increment_overlap_stats(&mut stats, overlap_mask);
                         if config.indel_mode {
                             // INDEL mode: use trim combinations for length preservation

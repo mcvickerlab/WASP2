@@ -96,12 +96,16 @@ def process_bam(
     )
     logger.info(
         "Rust filter: %s remap, %s keep, %s unique names",
-        f"{remap_count:,}", f"{keep_count:,}", f"{unique_names:,}",
+        f"{remap_count:,}",
+        f"{keep_count:,}",
+        f"{unique_names:,}",
     )
 
     # Write read names file for compatibility
     with pysam.AlignmentFile(remap_bam, "rb") as bam, open(remap_reads, "w") as f:
-        names = {read.query_name for read in bam.fetch(until_eof=True) if read.query_name is not None}
+        names = {
+            read.query_name for read in bam.fetch(until_eof=True) if read.query_name is not None
+        }
         f.write("\n".join(names))
 
     # Sort the remap BAM (Rust outputs unsorted)

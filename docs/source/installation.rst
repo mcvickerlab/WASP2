@@ -25,6 +25,56 @@ On macOS with Homebrew:
 
    brew install bcftools bedtools samtools
 
+Compiling pgenlib
+~~~~~~~~~~~~~~~~~
+
+WASP2 uses `pgenlib <https://github.com/chrchang/plink-ng/tree/master/2.0/Python>`_ for
+efficient PLINK2 file I/O. This library requires compilation from source and needs
+a C compiler.
+
+**Prerequisites:**
+
+On Ubuntu/Debian:
+
+.. code-block:: bash
+
+   sudo apt-get install build-essential python3-dev
+
+On macOS:
+
+.. code-block:: bash
+
+   xcode-select --install  # Installs Command Line Tools with clang
+
+On RHEL/CentOS/Fedora:
+
+.. code-block:: bash
+
+   sudo dnf install gcc gcc-c++ python3-devel
+
+**Installation:**
+
+pgenlib is installed automatically via pip when you install WASP2:
+
+.. code-block:: bash
+
+   pip install pgenlib>=0.90
+
+**Troubleshooting:**
+
+If you encounter compilation errors:
+
+1. **Missing Python headers**: Install ``python3-dev`` (Debian/Ubuntu) or ``python3-devel`` (RHEL/Fedora)
+2. **No C compiler**: Install ``build-essential`` (Debian/Ubuntu) or ``gcc`` (RHEL/Fedora)
+3. **macOS errors**: Ensure Xcode Command Line Tools are installed: ``xcode-select --install``
+4. **Conda environments**: The environment.yml already includes Rust and Clang for PyO3 compilation
+
+If compilation still fails, use the Docker image which has pgenlib pre-installed:
+
+.. code-block:: bash
+
+   docker pull ghcr.io/jaureguy760/wasp2-final:latest
+
 Python Requirements
 ~~~~~~~~~~~~~~~~~~~
 

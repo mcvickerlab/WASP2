@@ -73,9 +73,7 @@ class TestAlleleCounts:
 
         # Compare counts
         mismatches = []
-        for (chrom, pos, ref, alt), (ref_count, alt_count, other_count) in zip(
-            regions, counts
-        ):
+        for (chrom, pos, _ref, _alt), (ref_count, alt_count, other_count) in zip(regions, counts):
             key = (chrom, pos)
             if key in expected:
                 exp = expected[key]
@@ -85,9 +83,11 @@ class TestAlleleCounts:
                         f"expected {exp}"
                     )
 
-        assert not mismatches, f"Count mismatches found:\n" + "\n".join(
-            mismatches[:10]
-        ) + (f"\n... and {len(mismatches) - 10} more" if len(mismatches) > 10 else "")
+        assert not mismatches, (
+            "Count mismatches found:\n"
+            + "\n".join(mismatches[:10])
+            + (f"\n... and {len(mismatches) - 10} more" if len(mismatches) > 10 else "")
+        )
 
     def test_counts_coverage_stats(
         self,
@@ -114,9 +114,9 @@ class TestAlleleCounts:
 
         # Sanity checks on chr21 HG00731 data
         assert total_sites == 33036, f"Expected 33036 het sites, got {total_sites}"
-        assert (
-            sites_with_coverage > 100
-        ), f"Expected >100 sites with coverage, got {sites_with_coverage}"
+        assert sites_with_coverage > 100, (
+            f"Expected >100 sites with coverage, got {sites_with_coverage}"
+        )
         assert total_ref + total_alt > 1000, "Total counts should be >1000"
 
 
@@ -232,9 +232,7 @@ class TestFastqGeneration:
         r1_count = count_reads(out_r1)
         r2_count = count_reads(out_r2)
 
-        assert (
-            r1_count == r2_count
-        ), f"R1 has {r1_count} reads, R2 has {r2_count} reads"
+        assert r1_count == r2_count, f"R1 has {r1_count} reads, R2 has {r2_count} reads"
         assert r1_count > 0, "Expected at least one read pair"
 
 
@@ -252,9 +250,7 @@ class TestAnalysis:
             variant_count = sum(1 for _ in f)
 
         # Should have >100 variants with sufficient coverage
-        assert (
-            variant_count > 100
-        ), f"Expected >100 analyzed variants, got {variant_count}"
+        assert variant_count > 100, f"Expected >100 analyzed variants, got {variant_count}"
 
     def test_analysis_columns_present(
         self,
@@ -302,16 +298,11 @@ class TestAnalysis:
             region = result["region"]
             if region in expected_regions:
                 exp = expected_regions[region]
-                assert (
-                    result["ref_count"] == exp["ref_count"]
-                ), f"{region}: ref_count mismatch"
-                assert (
-                    result["alt_count"] == exp["alt_count"]
-                ), f"{region}: alt_count mismatch"
+                assert result["ref_count"] == exp["ref_count"], f"{region}: ref_count mismatch"
+                assert result["alt_count"] == exp["alt_count"], f"{region}: alt_count mismatch"
                 # P-values may have small floating-point differences
                 assert abs(result["pval"] - exp["pval"]) < 1e-6, (
-                    f"{region}: pval mismatch "
-                    f"(got {result['pval']}, expected {exp['pval']})"
+                    f"{region}: pval mismatch (got {result['pval']}, expected {exp['pval']})"
                 )
 
 

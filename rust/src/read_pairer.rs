@@ -195,9 +195,7 @@ impl ReadPairer {
 ///
 /// Use `process_read()` to feed records and collect pairs.
 #[allow(dead_code)]
-pub fn pair_reads_from_bam(
-    bam_path: &str,
-) -> Result<ReadPairer, Box<dyn std::error::Error>> {
+pub fn pair_reads_from_bam(bam_path: &str) -> Result<ReadPairer, Box<dyn std::error::Error>> {
     ReadPairer::new(bam_path)
 }
 

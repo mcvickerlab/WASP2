@@ -125,9 +125,7 @@ def get_compared_imbalance(
     n_counts: NDArray[np.uint16] = ref_counts + alt_counts
 
     # Calculate dispersion across dataset
-    def opt_disp(
-        rho: float, ref_data: NDArray[np.uint16], n_data: NDArray[np.uint16]
-    ) -> float:
+    def opt_disp(rho: float, ref_data: NDArray[np.uint16], n_data: NDArray[np.uint16]) -> float:
         rho_safe = float(clamp_rho(rho))  # Prevent division by zero (Issue #228)
         return float(
             -np.sum(
@@ -142,9 +140,9 @@ def get_compared_imbalance(
 
     disp: float = float(
         clamp_rho(
-            minimize_scalar(
-                opt_disp, args=(ref_counts, n_counts), method="bounded", bounds=(0, 1)
-            )["x"]
+            minimize_scalar(opt_disp, args=(ref_counts, n_counts), method="bounded", bounds=(0, 1))[
+                "x"
+            ]
         )
     )
 
@@ -235,7 +233,9 @@ def get_compared_imbalance(
         if not region_snp_dict:
             logger.warning(
                 "Skipping %s-%s comparison: no shared regions with allele counts >= %d",
-                group1, group2, min_count,
+                group1,
+                group2,
+                min_count,
             )
 
             continue

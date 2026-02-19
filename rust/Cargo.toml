@@ -8,7 +8,7 @@ name = "wasp2_rust"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-pyo3 = { version = "0.28", features = ["extension-module"] }
+pyo3 = { version = "0.28.2", features = ["extension-module"] }  # Minimum 0.28.2 for RUSTSEC-2026-0013 fix
 rust-htslib = { version = "0.44", default-features = false }  # Keep stable version (0.47+ has NFS build issues)
 rayon = "1.8"
 anyhow = "1.0"
@@ -31,7 +31,7 @@ flate2 = "1.1"         # For gzip decompression
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
-tempfile = "3.8"
+tempfile = "3.25"
 
 # Benchmarks removed for clean release (benchmark files in paper branch only)
 # [[bench]]

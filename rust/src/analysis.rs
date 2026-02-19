@@ -17,6 +17,7 @@ use std::collections::HashMap;
 
 /// Allele count data for a single variant
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct VariantCounts {
     pub chrom: String,
     pub pos: u32,
@@ -439,7 +440,10 @@ mod tests {
     fn test_opt_prob_rho_boundary_zero() {
         // Issue #228: rho=0 should not cause division by zero
         let result = opt_prob(0.5, 0.0, 10, 20).unwrap();
-        assert!(result.is_finite(), "rho=0 should produce finite result after clamping");
+        assert!(
+            result.is_finite(),
+            "rho=0 should produce finite result after clamping"
+        );
         assert!(!result.is_nan(), "rho=0 should not produce NaN");
     }
 
@@ -447,7 +451,10 @@ mod tests {
     fn test_opt_prob_rho_boundary_one() {
         // Issue #228: rho=1 should not produce zero alpha/beta
         let result = opt_prob(0.5, 1.0, 10, 20).unwrap();
-        assert!(result.is_finite(), "rho=1 should produce finite result after clamping");
+        assert!(
+            result.is_finite(),
+            "rho=1 should produce finite result after clamping"
+        );
         assert!(!result.is_nan(), "rho=1 should not produce NaN");
     }
 
@@ -456,7 +463,11 @@ mod tests {
         // Test values very close to boundaries
         for rho in [1e-15, 1e-12, 1e-10, 0.999999999, 0.9999999999999] {
             let result = opt_prob(0.5, rho, 10, 20).unwrap();
-            assert!(result.is_finite(), "rho={} should produce finite result", rho);
+            assert!(
+                result.is_finite(),
+                "rho={} should produce finite result",
+                rho
+            );
         }
     }
 

@@ -44,6 +44,7 @@ pub struct FilterStats {
 
 /// Configuration for BAM filtering
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct FilterConfig {
     /// Number of threads for BAM reading
     pub read_threads: usize,

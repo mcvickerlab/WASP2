@@ -187,9 +187,7 @@ class VCFSource(VariantSource):
             ref = record.ref
             assert ref is not None
             alt = record.alts[0] if record.alts else ref
-            variant = Variant(
-                chrom=record.chrom, pos=record.pos, ref=ref, alt=alt, id=record.id
-            )
+            variant = Variant(chrom=record.chrom, pos=record.pos, ref=ref, alt=alt, id=record.id)
 
             # Get allele sequences
             allele1, allele2 = self._get_alleles(record, gt)
@@ -291,9 +289,7 @@ class VCFSource(VariantSource):
             ref = record.ref
             assert ref is not None
             alt = record.alts[0] if record.alts else ref
-            variant = Variant(
-                chrom=record.chrom, pos=record.pos, ref=ref, alt=alt, id=record.id
-            )
+            variant = Variant(chrom=record.chrom, pos=record.pos, ref=ref, alt=alt, id=record.id)
 
             allele1, allele2 = self._get_alleles(record, gt)
 

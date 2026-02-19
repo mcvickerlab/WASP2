@@ -160,6 +160,7 @@ pub struct TrimCombination {
     pub trim_right: usize,
 }
 
+#[allow(dead_code)]
 impl TrimCombination {
     /// Create a new trim combination
     pub fn new(trim_left: usize, trim_right: usize) -> Self {
@@ -865,6 +866,7 @@ pub fn generate_haplotype_seqs(
     Ok(Some(vec![(hap1_seq, hap1_qual), (hap2_seq, hap2_qual)]))
 }
 
+#[allow(dead_code)]
 pub fn generate_haplotype_seqs_view(
     read: &bam::Record,
     variants: &[VariantSpanView<'_>],
@@ -1255,6 +1257,7 @@ pub fn calculate_indel_delta(hap_seq_len: usize, original_len: usize) -> i32 {
 /// # Returns
 /// `Ok(Some(vec))` - Vector of (sequence, qualities, trim_combo_id) tuples
 /// `Ok(None)` - Read should be skipped (unmappable variant position or too large INDEL)
+#[allow(dead_code)]
 pub fn generate_haplotype_seqs_with_trims(
     read: &bam::Record,
     variants: &[&VariantSpan],
@@ -1386,6 +1389,7 @@ pub fn write_fastq_pair<P: AsRef<Path>>(
 /// - Parse once instead of 22x: ~22x faster parsing
 /// - Parallel chromosome processing: Additional 4-8x speedup with 8 cores
 /// - Total expected speedup: ~100x for large RNA-seq datasets
+#[allow(dead_code)]
 pub fn process_all_chromosomes_parallel(
     bam_path: &str,
     variants_by_chrom: &FxHashMap<String, FxHashMap<Vec<u8>, Vec<VariantSpan>>>,
@@ -1838,6 +1842,7 @@ pub fn classify_variant_location(
 /// let expected = compute_expected_position_cigar_aware(&read, &[(50, 51, 5)]);
 /// assert_eq!(expected, 105);
 /// ```
+#[allow(dead_code)]
 pub fn compute_expected_position_cigar_aware<'a, I>(read: &bam::Record, variants: I) -> i64
 where
     I: IntoIterator<Item = &'a (u32, u32, i32)>,
@@ -1889,6 +1894,7 @@ where
 ///
 /// # Returns
 /// Expected alignment position after upstream shifts
+#[allow(dead_code)]
 pub fn compute_expected_position<'a, I>(read: &bam::Record, variants: I) -> i64
 where
     I: IntoIterator<Item = &'a (u32, i32)>,
@@ -2031,8 +2037,12 @@ mod tests {
         // Verify mate 2 (should have two distinct variant overlaps; duplicate removed)
         let mate2: Vec<_> = read2_spans.iter().filter(|s| s.mate == 2).collect();
         assert_eq!(mate2.len(), 2);
-        assert!(mate2.iter().any(|s| s.vcf_start == 87400 && s.vcf_stop == 87401));
-        assert!(mate2.iter().any(|s| s.vcf_start == 87401 && s.vcf_stop == 87402));
+        assert!(mate2
+            .iter()
+            .any(|s| s.vcf_start == 87400 && s.vcf_stop == 87401));
+        assert!(mate2
+            .iter()
+            .any(|s| s.vcf_start == 87401 && s.vcf_stop == 87402));
     }
 
     #[test]
@@ -2321,7 +2331,9 @@ mod tests {
             hap2: "ATG",
         }];
         let cfg = RemapConfig::default();
-        let out = generate_haplotype_seqs_view(&rec, &view, &cfg).unwrap().unwrap();
+        let out = generate_haplotype_seqs_view(&rec, &view, &cfg)
+            .unwrap()
+            .unwrap();
 
         assert_eq!(out[0].0.len(), 50); // hap1: ref allele
         assert_eq!(out[1].0.len(), 52); // hap2: insertion allele, replaces 1 base with 3
@@ -2339,7 +2351,9 @@ mod tests {
             hap2: "A",
         }];
         let cfg = RemapConfig::default();
-        let out = generate_haplotype_seqs_view(&rec, &view, &cfg).unwrap().unwrap();
+        let out = generate_haplotype_seqs_view(&rec, &view, &cfg)
+            .unwrap()
+            .unwrap();
 
         assert_eq!(out[0].0.len(), 50); // hap1 matches ref length
         assert_eq!(out[1].0.len(), 49); // hap2 shorter by 1

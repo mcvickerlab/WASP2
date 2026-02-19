@@ -18,7 +18,9 @@ mod seq_decode;
 mod unified_pipeline;
 mod vcf_to_bed;
 
-pub use unified_pipeline::{unified_make_reads, unified_make_reads_parallel, UnifiedConfig, UnifiedStats};
+pub use unified_pipeline::{
+    unified_make_reads, unified_make_reads_parallel, UnifiedConfig, UnifiedStats,
+};
 
 use bam_counter::BamCounter;
 use mapping_filter::filter_bam_wasp;
@@ -289,6 +291,14 @@ fn analyze_imbalance(
     let reader = BufReader::new(file);
 
     let mut variants = Vec::new();
+
+    // Detect column layout from header:
+    //   7-col: chrom, pos, ref, alt, ref_count, alt_count, other_count
+    //   9-col: chrom, pos0, pos, ref, alt, GT, ref_count, alt_count, other_count
+    let mut pos_idx: usize = 1;
+    let mut ref_count_idx: usize = 4;
+    let mut alt_count_idx: usize = 5;
+    let mut min_fields: usize = 7;
     let mut header_seen = false;
 
     for line in reader.lines() {
@@ -297,23 +307,30 @@ fn analyze_imbalance(
 
         if !header_seen {
             header_seen = true;
-            continue; // Skip header
-        }
-
-        let fields: Vec<&str> = line.split('\t').collect();
-        if fields.len() < 7 {
+            let headers: Vec<&str> = line.split('\t').collect();
+            if headers.len() >= 9 && headers.contains(&"GT") {
+                // 9-column format from wasp2-count CLI
+                pos_idx = 2;
+                ref_count_idx = 6;
+                alt_count_idx = 7;
+                min_fields = 9;
+            }
             continue;
         }
 
-        // Parse fields: chrom, pos, ref, alt, region, ref_count, alt_count, other_count
+        let fields: Vec<&str> = line.split('\t').collect();
+        if fields.len() < min_fields {
+            continue;
+        }
+
         let chrom = fields[0].to_string();
-        let pos = fields[1]
+        let pos = fields[pos_idx]
             .parse::<u32>()
             .map_err(|e| PyRuntimeError::new_err(format!("Invalid pos: {}", e)))?;
-        let ref_count = fields[5]
+        let ref_count = fields[ref_count_idx]
             .parse::<u32>()
             .map_err(|e| PyRuntimeError::new_err(format!("Invalid ref_count: {}", e)))?;
-        let alt_count = fields[6]
+        let alt_count = fields[alt_count_idx]
             .parse::<u32>()
             .map_err(|e| PyRuntimeError::new_err(format!("Invalid alt_count: {}", e)))?;
 
@@ -483,7 +500,10 @@ fn stats_to_pydict(py: Python, stats: &unified_pipeline::UnifiedStats) -> PyResu
     d.set_item("pairs_with_variants", stats.pairs_with_variants)?;
     d.set_item("pairs_with_snvs_only", stats.pairs_with_snvs_only)?;
     d.set_item("pairs_with_indels_only", stats.pairs_with_indels_only)?;
-    d.set_item("pairs_with_snvs_and_indels", stats.pairs_with_snvs_and_indels)?;
+    d.set_item(
+        "pairs_with_snvs_and_indels",
+        stats.pairs_with_snvs_and_indels,
+    )?;
     d.set_item("haplotypes_written", stats.haplotypes_written)?;
     d.set_item("pairs_kept", stats.pairs_kept)?;
     d.set_item("pairs_keep_no_flip", stats.pairs_keep_no_flip)?;
@@ -647,14 +667,18 @@ fn unified_make_reads_parallel_py(
         remap_names_path,
     };
 
-    let run = || unified_pipeline::unified_make_reads_parallel(bam_path, bed_path, out_r1, out_r2, &config);
+    let run = || {
+        unified_pipeline::unified_make_reads_parallel(bam_path, bed_path, out_r1, out_r2, &config)
+    };
 
     // Use a per-call Rayon thread pool so repeated calls can use different thread counts.
     let stats = if threads > 0 {
         let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(threads)
             .build()
-            .map_err(|e| PyRuntimeError::new_err(format!("Failed to build Rayon thread pool: {}", e)))?;
+            .map_err(|e| {
+                PyRuntimeError::new_err(format!("Failed to build Rayon thread pool: {}", e))
+            })?;
         pool.install(run)
     } else {
         run()
