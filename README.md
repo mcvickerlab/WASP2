@@ -17,7 +17,7 @@
 <p align="center">
   <a href="https://jaureguy760.github.io/WASP2-final/">Documentation</a> •
   <a href="https://jaureguy760.github.io/WASP2-final/_static/podcast/">Podcast</a> •
-  <a href="https://github.com/mcvickerlab/WASP2">McVicker Lab</a> •
+  <a href="https://mcvicker.salk.edu/">McVicker Lab</a> •
   <a href="https://github.com/bmvdgeijn/WASP">Original WASP</a>
 </p>
 
