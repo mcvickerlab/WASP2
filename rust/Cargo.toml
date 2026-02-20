@@ -17,7 +17,7 @@ statrs = "0.18"
 rv = "0.19"
 coitrees = "0.4"  # Fast interval tree for BAM-BED intersection (15-30x faster than pybedtools)
 crossbeam-channel = "0.5"  # Fast MPMC channels for parallel FASTQ writing
-gzp = { version = "0.11", default-features = false, features = ["deflate_default"] }  # Parallel gzip compression
+gzp = { version = "2.0", default-features = false, features = ["deflate_default"] }  # Parallel gzip compression
 itoa = "1.0" # Fast integer-to-ascii for FASTQ/sidecar writing
 smallvec = "1.13" # Reduce heap allocs for small overlap/span vectors
 
