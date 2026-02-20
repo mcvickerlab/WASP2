@@ -48,7 +48,7 @@ jobs:
     runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Run bandit with SARIF output
         run: |
@@ -70,7 +70,7 @@ jobs:
     runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Run pip-audit
         run: |
@@ -87,7 +87,7 @@ jobs:
       run:
         working-directory: rust
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Install cargo-audit
         working-directory: .
@@ -103,7 +103,7 @@ jobs:
     runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           fetch-depth: 0
 
@@ -128,7 +128,7 @@ jobs:
     runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Verify Cargo.lock exists
         run: |
@@ -156,7 +156,7 @@ jobs:
     runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Run Semgrep security rules
         run: |
