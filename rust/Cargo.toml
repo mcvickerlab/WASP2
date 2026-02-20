@@ -9,7 +9,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 pyo3 = { version = "0.28.2", features = ["extension-module"] }  # Minimum 0.28.2 for RUSTSEC-2026-0013 fix
-rust-htslib = { version = "0.44", default-features = false }  # Keep stable version (0.47+ has NFS build issues)
+rust-htslib = { version = "1.0", default-features = false }  # Keep stable version (0.47+ has NFS build issues)
 rayon = "1.8"
 anyhow = "1.0"
 rustc-hash = "2.1"
