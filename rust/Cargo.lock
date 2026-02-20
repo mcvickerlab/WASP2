@@ -74,7 +74,7 @@ dependencies = [
  "bitflags",
  "cexpr",
  "clang-sys",
- "itertools 0.10.5",
+ "itertools 0.12.1",
  "lazy_static",
  "lazycell",
  "proc-macro2",
@@ -740,6 +740,15 @@ dependencies = [
 
 [[package]]
 name = "itertools"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba291022dbbd398a455acf126c1e341954079855bc60dfdda641363bd6922569"
+dependencies = [
+ "either",
+]
+
+[[package]]
+name = "itertools"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
@@ -973,7 +982,7 @@ dependencies = [
  "indexmap",
  "memchr",
  "noodles-bgzf",
- "noodles-core 0.19.0",
+ "noodles-core",
  "noodles-csi",
  "noodles-vcf",
 ]
@@ -987,15 +996,6 @@ dependencies = [
  "bytes",
  "crossbeam-channel",
  "flate2",
-]
-
-[[package]]
-name = "noodles-core"
-version = "0.16.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "962b13b79312f773a12ffcb0cdaccab6327f8343b6f440a888eff10c749d52b0"
-dependencies = [
- "bstr",
 ]
 
 [[package]]
@@ -1017,7 +1017,7 @@ dependencies = [
  "bstr",
  "indexmap",
  "noodles-bgzf",
- "noodles-core 0.19.0",
+ "noodles-core",
 ]
 
 [[package]]
@@ -1029,7 +1029,7 @@ dependencies = [
  "bstr",
  "indexmap",
  "noodles-bgzf",
- "noodles-core 0.19.0",
+ "noodles-core",
  "noodles-csi",
 ]
 
@@ -1042,7 +1042,7 @@ dependencies = [
  "indexmap",
  "memchr",
  "noodles-bgzf",
- "noodles-core 0.19.0",
+ "noodles-core",
  "noodles-csi",
  "noodles-tabix",
  "percent-encoding",
@@ -1994,7 +1994,7 @@ dependencies = [
  "itoa",
  "noodles-bcf",
  "noodles-bgzf",
- "noodles-core 0.16.0",
+ "noodles-core",
  "noodles-vcf",
  "pyo3",
  "rayon",
