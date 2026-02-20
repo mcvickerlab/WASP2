@@ -30,7 +30,7 @@ noodles-bgzf = "0.46"  # Updated for compatibility
 flate2 = "1.1"         # For gzip decompression
 
 [dev-dependencies]
-criterion = { version = "0.5", features = ["html_reports"] }
+criterion = { version = "0.8", features = ["html_reports"] }
 tempfile = "3.25"
 
 # Benchmarks removed for clean release (benchmark files in paper branch only)
