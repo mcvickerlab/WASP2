@@ -49,8 +49,13 @@ jobs:
           manylinux: manylinux_2_28
           docker-options: ${{ matrix.target == 'aarch64' && '--platform linux/arm64' || '' }}
           before-script-linux: |
-            # Install htslib build dependencies (AlmaLinux 8 / manylinux_2_28)
-            dnf install -y bzip2-devel xz-devel zlib-devel libcurl-devel openssl-devel clang-devel
+            # Install htslib build dependencies
+            # Native containers (AlmaLinux 8) use dnf; cross containers (Ubuntu) use apt-get
+            if command -v dnf &>/dev/null; then
+              dnf install -y bzip2-devel xz-devel zlib-devel libcurl-devel openssl-devel clang-devel
+            elif command -v apt-get &>/dev/null; then
+              apt-get update && apt-get install -y libbz2-dev liblzma-dev zlib1g-dev libcurl4-openssl-dev libssl-dev libclang-dev
+            fi
 
       - name: Upload wheels
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
