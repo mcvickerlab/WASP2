@@ -16,7 +16,7 @@ tools:
       licence: ["MIT"]
   - wasp2:
       description: WASP2 allelic imbalance analysis tools
-      homepage: https://github.com/Jaureguy760/WASP2
+      homepage: https://github.com/mcvickerlab/WASP2
       licence: ["MIT"]
 
 input:

@@ -1,22 +1,21 @@
 <p align="center">
-  <img src="doc/banner.svg" alt="WASP2 - Allele-Specific Analysis Pipeline" width="100%">
+  <img src="docs/source/_static/banner.svg" alt="WASP2 - Allele-Specific Analysis Pipeline" width="100%">
 </p>
 
 <p align="center">
-  <a href="https://github.com/Jaureguy760/WASP2-final/actions/workflows/ci.yml">
-    <img src="https://github.com/Jaureguy760/WASP2-final/actions/workflows/ci.yml/badge.svg" alt="CI">
+  <a href="https://github.com/mcvickerlab/WASP2/actions/workflows/ci.yml">
+    <img src="https://github.com/mcvickerlab/WASP2/actions/workflows/ci.yml/badge.svg" alt="CI">
   </a>
-  <a href="https://jaureguy760.github.io/WASP2-final/">
+  <a href="https://mcvickerlab.github.io/WASP2/">
     <img src="https://img.shields.io/badge/docs-GitHub%20Pages-blue" alt="Documentation">
   </a>
-  <a href="https://github.com/Jaureguy760/WASP2-final/blob/main/LICENSE">
+  <a href="https://github.com/mcvickerlab/WASP2/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
   </a>
 </p>
 
 <p align="center">
-  <a href="https://jaureguy760.github.io/WASP2-final/">Documentation</a> •
-  <a href="https://jaureguy760.github.io/WASP2-final/_static/podcast/">Podcast</a> •
+  <a href="https://mcvickerlab.github.io/WASP2/">Documentation</a> •
   <a href="https://mcvicker.salk.edu/">McVicker Lab</a> •
   <a href="https://github.com/bmvdgeijn/WASP">Original WASP</a>
 </p>

@@ -77,12 +77,12 @@ html_theme_options = {
     "icon_links": [
         {
             "name": "GitHub",
-            "url": "https://github.com/Jaureguy760/WASP2-final",
+            "url": "https://github.com/mcvickerlab/WASP2",
             "icon": "fa-brands fa-github",
         },
         {
             "name": "PyPI",
-            "url": "https://test.pypi.org/project/wasp2-rust/",
+            "url": "https://pypi.org/project/wasp2/",
             "icon": "fa-solid fa-box",
         },
     ],
@@ -91,8 +91,8 @@ html_theme_options = {
 }
 
 html_context = {
-    "github_user": "Jaureguy760",
-    "github_repo": "WASP2-final",
+    "github_user": "mcvickerlab",
+    "github_repo": "WASP2",
     "github_version": "main",
     "doc_path": "docs/source",
 }

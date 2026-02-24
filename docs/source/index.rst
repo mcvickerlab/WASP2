@@ -5,8 +5,8 @@ WASP2: Allele-Specific Analysis
    :target: https://pypi.org/project/wasp2/
    :alt: PyPI
 
-.. image:: https://github.com/Jaureguy760/WASP2-exp/workflows/WASP2%20Tests/badge.svg
-   :target: https://github.com/Jaureguy760/WASP2-exp/actions
+.. image:: https://github.com/mcvickerlab/WASP2/workflows/WASP2%20Tests/badge.svg
+   :target: https://github.com/mcvickerlab/WASP2/actions
    :alt: Tests
 
 WASP2 is a comprehensive suite of tools for unbiased allele-specific analysis of next-generation sequencing data. It addresses reference bias in read mapping and provides statistical methods for detecting allelic imbalance.

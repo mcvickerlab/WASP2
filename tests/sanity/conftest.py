@@ -28,12 +28,12 @@ SANITY_DATA_DIR = Path(__file__).parent / "data"
 # GitHub Releases: Fast, CI-integrated, cached by Actions
 # Zenodo: DOI-backed archival for academic citation
 GITHUB_RELEASE_URL = (
-    f"https://github.com/Jaureguy760/WASP2-final/releases/download/v1.3.0/{SANITY_TARBALL_NAME}"
+    f"https://github.com/mcvickerlab/WASP2/releases/download/v1.3.0/{SANITY_TARBALL_NAME}"
 )
 # Zenodo DOI URL for archival citation (update after Zenodo deposit)
 # To activate: replace None with the direct file URL from Zenodo, e.g.:
 #   "https://zenodo.org/records/14538902/files/wasp2-sanity-chr21-v1.tar.xz"
-# See: https://github.com/Jaureguy760/WASP2-final/issues/246
+# See: https://github.com/mcvickerlab/WASP2/issues/246
 ZENODO_DOI_URL: str | None = None
 
 # Expected files in sanity dataset

@@ -257,9 +257,9 @@ The H5AD file contains different layers depending on input type:
 
 ## References
 
-- Issue [#32](https://github.com/Jaureguy760/WASP2-final/issues/32) - scATAC Pipeline
-- Issue [#57](https://github.com/Jaureguy760/WASP2-final/issues/57) - nf-core Subworkflow Pattern Compliance
-- Issue [#48](https://github.com/Jaureguy760/WASP2-final/issues/48) - Validation & Test Suite
+- Issue [#32](https://github.com/mcvickerlab/WASP2/issues/32) - scATAC Pipeline
+- Issue [#57](https://github.com/mcvickerlab/WASP2/issues/57) - nf-core Subworkflow Pattern Compliance
+- Issue [#48](https://github.com/mcvickerlab/WASP2/issues/48) - Validation & Test Suite
 - [ArchR](https://www.archrproject.com/) - scATAC-seq analysis
 - [Signac](https://satijalab.org/signac/) - scATAC-seq toolkit
 - [AnnData](https://anndata.readthedocs.io/) - Annotated data format

@@ -44,12 +44,12 @@ classifiers = [
 
 dependencies = [
     "numpy>=1.21.0",
-    "pandas>=1.5.0,<3.0.0",  # Pin <2.0 for anndata compatibility
+    "pandas>=1.5.0,<3.0.0",
     "polars>=0.19.0",
     "scipy>=1.10.0",
     "pysam>=0.21.0",
     "pybedtools>=0.9.0",
-    "anndata>=0.8.0,<0.12.0",  # Pin <0.10 for pandas <2.0 compatibility
+    "anndata>=0.8.0,<0.12.0",
     "scanpy>=1.9.0",
     "typer>=0.12.0",
     "rich>=13.0.0",
@@ -105,10 +105,10 @@ wasp2-analyze = "analysis.__main__:app"
 wasp2-ipscore = "ipscore.__main__:app"
 
 [project.urls]
-Homepage = "https://github.com/Jaureguy760/WASP2-final"
-Documentation = "https://Jaureguy760.github.io/WASP2-final/"
-Repository = "https://github.com/Jaureguy760/WASP2-final"
-Issues = "https://github.com/Jaureguy760/WASP2-final/issues"
+Homepage = "https://github.com/mcvickerlab/WASP2"
+Documentation = "https://mcvickerlab.github.io/WASP2/"
+Repository = "https://github.com/mcvickerlab/WASP2"
+Issues = "https://github.com/mcvickerlab/WASP2/issues"
 
 # Note: [tool.setuptools] is not used when building with maturin
 # Maturin handles package discovery via [tool.maturin.python-packages]

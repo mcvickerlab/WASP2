@@ -8,7 +8,7 @@ set -eo pipefail
 
 # Configuration
 RUNNER_DIR="${HOME}/actions-runner"
-REPO="Jaureguy760/WASP2-final"
+REPO="mcvickerlab/WASP2"
 RUNNER_NAME="wasp2-mac-runner"
 RUNNER_LABELS="macOS,ARM64,docker,wasp2"
 
