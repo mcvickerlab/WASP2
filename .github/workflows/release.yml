@@ -53,11 +53,13 @@ jobs:
           manylinux: ${{ matrix.target == 'aarch64' && 'manylinux_2_28' || '2014' }}
           docker-options: ${{ matrix.target == 'aarch64' && '--platform linux/arm64' || '' }}
           before-script-linux: |
-            # Install htslib build dependencies
+            # Install htslib build dependencies (detect package manager)
             if command -v yum &>/dev/null; then
               yum install -y ${{ env.HTSLIB_DEPS }}
             elif command -v dnf &>/dev/null; then
               dnf install -y ${{ env.HTSLIB_DEPS }}
+            elif command -v apt-get &>/dev/null; then
+              apt-get update && apt-get install -y libbz2-dev liblzma-dev zlib1g-dev libcurl4-openssl-dev libssl-dev libclang-dev
             fi
 
       - name: Upload wheels
@@ -94,8 +96,14 @@ jobs:
           manylinux: musllinux_1_2
           docker-options: ${{ matrix.target == 'aarch64' && '--platform linux/arm64' || '' }}
           before-script-linux: |
-            # Install htslib build dependencies (Alpine/musl)
-            apk add --no-cache bzip2-dev xz-dev zlib-dev curl-dev openssl-dev clang-dev
+            # Install htslib build dependencies (detect package manager)
+            if command -v apk &>/dev/null; then
+              apk add --no-cache bzip2-dev xz-dev zlib-dev curl-dev openssl-dev clang-dev
+            elif command -v yum &>/dev/null; then
+              yum install -y bzip2-devel xz-devel zlib-devel libcurl-devel openssl-devel clang-devel
+            elif command -v apt-get &>/dev/null; then
+              apt-get update && apt-get install -y libbz2-dev liblzma-dev zlib1g-dev libcurl4-openssl-dev libssl-dev libclang-dev
+            fi
 
       - name: Upload wheels
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
