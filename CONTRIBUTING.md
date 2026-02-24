@@ -23,7 +23,7 @@ This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.
 
 New to WASP2? Welcome! Here's how to get started:
 
-1. Look for issues labeled [`good first issue`](https://github.com/Jaureguy760/WASP2-final/labels/good%20first%20issue) or [`help wanted`](https://github.com/Jaureguy760/WASP2-final/labels/help%20wanted)
+1. Look for issues labeled [`good first issue`](https://github.com/mcvickerlab/WASP2/labels/good%20first%20issue) or [`help wanted`](https://github.com/mcvickerlab/WASP2/labels/help%20wanted)
 2. Comment on the issue to let maintainers know you're working on it
 3. Fork the repository and follow the [Development Setup](#development-setup)
 4. Submit your PR following the [Pull Request Process](#pull-request-process)
@@ -50,8 +50,8 @@ WASP2 is a hybrid Python/Rust project. You'll need both toolchains to build from
 1. **Clone the repository:**
 
    ```bash
-   git clone https://github.com/Jaureguy760/WASP2-final.git
-   cd WASP2-final
+   git clone https://github.com/mcvickerlab/WASP2.git
+   cd WASP2
    ```
 
 2. **Create a Python virtual environment:**
@@ -281,7 +281,7 @@ We follow [Conventional Commits](https://www.conventionalcommits.org/):
 ### Before Creating an Issue
 
 1. Search existing issues to avoid duplicates
-2. Check the [documentation](https://jaureguy760.github.io/WASP2-final/) for answers
+2. Check the [documentation](https://mcvickerlab.github.io/WASP2/) for answers
 3. Ensure you're using the latest version
 
 ### Bug Reports

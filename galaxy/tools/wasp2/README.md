@@ -118,5 +118,5 @@ Test data files should be placed in `test-data/`:
 
 ## Support
 
-- Issues: https://github.com/Jaureguy760/WASP2-exp/issues
-- Documentation: https://Jaureguy760.github.io/WASP2-exp/
+- Issues: https://github.com/mcvickerlab/WASP2/issues
+- Documentation: https://mcvickerlab.github.io/WASP2/

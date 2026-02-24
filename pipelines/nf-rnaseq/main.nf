@@ -3,7 +3,7 @@
 ========================================================================================
     WASP2 RNA-seq ASE Pipeline
 ========================================================================================
-    Github : https://github.com/Jaureguy760/WASP2-exp
+    Github : https://github.com/mcvickerlab/WASP2
     Docs   : https://wasp2.readthedocs.io
 
     Pipeline for RNA-seq Allele-Specific Expression (ASE) analysis using WASP2

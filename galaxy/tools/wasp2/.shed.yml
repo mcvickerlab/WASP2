@@ -4,7 +4,7 @@ description: |
     WASP2: Allele-specific analysis of next-generation sequencing data.
     High-performance tools for variant counting, mapping bias correction,
     and statistical analysis of allelic imbalance.
-homepage_url: https://github.com/Jaureguy760/WASP2-exp
+homepage_url: https://github.com/mcvickerlab/WASP2
 long_description: |
     WASP2 provides a complete pipeline for allele-specific analysis of NGS data:
 
@@ -25,7 +25,7 @@ long_description: |
 
     The package includes a Rust extension for high-performance BAM processing.
 
-remote_repository_url: https://github.com/Jaureguy760/WASP2-exp
+remote_repository_url: https://github.com/mcvickerlab/WASP2
 type: unrestricted
 categories:
     - Sequence Analysis

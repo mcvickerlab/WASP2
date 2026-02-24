@@ -3,6 +3,6 @@ on: [push, pull_request]
 
 jobs:
   ci:
-    uses: Jaureguy760/shared-workflows/.github/workflows/ci-python.yml@main
+    uses: mcvickerlab/shared-workflows/.github/workflows/ci-python.yml@main
     with:
       python-version: '3.11'

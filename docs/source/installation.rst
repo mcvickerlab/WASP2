@@ -73,7 +73,7 @@ If compilation still fails, use the Docker image which has pgenlib pre-installed
 
 .. code-block:: bash
 
-   docker pull ghcr.io/jaureguy760/wasp2-final:latest
+   docker pull ghcr.io/mcvickerlab/wasp2:latest
 
 Python Requirements
 ~~~~~~~~~~~~~~~~~~~
@@ -96,8 +96,8 @@ Development Installation
 
 .. code-block:: bash
 
-   git clone https://github.com/Jaureguy760/WASP2-final.git
-   cd WASP2-final
+   git clone https://github.com/mcvickerlab/WASP2.git
+   cd WASP2
    pip install -e ".[dev]"
 
 Conda Installation
@@ -119,29 +119,29 @@ bioinformatics tools is challenging.
 
 .. code-block:: bash
 
-   docker pull ghcr.io/jaureguy760/wasp2-final:latest
+   docker pull ghcr.io/mcvickerlab/wasp2:latest
 
 **Run WASP2 commands:**
 
 .. code-block:: bash
 
    # Run counting
-   docker run -v /path/to/data:/data ghcr.io/jaureguy760/wasp2-final:latest \
+   docker run -v /path/to/data:/data ghcr.io/mcvickerlab/wasp2:latest \
        wasp2-count count-variants /data/sample.bam /data/variants.vcf
 
    # Interactive shell
-   docker run -it -v /path/to/data:/data ghcr.io/jaureguy760/wasp2-final:latest bash
+   docker run -it -v /path/to/data:/data ghcr.io/mcvickerlab/wasp2:latest bash
 
 **Build locally (optional):**
 
 .. code-block:: bash
 
-   git clone https://github.com/Jaureguy760/WASP2-final
-   cd WASP2-final
+   git clone https://github.com/mcvickerlab/WASP2
+   cd WASP2
    docker build -t wasp2:local .
 
 For detailed Docker usage including GPU support and Singularity conversion,
-see the `Container Usage Guide <https://github.com/Jaureguy760/WASP2-final/blob/main/docs/CONTAINER_USAGE.md>`_.
+see the `Container Usage Guide <https://github.com/mcvickerlab/WASP2/blob/main/docs/CONTAINER_USAGE.md>`_.
 
 Singularity/Apptainer
 ~~~~~~~~~~~~~~~~~~~~~
@@ -151,7 +151,7 @@ For HPC environments that don't support Docker, use Singularity/Apptainer:
 .. code-block:: bash
 
    # Pull from GitHub Container Registry
-   singularity pull wasp2.sif docker://ghcr.io/jaureguy760/wasp2-final:latest
+   singularity pull wasp2.sif docker://ghcr.io/mcvickerlab/wasp2:latest
 
    # Run WASP2 commands
    singularity exec wasp2.sif wasp2-count --help

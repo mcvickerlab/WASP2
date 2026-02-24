@@ -234,7 +234,7 @@ for d in ~/wasp2-runners/*/; do (cd "$d" && ./svc.sh start); done
 
 ### View on GitHub
 
-https://github.com/Jaureguy760/WASP2-final/settings/actions/runners
+https://github.com/mcvickerlab/WASP2/settings/actions/runners
 
 ## References
 

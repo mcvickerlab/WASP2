@@ -6,7 +6,7 @@ on:
 
 jobs:
   cleanup:
-    uses: Jaureguy760/shared-workflows/.github/workflows/stale-branches.yml@main
+    uses: mcvickerlab/shared-workflows/.github/workflows/stale-branches.yml@main
     with:
       days-stale: 14
       exclude-branches: 'main,master,dev,develop'

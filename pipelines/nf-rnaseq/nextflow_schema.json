@@ -1,6 +1,6 @@
 {
     "$schema": "https://json-schema.org/draft-07/schema",
-    "$id": "https://raw.githubusercontent.com/Jaureguy760/WASP2/master/pipelines/nf-rnaseq/nextflow_schema.json",
+    "$id": "https://raw.githubusercontent.com/mcvickerlab/WASP2/master/pipelines/nf-rnaseq/nextflow_schema.json",
     "title": "wasp2-nf-rnaseq pipeline parameters",
     "description": "RNA-seq Allele-Specific Expression (ASE) pipeline with WASP2 mapping bias correction",
     "type": "object",

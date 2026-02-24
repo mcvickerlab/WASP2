@@ -1,6 +1,6 @@
 {
     "$schema": "http://json-schema.org/draft-07/schema",
-    "$id": "https://raw.githubusercontent.com/Jaureguy760/WASP2-exp/main/pipelines/nf-rnaseq/assets/samplesheet_schema.json",
+    "$id": "https://raw.githubusercontent.com/mcvickerlab/WASP2/main/pipelines/nf-rnaseq/assets/samplesheet_schema.json",
     "title": "WASP2 RNA-seq ASE Pipeline - Samplesheet Schema",
     "description": "Schema for the samplesheet used as input to the WASP2 RNA-seq ASE pipeline",
     "type": "array",

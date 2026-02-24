@@ -20,7 +20,7 @@ SANITY_DATA_DIR := tests/sanity/data
 # Sanity test data configuration
 SANITY_VERSION := v1
 SANITY_TARBALL := wasp2-sanity-chr21-$(SANITY_VERSION).tar.xz
-SANITY_RELEASE_URL := https://github.com/Jaureguy760/WASP2-final/releases/download/v1.3.0/$(SANITY_TARBALL)
+SANITY_RELEASE_URL := https://github.com/mcvickerlab/WASP2/releases/download/v1.3.0/$(SANITY_TARBALL)
 
 # Local sanity data path (for development)
 LOCAL_SANITY_DATA := /iblm/netapp/data3/jjaureguy/gvl_files/wasp2/WASP2_extensive_evaluation/WASP2_current/cvpc/WASP2-exp/benchmarking/sanity_test

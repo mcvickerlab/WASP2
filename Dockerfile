@@ -42,10 +42,10 @@ FROM python:3.11-slim-bookworm
 # Run scripts/check-version-consistency.sh to verify
 ARG VERSION=1.3.0
 
-LABEL org.opencontainers.image.source="https://github.com/Jaureguy760/WASP2-final"
+LABEL org.opencontainers.image.source="https://github.com/mcvickerlab/WASP2"
 LABEL org.opencontainers.image.description="WASP2: Allele-specific analysis of NGS data with Rust acceleration"
 LABEL org.opencontainers.image.licenses="MIT"
-LABEL org.opencontainers.image.vendor="Jaureguy760"
+LABEL org.opencontainers.image.vendor="mcvickerlab"
 LABEL org.opencontainers.image.title="WASP2"
 LABEL org.opencontainers.image.version="${VERSION}"
 LABEL maintainer="Jeff Jaureguy <jeffpjaureguy@gmail.com>"

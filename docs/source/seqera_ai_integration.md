@@ -98,7 +98,7 @@ Use Seqera AI for Nextflow-specific code:
 - Takes meta map, bam, bai, vcf as input
 - Runs wasp2-count count-variants
 - Outputs meta map and counts TSV
-- Uses container 'ghcr.io/jaureguy760/wasp2-python:latest'
+- Uses container 'ghcr.io/mcvickerlab/wasp2:latest'
 ```
 
 Example generated output:
@@ -107,7 +107,7 @@ process WASP2_COUNT {
     tag "$meta.id"
     label 'process_medium'
 
-    container 'ghcr.io/jaureguy760/wasp2-python:latest'
+    container 'ghcr.io/mcvickerlab/wasp2:latest'
 
     input:
     tuple val(meta), path(bam), path(bai), path(vcf)
@@ -163,7 +163,7 @@ docker --version || singularity --version
 nextflow run . -profile test -preview
 
 # Verify container accessibility
-docker pull ghcr.io/jaureguy760/wasp2-python:latest
+docker pull ghcr.io/mcvickerlab/wasp2:latest
 ```
 
 > **Note**: The [Anthropic life-sciences](https://github.com/anthropics/life-sciences) plugin provides additional validation scripts (`check_environment.py`, `generate_samplesheet.py`, `manage_genomes.py`) when installed. See their documentation for setup instructions.
@@ -322,7 +322,7 @@ When using AI-assisted development:
 
 - **Review all generated code** before committing - AI may introduce insecure patterns
 - **Never commit credentials** - Use Nextflow secrets or environment variables for sensitive data
-- **Pin container versions** - Avoid `latest` tags in production (`ghcr.io/jaureguy760/wasp2-python:1.3.0`)
+- **Pin container versions** - Avoid `latest` tags in production (`ghcr.io/mcvickerlab/wasp2:1.3.0`)
 - **Validate inputs** - AI-generated processes may not include proper input validation
 - **Use signed containers** - Enable container signature verification when available
 - **Audit dependencies** - Review any new dependencies suggested by AI tools
@@ -330,14 +330,14 @@ When using AI-assisted development:
 ```nextflow
 // SECURE: Pin container version, use secrets
 process SECURE_EXAMPLE {
-    container 'ghcr.io/jaureguy760/wasp2-python:1.3.0'
+    container 'ghcr.io/mcvickerlab/wasp2:1.3.0'
     secret 'API_KEY'
 
     // ...
 }
 
 // INSECURE: Avoid these patterns
-// container 'ghcr.io/jaureguy760/wasp2-python:latest'  // Unpinned
+// container 'ghcr.io/mcvickerlab/wasp2:latest'  // Unpinned
 // script: "curl ${params.api_key}"  // Exposed credential
 ```
 
@@ -351,9 +351,9 @@ process SECURE_EXAMPLE {
 
 ## Related Issues
 
-- **Parent**: [EPIC #25 - Nextflow Pipeline Ecosystem](https://github.com/Jaureguy760/WASP2-final/issues/25)
-- **Supports**: [#58 - nf-core subworkflow compliance](https://github.com/Jaureguy760/WASP2-final/issues/58)
-- **Complements**: [#95 - Anthropic life-sciences integration](https://github.com/Jaureguy760/WASP2-final/issues/95)
+- **Parent**: [EPIC #25 - Nextflow Pipeline Ecosystem](https://github.com/mcvickerlab/WASP2/issues/25)
+- **Supports**: [#58 - nf-core subworkflow compliance](https://github.com/mcvickerlab/WASP2/issues/58)
+- **Complements**: [#95 - Anthropic life-sciences integration](https://github.com/mcvickerlab/WASP2/issues/95)
 
 ---
 

@@ -1,5 +1,6 @@
-# WASP2 Development Environment
+# WASP2 Conda Environment
 # Channel order: bioconda requires conda-forge
+# Source of truth for Python deps: pyproject.toml [project.dependencies]
 name: WASP2
 channels:
   - bioconda
@@ -12,7 +13,7 @@ dependencies:
 
   # Data processing (aligned with pyproject.toml)
   - numpy>=1.21,<2.0  # <2.0 for ABI compatibility with pysam, pyarrow
-  - pandas>=2.0,<2.3
+  - pandas>=1.5,<3.0
   - polars>=0.19
   - scipy>=1.10
 
@@ -24,7 +25,8 @@ dependencies:
   - samtools>=1.10  # Required for collate -T option
   - htslib>=1.10
   - bwa>=0.7
-  - anndata>=0.10.7,<0.11
+  - anndata>=0.8,<0.12
+  - scanpy>=1.9
   - plink2
 
   # CLI

@@ -13,9 +13,9 @@ tools:
       description: |
         WASP2 is a tool for allele-specific analysis of next-generation sequencing data
         with high-performance multi-format variant support (VCF/cyvcf2/PGEN).
-      homepage: https://github.com/Jaureguy760/WASP2-exp
-      documentation: https://Jaureguy760.github.io/WASP2-exp/
-      tool_dev_url: https://github.com/Jaureguy760/WASP2-exp
+      homepage: https://github.com/mcvickerlab/WASP2
+      documentation: https://mcvickerlab.github.io/WASP2/
+      tool_dev_url: https://github.com/mcvickerlab/WASP2
       licence: ["MIT"]
 
 input:
