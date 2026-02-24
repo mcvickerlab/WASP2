@@ -6,13 +6,13 @@ name: Build
 
 on:
   push:
-    branches: [main, dev]
+    branches: [master, dev]
     paths:
       - "rust/**"
       - "pyproject.toml"
       - ".github/workflows/build.yml"
   pull_request:
-    branches: [main, dev]
+    branches: [master, dev]
     paths:
       - "rust/**"
       - "pyproject.toml"
