@@ -88,20 +88,22 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@7eb50e6e20e1e2009087999ba91242e80253875f  # v7
 
-      - name: Install maturin
-        run: uv pip install --system maturin
-
-      - name: Build Rust extension
-        run: maturin develop --release
-
-      - name: Install package with dev dependencies
-        run: uv pip install --system -e ".[dev]" --no-build-isolation
+      - name: Create virtualenv and install dependencies
+        run: |
+          uv venv .venv
+          source .venv/bin/activate
+          uv pip install maturin
+          maturin develop --release
+          uv pip install -e ".[dev]" --no-build-isolation
 
       - name: Verify Rust extension loads
-        run: python -c "import wasp2_rust; print('wasp2_rust loaded:', wasp2_rust.__file__)"
+        run: |
+          source .venv/bin/activate
+          python -c "import wasp2_rust; print('wasp2_rust loaded:', wasp2_rust.__file__)"
 
       - name: Run tests
         run: |
+          source .venv/bin/activate
           pytest tests/ -v --tb=short \
             -m "not benchmark and not sanity" \
             --ignore=tests/benchmarks \
