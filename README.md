@@ -26,8 +26,20 @@
 
 ```bash
 pip install wasp2
+```
 
-wasp2-count count-variants reads.bam variants.vcf.gz -s sample1
+WASP2 provides three pipelines that run in order:
+
+```bash
+# 1. Remap reads to correct mapping bias
+wasp2-map make-reads input.bam variants.vcf.gz -o remap_dir/
+wasp2-map filter-remapped remap_dir/ -o filtered.bam
+
+# 2. Count allele-specific reads at heterozygous SNPs
+wasp2-count count-variants filtered.bam variants.vcf.gz -s sample1
+
+# 3. Test for allelic imbalance
+wasp2-analyze find-imbalance counts.tsv -o results.tsv
 ```
 
 ## Authors
