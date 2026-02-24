@@ -1,6 +1,6 @@
 {
     "$schema": "https://json-schema.org/draft-07/schema",
-    "$id": "https://raw.githubusercontent.com/Jaureguy760/WASP2/master/pipelines/nf-atacseq/assets/schema_input.json",
+    "$id": "https://raw.githubusercontent.com/mcvickerlab/WASP2/master/pipelines/nf-atacseq/assets/schema_input.json",
     "title": "nf-atacseq samplesheet schema",
     "description": "Schema for the samplesheet input to nf-atacseq pipeline",
     "type": "array",

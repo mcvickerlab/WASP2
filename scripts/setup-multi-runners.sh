@@ -8,7 +8,7 @@
 set -eo pipefail
 
 # Configuration
-REPO="Jaureguy760/WASP2-final"
+REPO="mcvickerlab/WASP2"
 RUNNERS_BASE="${HOME}/wasp2-runners"
 
 # Runner configurations (3 specialized runners for M3 Max)

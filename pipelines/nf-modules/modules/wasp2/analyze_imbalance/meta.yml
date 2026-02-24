@@ -15,9 +15,9 @@ tools:
         The analyze_imbalance module performs beta-binomial statistical modeling to detect
         significant allelic imbalance from allele count data, using likelihood ratio tests
         to identify regions with significant deviation from expected 50:50 allele ratios.
-      homepage: https://github.com/Jaureguy760/WASP2-exp
-      documentation: https://Jaureguy760.github.io/WASP2-exp/
-      tool_dev_url: https://github.com/Jaureguy760/WASP2-exp
+      homepage: https://github.com/mcvickerlab/WASP2
+      documentation: https://mcvickerlab.github.io/WASP2/
+      tool_dev_url: https://github.com/mcvickerlab/WASP2
       licence: ["MIT"]
 
 input:

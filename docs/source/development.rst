@@ -14,7 +14,7 @@ Clone Repository
 
 .. code-block:: bash
 
-   git clone https://github.com/Jaureguy760/WASP2-exp
+   git clone https://github.com/mcvickerlab/WASP2
    cd WASP2-exp
 
 Install Development Dependencies
@@ -262,7 +262,7 @@ Tool Selection
 Getting Help
 ------------
 
-* **Issues**: https://github.com/Jaureguy760/WASP2-exp/issues
+* **Issues**: https://github.com/mcvickerlab/WASP2/issues
 * **Discussions**: GitHub Discussions
 * **Email**: Contact maintainers
 

@@ -1,6 +1,6 @@
 # WASP2 Nextflow Pipeline Ecosystem
 
-> Tracking document for [EPIC #25](https://github.com/Jaureguy760/WASP2-final/issues/25)
+> Tracking document for [EPIC #25](https://github.com/mcvickerlab/WASP2/issues/25)
 
 ## Status Matrix
 

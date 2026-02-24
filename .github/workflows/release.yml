@@ -249,7 +249,7 @@ jobs:
           # If this fails, the sanity data needs to be uploaded manually
           SANITY_TARBALL="wasp2-sanity-chr21-v1.tar.xz"
           wget -q -O "dist/${SANITY_TARBALL}" \
-            "https://github.com/Jaureguy760/WASP2-final/releases/download/v1.3.0/${SANITY_TARBALL}" \
+            "https://github.com/mcvickerlab/WASP2/releases/download/v1.3.0/${SANITY_TARBALL}" \
             || echo "Sanity tarball not found - will need manual upload"
           if [ -f "dist/${SANITY_TARBALL}" ]; then
             echo "Sanity tarball downloaded successfully"

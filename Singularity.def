@@ -5,10 +5,10 @@
 # Run scripts/check-version-consistency.sh to verify
 #
 # Build: singularity build wasp2.sif Singularity.def
-# Or pull directly: singularity pull docker://jaureguy760/wasp2:latest
+# Or pull directly: singularity pull docker://mcvickerlab/wasp2:latest
 
 Bootstrap: docker
-From: jaureguy760/wasp2:1.3.0
+From: mcvickerlab/wasp2:1.3.0
 
 %labels
     Author Jeff Jaureguy <jeffpjaureguy@gmail.com>
@@ -33,7 +33,7 @@ From: jaureguy760/wasp2:1.3.0
     Nextflow Integration:
       nextflow run main.nf -profile singularity
 
-    Documentation: https://github.com/Jaureguy760/WASP2-final
+    Documentation: https://github.com/mcvickerlab/WASP2
 
 %environment
     export LC_ALL=C

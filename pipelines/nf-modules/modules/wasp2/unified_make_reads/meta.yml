@@ -15,9 +15,9 @@ tools:
         The unified_make_reads module generates synthetic FASTQ files where reads overlapping
         heterozygous variants have their alleles swapped, enabling detection of mapping bias
         through remapping.
-      homepage: https://github.com/Jaureguy760/WASP2-exp
-      documentation: https://Jaureguy760.github.io/WASP2-exp/
-      tool_dev_url: https://github.com/Jaureguy760/WASP2-exp
+      homepage: https://github.com/mcvickerlab/WASP2
+      documentation: https://mcvickerlab.github.io/WASP2/
+      tool_dev_url: https://github.com/mcvickerlab/WASP2
       licence: ["MIT"]
 
 input:

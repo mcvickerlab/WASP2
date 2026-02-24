@@ -82,7 +82,7 @@ The self-hosted runner infrastructure is well-architected with a 2-tier health m
 #### M4: Hardcoded repository path
 **Status:** ACCEPTED (Intentional)
 **Files:** `scripts/setup-mac-runner.sh`, `scripts/setup-multi-runners.sh`
-**Risk:** `REPO="Jaureguy760/WASP2-final"` limits reusability.
+**Risk:** `REPO="mcvickerlab/WASP2"` limits reusability.
 **Rationale:** These are project-specific setup scripts. Making REPO configurable via env var would improve reusability but is low priority.
 
 ### LOW
