@@ -42,7 +42,6 @@ jobs:
             libbz2-dev \
             liblzma-dev \
             zlib1g-dev \
-            libcurl4-openssl-dev \
             libssl-dev \
             pkg-config \
             libclang-dev
