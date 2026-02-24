@@ -24,6 +24,11 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: "3.12"
+
       - name: Install uv
         uses: astral-sh/setup-uv@7eb50e6e20e1e2009087999ba91242e80253875f  # v7
 
@@ -58,7 +63,7 @@ jobs:
             libbz2-dev \
             liblzma-dev \
             zlib1g-dev \
-            libcurl4-openssl-dev \
+            libcurl-dev \
             libssl-dev \
             pkg-config \
             libclang-dev \
@@ -121,7 +126,7 @@ jobs:
             libbz2-dev \
             liblzma-dev \
             zlib1g-dev \
-            libcurl4-openssl-dev \
+            libcurl-dev \
             libssl-dev \
             pkg-config \
             libclang-dev
