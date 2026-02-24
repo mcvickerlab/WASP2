@@ -1,8 +1,0 @@
-name: Stale Issues
-on:
-  schedule:
-    - cron: '0 6 * * 1'  # Weekly on Monday at 6am UTC
-
-jobs:
-  stale:
-    uses: mcvickerlab/shared-workflows/.github/workflows/stale-issues.yml@main
