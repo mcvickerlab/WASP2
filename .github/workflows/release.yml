@@ -32,7 +32,7 @@ jobs:
   linux:
     name: Linux (${{ matrix.target }})
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     strategy:
       fail-fast: true  # All builds must succeed for release
       matrix:
@@ -40,16 +40,25 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
+      - name: Set up QEMU
+        if: matrix.target == 'aarch64'
+        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392  # v3
+
       - name: Build wheels
         uses: PyO3/maturin-action@3b5f400f9576c9934eaeed862ce6281fef121b67  # v1
         with:
           target: ${{ matrix.target }}
           args: --release --out dist -m rust/Cargo.toml
-          sccache: true
+          sccache: ${{ matrix.target == 'x86_64' }}
           manylinux: ${{ matrix.target == 'aarch64' && 'manylinux_2_28' || '2014' }}
+          docker-options: ${{ matrix.target == 'aarch64' && '--platform linux/arm64' || '' }}
           before-script-linux: |
             # Install htslib build dependencies
-            yum install -y ${{ env.HTSLIB_DEPS }}
+            if command -v yum &>/dev/null; then
+              yum install -y ${{ env.HTSLIB_DEPS }}
+            elif command -v dnf &>/dev/null; then
+              dnf install -y ${{ env.HTSLIB_DEPS }}
+            fi
 
       - name: Upload wheels
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
@@ -64,7 +73,7 @@ jobs:
   musllinux:
     name: Musllinux (${{ matrix.target }})
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     strategy:
       fail-fast: true  # All builds must succeed for release
       matrix:
@@ -72,13 +81,18 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
+      - name: Set up QEMU
+        if: matrix.target == 'aarch64'
+        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392  # v3
+
       - name: Build wheels
         uses: PyO3/maturin-action@3b5f400f9576c9934eaeed862ce6281fef121b67  # v1
         with:
           target: ${{ matrix.target }}
           args: --release --out dist -m rust/Cargo.toml
-          sccache: true
+          sccache: ${{ matrix.target == 'x86_64' }}
           manylinux: musllinux_1_2
+          docker-options: ${{ matrix.target == 'aarch64' && '--platform linux/arm64' || '' }}
           before-script-linux: |
             # Install htslib build dependencies (Alpine/musl)
             apk add --no-cache bzip2-dev xz-dev zlib-dev curl-dev openssl-dev clang-dev
