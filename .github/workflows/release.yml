@@ -44,7 +44,7 @@ jobs:
         uses: PyO3/maturin-action@3b5f400f9576c9934eaeed862ce6281fef121b67  # v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist -m rust/Cargo.toml
+          args: --release --out dist -m rust/Cargo.toml -i python3.10 python3.11 python3.12
           sccache: ${{ matrix.target == 'x86_64' }}
           manylinux: manylinux_2_28
           docker-options: ${{ matrix.target == 'aarch64' && '--platform linux/arm64' || '' }}
@@ -165,8 +165,8 @@ jobs:
           echo "Wheel count: $WHEEL_COUNT"
           echo "Sdist count: $SDIST_COUNT"
 
-          # Expected: 2 Linux + 6 macOS (3 interpreters x 2 targets) = 8 wheels minimum
-          MIN_WHEELS=8
+          # Expected: 6 Linux + 6 macOS (3 interpreters x 2 targets each) = 12 wheels minimum
+          MIN_WHEELS=12
 
           if [ "$WHEEL_COUNT" -lt "$MIN_WHEELS" ]; then
             echo "::error::Expected at least $MIN_WHEELS wheels, found $WHEEL_COUNT"
