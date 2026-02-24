@@ -9,12 +9,12 @@ This guide helps audit team members review WASP2 code for the v1.4.0 release. WA
 ## Getting Started
 
 ### 1. Accept GitHub Invitation
-Check your email for a collaborator invitation to `Jaureguy760/wasp2-final`.
+Check your email for a collaborator invitation to `mcvickerlab/WASP2`.
 
 ### 2. Clone the Repository
 ```bash
-git clone https://github.com/Jaureguy760/wasp2-final.git
-cd wasp2-final
+git clone https://github.com/mcvickerlab/WASP2.git
+cd WASP2
 ```
 
 ### 3. Set Up Your Environment

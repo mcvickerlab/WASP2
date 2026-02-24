@@ -15,9 +15,9 @@ tools:
         The filter_remapped module applies the WASP filtering algorithm to identify reads
         that map to the same location regardless of which allele they contain, then merges
         with reads that did not overlap variants.
-      homepage: https://github.com/Jaureguy760/WASP2-exp
-      documentation: https://Jaureguy760.github.io/WASP2-exp/
-      tool_dev_url: https://github.com/Jaureguy760/WASP2-exp
+      homepage: https://github.com/mcvickerlab/WASP2
+      documentation: https://mcvickerlab.github.io/WASP2/
+      tool_dev_url: https://github.com/mcvickerlab/WASP2
       licence: ["MIT"]
   - samtools:
       description: Tools for manipulating next-generation sequencing data

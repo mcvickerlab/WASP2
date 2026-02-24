@@ -10,7 +10,7 @@ pipeline reproducibility in CI. This document describes the data hosting strateg
 | Source | Purpose | URL Pattern |
 |--------|---------|-------------|
 | **GitHub Releases** (Primary) | CI testing, fast download | `releases/download/v1.3.0/wasp2-sanity-chr21-v1.tar.xz` |
-| **Zenodo** (Archival) | DOI citation, long-term preservation | `zenodo.org/records/<ID>` (pending setup — see [#246](https://github.com/Jaureguy760/WASP2-final/issues/246)) |
+| **Zenodo** (Archival) | DOI citation, long-term preservation | `zenodo.org/records/<ID>` (pending setup — see [#246](https://github.com/mcvickerlab/WASP2/issues/246)) |
 
 ### Why This Approach?
 
@@ -74,7 +74,7 @@ gh release upload v1.4.0 wasp2-sanity-chr21-v2.tar.xz
 
 ## Zenodo Setup Checklist
 
-To complete Zenodo archival (issue [#246](https://github.com/Jaureguy760/WASP2-final/issues/246)):
+To complete Zenodo archival (issue [#246](https://github.com/mcvickerlab/WASP2/issues/246)):
 
 1. [ ] Link repo at https://zenodo.org/account/settings/github (toggle ON)
 2. [ ] Upload `wasp2-sanity-chr21-v1.tar.xz` to Zenodo

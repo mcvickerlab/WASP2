@@ -229,5 +229,5 @@ If you use this pipeline, please cite:
 
 ```
 WASP2: Allele-specific analysis toolkit
-https://github.com/Jaureguy760/WASP2-exp
+https://github.com/mcvickerlab/WASP2
 ```

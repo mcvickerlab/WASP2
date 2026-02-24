@@ -13,9 +13,9 @@ tools:
         WASP2 is a tool for allele-specific analysis of next-generation sequencing data.
         The mapping module corrects for reference mapping bias by generating reads with
         swapped alleles, remapping them, and filtering reads that don't map to the same location.
-      homepage: https://github.com/Jaureguy760/WASP2-exp
-      documentation: https://Jaureguy760.github.io/WASP2-exp/
-      tool_dev_url: https://github.com/Jaureguy760/WASP2-exp
+      homepage: https://github.com/mcvickerlab/WASP2
+      documentation: https://mcvickerlab.github.io/WASP2/
+      tool_dev_url: https://github.com/mcvickerlab/WASP2
       licence: ["MIT"]
 
 components:

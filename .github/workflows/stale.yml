@@ -5,4 +5,4 @@ on:
 
 jobs:
   stale:
-    uses: Jaureguy760/shared-workflows/.github/workflows/stale-issues.yml@main
+    uses: mcvickerlab/shared-workflows/.github/workflows/stale-issues.yml@main

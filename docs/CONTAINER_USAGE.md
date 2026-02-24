@@ -8,8 +8,8 @@ WASP2 images are available from:
 
 | Registry | Image | Pull Command |
 |----------|-------|--------------|
-| **DockerHub** | `jaureguy760/wasp2-final` | `docker pull jaureguy760/wasp2-final:latest` |
-| **GitHub Container Registry** | `ghcr.io/jaureguy760/wasp2-final` | `docker pull ghcr.io/jaureguy760/wasp2-final:latest` |
+| **DockerHub** | `mcvickerlab/wasp2` | `docker pull mcvickerlab/wasp2:latest` |
+| **GitHub Container Registry** | `ghcr.io/mcvickerlab/wasp2` | `docker pull ghcr.io/mcvickerlab/wasp2:latest` |
 
 ### Available Tags
 
@@ -24,22 +24,22 @@ WASP2 images are available from:
 
 ```bash
 # Pull the image
-docker pull jaureguy760/wasp2-final:latest
+docker pull mcvickerlab/wasp2:latest
 
 # Run WASP2 commands
-docker run --rm jaureguy760/wasp2-final wasp2-count --help
-docker run --rm jaureguy760/wasp2-final wasp2-map --help
-docker run --rm jaureguy760/wasp2-final wasp2-analyze --help
+docker run --rm mcvickerlab/wasp2 wasp2-count --help
+docker run --rm mcvickerlab/wasp2 wasp2-map --help
+docker run --rm mcvickerlab/wasp2 wasp2-analyze --help
 
 # Process files (mount local directory)
-docker run --rm -v $(pwd):/data jaureguy760/wasp2-final \
+docker run --rm -v $(pwd):/data mcvickerlab/wasp2 \
     wasp2-count /data/sample.bam /data/variants.vcf.gz -o /data/counts.tsv
 ```
 
 ### Interactive Shell
 
 ```bash
-docker run -it --rm -v $(pwd):/data jaureguy760/wasp2-final /bin/bash
+docker run -it --rm -v $(pwd):/data mcvickerlab/wasp2 /bin/bash
 ```
 
 ## Singularity/Apptainer Usage (HPC)
@@ -48,18 +48,18 @@ docker run -it --rm -v $(pwd):/data jaureguy760/wasp2-final /bin/bash
 
 ```bash
 # Pull and convert to SIF
-singularity pull wasp2.sif docker://jaureguy760/wasp2-final:latest
+singularity pull wasp2.sif docker://mcvickerlab/wasp2:latest
 
 # Or from GHCR
-singularity pull wasp2.sif docker://ghcr.io/jaureguy760/wasp2-final:latest
+singularity pull wasp2.sif docker://ghcr.io/mcvickerlab/wasp2:latest
 ```
 
 ### Build from Definition File
 
 ```bash
 # Clone the repository
-git clone https://github.com/Jaureguy760/WASP2-final.git
-cd WASP2-final
+git clone https://github.com/mcvickerlab/WASP2.git
+cd WASP2
 
 # Build the container
 singularity build wasp2.sif Singularity.def
@@ -127,7 +127,7 @@ profiles {
 
 process {
     withLabel: 'wasp2' {
-        container = 'jaureguy760/wasp2-final:latest'
+        container = 'mcvickerlab/wasp2:latest'
     }
 }
 ```
@@ -148,8 +148,8 @@ nextflow run main.nf -profile singularity
 
 ```bash
 # Clone repository
-git clone https://github.com/Jaureguy760/WASP2-final.git
-cd WASP2-final
+git clone https://github.com/mcvickerlab/WASP2.git
+cd WASP2
 
 # Build image
 docker build -t wasp2:local .
@@ -171,8 +171,8 @@ docker buildx create --name wasp2builder --use
 docker buildx build \
     --platform linux/amd64 \
     --build-arg VERSION=1.3.0 \
-    -t jaureguy760/wasp2-final:1.3.0 \
-    -t jaureguy760/wasp2-final:latest \
+    -t mcvickerlab/wasp2:1.3.0 \
+    -t mcvickerlab/wasp2:latest \
     --push .
 ```
 
@@ -220,7 +220,7 @@ Each tool has subcommands for different analysis modes:
 
 ```bash
 # Run as current user
-docker run --rm -u $(id -u):$(id -g) -v $(pwd):/data jaureguy760/wasp2-final ...
+docker run --rm -u $(id -u):$(id -g) -v $(pwd):/data mcvickerlab/wasp2 ...
 ```
 
 ### Cache Issues (Singularity)
@@ -237,8 +237,8 @@ export SINGULARITY_CACHEDIR=/scratch/singularity_cache
 
 ```bash
 # Docker
-docker run --rm jaureguy760/wasp2-final wasp2-count --version
-docker run --rm jaureguy760/wasp2-final python -c "import wasp2_rust; print('Rust extension OK')"
+docker run --rm mcvickerlab/wasp2 wasp2-count --version
+docker run --rm mcvickerlab/wasp2 python -c "import wasp2_rust; print('Rust extension OK')"
 
 # Singularity
 singularity exec wasp2.sif wasp2-count --version
@@ -259,4 +259,4 @@ To enable automated container builds, repository maintainers must configure:
 
 - [Nextflow Pipelines](../pipelines/nf-atacseq/README.md)
 - [WASP2 Ecosystem](WASP2_ECOSYSTEM.md)
-- [GitHub Repository](https://github.com/Jaureguy760/WASP2-final)
+- [GitHub Repository](https://github.com/mcvickerlab/WASP2)

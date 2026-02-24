@@ -456,9 +456,9 @@ cosign verify --key cosign.pub wasp2:latest
 
 ### Files Created
 
-- `/Users/jeffjaureguy/Projects/WASP2-final/Dockerfile.optimized` - New optimized Dockerfile
-- `/Users/jeffjaureguy/Projects/WASP2-final/scripts/benchmark_docker_build.sh` - Build comparison script
-- `/Users/jeffjaureguy/Projects/WASP2-final/.dockerignore` - Updated ignore patterns
+- `/Users/jeffjaureguy/Projects/WASP2/Dockerfile.optimized` - New optimized Dockerfile
+- `/Users/jeffjaureguy/Projects/WASP2/scripts/benchmark_docker_build.sh` - Build comparison script
+- `/Users/jeffjaureguy/Projects/WASP2/.dockerignore` - Updated ignore patterns
 
 ---
 

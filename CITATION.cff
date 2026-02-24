@@ -12,13 +12,11 @@ type: software
 authors:
   - family-names: Ho
     given-names: Aaron
-    # orcid: https://orcid.org/0000-0000-0000-0000  # TODO: Replace with actual ORCID
 
   - family-names: Jaureguy
     given-names: Jeff
     email: jeffpjaureguy@gmail.com
     affiliation: "UC San Diego"
-    # orcid: https://orcid.org/0000-0000-0000-0000  # TODO: Replace with actual ORCID
 
   # Institutional author - add individual contributors to authors list above if needed
   - name: "McVicker Lab"
@@ -28,8 +26,8 @@ version: "1.3.0"
 date-released: "2025-01-01"
 license: MIT
 
-repository-code: "https://github.com/Jaureguy760/WASP2-final"
-url: "https://github.com/Jaureguy760/WASP2-final"
+repository-code: "https://github.com/mcvickerlab/WASP2"
+url: "https://github.com/mcvickerlab/WASP2"
 
 keywords:
   - bioinformatics

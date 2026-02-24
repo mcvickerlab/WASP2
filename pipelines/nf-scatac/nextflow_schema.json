@@ -1,6 +1,6 @@
 {
     "$schema": "https://json-schema.org/draft-07/schema",
-    "$id": "https://raw.githubusercontent.com/Jaureguy760/WASP2/master/pipelines/nf-scatac/nextflow_schema.json",
+    "$id": "https://raw.githubusercontent.com/mcvickerlab/WASP2/master/pipelines/nf-scatac/nextflow_schema.json",
     "title": "nf-scatac pipeline parameters",
     "description": "Single-Cell ATAC-seq Allelic Imbalance Pipeline with WASP2",
     "type": "object",
