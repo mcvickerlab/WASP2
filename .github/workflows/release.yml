@@ -21,13 +21,9 @@ on:
 permissions:
   contents: read
 
-env:
-  # Common htslib build dependencies for manylinux
-  HTSLIB_DEPS: "bzip2-devel xz-devel zlib-devel libcurl-devel openssl-devel clang-devel"
-
 jobs:
   # ===========================================================================
-  # Build Linux wheels (manylinux) - uses Docker via maturin-action
+  # Build Linux wheels (manylinux_2_28) - uses Docker via maturin-action
   # ===========================================================================
   linux:
     name: Linux (${{ matrix.target }})
@@ -50,65 +46,16 @@ jobs:
           target: ${{ matrix.target }}
           args: --release --out dist -m rust/Cargo.toml
           sccache: ${{ matrix.target == 'x86_64' }}
-          manylinux: ${{ matrix.target == 'aarch64' && 'manylinux_2_28' || '2014' }}
+          manylinux: manylinux_2_28
           docker-options: ${{ matrix.target == 'aarch64' && '--platform linux/arm64' || '' }}
           before-script-linux: |
-            # Install htslib build dependencies (detect package manager)
-            if command -v yum &>/dev/null; then
-              yum install -y ${{ env.HTSLIB_DEPS }}
-            elif command -v dnf &>/dev/null; then
-              dnf install -y ${{ env.HTSLIB_DEPS }}
-            elif command -v apt-get &>/dev/null; then
-              apt-get update && apt-get install -y libbz2-dev liblzma-dev zlib1g-dev libcurl4-openssl-dev libssl-dev libclang-dev
-            fi
+            # Install htslib build dependencies (AlmaLinux 8 / manylinux_2_28)
+            dnf install -y bzip2-devel xz-devel zlib-devel libcurl-devel openssl-devel clang-devel
 
       - name: Upload wheels
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
         with:
           name: wheels-linux-${{ matrix.target }}
-          path: dist/*.whl
-          if-no-files-found: error  # Fail if no wheels built
-
-  # ===========================================================================
-  # Build Linux wheels (musllinux for Alpine/containers) - uses Docker
-  # ===========================================================================
-  musllinux:
-    name: Musllinux (${{ matrix.target }})
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    strategy:
-      fail-fast: true  # All builds must succeed for release
-      matrix:
-        target: [x86_64, aarch64]
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-
-      - name: Set up QEMU
-        if: matrix.target == 'aarch64'
-        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392  # v3
-
-      - name: Build wheels
-        uses: PyO3/maturin-action@3b5f400f9576c9934eaeed862ce6281fef121b67  # v1
-        with:
-          target: ${{ matrix.target }}
-          args: --release --out dist -m rust/Cargo.toml
-          sccache: ${{ matrix.target == 'x86_64' }}
-          manylinux: musllinux_1_2
-          docker-options: ${{ matrix.target == 'aarch64' && '--platform linux/arm64' || '' }}
-          before-script-linux: |
-            # Install htslib build dependencies (detect package manager)
-            if command -v apk &>/dev/null; then
-              apk add --no-cache bzip2-dev xz-dev zlib-dev curl-dev openssl-dev clang-dev
-            elif command -v yum &>/dev/null; then
-              yum install -y bzip2-devel xz-devel zlib-devel libcurl-devel openssl-devel clang-devel
-            elif command -v apt-get &>/dev/null; then
-              apt-get update && apt-get install -y libbz2-dev liblzma-dev zlib1g-dev libcurl4-openssl-dev libssl-dev libclang-dev
-            fi
-
-      - name: Upload wheels
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
-        with:
-          name: wheels-musllinux-${{ matrix.target }}
           path: dist/*.whl
           if-no-files-found: error  # Fail if no wheels built
 
@@ -175,7 +122,7 @@ jobs:
   # ===========================================================================
   publish:
     name: Publish to PyPI
-    needs: [linux, musllinux, macos, sdist]
+    needs: [linux, macos, sdist]
     runs-on: ubuntu-latest  # PyPI publish action only works on Linux
     timeout-minutes: 10
     environment:
@@ -207,8 +154,8 @@ jobs:
           echo "Wheel count: $WHEEL_COUNT"
           echo "Sdist count: $SDIST_COUNT"
 
-          # Expected: 2 Linux + 2 musllinux + 6 macOS (3 interpreters × 2 targets) = 10 wheels minimum
-          MIN_WHEELS=10
+          # Expected: 2 Linux + 6 macOS (3 interpreters x 2 targets) = 8 wheels minimum
+          MIN_WHEELS=8
 
           if [ "$WHEEL_COUNT" -lt "$MIN_WHEELS" ]; then
             echo "::error::Expected at least $MIN_WHEELS wheels, found $WHEEL_COUNT"
