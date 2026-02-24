@@ -93,7 +93,7 @@ html_theme_options = {
 html_context = {
     "github_user": "mcvickerlab",
     "github_repo": "WASP2",
-    "github_version": "main",
+    "github_version": "master",
     "doc_path": "docs/source",
 }
 
