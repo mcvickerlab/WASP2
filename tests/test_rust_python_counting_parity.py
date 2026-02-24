@@ -173,9 +173,7 @@ class TestCountingParity:
         rust_results = counter.count_alleles(all_regions, min_qual=0, threads=1)
 
         rust_counts = {}
-        for (chrom, pos, _ref, _alt), (ref_c, alt_c, other_c) in zip(
-            all_regions, rust_results
-        ):
+        for (chrom, pos, _ref, _alt), (ref_c, alt_c, other_c) in zip(all_regions, rust_results):
             rust_counts[(chrom, pos)] = (ref_c, alt_c, other_c)
 
         # Compare
@@ -245,9 +243,7 @@ class TestCountingParitySanity:
         rust_results = counter.count_alleles(all_regions, min_qual=0, threads=1)
 
         rust_counts = {}
-        for (chrom, pos, _ref, _alt), (ref_c, alt_c, other_c) in zip(
-            all_regions, rust_results
-        ):
+        for (chrom, pos, _ref, _alt), (ref_c, alt_c, other_c) in zip(all_regions, rust_results):
             rust_counts[(chrom, pos)] = (ref_c, alt_c, other_c)
 
         # Compare

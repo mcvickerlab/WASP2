@@ -122,6 +122,7 @@ Issues = "https://github.com/mcvickerlab/WASP2/issues"
 [tool.maturin]
 manifest-path = "rust/Cargo.toml"
 python-source = "src"
+module-name = "wasp2_rust"
 python-packages = ["counting", "mapping", "analysis", "wasp2", "ipscore"]
 bindings = "pyo3"
 strip = true

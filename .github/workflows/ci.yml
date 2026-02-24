@@ -1,8 +1,153 @@
+# WASP2 CI workflow
+# Runs linting, Python tests (with Rust extension), and Rust tests
+# Replaces the broken shared-workflow reference
+
 name: CI
-on: [push, pull_request]
+
+on:
+  push:
+    branches: [master, dev]
+  pull_request:
+    branches: [master, dev]
+
+permissions:
+  contents: read
 
 jobs:
-  ci:
-    uses: mcvickerlab/shared-workflows/.github/workflows/ci-python.yml@main
-    with:
-      python-version: '3.11'
+  # ===========================================================================
+  # Lint Python source with ruff (fast, no Rust build needed)
+  # ===========================================================================
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@7eb50e6e20e1e2009087999ba91242e80253875f  # v7
+
+      - name: Install ruff
+        run: uv pip install --system ruff
+
+      - name: Ruff check
+        run: ruff check src/ tests/
+
+      - name: Ruff format check
+        run: ruff format --check src/ tests/
+
+  # ===========================================================================
+  # Python tests with Rust extension (matrix: Python 3.10-3.12)
+  # ===========================================================================
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libhts-dev \
+            libbz2-dev \
+            liblzma-dev \
+            zlib1g-dev \
+            libssl-dev \
+            pkg-config \
+            libclang-dev \
+            samtools \
+            bcftools
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7  # stable
+
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad  # v0.0.9
+
+      - name: Configure sccache
+        run: |
+          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@7eb50e6e20e1e2009087999ba91242e80253875f  # v7
+
+      - name: Create virtualenv and install dependencies
+        run: |
+          uv venv .venv
+          source .venv/bin/activate
+          uv pip install maturin
+          maturin develop --release
+          uv pip install -e ".[dev]" --no-build-isolation
+
+      - name: Verify Rust extension loads
+        run: |
+          source .venv/bin/activate
+          python -c "import wasp2_rust; print('wasp2_rust loaded:', wasp2_rust.__file__)"
+
+      - name: Run tests
+        run: |
+          source .venv/bin/activate
+          pytest tests/ -v --tb=short \
+            -m "not benchmark and not sanity" \
+            --ignore=tests/benchmarks \
+            --ignore=tests/sanity
+
+  # ===========================================================================
+  # Rust unit tests and clippy lints
+  # ===========================================================================
+  rust-test:
+    name: Rust Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libhts-dev \
+            libbz2-dev \
+            liblzma-dev \
+            zlib1g-dev \
+            libssl-dev \
+            pkg-config \
+            libclang-dev
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7  # stable
+        with:
+          components: clippy
+
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad  # v0.0.9
+
+      - name: Configure sccache
+        run: |
+          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+
+      - name: Run cargo test
+        working-directory: rust
+        run: cargo test
+
+      - name: Run clippy
+        working-directory: rust
+        run: cargo clippy -- -W warnings

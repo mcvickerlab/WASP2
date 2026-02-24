@@ -1794,7 +1794,21 @@ pub fn classify_variant_location(
 ) -> VariantLocation {
     // Get read's reference span from alignment
     let read_ref_start = read.pos() as u32;
-    let read_ref_end = read.reference_end() as u32;
+    // Compute reference end from CIGAR (more reliable than reference_end()
+    // which depends on bam_endpos() internal state)
+    let cigar = read.cigar();
+    let cigar_ref_len: u32 = cigar
+        .iter()
+        .map(|op| match op {
+            rust_htslib::bam::record::Cigar::Match(l)
+            | rust_htslib::bam::record::Cigar::Del(l)
+            | rust_htslib::bam::record::Cigar::RefSkip(l)
+            | rust_htslib::bam::record::Cigar::Equal(l)
+            | rust_htslib::bam::record::Cigar::Diff(l) => *l,
+            _ => 0,
+        })
+        .sum();
+    let read_ref_end = read_ref_start + cigar_ref_len;
 
     // Variant ends before read starts on reference
     if variant_end <= read_ref_start {
