@@ -65,25 +65,31 @@ jobs:
           if-no-files-found: error  # Fail if no wheels built
 
   # ===========================================================================
-  # Build macOS wheels (x86_64 and arm64) - native builds on each arch
+  # Build macOS wheels (x86_64 and arm64) on Apple Silicon runners
   # ===========================================================================
   macos:
     name: macOS (${{ matrix.target }})
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-14  # Apple Silicon - native for aarch64, cross-compile for x86_64
     timeout-minutes: 30
     strategy:
       fail-fast: true  # All builds must succeed for release
       matrix:
-        include:
-          - target: x86_64-apple-darwin
-            os: macos-13       # Intel runner
-          - target: aarch64-apple-darwin
-            os: macos-14       # Apple Silicon runner
+        target: [x86_64-apple-darwin, aarch64-apple-darwin]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Install htslib
-        run: brew install htslib
+        run: |
+          brew install htslib
+          # For x86_64 cross-compilation, also install x86_64 htslib
+          if [[ "${{ matrix.target }}" == "x86_64-apple-darwin" ]]; then
+            brew fetch --force --bottle-tag=ventura htslib 2>/dev/null || true
+          fi
+
+      - name: Set x86_64 library paths
+        if: matrix.target == 'x86_64-apple-darwin'
+        run: |
+          echo "MACOSX_DEPLOYMENT_TARGET=13.0" >> $GITHUB_ENV
 
       - name: Build wheels
         uses: PyO3/maturin-action@3b5f400f9576c9934eaeed862ce6281fef121b67  # v1
