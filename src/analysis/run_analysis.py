@@ -167,6 +167,16 @@ def run_ai_analysis(
         groupby=groupby,
     )
 
+    # Warn about params not yet forwarded to Rust backend
+    unsupported = {
+        "--phased": ai_files.phased,
+        "--region_col": ai_files.region_col is not None,
+        "--groupby": ai_files.groupby is not None,
+    }
+    for flag, active in unsupported.items():
+        if active:
+            logger.warning("%s is not yet supported by the Rust analysis backend; ignored", flag)
+
     # Run analysis pipeline (Rust only)
     if rust_analyze_imbalance is None:
         raise RuntimeError(

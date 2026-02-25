@@ -1,0 +1,72 @@
+# WASP2 - pixi environment configuration
+# Install: curl -fsSL https://pixi.sh/install.sh | bash && pixi install
+# Run: pixi run wasp2-count --help
+#
+# pixi resolves ALL dependencies (Python, Rust toolchain, htslib, samtools, etc.)
+# in a single lockfile. No system packages required.
+
+[project]
+name = "wasp2"
+version = "1.4.0"
+description = "Allele-specific analysis of next-generation sequencing data with Rust acceleration"
+channels = ["bioconda", "conda-forge"]
+platforms = ["linux-64", "linux-aarch64", "osx-arm64", "osx-64"]
+
+[dependencies]
+# Core Python
+python = ">=3.10,<3.14"
+
+# Bioinformatics tools (resolved by conda)
+samtools = ">=1.10"
+bcftools = ">=1.10"
+bedtools = ">=2.30"
+htslib = ">=1.10"
+bwa = ">=0.7"
+
+# Data processing
+numpy = ">=1.21,<2.0"
+pandas = ">=1.5,<3.0"
+polars = ">=0.19"
+scipy = ">=1.10"
+pysam = ">=0.21"
+pybedtools = ">=0.9"
+anndata = ">=0.8,<0.12"
+scanpy = ">=1.9"
+
+# CLI
+typer = ">=0.12"
+rich = ">=13.0"
+
+# Rust build toolchain
+rust = ">=1.70"
+libclang = "*"
+clang = "*"
+pkg-config = "*"
+
+[pypi-dependencies]
+wasp2 = { path = ".", editable = true }
+Pgenlib = ">=0.90"
+maturin = ">=1.6,<2.0"
+
+[feature.dev.dependencies]
+pytest = ">=7.0"
+pytest-cov = ">=4.0"
+pytest-benchmark = ">=4.0"
+mypy = ">=1.0"
+ruff = ">=0.9"
+
+[environments]
+default = { solve-group = "default" }
+dev = { features = ["dev"], solve-group = "default" }
+
+[tasks]
+# Quick verification
+verify = "wasp2-count --help && wasp2-map --help && wasp2-analyze --help && python -c 'import wasp2_rust; print(\"OK\")'"
+# Build Rust extension
+build = "maturin develop --release -m rust/Cargo.toml"
+# Run tests
+test = "pytest tests/ -v --tb=short --ignore=tests/benchmarks -m 'not benchmark'"
+# Run benchmarks
+bench = "pytest tests/benchmarks/ -v --tb=short"
+# Lint
+lint = "ruff check src/ tests/"

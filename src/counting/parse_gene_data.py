@@ -122,11 +122,11 @@ def parse_gene_file(
 
     # Parse attributes
     if attribute is None:
-        if df.get_column("attribute").str.contains(f"{feature}_id").all() is True:
+        if df.get_column("attribute").str.contains(f"{feature}_id").any():
             attribute = f"{feature}_id"
-        elif df.get_column("attribute").str.contains("ID").all() is True:
+        elif df.get_column("attribute").str.contains("ID").any():
             attribute = "ID"
-        elif df.get_column("attribute").str.contains("Name").all() is True:
+        elif df.get_column("attribute").str.contains("Name").any():
             attribute = "Name"
         else:
             # TODO return an error
@@ -140,11 +140,11 @@ def parse_gene_file(
     if parent_attribute is None:
         # Defaults to gene(possibly transcript???)
 
-        if df.get_column("attribute").str.contains("Parent").all() is True:
+        if df.get_column("attribute").str.contains("Parent").any():
             parent_attribute = "Parent"
-        elif df.get_column("attribute").str.contains("transcript_id").all() is True:
+        elif df.get_column("attribute").str.contains("transcript_id").any():
             parent_attribute = "transcript_id"
-        elif df.get_column("attribute").str.contains("gene_id").all() is True:
+        elif df.get_column("attribute").str.contains("gene_id").any():
             parent_attribute = "gene_id"
         else:
             parent_attribute = attribute

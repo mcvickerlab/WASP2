@@ -156,11 +156,10 @@ def make_reads(
     ] = 1,
 ) -> None:
     """Generate reads with swapped alleles for remapping."""
-    sample_str = samples[0] if samples else None
     run_make_remap_reads(
         bam_file=bam,
         variant_file=variants,
-        samples=sample_str,
+        samples=samples,
         out_dir=out_dir,
         temp_loc=temp_loc,
         out_json=out_json,

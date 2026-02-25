@@ -5,7 +5,6 @@ name: WASP2
 channels:
   - bioconda
   - conda-forge
-  - defaults
 
 dependencies:
   # Core Python
