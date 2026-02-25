@@ -35,11 +35,10 @@ requirements:
     - python
     - pip
     - maturin >=1.6,<2.0
-    - htslib >=1.10
+    - htslib >=1.22
     - bzip2
     - xz
     - zlib
-    - libdeflate
     - openssl  # [not osx]
     - libcurl
   run:
@@ -94,6 +93,9 @@ about:
   dev_url: https://github.com/mcvickerlab/WASP2
 
 extra:
+  additional-platforms:
+    - linux-aarch64
+    - osx-arm64
   recipe-maintainers:
     - Jaureguy760
   identifiers:

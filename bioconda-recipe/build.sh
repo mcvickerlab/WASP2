@@ -16,6 +16,8 @@ cd ..
 
 # Set LIBCLANG_PATH for bindgen (hts-sys generates FFI bindings via libclang)
 export LIBCLANG_PATH="${BUILD_PREFIX}/lib"
+# Pass conda compiler flags to bindgen's clang invocation (needed for ARM builds)
+export BINDGEN_EXTRA_CLANG_ARGS="${CPPFLAGS} ${CFLAGS}"
 
 # Set up environment for htslib linking
 export HTSLIB_DIR="${PREFIX}"
@@ -32,10 +34,15 @@ export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER="$CC"
 if [[ "$OSTYPE" == "darwin"* ]]; then
     export RUSTFLAGS="-C link-arg=-undefined -C link-arg=dynamic_lookup"
     # Force deployment target for correct wheel platform tag.
-    # The macosx_deployment_target_osx-64 conda package sets MACOSX_DEPLOYMENT_TARGET
+    # The macosx_deployment_target conda packages set MACOSX_DEPLOYMENT_TARGET
     # to the runner OS version (e.g. 26.0), but pip rejects wheels tagged higher
     # than the actual running macOS. Hardcode like snapatac2/pybigtools recipes.
-    export MACOSX_DEPLOYMENT_TARGET=10.13
+    # ARM64 macOS starts at 11.0; x86_64 uses 10.13.
+    if [[ "$(uname -m)" == "arm64" ]]; then
+        export MACOSX_DEPLOYMENT_TARGET=11.0
+    else
+        export MACOSX_DEPLOYMENT_TARGET=10.13
+    fi
 fi
 
 # Workaround for conda-provided llvm-otool crashing on Rust .so files (SIGABRT).
