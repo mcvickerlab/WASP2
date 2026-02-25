@@ -49,7 +49,7 @@ pip install wasp2
 
 Pre-built wheels are available for Linux (x86_64, aarch64) and macOS (Intel, Apple Silicon) with Python 3.10-3.13. The Rust extension and htslib are bundled — no additional dependencies required. You still need samtools, bcftools, and bedtools on your PATH.
 
-See the [documentation](https://mcvickerlab.github.io/WASP2/) for conda, Docker, and Singularity install options.
+See the [documentation](https://mcvickerlab.github.io/WASP2/) for mamba/conda, Docker, and Singularity install options.
 
 ## Quick Start
 

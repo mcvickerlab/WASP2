@@ -124,8 +124,18 @@ Development Installation
    pixi run build            # builds the Rust extension
    pixi run test             # runs the test suite
 
-Conda Installation
-~~~~~~~~~~~~~~~~~~
+Mamba/Conda Installation
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+`mamba <https://mamba.readthedocs.io>`_ is the recommended conda-compatible installer
+(much faster solver). Install it via `miniforge <https://github.com/conda-forge/miniforge>`_.
+
+.. code-block:: bash
+
+   mamba env create -f environment.yml
+   mamba activate wasp2
+
+Or with conda:
 
 .. code-block:: bash
 
