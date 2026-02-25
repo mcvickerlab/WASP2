@@ -6,6 +6,9 @@
   <a href="https://pypi.org/project/wasp2/">
     <img src="https://img.shields.io/pypi/v/wasp2" alt="PyPI">
   </a>
+  <a href="https://bioconda.github.io/recipes/wasp2/README.html">
+    <img src="https://img.shields.io/conda/vn/bioconda/wasp2" alt="Bioconda">
+  </a>
   <a href="https://github.com/mcvickerlab/WASP2/actions/workflows/ci.yml">
     <img src="https://github.com/mcvickerlab/WASP2/actions/workflows/ci.yml/badge.svg" alt="CI">
   </a>
@@ -27,29 +30,32 @@
 
 ## Installation
 
-### Recommended: pixi (one command, all dependencies)
+### Recommended: Bioconda
 
 ```bash
-# Install pixi if you don't have it
-curl -fsSL https://pixi.sh/install.sh | bash
-
-# Clone and install
-git clone https://github.com/mcvickerlab/WASP2.git
-cd WASP2
-pixi install
+mamba install -c conda-forge -c bioconda wasp2
 ```
 
-This resolves Python, Rust, samtools, bcftools, bedtools, and htslib automatically. No system packages required.
+Installs WASP2 and all dependencies (samtools, bcftools, bedtools, htslib) automatically. Available for Linux (x86_64, aarch64) and macOS (Intel, Apple Silicon). Requires [miniforge](https://github.com/conda-forge/miniforge).
 
-### Via PyPI (pre-built wheels)
+### Via PyPI
 
 ```bash
 pip install wasp2
 ```
 
-Pre-built wheels are available for Linux (x86_64, aarch64) and macOS (Intel, Apple Silicon) with Python 3.10-3.13. The Rust extension and htslib are bundled — no additional dependencies required. You still need samtools, bcftools, and bedtools on your PATH.
+Pre-built wheels for Linux (x86_64, aarch64) and macOS (Intel, Apple Silicon) with Python 3.10-3.13. The Rust extension and htslib are bundled in the wheel. Requires samtools, bcftools, and bedtools installed separately.
 
-See the [documentation](https://mcvickerlab.github.io/WASP2/) for mamba/conda, Docker, and Singularity install options.
+### For development
+
+```bash
+git clone https://github.com/mcvickerlab/WASP2.git
+cd WASP2
+pixi install        # resolves all dependencies including Rust toolchain
+pixi run verify     # build + test
+```
+
+See the [documentation](https://mcvickerlab.github.io/WASP2/) for Docker and Singularity install options.
 
 ## Quick Start
 
