@@ -188,12 +188,11 @@ def count_variants(
         ),
     ] = False,
 ) -> None:
-    sample_str = samples[0] if samples else None
     run_count_variants(
         bam_file=bam,
         variant_file=variants,
         region_file=region_file,
-        samples=sample_str,
+        samples=samples,
         use_region_names=use_region_names,
         out_file=out_file,
         temp_loc=temp_loc,
@@ -272,13 +271,12 @@ def count_variants_sc(
         ),
     ] = None,
 ) -> None:
-    sample_str = samples[0] if samples else None
     run_count_variants_sc(
         bam_file=bam,
         variant_file=variants,
         barcode_file=barcodes,
         feature_file=feature_file,
-        samples=sample_str,
+        samples=samples,
         out_file=out_file,
         temp_loc=temp_loc,
     )
