@@ -162,12 +162,20 @@ def opt_unphased_dp(
     :param phase_n: Array of total counts for subsequent positions
     :return: Negative log-likelihood value
     """
-    # Get likelihood of first pos
-    first_ll = opt_prob(prob, disp, first_ref[0], first_n[0])
+    # Split per-variant dispersion for first vs subsequent positions (linear model)
+    if isinstance(disp, np.ndarray) and disp.ndim > 0 and len(disp) > 1:
+        first_disp = disp[0]
+        phase_disp = disp[1:]
+    else:
+        first_disp = disp
+        phase_disp = disp
 
-    # Get likelihood witth regard to phasing of first pos
-    phase1_like = opt_prob(prob, disp, phase_ref, phase_n, log=False)
-    phase2_like = opt_prob(1 - prob, disp, phase_ref, phase_n, log=False)
+    # Get likelihood of first pos
+    first_ll = opt_prob(prob, first_disp, first_ref[0], first_n[0])
+
+    # Get likelihood with regard to phasing of first pos
+    phase1_like = opt_prob(prob, phase_disp, phase_ref, phase_n, log=False)
+    phase2_like = opt_prob(1 - prob, phase_disp, phase_ref, phase_n, log=False)
 
     prev_like: float = 1.0
     # phase1_like and phase2_like are arrays when phase_ref/phase_n are arrays

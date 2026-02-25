@@ -67,10 +67,16 @@ class WaspDataFiles:
             suffix = variant_path.suffix.lower()
             if suffix in (".vcf", ".bcf") or str(variant_path).lower().endswith(".vcf.gz"):
                 with VariantFile(str(self.variant_file), "r") as vcf:
-                    vcf_samps = next(vcf.fetch()).samples
-                    samps_phased = [vcf_samps[s].phased for s in self.samples]
+                    n_phased = 0
+                    n_checked = 0
+                    for rec in vcf.fetch():
+                        n_checked += 1
+                        if all(rec.samples[s].phased for s in self.samples):
+                            n_phased += 1
+                        if n_checked >= 100:
+                            break
 
-                    if all(samps_phased):
+                    if n_checked > 0 and n_phased > n_checked // 2:
                         self.is_phased = True
                     else:
                         # TODO GOTTA WARN UNPHASED BAD

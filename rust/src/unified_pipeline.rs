@@ -1691,12 +1691,10 @@ pub fn unified_make_reads_parallel(
         return unified_make_reads(bam_path, bed_path, r1_path, r2_path, config);
     }
 
-    // If keep_no_flip_names_path is set, fall back to sequential
+    // Fall back to sequential when name-list output paths are set
     // (parallel version would need thread-safe file writing)
-    if config.keep_no_flip_names_path.is_some() {
-        eprintln!(
-            "keep_no_flip_names_path set, using sequential processing for thread-safe writes"
-        );
+    if config.keep_no_flip_names_path.is_some() || config.remap_names_path.is_some() {
+        eprintln!("Name-list output requested, falling back to sequential processing");
         return unified_make_reads(bam_path, bed_path, r1_path, r2_path, config);
     }
 

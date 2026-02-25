@@ -313,9 +313,8 @@ pub fn filter_bam_wasp(
         }
     }
 
-    // Remove reads with missing counts
+    // Remove reads with missing counts (tracked separately from moved reads)
     let missing_count = remaining.len() as u64;
-    removed_moved += missing_count;
     if missing_count > 0 {
         for name in remaining.keys() {
             keep_set.remove(name);

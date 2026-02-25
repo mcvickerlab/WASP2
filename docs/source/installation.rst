@@ -84,12 +84,34 @@ Python Requirements
 Installation
 ------------
 
-Via PyPI (Recommended)
+Via pixi (Recommended)
 ~~~~~~~~~~~~~~~~~~~~~~
+
+`pixi <https://pixi.sh>`_ resolves **all** dependencies — Python, Rust toolchain,
+samtools, bcftools, bedtools, and htslib — in a single command. No system packages required.
+
+.. code-block:: bash
+
+   # Install pixi (one-time)
+   curl -fsSL https://pixi.sh/install.sh | bash
+
+   # Clone and install WASP2
+   git clone https://github.com/mcvickerlab/WASP2.git
+   cd WASP2
+   pixi install
+
+   # Verify
+   pixi run verify
+
+Via PyPI
+~~~~~~~~
 
 .. code-block:: bash
 
    pip install wasp2
+
+Pre-built wheels include the Rust extension and htslib. You still need
+samtools, bcftools, and bedtools on your PATH (see System Dependencies above).
 
 Development Installation
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -98,10 +120,22 @@ Development Installation
 
    git clone https://github.com/mcvickerlab/WASP2.git
    cd WASP2
-   pip install -e ".[dev]"
+   pixi install              # or: pip install -e ".[dev]"
+   pixi run build            # builds the Rust extension
+   pixi run test             # runs the test suite
 
-Conda Installation
-~~~~~~~~~~~~~~~~~~
+Mamba/Conda Installation
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+`mamba <https://mamba.readthedocs.io>`_ is the recommended conda-compatible installer
+(much faster solver). Install it via `miniforge <https://github.com/conda-forge/miniforge>`_.
+
+.. code-block:: bash
+
+   mamba env create -f environment.yml
+   mamba activate wasp2
+
+Or with conda:
 
 .. code-block:: bash
 

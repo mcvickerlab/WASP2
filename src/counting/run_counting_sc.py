@@ -124,6 +124,7 @@ class WaspCountSC:
 
         else:
             self.intersect_file = self.vcf_bed
+            self.is_gene_file = False
 
         # TODO UPDATE THIS WHEN I ADD AUTOPARSERS
         if self.is_gene_file:

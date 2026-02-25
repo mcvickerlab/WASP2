@@ -162,7 +162,7 @@ def process_adata_inputs(
 
     # Check phasing if True or None
     if phased is not False:
-        if {"0|1", "1|0"} == set(adata.obs[sample].unique()):
+        if {"0|1", "1|0"}.issubset(set(adata.obs[sample].unique())):
             phased = True
         else:
             phased = False
