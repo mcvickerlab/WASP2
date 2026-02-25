@@ -220,7 +220,6 @@ def find_imbalance_sc(
         ),
     ] = None,
 ) -> None:
-    groups_value = groups[0] if groups else None
     run_ai_analysis_sc(
         count_file=counts,
         bc_map=bc_map,
@@ -228,7 +227,7 @@ def find_imbalance_sc(
         pseudocount=pseudocount,
         phase=phased,
         sample=sample,
-        groups=groups_value,
+        groups=groups,
         out_file=out_file,
         z_cutoff=z_cutoff,
     )
@@ -312,7 +311,6 @@ def compare_imbalance(
         ),
     ] = None,
 ) -> None:
-    groups_value = groups[0] if groups else None
     run_ai_comparison(
         count_file=counts,
         bc_map=bc_map,
@@ -320,7 +318,7 @@ def compare_imbalance(
         pseudocount=pseudocount,
         phase=phased,
         sample=sample,
-        groups=groups_value,
+        groups=groups,
         out_file=out_file,
         z_cutoff=z_cutoff,
     )

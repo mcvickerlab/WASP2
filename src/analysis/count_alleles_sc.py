@@ -184,7 +184,7 @@ def make_count_df_sc(bam_file, df, bc_series):
     logger.info("Counted all SNPs in %.2f seconds", total_end - total_start)
 
     if skip_chrom:
-        df = df.loc[not df["chrom"].isin(skip_chrom)]
+        df = df.loc[~df["chrom"].isin(skip_chrom)]
 
     df[cols] = np.array(count_list, dtype=np.int32)
     df = df.astype(dict.fromkeys(cols, "Sparse[int]"))

@@ -116,7 +116,7 @@ def make_count_df(bam_file, df):
     logger.info("Counted all SNPs in %.2f seconds", total_end - total_start)
 
     if skip_chrom:
-        df = df.loc[not df["chrom"].isin(skip_chrom)]
+        df = df.loc[~df["chrom"].isin(skip_chrom)]
 
     df[["ref_count", "alt_count", "other_count"]] = count_list
     return df

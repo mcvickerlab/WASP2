@@ -122,12 +122,19 @@ fn vcf_to_bed_vcf_plain(
 // ============================================================================
 
 fn vcf_to_bed_vcf_gz(vcf_path: &Path, bed_path: &Path, config: &VcfToBedConfig) -> Result<usize> {
-    let file = File::open(vcf_path).context("Failed to open VCF.gz file")?;
+    // Try BGZF first (standard for indexed VCF), fall back to standard gzip
+    vcf_to_bed_vcf_bgzf(vcf_path, bed_path, config).or_else(|_| {
+        let file = File::open(vcf_path).context("Failed to open VCF.gz file for gzip fallback")?;
+        let decoder = flate2::read::GzDecoder::new(file);
+        let buf_reader = BufReader::with_capacity(1024 * 1024, decoder);
+        vcf_to_bed_from_reader(buf_reader, bed_path, config)
+    })
+}
 
-    // Try BGZF first (standard for indexed VCF)
+fn vcf_to_bed_vcf_bgzf(vcf_path: &Path, bed_path: &Path, config: &VcfToBedConfig) -> Result<usize> {
+    let file = File::open(vcf_path).context("Failed to open VCF.gz file")?;
     let reader = bgzf::Reader::new(file);
     let buf_reader = BufReader::with_capacity(1024 * 1024, reader);
-
     vcf_to_bed_from_reader(buf_reader, bed_path, config)
 }
 
@@ -359,7 +366,8 @@ fn get_genotype_indices(
         _ => return Ok((vec![], false)),
     };
 
-    // Convert value to string using Debug and parse manually
+    // Convert value to string via Debug format and extract genotype
+    // Note: noodles Value doesn't implement Display; Debug gives e.g. String("0|1")
     let gt_string = format!("{:?}", gt_value);
     let gt_clean = extract_genotype_string(&gt_string);
 

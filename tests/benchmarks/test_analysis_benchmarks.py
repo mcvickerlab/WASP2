@@ -86,8 +86,8 @@ class TestOptimizationBenchmarks:
         ref_counts = rng.integers(5, 50, size=n)
         n_array = rng.integers(20, 100, size=n)
 
-        result = benchmark(opt_prob, 0.1, ref_counts, n_array)
-        assert isinstance(result, float)
+        result = benchmark(opt_prob, 0.1, 0.05, ref_counts, n_array)
+        assert isinstance(result, float | np.floating | np.ndarray)
 
 
 class TestModelBenchmarks:

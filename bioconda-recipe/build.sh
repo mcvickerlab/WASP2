@@ -12,7 +12,8 @@ export PATH="${CARGO_HOME}/bin:${PATH}"
 cargo-bundle-licenses \
     --format yaml \
     --output THIRDPARTY.yml \
-    --manifest-path rust/Cargo.toml
+    --manifest-path rust/Cargo.toml \
+    --locked
 
 # Set up environment for htslib linking
 export HTSLIB_DIR="${PREFIX}"
@@ -31,6 +32,7 @@ fi
 maturin build \
     --release \
     --strip \
+    --locked \
     --interpreter "${PYTHON}" \
     -m rust/Cargo.toml
 
