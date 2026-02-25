@@ -138,19 +138,19 @@ def make_count_matrix(
     sparse_ref = csr_matrix(
         (list(sc_counts.ref_count.values()), list(zip(*sc_counts.ref_count.keys()))),
         shape=(snp_df.shape[0], len(bc_dict)),
-        dtype=np.uint8,
+        dtype=np.uint16,
     )
 
     sparse_alt = csr_matrix(
         (list(sc_counts.alt_count.values()), list(zip(*sc_counts.alt_count.keys()))),
         shape=(snp_df.shape[0], len(bc_dict)),
-        dtype=np.uint8,
+        dtype=np.uint16,
     )
 
     sparse_other = csr_matrix(
         (list(sc_counts.other_count.values()), list(zip(*sc_counts.other_count.keys()))),
         shape=(snp_df.shape[0], len(bc_dict)),
-        dtype=np.uint8,
+        dtype=np.uint16,
     )
 
     # Create anndata With total as X

@@ -363,6 +363,9 @@ pub fn single_model(variants: Vec<VariantCounts>) -> Result<Vec<ImbalanceResult>
 
     let mut results = results?;
 
+    // Sort by region name for deterministic output across runs
+    results.sort_by(|a, b| a.region.cmp(&b.region));
+
     // Step 4: FDR correction
     let pvals: Vec<f64> = results.iter().map(|r| r.pval).collect();
     let fdr_pvals = fdr_correction(&pvals);
