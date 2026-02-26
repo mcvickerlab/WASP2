@@ -21,10 +21,7 @@ nextflow_workflow {
                     file('test.bam'),
                     file('test.bam.bai')
                 ])
-                input[1] = Channel.of([
-                    [ id:'reference' ],
-                    file('reference.fa')
-                ])
+                input[1] = Channel.of(file('reference.fa'))
                 """
             }
         }
@@ -51,10 +48,7 @@ nextflow_workflow {
                     file('test.cram'),
                     file('test.cram.crai')
                 ])
-                input[1] = Channel.of([
-                    [ id:'reference' ],
-                    file('reference.fa')
-                ])
+                input[1] = Channel.of(file('reference.fa'))
                 """
             }
         }

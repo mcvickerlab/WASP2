@@ -1,0 +1,120 @@
+{
+    "stub_with_peaks": {
+        "content": [
+            {
+                "0": [
+                    [
+                        {
+                            "id": "test_with_peaks",
+                            "sample": "NA12878"
+                        },
+                        "test_with_peaks_allele_counts.h5ad:md5,4f1916a85d08e826a7cfa5dd852c9b51"
+                    ]
+                ],
+                "1": [
+                    [
+                        {
+                            "id": "test_with_peaks",
+                            "sample": "NA12878"
+                        },
+                        "test_with_peaks_stats.tsv:md5,5c501a413384541b98cd0e39214c0334"
+                    ]
+                ],
+                "2": [
+                    "versions.yml:md5,a84cb5b6165e1ba538108a3902062694"
+                ],
+                "counts": [
+                    [
+                        {
+                            "id": "test_with_peaks",
+                            "sample": "NA12878"
+                        },
+                        "test_with_peaks_allele_counts.h5ad:md5,4f1916a85d08e826a7cfa5dd852c9b51"
+                    ]
+                ],
+                "stats": [
+                    [
+                        {
+                            "id": "test_with_peaks",
+                            "sample": "NA12878"
+                        },
+                        "test_with_peaks_stats.tsv:md5,5c501a413384541b98cd0e39214c0334"
+                    ]
+                ],
+                "versions": [
+                    "versions.yml:md5,a84cb5b6165e1ba538108a3902062694"
+                ]
+            }
+        ],
+        "meta": {
+            "nf-test": "0.9.2",
+            "nextflow": "25.10.4"
+        },
+        "timestamp": "2026-02-25T23:33:37.838574"
+    },
+    "versions_stub": {
+        "content": [
+            [
+                "versions.yml:md5,a84cb5b6165e1ba538108a3902062694"
+            ]
+        ],
+        "meta": {
+            "nf-test": "0.9.2",
+            "nextflow": "25.10.4"
+        },
+        "timestamp": "2026-02-25T22:57:57.168617"
+    },
+    "stub_with_barcodes": {
+        "content": [
+            {
+                "0": [
+                    [
+                        {
+                            "id": "test_with_barcodes",
+                            "sample": "NA12878"
+                        },
+                        "test_with_barcodes_allele_counts.h5ad:md5,4f1916a85d08e826a7cfa5dd852c9b51"
+                    ]
+                ],
+                "1": [
+                    [
+                        {
+                            "id": "test_with_barcodes",
+                            "sample": "NA12878"
+                        },
+                        "test_with_barcodes_stats.tsv:md5,5c501a413384541b98cd0e39214c0334"
+                    ]
+                ],
+                "2": [
+                    "versions.yml:md5,a84cb5b6165e1ba538108a3902062694"
+                ],
+                "counts": [
+                    [
+                        {
+                            "id": "test_with_barcodes",
+                            "sample": "NA12878"
+                        },
+                        "test_with_barcodes_allele_counts.h5ad:md5,4f1916a85d08e826a7cfa5dd852c9b51"
+                    ]
+                ],
+                "stats": [
+                    [
+                        {
+                            "id": "test_with_barcodes",
+                            "sample": "NA12878"
+                        },
+                        "test_with_barcodes_stats.tsv:md5,5c501a413384541b98cd0e39214c0334"
+                    ]
+                ],
+                "versions": [
+                    "versions.yml:md5,a84cb5b6165e1ba538108a3902062694"
+                ]
+            }
+        ],
+        "meta": {
+            "nf-test": "0.9.2",
+            "nextflow": "25.10.4"
+        },
+        "timestamp": "2026-02-25T23:33:28.574452"
+    }
+}

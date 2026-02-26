@@ -2,13 +2,13 @@
     "versions_stub": {
         "content": [
             [
-                "versions.yml:md5,52e99caff856834e37a6fd861b539f90"
+                "versions.yml:md5,9e661de293dac590ae92aba3e7efaf54"
             ]
         ],
         "meta": {
             "nf-test": "0.9.2",
             "nextflow": "25.10.4"
         },
-        "timestamp": "2026-02-25T21:03:47.348861"
+        "timestamp": "2026-02-25T21:05:59.981465"
     }
 }

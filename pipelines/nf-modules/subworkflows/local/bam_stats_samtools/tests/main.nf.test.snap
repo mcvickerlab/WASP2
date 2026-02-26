@@ -1,0 +1,152 @@
+{
+    "Should handle CRAM input - stub": {
+        "content": [
+            {
+                "0": [
+                    [
+                        {
+                            "id": "cram_sample",
+                            "single_end": false
+                        },
+                        "cram_sample.stats:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "1": [
+                    [
+                        {
+                            "id": "cram_sample",
+                            "single_end": false
+                        },
+                        "cram_sample.flagstat:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "2": [
+                    [
+                        {
+                            "id": "cram_sample",
+                            "single_end": false
+                        },
+                        "cram_sample.idxstats:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "3": [
+                    "versions.yml:md5,174de362af016e115684b607c8f6ab15",
+                    "versions.yml:md5,b10c7b2ce0b2243e652a3ceff1173860",
+                    "versions.yml:md5,d81ce8c66d3249885123156678e675b4"
+                ],
+                "flagstat": [
+                    [
+                        {
+                            "id": "cram_sample",
+                            "single_end": false
+                        },
+                        "cram_sample.flagstat:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "idxstats": [
+                    [
+                        {
+                            "id": "cram_sample",
+                            "single_end": false
+                        },
+                        "cram_sample.idxstats:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "stats": [
+                    [
+                        {
+                            "id": "cram_sample",
+                            "single_end": false
+                        },
+                        "cram_sample.stats:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "versions": [
+                    "versions.yml:md5,174de362af016e115684b607c8f6ab15",
+                    "versions.yml:md5,b10c7b2ce0b2243e652a3ceff1173860",
+                    "versions.yml:md5,d81ce8c66d3249885123156678e675b4"
+                ]
+            }
+        ],
+        "meta": {
+            "nf-test": "0.9.2",
+            "nextflow": "25.10.4"
+        },
+        "timestamp": "2026-02-25T23:07:03.432121"
+    },
+    "Should generate BAM statistics - stub": {
+        "content": [
+            {
+                "0": [
+                    [
+                        {
+                            "id": "test_sample",
+                            "single_end": false
+                        },
+                        "test_sample.stats:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "1": [
+                    [
+                        {
+                            "id": "test_sample",
+                            "single_end": false
+                        },
+                        "test_sample.flagstat:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "2": [
+                    [
+                        {
+                            "id": "test_sample",
+                            "single_end": false
+                        },
+                        "test_sample.idxstats:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "3": [
+                    "versions.yml:md5,174de362af016e115684b607c8f6ab15",
+                    "versions.yml:md5,b10c7b2ce0b2243e652a3ceff1173860",
+                    "versions.yml:md5,d81ce8c66d3249885123156678e675b4"
+                ],
+                "flagstat": [
+                    [
+                        {
+                            "id": "test_sample",
+                            "single_end": false
+                        },
+                        "test_sample.flagstat:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "idxstats": [
+                    [
+                        {
+                            "id": "test_sample",
+                            "single_end": false
+                        },
+                        "test_sample.idxstats:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "stats": [
+                    [
+                        {
+                            "id": "test_sample",
+                            "single_end": false
+                        },
+                        "test_sample.stats:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "versions": [
+                    "versions.yml:md5,174de362af016e115684b607c8f6ab15",
+                    "versions.yml:md5,b10c7b2ce0b2243e652a3ceff1173860",
+                    "versions.yml:md5,d81ce8c66d3249885123156678e675b4"
+                ]
+            }
+        ],
+        "meta": {
+            "nf-test": "0.9.2",
+            "nextflow": "25.10.4"
+        },
+        "timestamp": "2026-02-25T23:06:52.993105"
+    }
+}

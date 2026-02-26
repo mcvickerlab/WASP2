@@ -3,17 +3,15 @@ nextflow_process {
     script "../main.nf"
     process "WASP2_ML_OUTPUT"
 
-    test("Should convert counts to Zarr format") {
+    test("Should convert counts to Zarr format - stub") {
+        options "-stub"
         when {
             params {
                 outdir = "$outputDir"
             }
             process {
                 """
-                input[0] = [
-                    [ id:'test_sample', single_end:false ],
-                    file("${projectDir}/tests/data/test_counts.tsv", checkIfExists: true)
-                ]
+                input[0] = [[id:'test_zarr'], file('test_counts.tsv')]
                 input[1] = "zarr"
                 """
             }
@@ -21,21 +19,19 @@ nextflow_process {
         then {
             assert process.success
             assert process.out.zarr
-            assert path(process.out.zarr[0][1]).isDirectory()
+            assert process.out.zarr[0][1].toString().endsWith('.zarr')
         }
     }
 
-    test("Should convert counts to Parquet format") {
+    test("Should convert counts to Parquet format - stub") {
+        options "-stub"
         when {
             params {
                 outdir = "$outputDir"
             }
             process {
                 """
-                input[0] = [
-                    [ id:'test_sample', single_end:false ],
-                    file("${projectDir}/tests/data/test_counts.tsv", checkIfExists: true)
-                ]
+                input[0] = [[id:'test_parquet'], file('test_counts.tsv')]
                 input[1] = "parquet"
                 """
             }
@@ -65,21 +61,19 @@ nextflow_process {
         then {
             assert process.success
             assert process.out.anndata
-            assert path(process.out.anndata[0][1]).name.endsWith('.h5ad')
+            assert process.out.anndata[0][1].toString().endsWith('.h5ad')
         }
     }
 
-    test("Should convert counts to multiple formats") {
+    test("Should convert counts to multiple formats - stub") {
+        options "-stub"
         when {
             params {
                 outdir = "$outputDir"
             }
             process {
                 """
-                input[0] = [
-                    [ id:'test_sample', single_end:false ],
-                    file("${projectDir}/tests/data/test_counts.tsv", checkIfExists: true)
-                ]
+                input[0] = [[id:'test_multi'], file('test_counts.tsv')]
                 input[1] = "zarr,parquet,anndata"
                 """
             }

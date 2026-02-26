@@ -1,0 +1,4 @@
+chrom	pos	ref	alt	ref_count	alt_count	other_count
+chr1	100	A	G	15	12	0
+chr1	400	T	C	8	10	1
+chr2	100	A	T	20	18	0

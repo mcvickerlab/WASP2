@@ -72,7 +72,7 @@ nextflow_process {
                 ]
                 input[2] = [
                     [ id:'test' ],
-                    file("${projectDir}/tests/data/minimal.bam")
+                    file("${projectDir}/tests/data/minimal_keep.bam")
                 ]
                 input[3] = [
                     [ id:'test' ],
