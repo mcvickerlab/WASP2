@@ -43,18 +43,21 @@ Pre-built wheels include the Rust extension and bundled htslib for Linux
 Via Docker
 ----------
 
-WASP2 is available as a Docker image with all dependencies pre-installed.
+WASP2 is available as a multi-platform Docker image (linux/amd64 + linux/arm64)
+with all dependencies pre-installed:
 
 .. code-block:: bash
 
-   docker pull ghcr.io/mcvickerlab/wasp2:latest
+   docker pull ghcr.io/mcvickerlab/wasp2:1.4.0
 
    # Run a command
-   docker run -v /path/to/data:/data ghcr.io/mcvickerlab/wasp2:latest \
+   docker run --rm -v /path/to/data:/data ghcr.io/mcvickerlab/wasp2:1.4.0 \
        wasp2-count count-variants /data/sample.bam /data/variants.vcf
 
    # Interactive shell
-   docker run -it -v /path/to/data:/data ghcr.io/mcvickerlab/wasp2:latest bash
+   docker run -it --rm -v /path/to/data:/data ghcr.io/mcvickerlab/wasp2:1.4.0 bash
+
+The image includes samtools, bcftools, bedtools, and the Rust-accelerated backend.
 
 Via Singularity/Apptainer
 -------------------------
@@ -63,7 +66,7 @@ For HPC environments that don't support Docker:
 
 .. code-block:: bash
 
-   singularity pull wasp2.sif docker://ghcr.io/mcvickerlab/wasp2:latest
+   singularity pull wasp2.sif docker://ghcr.io/mcvickerlab/wasp2:1.4.0
    singularity exec wasp2.sif wasp2-count --help
 
 Development Installation
