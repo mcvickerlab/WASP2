@@ -1,10 +1,28 @@
+# syntax=docker/dockerfile:1
 # WASP2 Multi-stage Dockerfile
 # Builds Rust extension and packages for Nextflow DSL2 modules
+# Uses cargo-chef for Rust dependency caching and BuildKit cache mounts
 
 # ============================================================================
-# Stage 1: Build Rust extension
+# Stage 1: Install cargo-chef
 # ============================================================================
-FROM rust:1.87-bookworm AS rust-builder
+FROM rust:1.88-bookworm AS chef
+RUN cargo install cargo-chef
+WORKDIR /build
+
+# ============================================================================
+# Stage 2: Plan — generate dependency recipe (only depends on Cargo.toml/lock)
+# ============================================================================
+FROM chef AS planner
+WORKDIR /build/rust
+COPY rust/Cargo.toml rust/Cargo.lock ./
+COPY rust/src/ src/
+RUN cargo chef prepare --recipe-path /build/recipe.json
+
+# ============================================================================
+# Stage 3: Cook + Build — compile deps (cached), then compile source
+# ============================================================================
+FROM chef AS rust-builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -19,10 +37,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     cmake \
     && rm -rf /var/lib/apt/lists/*
 
-# Install maturin
-RUN pip3 install --break-system-packages --no-cache-dir maturin>=1.4
+# Install maturin (before source copy so this layer is cached)
+RUN pip3 install --break-system-packages --no-cache-dir "maturin>=1.4"
 
-# Copy source files needed for maturin build
+# Cook dependencies — this layer only rebuilds when Cargo.toml/lock changes
+WORKDIR /build/rust
+COPY --from=planner /build/recipe.json /build/recipe.json
+COPY rust/Cargo.toml rust/Cargo.lock ./
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/build/rust/target \
+    cargo chef cook --release --recipe-path /build/recipe.json
+
+# Copy full source and build wheel
 WORKDIR /build
 COPY rust/ rust/
 COPY src/ src/
@@ -30,11 +57,13 @@ COPY pyproject.toml .
 COPY README.md .
 COPY LICENSE .
 
-# Build wheels
-RUN maturin build --release -m rust/Cargo.toml -o /wheels
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/build/rust/target \
+    maturin build --release -m rust/Cargo.toml -o /wheels
 
 # ============================================================================
-# Stage 2: Runtime image
+# Stage 4: Runtime image
 # ============================================================================
 FROM python:3.11-slim-bookworm
 
@@ -50,14 +79,15 @@ LABEL org.opencontainers.image.title="WASP2"
 LABEL org.opencontainers.image.version="${VERSION}"
 LABEL maintainer="Jeff Jaureguy <jeffpjaureguy@gmail.com>"
 
-# Install runtime dependencies + temporary build deps for pybedtools (C++ extension)
+# Install runtime deps + temporary build deps for pybedtools C++ extension
+# Combined into one RUN to minimize layers; build tools purged at the end
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # Bioinformatics tools
     samtools \
     bcftools \
     bedtools \
     tabix \
-    # For htslib
+    # htslib runtime libs
     libhts3 \
     libbz2-1.0 \
     liblzma5 \
@@ -65,17 +95,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libcurl4 \
     # Procps for ps command (Nextflow needs it)
     procps \
-    # Build tools needed to compile pybedtools C++ extension
+    # Temporary: build tools for pybedtools C++ extension
     g++ \
     zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy wheel from builder and install
+# Copy wheel from builder and install, then purge build tools in same layer
 COPY --from=rust-builder /wheels/*.whl /tmp/
-RUN pip install --no-cache-dir /tmp/*.whl && rm -rf /tmp/*.whl
-
-# Remove build tools to reduce image size
-RUN apt-get purge -y --auto-remove g++ zlib1g-dev && rm -rf /var/lib/apt/lists/*
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install /tmp/*.whl \
+    && rm -rf /tmp/*.whl \
+    && apt-get purge -y --auto-remove g++ zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 

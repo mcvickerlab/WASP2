@@ -12,8 +12,9 @@ doc
 *.md
 !README.md
 
-# Tests
+# Tests (keep shared_data for container smoke test)
 tests
+!tests/shared_data/
 .pytest_cache
 .nf-test
 .coverage
@@ -75,6 +76,9 @@ secrets*
 Jenkinsfile
 Makefile
 
+# Scripts (keep smoke test for container validation)
+!scripts/container_smoke_test.sh
+
 # Container definitions (prevent recursion)
 Dockerfile*
 docker-compose*
@@ -88,7 +92,7 @@ Singularity*
 galaxy
 bioconda-recipe
 
-# Large data files
+# Large data files (allow tests/shared_data/ for smoke test)
 *.bam
 *.bai
 *.vcf
@@ -98,3 +102,12 @@ bioconda-recipe
 *.fastq.gz
 *.fasta
 *.fa
+!tests/shared_data/*.bam
+!tests/shared_data/*.bam.bai
+!tests/shared_data/*.vcf
+!tests/shared_data/*.vcf.gz
+!tests/shared_data/*.vcf.gz.tbi
+!tests/shared_data/*.bed
+!tests/shared_data/*.fa
+!tests/shared_data/*.fa.fai
+!tests/shared_data/*.gtf
