@@ -55,7 +55,23 @@ pixi install        # resolves all dependencies including Rust toolchain
 pixi run verify     # build + test
 ```
 
-See the [documentation](https://mcvickerlab.github.io/WASP2/) for Docker and Singularity install options.
+### Via Docker
+
+```bash
+docker pull ghcr.io/mcvickerlab/wasp2:1.4.0
+docker run --rm -v $PWD:/data ghcr.io/mcvickerlab/wasp2:1.4.0 wasp2-count --help
+```
+
+Multi-platform image (linux/amd64 + linux/arm64) with all dependencies included.
+
+### Via Singularity/Apptainer (HPC)
+
+```bash
+singularity pull wasp2.sif docker://ghcr.io/mcvickerlab/wasp2:1.4.0
+singularity exec wasp2.sif wasp2-count --help
+```
+
+See the [documentation](https://mcvickerlab.github.io/WASP2/) for detailed install options and development setup.
 
 ## Quick Start
 
