@@ -1,15 +1,15 @@
 nextflow_process {
 
-    name "Test Process WASP2_UNIFIED_MAKE_READS"
+    name "Test Process WASP2_MAP_MAKE_READS"
     script "../main.nf"
-    process "WASP2_UNIFIED_MAKE_READS"
+    process "WASP2_MAP_MAKE_READS"
 
     tag "modules"
     tag "modules_nfcore"
     tag "wasp2"
-    tag "wasp2/unified_make_reads"
+    tag "wasp2/map"
 
-    test("wasp2_unified_make_reads - paired_end - real") {
+    test("wasp2_map_make_reads - paired_end - real") {
 
         when {
             process {
@@ -31,16 +31,17 @@ nextflow_process {
         then {
             assertAll(
                 { assert process.success },
-                { assert process.out.remap_fastq.size() == 1 },
+                { assert process.out.fastq.size() == 1 },
                 { assert process.out.to_remap_bam.size() == 1 },
                 { assert process.out.keep_bam.size() == 1 },
                 { assert process.out.wasp_json.size() == 1 },
+                { assert file(process.out.wasp_json[0][1]).text.contains("bam_file") },
                 { assert process.out.versions.size() == 1 }
             )
         }
     }
 
-    test("wasp2_unified_make_reads - paired_end - stub") {
+    test("wasp2_map_make_reads - paired_end - stub") {
 
         options "-stub"
 
@@ -65,7 +66,7 @@ nextflow_process {
             assertAll(
                 { assert process.success },
                 { assert snapshot(process.out.versions).match("versions_stub") },
-                { assert process.out.remap_fastq.size() == 1 },
+                { assert process.out.fastq.size() == 1 },
                 { assert process.out.to_remap_bam.size() == 1 },
                 { assert process.out.keep_bam.size() == 1 },
                 { assert process.out.wasp_json.size() == 1 }

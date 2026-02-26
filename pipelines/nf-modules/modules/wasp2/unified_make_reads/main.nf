@@ -37,11 +37,43 @@ process WASP2_UNIFIED_MAKE_READS {
         --threads ${threads} \\
         ${args}
 
-    # Rename outputs to standardized names with prefix
-    for suffix in remap_r1.fq.gz remap_r2.fq.gz to_remap.bam keep.bam; do
-        for f in *_\${suffix} \${suffix}; do
-            [ -f "\$f" ] && mv "\$f" ${prefix}_\${suffix} && break
+    # Rename R1 FASTQ (may be uncompressed .fq or compressed .fq.gz)
+    r1_found=false
+    for f in *_swapped_alleles_r1.fq.gz; do
+        [ -f "\$f" ] && mv "\$f" ${prefix}_remap_r1.fq.gz && r1_found=true && break
+    done
+    if [ "\$r1_found" = "false" ]; then
+        for f in *_swapped_alleles_r1.fq; do
+            [ -f "\$f" ] && gzip -c "\$f" > ${prefix}_remap_r1.fq.gz && r1_found=true && break
         done
+    fi
+
+    # Rename R2 FASTQ
+    r2_found=false
+    for f in *_swapped_alleles_r2.fq.gz; do
+        [ -f "\$f" ] && mv "\$f" ${prefix}_remap_r2.fq.gz && r2_found=true && break
+    done
+    if [ "\$r2_found" = "false" ]; then
+        for f in *_swapped_alleles_r2.fq; do
+            [ -f "\$f" ] && gzip -c "\$f" > ${prefix}_remap_r2.fq.gz && r2_found=true && break
+        done
+    fi
+
+    # Rename to_remap and keep BAMs
+    for f in *_to_remap.bam; do
+        [ -f "\$f" ] && [ "\$f" != "${prefix}_to_remap.bam" ] && mv "\$f" ${prefix}_to_remap.bam && break
+    done
+    for f in *_keep.bam; do
+        [ -f "\$f" ] && [ "\$f" != "${prefix}_keep.bam" ] && mv "\$f" ${prefix}_keep.bam && break
+    done
+
+    # Validate outputs
+    for expected in ${prefix}_remap_r1.fq.gz ${prefix}_remap_r2.fq.gz ${prefix}_to_remap.bam ${prefix}_keep.bam ${prefix}_wasp_data.json; do
+        if [ ! -f "\$expected" ]; then
+            echo "ERROR: Expected output \$expected not found" >&2
+            ls -la >&2
+            exit 1
+        fi
     done
 
     cat <<-END_VERSIONS > versions.yml

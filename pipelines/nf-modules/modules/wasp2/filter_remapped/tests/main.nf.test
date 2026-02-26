@@ -9,6 +9,41 @@ nextflow_process {
     tag "wasp2"
     tag "wasp2/filter_remapped"
 
+    test("wasp2_filter_remapped - real") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id:'test_real' ],
+                    file("${projectDir}/tests/data/minimal_remap.bam"),
+                    file("${projectDir}/tests/data/minimal_remap.bam.bai")
+                ]
+                input[1] = [
+                    [ id:'test_real' ],
+                    file("${projectDir}/tests/data/minimal.bam")
+                ]
+                input[2] = [
+                    [ id:'test_real' ],
+                    file("${projectDir}/tests/data/minimal_keep.bam")
+                ]
+                input[3] = [
+                    [ id:'test_real' ],
+                    file("${projectDir}/tests/data/sample.wasp_data.json")
+                ]
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert process.success },
+                { assert process.out.bam.size() == 1 },
+                { assert process.out.versions.size() == 1 }
+            )
+        }
+    }
+
     test("wasp2_filter_remapped - stub") {
 
         options "-stub"

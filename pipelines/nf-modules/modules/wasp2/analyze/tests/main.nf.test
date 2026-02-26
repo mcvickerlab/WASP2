@@ -34,6 +34,30 @@ nextflow_process {
         }
     }
 
+    test("wasp2_analyze - counts - real") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id:'test_real', phased:false ],
+                    file("${projectDir}/tests/data/sample.counts_real.tsv")
+                ]
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert process.success },
+                { assert process.out.stats.size() == 1 },
+                { assert path(process.out.stats[0][1]).text.contains("pval") },
+                { assert path(process.out.stats[0][1]).readLines().size() >= 2 },
+                { assert process.out.versions.size() == 1 }
+            )
+        }
+    }
+
     test("wasp2_analyze - phased - stub") {
 
         options "-stub"
