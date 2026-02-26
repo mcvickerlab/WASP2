@@ -120,14 +120,21 @@ workflow RNASEQ_ASE {
             }
 
             // FASTQ file existence validation
-            def fq1 = file(row.fastq_1)
+            // Resolve paths: handle ${projectDir} in samplesheets and relative paths
+            def resolve_path = { p ->
+                p = p.replace('${projectDir}', projectDir.toString())
+                def f = file(p)
+                if (!f.exists() && !p.startsWith('/')) { f = file("${projectDir}/${p}") }
+                return f
+            }
+            def fq1 = resolve_path(row.fastq_1)
             if (!fq1.exists()) {
                 exit 1, "ERROR: fastq_1 file not found for sample '${row.sample}': ${row.fastq_1}"
             }
 
             def fq2 = null
             if (row.fastq_2 && row.fastq_2.trim() != '') {
-                fq2 = file(row.fastq_2)
+                fq2 = resolve_path(row.fastq_2)
                 if (!fq2.exists()) {
                     exit 1, "ERROR: fastq_2 file not found for sample '${row.sample}': ${row.fastq_2}"
                 }

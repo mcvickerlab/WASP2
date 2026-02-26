@@ -1,0 +1,57 @@
+{
+    "Should filter remapped reads using WASP algorithm - stub": {
+        "content": [
+            {
+                "0": [
+                    [
+                        {
+                            "id": "test_sample",
+                            "single_end": false
+                        },
+                        "test_sample_wasp_filt.bam:md5,d41d8cd98f00b204e9800998ecf8427e",
+                        "test_sample_wasp_filt.bam.bai:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "1": [
+                    [
+                        {
+                            "id": "test_sample",
+                            "single_end": false
+                        },
+                        "test_sample.filter_stats.txt:md5,f50b84b1db4b83ba62ec1deacc69c260"
+                    ]
+                ],
+                "2": [
+                    "versions.yml:md5,82333efbfbf22e9ad32ea133b89054df"
+                ],
+                "bam": [
+                    [
+                        {
+                            "id": "test_sample",
+                            "single_end": false
+                        },
+                        "test_sample_wasp_filt.bam:md5,d41d8cd98f00b204e9800998ecf8427e",
+                        "test_sample_wasp_filt.bam.bai:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "stats": [
+                    [
+                        {
+                            "id": "test_sample",
+                            "single_end": false
+                        },
+                        "test_sample.filter_stats.txt:md5,f50b84b1db4b83ba62ec1deacc69c260"
+                    ]
+                ],
+                "versions": [
+                    "versions.yml:md5,82333efbfbf22e9ad32ea133b89054df"
+                ]
+            }
+        ],
+        "meta": {
+            "nf-test": "0.9.2",
+            "nextflow": "25.10.4"
+        },
+        "timestamp": "2026-02-26T01:35:09.281646"
+    }
+}

@@ -34,8 +34,8 @@ process SCATAC_COUNT_ALLELES {
     script:
     def prefix = task.ext.prefix ?: "${meta.id}"
     def min_frags = params.min_fragments_per_cell ?: 1000
-    def filter_barcodes = barcodes.name != 'NO_FILE' ? "true" : "false"
-    def filter_peaks = peaks.name != 'NO_FILE' ? "true" : "false"
+    def filter_barcodes = !barcodes.name.startsWith('NO_FILE') ? "true" : "false"
+    def filter_peaks = !peaks.name.startsWith('NO_FILE') ? "true" : "false"
     """
     set -euo pipefail
 

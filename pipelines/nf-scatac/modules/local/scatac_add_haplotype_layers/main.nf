@@ -204,13 +204,15 @@ import pandas as pd
 from scipy import sparse
 import anndata as ad
 
+np.random.seed(42)  # Deterministic stub for reproducible snapshots
+
 # Create stub AnnData with all layers
 n_cells, n_snps = 10, 50
-X = sparse.random(n_cells, n_snps, density=0.3, format='csr')
-ref = sparse.random(n_cells, n_snps, density=0.3, format='csr')
-alt = sparse.random(n_cells, n_snps, density=0.3, format='csr')
-hap1 = sparse.random(n_cells, n_snps, density=0.3, format='csr')
-hap2 = sparse.random(n_cells, n_snps, density=0.3, format='csr')
+X = sparse.random(n_cells, n_snps, density=0.3, format='csr', random_state=42)
+ref = sparse.random(n_cells, n_snps, density=0.3, format='csr', random_state=43)
+alt = sparse.random(n_cells, n_snps, density=0.3, format='csr', random_state=44)
+hap1 = sparse.random(n_cells, n_snps, density=0.3, format='csr', random_state=45)
+hap2 = sparse.random(n_cells, n_snps, density=0.3, format='csr', random_state=46)
 
 obs = pd.DataFrame({
     'n_snps': np.random.randint(10, 50, n_cells),

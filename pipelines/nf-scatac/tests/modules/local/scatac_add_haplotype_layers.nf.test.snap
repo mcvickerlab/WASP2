@@ -1,0 +1,136 @@
+{
+    "Should create Zarr output when requested - stub": {
+        "content": [
+            {
+                "0": [
+                    [
+                        {
+                            "id": "test_sample_zarr",
+                            "sample": "NA12878"
+                        },
+                        "test_sample_zarr_with_haplotypes.h5ad:md5,b34c64162950ae3c08da330cd084c121"
+                    ]
+                ],
+                "1": [
+                    [
+                        {
+                            "id": "test_sample_zarr",
+                            "sample": "NA12878"
+                        },
+                        [
+                            ".zgroup:md5,d41d8cd98f00b204e9800998ecf8427e"
+                        ]
+                    ]
+                ],
+                "2": [
+                    [
+                        {
+                            "id": "test_sample_zarr",
+                            "sample": "NA12878"
+                        },
+                        "test_sample_zarr_cell_qc.tsv:md5,11808b9810ad7df25a6608522380e3ac"
+                    ]
+                ],
+                "3": [
+                    "versions.yml:md5,dafabcc9d061ee3605b56f3039505442"
+                ],
+                "anndata": [
+                    [
+                        {
+                            "id": "test_sample_zarr",
+                            "sample": "NA12878"
+                        },
+                        "test_sample_zarr_with_haplotypes.h5ad:md5,b34c64162950ae3c08da330cd084c121"
+                    ]
+                ],
+                "cell_qc": [
+                    [
+                        {
+                            "id": "test_sample_zarr",
+                            "sample": "NA12878"
+                        },
+                        "test_sample_zarr_cell_qc.tsv:md5,11808b9810ad7df25a6608522380e3ac"
+                    ]
+                ],
+                "versions": [
+                    "versions.yml:md5,dafabcc9d061ee3605b56f3039505442"
+                ],
+                "zarr": [
+                    [
+                        {
+                            "id": "test_sample_zarr",
+                            "sample": "NA12878"
+                        },
+                        [
+                            ".zgroup:md5,d41d8cd98f00b204e9800998ecf8427e"
+                        ]
+                    ]
+                ]
+            }
+        ],
+        "meta": {
+            "nf-test": "0.9.2",
+            "nextflow": "25.10.4"
+        },
+        "timestamp": "2026-02-26T01:04:25.567276"
+    },
+    "Should add haplotype layers to AnnData - stub": {
+        "content": [
+            {
+                "0": [
+                    [
+                        {
+                            "id": "test_sample",
+                            "sample": "NA12878"
+                        },
+                        "test_sample_with_haplotypes.h5ad:md5,b34c64162950ae3c08da330cd084c121"
+                    ]
+                ],
+                "1": [
+                    
+                ],
+                "2": [
+                    [
+                        {
+                            "id": "test_sample",
+                            "sample": "NA12878"
+                        },
+                        "test_sample_cell_qc.tsv:md5,11808b9810ad7df25a6608522380e3ac"
+                    ]
+                ],
+                "3": [
+                    "versions.yml:md5,dafabcc9d061ee3605b56f3039505442"
+                ],
+                "anndata": [
+                    [
+                        {
+                            "id": "test_sample",
+                            "sample": "NA12878"
+                        },
+                        "test_sample_with_haplotypes.h5ad:md5,b34c64162950ae3c08da330cd084c121"
+                    ]
+                ],
+                "cell_qc": [
+                    [
+                        {
+                            "id": "test_sample",
+                            "sample": "NA12878"
+                        },
+                        "test_sample_cell_qc.tsv:md5,11808b9810ad7df25a6608522380e3ac"
+                    ]
+                ],
+                "versions": [
+                    "versions.yml:md5,dafabcc9d061ee3605b56f3039505442"
+                ],
+                "zarr": [
+                    
+                ]
+            }
+        ],
+        "meta": {
+            "nf-test": "0.9.2",
+            "nextflow": "25.10.4"
+        },
+        "timestamp": "2026-02-26T01:04:13.494977"
+    }
+}

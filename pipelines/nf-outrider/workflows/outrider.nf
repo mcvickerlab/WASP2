@@ -52,8 +52,8 @@ workflow OUTRIDER {
     //
     // Prepare reference files
     //
-    ch_vcf = params.vcf ? Channel.fromPath(params.vcf, checkIfExists: true).collect() : Channel.empty()
-    ch_gtf = params.gtf ? Channel.fromPath(params.gtf, checkIfExists: true).collect() : Channel.empty()
+    ch_vcf = params.vcf ? Channel.fromPath(params.vcf, checkIfExists: true) : Channel.empty()
+    ch_gtf = params.gtf ? Channel.fromPath(params.gtf, checkIfExists: true) : Channel.empty()
 
     // Validate required inputs
     if (!params.vcf) {
@@ -165,12 +165,13 @@ workflow OUTRIDER {
     }
 
     emit:
-    counts      = ch_counts                                    // channel: [ val(meta), path(counts) ]
-    gene_counts = ch_gene_counts                               // channel: [ val(meta), path(gene_counts) ]
-    outliers    = ch_outliers                                  // channel: path(outliers.tsv)
-    mae_results = params.skip_mae ? Channel.empty() : ch_mae_results // channel: [ val(meta), path(mae_results) ]
-    ml_zarr     = ch_ml_zarr                                   // channel: [ val(meta), path(*.zarr) ]
-    ml_parquet  = ch_ml_parquet                                // channel: [ val(meta), path(*.parquet) ]
-    ml_anndata  = ch_ml_anndata                                // channel: [ val(meta), path(*.h5ad) ]
-    versions    = ch_versions                                  // channel: path(versions.yml)
+    counts         = ch_counts                                    // channel: [ val(meta), path(counts) ]
+    gene_counts    = ch_gene_counts                               // channel: [ val(meta), path(gene_counts) ]
+    outliers       = ch_outliers                                  // channel: path(outliers.tsv)
+    mae_results    = params.skip_mae ? Channel.empty() : ch_mae_results // channel: [ val(meta), path(mae_results) ]
+    multiqc_report = Channel.empty()                              // channel: placeholder (MultiQC not yet implemented)
+    ml_zarr        = ch_ml_zarr                                   // channel: [ val(meta), path(*.zarr) ]
+    ml_parquet     = ch_ml_parquet                                // channel: [ val(meta), path(*.parquet) ]
+    ml_anndata     = ch_ml_anndata                                // channel: [ val(meta), path(*.h5ad) ]
+    versions       = ch_versions                                  // channel: path(versions.yml)
 }

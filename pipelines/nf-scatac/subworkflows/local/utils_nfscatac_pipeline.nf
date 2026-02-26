@@ -44,8 +44,8 @@ workflow PIPELINE_INITIALISATION {
             ]
 
             // Resolve fragments file path (optional when BAM is provided)
-            def fragments = file('NO_FILE')
-            def fragments_tbi = file('NO_FILE')
+            def fragments = file('NO_FILE_FRAGS')
+            def fragments_tbi = file('NO_FILE_FRAGS_TBI')
             if (row.fragments) {
                 fragments = file(row.fragments, checkIfExists: true)
                 fragments_tbi = file("${fragments}.tbi", checkIfExists: true)
@@ -58,8 +58,8 @@ workflow PIPELINE_INITIALISATION {
             }
 
             // Optional: BAM file for true allele-specific counting
-            def bam = file('NO_FILE')
-            def bai = file('NO_FILE')
+            def bam = file('NO_FILE_BAM')
+            def bai = file('NO_FILE_BAI')
             if (row.bam && row.bam.trim()) {
                 bam = file(row.bam, checkIfExists: true)
                 // Try common BAI naming conventions: .bam.bai and .bai
@@ -83,12 +83,12 @@ workflow PIPELINE_INITIALISATION {
             // Optional: cell barcode whitelist file
             def barcodes = row.barcodes && row.barcodes.trim()
                 ? file(row.barcodes, checkIfExists: true)
-                : file('NO_FILE')
+                : file('NO_FILE_BARCODES')
 
             // Optional: peak BED file for restricting analysis to peak regions
             def peaks = row.peaks && row.peaks.trim()
                 ? file(row.peaks, checkIfExists: true)
-                : file('NO_FILE')
+                : file('NO_FILE_PEAKS')
 
             [ meta, fragments, fragments_tbi, barcodes, peaks, bam, bai ]
         }

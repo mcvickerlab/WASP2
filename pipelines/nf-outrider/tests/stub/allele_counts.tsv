@@ -1,0 +1,4 @@
+chrom	pos	gene_id	ref_count	alt_count
+chr1	100000	GENE001	50	45
+chr1	200000	GENE002	30	28
+chr2	150000	GENE003	100	5

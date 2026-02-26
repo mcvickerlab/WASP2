@@ -114,17 +114,31 @@ def validateSamplesheetRow(row) {
     meta.id = row.sample
     meta.sample = row.sample
 
+    // Resolve paths: handle ${projectDir} in samplesheets and relative paths
+    def resolve_path = { p ->
+        p = p.replace('${projectDir}', projectDir.toString())
+        def f = file(p)
+        if (!f.exists() && !p.startsWith('/')) { f = file("${projectDir}/${p}") }
+        return f
+    }
+
     // Validate BAM file exists
-    def bam = file(row.bam, checkIfExists: true)
+    def bam = resolve_path(row.bam)
+    if (!bam.exists()) {
+        error "ERROR: BAM file not found for ${row.sample}: ${row.bam}"
+    }
 
     // Find BAM index
     def bai = null
-    if (row.bai) {
-        bai = file(row.bai, checkIfExists: true)
+    if (row.bai && row.bai.trim() != '') {
+        bai = resolve_path(row.bai)
+        if (!bai.exists()) {
+            error "ERROR: BAI file not found for ${row.sample}: ${row.bai}"
+        }
     } else {
         // Auto-detect BAI
-        def bai_path = "${row.bam}.bai"
-        def alt_bai_path = row.bam.toString().replaceAll(/\.bam$/, '.bai')
+        def bai_path = "${bam}.bai"
+        def alt_bai_path = bam.toString().replaceAll(/\.bam$/, '.bai')
         if (file(bai_path).exists()) {
             bai = file(bai_path)
         } else if (file(alt_bai_path).exists()) {

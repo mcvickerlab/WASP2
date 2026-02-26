@@ -55,6 +55,16 @@ workflow PIPELINE_INITIALISATION {
     //
     // Parse samplesheet
     //
+    // Resolve paths: handle ${projectDir} references and relative paths
+    def resolve_path = { p ->
+        p = p.replace('${projectDir}', projectDir.toString())
+        def f = file(p)
+        if (!f.exists() && !p.startsWith('/') && !p.startsWith('http')) {
+            f = file("${projectDir}/${p}")
+        }
+        return f
+    }
+
     ch_samplesheet = Channel.fromPath(input_file, checkIfExists: true)
         .splitCsv(header: true, sep: ',')
         .map { row ->
@@ -64,9 +74,18 @@ workflow PIPELINE_INITIALISATION {
             meta.single_end  = row.single_end ? row.single_end.toBoolean() : false
             meta.sample_name = row.sample_name ?: null
 
-            // Check FASTQ files exist
-            def fastq_1 = file(row.fastq_1, checkIfExists: true)
-            def fastq_2 = row.fastq_2 ? file(row.fastq_2, checkIfExists: true) : null
+            // Check FASTQ files exist (resolve relative paths against projectDir)
+            def fastq_1 = resolve_path(row.fastq_1)
+            if (!fastq_1.exists()) {
+                error "ERROR: FASTQ file not found for sample '${meta.id}': ${row.fastq_1}"
+            }
+            def fastq_2 = null
+            if (row.fastq_2 && row.fastq_2.trim() != '') {
+                fastq_2 = resolve_path(row.fastq_2)
+                if (!fastq_2.exists()) {
+                    error "ERROR: FASTQ_2 file not found for sample '${meta.id}': ${row.fastq_2}"
+                }
+            }
 
             // Return tuple
             if (meta.single_end) {
