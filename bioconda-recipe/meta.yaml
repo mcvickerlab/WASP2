@@ -13,18 +13,20 @@ source:
 
 build:
   number: 0
-  skip: true  # [win or py < 310]
+  skip: true  # [win or py < 311 or py > 312]
   run_exports:
     - {{ pin_subpackage('wasp2', max_pin="x") }}
 
 requirements:
   build:
     - {{ compiler('c') }}
+    - {{ compiler('cxx') }}
     - {{ compiler('rust') }}
     - cargo-bundle-licenses
     - pkg-config
+    - cmake
     - make
-    - clang
+    - clangdev
     - python                              # [build_platform != target_platform]
     - cross-python_{{ target_platform }}  # [build_platform != target_platform]
     - crossenv                            # [build_platform != target_platform]
@@ -33,15 +35,14 @@ requirements:
     - python
     - pip
     - maturin >=1.6,<2.0
-    - htslib >=1.10
+    - htslib >=1.22
     - bzip2
     - xz
     - zlib
-    - libdeflate
     - openssl  # [not osx]
     - libcurl
   run:
-    - python >=3.10
+    - python >=3.11,<3.13.0a0
     # Data processing
     - numpy >=1.21.0
     - pandas >=1.5.0,<3.0.0
@@ -92,10 +93,10 @@ about:
   dev_url: https://github.com/mcvickerlab/WASP2
 
 extra:
+  additional-platforms:
+    - linux-aarch64
+    - osx-arm64
   recipe-maintainers:
     - Jaureguy760
   identifiers:
     - biotools:wasp2
-  additional-platforms:
-    - linux-aarch64
-    - osx-arm64
