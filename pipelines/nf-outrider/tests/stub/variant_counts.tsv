@@ -1,0 +1,4 @@
+chrom	pos	ref_count	alt_count	other_count
+chr1	100000	50	45	0
+chr1	200000	30	28	0
+chr2	150000	100	5	0

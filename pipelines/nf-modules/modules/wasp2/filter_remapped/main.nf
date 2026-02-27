@@ -27,11 +27,11 @@ process WASP2_FILTER_REMAPPED {
     def threads = task.cpus ?: 4
     """
     # Filter remapped reads using WASP algorithm
+    # Note: use positional args for BAMs, not --json (which overrides positional args)
     wasp2-map filter-remapped \\
         ${remapped_bam} \\
         ${to_remap_bam} \\
         ${keep_bam} \\
-        --json ${wasp_json} \\
         --out_bam ${prefix}_remapped_filt.bam \\
         --threads ${threads} \\
         --use-rust \\

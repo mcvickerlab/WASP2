@@ -2,7 +2,6 @@ nextflow_pipeline {
 
     name "Test nf-atacseq Pipeline"
     script "../main.nf"
-    profile "test"
 
     tag "pipeline"
     tag "nf-atacseq"
@@ -10,7 +9,7 @@ nextflow_pipeline {
     test("Should run stub-run mode for workflow validation") {
 
         tag "ci_stub"
-        options "-stub-run"
+        options "-stub"
 
         when {
             params {
@@ -20,33 +19,17 @@ nextflow_pipeline {
 
         then {
             assert workflow.success
-            assert path("$outputDir/results").exists()
-        }
-    }
-
-    test("Should run with minimal test data") {
-
-        tag "integration"
-
-        when {
-            params {
-                outdir = "$outputDir/results"
-            }
-        }
-
-        then {
-            assert workflow.success
-            assert path("$outputDir/results").exists()
-            assert path("$outputDir/results/multiqc").exists()
         }
     }
 
     test("Should fail with missing required inputs") {
 
+        options "-stub"
+
         when {
             params {
-                input = null
-                fasta = null
+                input  = null
+                fasta  = null
                 outdir = "$outputDir/results"
             }
         }

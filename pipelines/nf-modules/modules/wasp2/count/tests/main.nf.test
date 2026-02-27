@@ -41,6 +41,38 @@ nextflow_process {
         }
     }
 
+    test("wasp2_count - bam + vcf - real") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id:'test_real', sample:'sample1' ],
+                    file("${projectDir}/tests/data/minimal.bam"),
+                    file("${projectDir}/tests/data/minimal.bam.bai")
+                ]
+                input[1] = [
+                    [ id:'test_vcf' ],
+                    file("${projectDir}/tests/data/sample.vcf.gz"),
+                    file("${projectDir}/tests/data/sample.vcf.gz.tbi")
+                ]
+                input[2] = []
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert process.success },
+                { assert process.out.counts.size() == 1 },
+                { assert path(process.out.counts[0][1]).text.contains("ref_count") },
+                { assert path(process.out.counts[0][1]).text.contains("alt_count") },
+                { assert path(process.out.counts[0][1]).readLines().size() >= 4 },
+                { assert process.out.versions.size() == 1 }
+            )
+        }
+    }
+
     test("wasp2_count - bam + vcf + regions - stub") {
 
         options "-stub"

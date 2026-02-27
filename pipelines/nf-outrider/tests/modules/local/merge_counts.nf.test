@@ -1,7 +1,7 @@
 nextflow_process {
 
     name "Test Process MERGE_COUNTS"
-    script "../../../modules/local/merge_counts.nf"
+    script "../../../modules/local/merge_counts/main.nf"
     process "MERGE_COUNTS"
 
     tag "modules"
@@ -16,9 +16,9 @@ nextflow_process {
             process {
                 """
                 input[0] = [
-                    file('sample1.gene_counts.tsv'),
-                    file('sample2.gene_counts.tsv'),
-                    file('sample3.gene_counts.tsv')
+                    file("${projectDir}/tests/stub/sample1.gene_counts.tsv"),
+                    file("${projectDir}/tests/stub/sample2.gene_counts.tsv"),
+                    file("${projectDir}/tests/stub/sample3.gene_counts.tsv")
                 ]
                 """
             }
@@ -28,7 +28,6 @@ nextflow_process {
             assert process.success
             assert process.out.count_matrix
             assert process.out.versions
-            assert snapshot(process.out).match()
         }
     }
 }

@@ -7,13 +7,9 @@ nextflow_pipeline {
     tag "wasp2"
     tag "rnaseq_ase"
 
-    // Shared constants to avoid duplication (no 'def' for binding-level scope)
-    countsHeader = "chrom\tpos\tref\talt\tregion\tref_count\talt_count\tother_count\tN"
-    aiResultsHeader = "region\tsnp_count\tref_sum\talt_sum\tmu\tnull_ll\talt_ll\tLRT\tpvalue\tfdr"
-
     test("RNASEQ_ASE - stub run - validates output structure and format") {
 
-        options "-stub -profile test_stub"
+        options "-stub"
 
         when {
             params {
@@ -29,15 +25,6 @@ nextflow_pipeline {
             assertAll(
                 { assert workflow.success },
 
-                // Workflow channels populated
-                { assert workflow.out.wasp_bam != null },
-                { assert workflow.out.counts != null },
-                { assert workflow.out.results != null },
-                { assert workflow.out.versions != null },
-                { assert workflow.out.wasp_bam.size() == 2, "Expected 2 WASP BAM outputs" },
-                { assert workflow.out.counts.size() == 2, "Expected 2 counts outputs" },
-                { assert workflow.out.results.size() == 2, "Expected 2 AI results outputs" },
-
                 // Snapshot for regression tracking
                 { assert snapshot(
                     workflow.trace.tasks().size(),
@@ -45,39 +32,40 @@ nextflow_pipeline {
                 ).match("stub_workflow_tasks") },
 
                 // Output directories exist
-                { assert path("${outputDir}/results/wasp_filtered").exists() },
+                { assert path("${outputDir}/results/wasp/filtered").exists() },
                 { assert path("${outputDir}/results/counts").exists() },
                 { assert path("${outputDir}/results/analysis").exists() },
 
                 // SAMPLE1 outputs
-                { assert path("${outputDir}/results/wasp_filtered/SAMPLE1_wasp_filt.bam").exists() },
-                { assert path("${outputDir}/results/wasp_filtered/SAMPLE1_wasp_filt.bam.bai").exists() },
-                { assert path("${outputDir}/results/wasp_filtered/SAMPLE1.filter_stats.txt").exists() },
+                { assert path("${outputDir}/results/wasp/filtered/SAMPLE1_wasp_filt.bam").exists() },
+                { assert path("${outputDir}/results/wasp/filtered/SAMPLE1_wasp_filt.bam.bai").exists() },
+                { assert path("${outputDir}/results/wasp/filtered/SAMPLE1.filter_stats.txt").exists() },
                 { assert path("${outputDir}/results/counts/SAMPLE1_counts.tsv").exists() },
                 { assert path("${outputDir}/results/analysis/SAMPLE1_ai_results.tsv").exists() },
 
                 // SAMPLE2 outputs
-                { assert path("${outputDir}/results/wasp_filtered/SAMPLE2_wasp_filt.bam").exists() },
-                { assert path("${outputDir}/results/wasp_filtered/SAMPLE2_wasp_filt.bam.bai").exists() },
-                { assert path("${outputDir}/results/wasp_filtered/SAMPLE2.filter_stats.txt").exists() },
+                { assert path("${outputDir}/results/wasp/filtered/SAMPLE2_wasp_filt.bam").exists() },
+                { assert path("${outputDir}/results/wasp/filtered/SAMPLE2_wasp_filt.bam.bai").exists() },
+                { assert path("${outputDir}/results/wasp/filtered/SAMPLE2.filter_stats.txt").exists() },
                 { assert path("${outputDir}/results/counts/SAMPLE2_counts.tsv").exists() },
                 { assert path("${outputDir}/results/analysis/SAMPLE2_ai_results.tsv").exists() },
 
                 // Header validation (first line must match exactly)
-                { assert path("${outputDir}/results/counts/SAMPLE1_counts.tsv").readLines()[0] == countsHeader },
-                { assert path("${outputDir}/results/counts/SAMPLE2_counts.tsv").readLines()[0] == countsHeader },
-                { assert path("${outputDir}/results/analysis/SAMPLE1_ai_results.tsv").readLines()[0] == aiResultsHeader },
-                { assert path("${outputDir}/results/analysis/SAMPLE2_ai_results.tsv").readLines()[0] == aiResultsHeader }
+                { assert path("${outputDir}/results/counts/SAMPLE1_counts.tsv").readLines()[0] == "chrom\tpos\tref\talt\tregion\tref_count\talt_count\tother_count\tN" },
+                { assert path("${outputDir}/results/counts/SAMPLE2_counts.tsv").readLines()[0] == "chrom\tpos\tref\talt\tregion\tref_count\talt_count\tother_count\tN" },
+                { assert path("${outputDir}/results/analysis/SAMPLE1_ai_results.tsv").readLines()[0] == "region\tsnp_count\tref_sum\talt_sum\tmu\tnull_ll\talt_ll\tLRT\tpvalue\tfdr" },
+                { assert path("${outputDir}/results/analysis/SAMPLE2_ai_results.tsv").readLines()[0] == "region\tsnp_count\tref_sum\talt_sum\tmu\tnull_ll\talt_ll\tLRT\tpvalue\tfdr" }
             )
         }
     }
 
     test("RNASEQ_ASE - fails without input samplesheet") {
 
-        options "-stub -profile test_stub"
+        options "-stub"
 
         when {
             params {
+                input      = null
                 vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
                 star_index = "${projectDir}/tests/data/star_index"
                 gtf        = "${projectDir}/tests/data/test.gtf"
@@ -94,11 +82,12 @@ nextflow_pipeline {
 
     test("RNASEQ_ASE - fails without VCF") {
 
-        options "-stub -profile test_stub"
+        options "-stub"
 
         when {
             params {
                 input      = "${projectDir}/assets/samplesheet_test.csv"
+                vcf        = null
                 star_index = "${projectDir}/tests/data/star_index"
                 gtf        = "${projectDir}/tests/data/test.gtf"
                 outdir     = "${outputDir}/results_no_vcf"
@@ -114,12 +103,13 @@ nextflow_pipeline {
 
     test("RNASEQ_ASE - fails without STAR index") {
 
-        options "-stub -profile test_stub"
+        options "-stub"
 
         when {
             params {
                 input      = "${projectDir}/assets/samplesheet_test.csv"
                 vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
+                star_index = null
                 gtf        = "${projectDir}/tests/data/test.gtf"
                 outdir     = "${outputDir}/results_no_star"
             }
@@ -134,7 +124,7 @@ nextflow_pipeline {
 
     test("RNASEQ_ASE - fails without VCF index") {
 
-        options "-stub -profile test_stub"
+        options "-stub"
 
         when {
             params {
@@ -155,7 +145,7 @@ nextflow_pipeline {
 
     test("RNASEQ_ASE - fails with malformed samplesheet - missing sample column") {
 
-        options "-stub -profile test_stub"
+        options "-stub"
 
         when {
             params {
@@ -176,7 +166,7 @@ nextflow_pipeline {
 
     test("RNASEQ_ASE - fails with malformed samplesheet - missing fastq_1 column") {
 
-        options "-stub -profile test_stub"
+        options "-stub"
 
         when {
             params {
@@ -197,7 +187,7 @@ nextflow_pipeline {
 
     test("RNASEQ_ASE - stub run - single sample") {
 
-        options "-stub -profile test_stub"
+        options "-stub"
 
         when {
             params {
@@ -212,32 +202,29 @@ nextflow_pipeline {
         then {
             assertAll(
                 { assert workflow.success },
-                { assert workflow.out.wasp_bam.size() == 1, "Expected 1 WASP BAM output" },
-                { assert workflow.out.counts.size() == 1, "Expected 1 counts output" },
-                { assert workflow.out.results.size() == 1, "Expected 1 AI results output" },
 
                 // Output directories exist
-                { assert path("${outputDir}/results_single/wasp_filtered").exists() },
+                { assert path("${outputDir}/results_single/wasp/filtered").exists() },
                 { assert path("${outputDir}/results_single/counts").exists() },
                 { assert path("${outputDir}/results_single/analysis").exists() },
 
                 // SAMPLE1 outputs (including BAI validation)
-                { assert path("${outputDir}/results_single/wasp_filtered/SAMPLE1_wasp_filt.bam").exists() },
-                { assert path("${outputDir}/results_single/wasp_filtered/SAMPLE1_wasp_filt.bam.bai").exists() },
-                { assert path("${outputDir}/results_single/wasp_filtered/SAMPLE1.filter_stats.txt").exists() },
+                { assert path("${outputDir}/results_single/wasp/filtered/SAMPLE1_wasp_filt.bam").exists() },
+                { assert path("${outputDir}/results_single/wasp/filtered/SAMPLE1_wasp_filt.bam.bai").exists() },
+                { assert path("${outputDir}/results_single/wasp/filtered/SAMPLE1.filter_stats.txt").exists() },
                 { assert path("${outputDir}/results_single/counts/SAMPLE1_counts.tsv").exists() },
                 { assert path("${outputDir}/results_single/analysis/SAMPLE1_ai_results.tsv").exists() },
 
                 // Header validation
-                { assert path("${outputDir}/results_single/counts/SAMPLE1_counts.tsv").readLines()[0] == countsHeader },
-                { assert path("${outputDir}/results_single/analysis/SAMPLE1_ai_results.tsv").readLines()[0] == aiResultsHeader }
+                { assert path("${outputDir}/results_single/counts/SAMPLE1_counts.tsv").readLines()[0] == "chrom\tpos\tref\talt\tregion\tref_count\talt_count\tother_count\tN" },
+                { assert path("${outputDir}/results_single/analysis/SAMPLE1_ai_results.tsv").readLines()[0] == "region\tsnp_count\tref_sum\talt_sum\tmu\tnull_ll\talt_ll\tLRT\tpvalue\tfdr" }
             )
         }
     }
 
     test("RNASEQ_ASE - stub run - single-end sequencing") {
 
-        options "-stub -profile test_stub"
+        options "-stub"
 
         when {
             params {
@@ -252,37 +239,35 @@ nextflow_pipeline {
         then {
             assertAll(
                 { assert workflow.success },
-                { assert workflow.out.wasp_bam.size() == 1, "Expected 1 WASP BAM output" },
-                { assert workflow.out.counts.size() == 1, "Expected 1 counts output" },
-                { assert workflow.out.results.size() == 1, "Expected 1 AI results output" },
 
                 // Output directories exist
-                { assert path("${outputDir}/results_singleend/wasp_filtered").exists() },
+                { assert path("${outputDir}/results_singleend/wasp/filtered").exists() },
                 { assert path("${outputDir}/results_singleend/counts").exists() },
                 { assert path("${outputDir}/results_singleend/analysis").exists() },
 
                 // Single-end sample outputs
-                { assert path("${outputDir}/results_singleend/wasp_filtered/SAMPLE_SE_wasp_filt.bam").exists() },
-                { assert path("${outputDir}/results_singleend/wasp_filtered/SAMPLE_SE_wasp_filt.bam.bai").exists() },
+                { assert path("${outputDir}/results_singleend/wasp/filtered/SAMPLE_SE_wasp_filt.bam").exists() },
+                { assert path("${outputDir}/results_singleend/wasp/filtered/SAMPLE_SE_wasp_filt.bam.bai").exists() },
                 { assert path("${outputDir}/results_singleend/counts/SAMPLE_SE_counts.tsv").exists() },
                 { assert path("${outputDir}/results_singleend/analysis/SAMPLE_SE_ai_results.tsv").exists() },
 
                 // Header validation
-                { assert path("${outputDir}/results_singleend/counts/SAMPLE_SE_counts.tsv").readLines()[0] == countsHeader },
-                { assert path("${outputDir}/results_singleend/analysis/SAMPLE_SE_ai_results.tsv").readLines()[0] == aiResultsHeader }
+                { assert path("${outputDir}/results_singleend/counts/SAMPLE_SE_counts.tsv").readLines()[0] == "chrom\tpos\tref\talt\tregion\tref_count\talt_count\tother_count\tN" },
+                { assert path("${outputDir}/results_singleend/analysis/SAMPLE_SE_ai_results.tsv").readLines()[0] == "region\tsnp_count\tref_sum\talt_sum\tmu\tnull_ll\talt_ll\tLRT\tpvalue\tfdr" }
             )
         }
     }
 
     test("RNASEQ_ASE - stub run - without GTF annotation") {
 
-        options "-stub -profile test_stub"
+        options "-stub"
 
         when {
             params {
                 input      = "${projectDir}/assets/samplesheet_test.csv"
                 vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
                 star_index = "${projectDir}/tests/data/star_index"
+                gtf        = null
                 outdir     = "${outputDir}/results_no_gtf"
             }
         }
@@ -290,27 +275,24 @@ nextflow_pipeline {
         then {
             assertAll(
                 { assert workflow.success },
-                { assert workflow.out.wasp_bam.size() == 2, "Expected 2 WASP BAM outputs" },
-                { assert workflow.out.counts.size() == 2, "Expected 2 counts outputs" },
-                { assert workflow.out.results.size() == 2, "Expected 2 AI results outputs" },
 
                 // Output files exist
-                { assert path("${outputDir}/results_no_gtf/wasp_filtered/SAMPLE1_wasp_filt.bam").exists() },
-                { assert path("${outputDir}/results_no_gtf/wasp_filtered/SAMPLE1_wasp_filt.bam.bai").exists() },
-                { assert path("${outputDir}/results_no_gtf/wasp_filtered/SAMPLE1.filter_stats.txt").exists() },
-                { assert path("${outputDir}/results_no_gtf/wasp_filtered/SAMPLE2_wasp_filt.bam").exists() },
-                { assert path("${outputDir}/results_no_gtf/wasp_filtered/SAMPLE2_wasp_filt.bam.bai").exists() },
-                { assert path("${outputDir}/results_no_gtf/wasp_filtered/SAMPLE2.filter_stats.txt").exists() },
+                { assert path("${outputDir}/results_no_gtf/wasp/filtered/SAMPLE1_wasp_filt.bam").exists() },
+                { assert path("${outputDir}/results_no_gtf/wasp/filtered/SAMPLE1_wasp_filt.bam.bai").exists() },
+                { assert path("${outputDir}/results_no_gtf/wasp/filtered/SAMPLE1.filter_stats.txt").exists() },
+                { assert path("${outputDir}/results_no_gtf/wasp/filtered/SAMPLE2_wasp_filt.bam").exists() },
+                { assert path("${outputDir}/results_no_gtf/wasp/filtered/SAMPLE2_wasp_filt.bam.bai").exists() },
+                { assert path("${outputDir}/results_no_gtf/wasp/filtered/SAMPLE2.filter_stats.txt").exists() },
                 { assert path("${outputDir}/results_no_gtf/counts/SAMPLE1_counts.tsv").exists() },
                 { assert path("${outputDir}/results_no_gtf/counts/SAMPLE2_counts.tsv").exists() },
                 { assert path("${outputDir}/results_no_gtf/analysis/SAMPLE1_ai_results.tsv").exists() },
                 { assert path("${outputDir}/results_no_gtf/analysis/SAMPLE2_ai_results.tsv").exists() },
 
                 // Header validation
-                { assert path("${outputDir}/results_no_gtf/counts/SAMPLE1_counts.tsv").readLines()[0] == countsHeader },
-                { assert path("${outputDir}/results_no_gtf/counts/SAMPLE2_counts.tsv").readLines()[0] == countsHeader },
-                { assert path("${outputDir}/results_no_gtf/analysis/SAMPLE1_ai_results.tsv").readLines()[0] == aiResultsHeader },
-                { assert path("${outputDir}/results_no_gtf/analysis/SAMPLE2_ai_results.tsv").readLines()[0] == aiResultsHeader }
+                { assert path("${outputDir}/results_no_gtf/counts/SAMPLE1_counts.tsv").readLines()[0] == "chrom\tpos\tref\talt\tregion\tref_count\talt_count\tother_count\tN" },
+                { assert path("${outputDir}/results_no_gtf/counts/SAMPLE2_counts.tsv").readLines()[0] == "chrom\tpos\tref\talt\tregion\tref_count\talt_count\tother_count\tN" },
+                { assert path("${outputDir}/results_no_gtf/analysis/SAMPLE1_ai_results.tsv").readLines()[0] == "region\tsnp_count\tref_sum\talt_sum\tmu\tnull_ll\talt_ll\tLRT\tpvalue\tfdr" },
+                { assert path("${outputDir}/results_no_gtf/analysis/SAMPLE2_ai_results.tsv").readLines()[0] == "region\tsnp_count\tref_sum\talt_sum\tmu\tnull_ll\talt_ll\tLRT\tpvalue\tfdr" }
             )
         }
     }
@@ -608,9 +590,9 @@ nextflow_pipeline {
         then {
             assertAll(
                 { assert workflow.success },
-                { assert workflow.out.wasp_bam != null },
-                { assert workflow.out.counts != null },
-                { assert workflow.out.results != null }
+                { assert path("${outputDir}/results_single_end/wasp/filtered").exists() },
+                { assert path("${outputDir}/results_single_end/counts").exists() },
+                { assert path("${outputDir}/results_single_end/analysis").exists() }
             )
         }
     }

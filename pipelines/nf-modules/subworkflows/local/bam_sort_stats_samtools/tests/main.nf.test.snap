@@ -1,0 +1,232 @@
+{
+    "Should handle paired-end data - stub": {
+        "content": [
+            {
+                "0": [
+                    [
+                        {
+                            "id": "paired_sample",
+                            "single_end": false
+                        },
+                        "paired_sample.sorted.bam:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "1": [
+                    [
+                        {
+                            "id": "paired_sample",
+                            "single_end": false
+                        },
+                        "paired_sample.sorted.bam.bai:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "2": [
+                    [
+                        {
+                            "id": "paired_sample",
+                            "single_end": false
+                        },
+                        "paired_sample.stats:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "3": [
+                    [
+                        {
+                            "id": "paired_sample",
+                            "single_end": false
+                        },
+                        "paired_sample.flagstat:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "4": [
+                    [
+                        {
+                            "id": "paired_sample",
+                            "single_end": false
+                        },
+                        "paired_sample.idxstats:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "5": [
+                    "versions.yml:md5,4801de1ec9c4a26a8be5901e56f88ca7",
+                    "versions.yml:md5,4e8571959657a5cdc397b8555186183f",
+                    "versions.yml:md5,9770168ee991733c5b8c922a2d5f62d9",
+                    "versions.yml:md5,db9a88dc3d7bd41f63a58c4846bad7db",
+                    "versions.yml:md5,ddb3e13bf4cd3fdd5c9778b36da484ec"
+                ],
+                "bai": [
+                    [
+                        {
+                            "id": "paired_sample",
+                            "single_end": false
+                        },
+                        "paired_sample.sorted.bam.bai:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "bam": [
+                    [
+                        {
+                            "id": "paired_sample",
+                            "single_end": false
+                        },
+                        "paired_sample.sorted.bam:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "flagstat": [
+                    [
+                        {
+                            "id": "paired_sample",
+                            "single_end": false
+                        },
+                        "paired_sample.flagstat:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "idxstats": [
+                    [
+                        {
+                            "id": "paired_sample",
+                            "single_end": false
+                        },
+                        "paired_sample.idxstats:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "stats": [
+                    [
+                        {
+                            "id": "paired_sample",
+                            "single_end": false
+                        },
+                        "paired_sample.stats:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "versions": [
+                    "versions.yml:md5,4801de1ec9c4a26a8be5901e56f88ca7",
+                    "versions.yml:md5,4e8571959657a5cdc397b8555186183f",
+                    "versions.yml:md5,9770168ee991733c5b8c922a2d5f62d9",
+                    "versions.yml:md5,db9a88dc3d7bd41f63a58c4846bad7db",
+                    "versions.yml:md5,ddb3e13bf4cd3fdd5c9778b36da484ec"
+                ]
+            }
+        ],
+        "meta": {
+            "nf-test": "0.9.2",
+            "nextflow": "25.10.4"
+        },
+        "timestamp": "2026-02-25T23:06:43.027313"
+    },
+    "Should sort BAM, index, and generate stats - stub": {
+        "content": [
+            {
+                "0": [
+                    [
+                        {
+                            "id": "test_sample",
+                            "single_end": false
+                        },
+                        "test_sample.sorted.bam:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "1": [
+                    [
+                        {
+                            "id": "test_sample",
+                            "single_end": false
+                        },
+                        "test_sample.sorted.bam.bai:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "2": [
+                    [
+                        {
+                            "id": "test_sample",
+                            "single_end": false
+                        },
+                        "test_sample.stats:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "3": [
+                    [
+                        {
+                            "id": "test_sample",
+                            "single_end": false
+                        },
+                        "test_sample.flagstat:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "4": [
+                    [
+                        {
+                            "id": "test_sample",
+                            "single_end": false
+                        },
+                        "test_sample.idxstats:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "5": [
+                    "versions.yml:md5,4801de1ec9c4a26a8be5901e56f88ca7",
+                    "versions.yml:md5,4e8571959657a5cdc397b8555186183f",
+                    "versions.yml:md5,9770168ee991733c5b8c922a2d5f62d9",
+                    "versions.yml:md5,db9a88dc3d7bd41f63a58c4846bad7db",
+                    "versions.yml:md5,ddb3e13bf4cd3fdd5c9778b36da484ec"
+                ],
+                "bai": [
+                    [
+                        {
+                            "id": "test_sample",
+                            "single_end": false
+                        },
+                        "test_sample.sorted.bam.bai:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "bam": [
+                    [
+                        {
+                            "id": "test_sample",
+                            "single_end": false
+                        },
+                        "test_sample.sorted.bam:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "flagstat": [
+                    [
+                        {
+                            "id": "test_sample",
+                            "single_end": false
+                        },
+                        "test_sample.flagstat:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "idxstats": [
+                    [
+                        {
+                            "id": "test_sample",
+                            "single_end": false
+                        },
+                        "test_sample.idxstats:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "stats": [
+                    [
+                        {
+                            "id": "test_sample",
+                            "single_end": false
+                        },
+                        "test_sample.stats:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "versions": [
+                    "versions.yml:md5,4801de1ec9c4a26a8be5901e56f88ca7",
+                    "versions.yml:md5,4e8571959657a5cdc397b8555186183f",
+                    "versions.yml:md5,9770168ee991733c5b8c922a2d5f62d9",
+                    "versions.yml:md5,db9a88dc3d7bd41f63a58c4846bad7db",
+                    "versions.yml:md5,ddb3e13bf4cd3fdd5c9778b36da484ec"
+                ]
+            }
+        ],
+        "meta": {
+            "nf-test": "0.9.2",
+            "nextflow": "25.10.4"
+        },
+        "timestamp": "2026-02-25T23:06:31.374038"
+    }
+}

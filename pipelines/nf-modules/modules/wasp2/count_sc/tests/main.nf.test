@@ -26,8 +26,8 @@ nextflow_process {
                     file("${projectDir}/tests/data/sample.vcf.gz"),
                     file("${projectDir}/tests/data/sample.vcf.gz.tbi")
                 ]
-                input[2] = file('NO_FILE')
-                input[3] = file('NO_FILE')
+                input[2] = file('NO_FILE_BARCODES')
+                input[3] = file('NO_FILE_FEATURES')
                 """
             }
         }
@@ -123,8 +123,8 @@ nextflow_process {
                     file("${projectDir}/tests/data/sample.vcf.gz"),
                     file("${projectDir}/tests/data/sample.vcf.gz.tbi")
                 ]
-                input[2] = file('NO_FILE')
-                input[3] = file('NO_FILE')
+                input[2] = file('NO_FILE_BARCODES')
+                input[3] = file('NO_FILE_FEATURES')
                 """
             }
         }

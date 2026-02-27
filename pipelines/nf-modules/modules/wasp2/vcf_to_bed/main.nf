@@ -23,17 +23,28 @@ process WASP2_VCF_TO_BED {
     def prefix = task.ext.prefix ?: "${meta.id}"
     def sample_arg = samples ? "--samples ${samples}" : ''
     """
-    # Extract heterozygous SNPs to BED format
+    # Extract heterozygous SNPs to BED format using WASP2 v1.4.0 API
     python3 << 'EOF'
 from wasp2.io.variant_source import VariantSource
+from pathlib import Path
 
 source = VariantSource.open("${vcf}")
 samples_list = "${samples}".split(",") if "${samples}" else None
 
-with open("${prefix}.variants.bed", "w") as f:
-    for var in source.iter_variants(samples=samples_list, het_only=True):
-        # BED format: chrom, start (0-based), end (1-based), ref, alt
-        f.write(f"{var.chrom}\\t{var.pos - 1}\\t{var.pos}\\t{var.ref}\\t{var.alt}\\n")
+# Use to_bed() method (v1.4.0+) — iter_variants() returns VariantGenotype
+# objects without chrom/pos attributes in v1.4.0
+out_path = source.to_bed(
+    Path("${prefix}.variants.bed"),
+    samples=samples_list,
+    het_only=True,
+    include_genotypes=False
+)
+
+# Deduplicate BED entries (same SNP het in multiple samples)
+with open(out_path) as f:
+    lines = sorted(set(f.readlines()))
+with open(out_path, 'w') as f:
+    f.writelines(lines)
 EOF
 
     cat <<-END_VERSIONS > versions.yml

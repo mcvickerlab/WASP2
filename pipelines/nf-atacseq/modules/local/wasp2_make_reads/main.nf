@@ -35,26 +35,44 @@ process WASP2_MAKE_READS {
         --out_json ${prefix}_wasp_data_files.json \\
         --threads ${task.cpus}
 
-    # Rename outputs to include sample prefix (with validation)
-    rename_single_file() {
-        local pattern="\$1" target="\$2"
-        local matches=(\$pattern)
-        if [ \${#matches[@]} -eq 0 ] || [ ! -f "\${matches[0]}" ]; then
-            echo "ERROR: No files matching pattern '\$pattern'" >&2
+    # Rename R1 FASTQ (may be uncompressed .fq or compressed .fq.gz)
+    r1_found=false
+    for f in *_swapped_alleles_r1.fq.gz; do
+        [ -f "\$f" ] && mv "\$f" ${prefix}_remap_r1.fq.gz && r1_found=true && break
+    done
+    if [ "\$r1_found" = "false" ]; then
+        for f in *_swapped_alleles_r1.fq; do
+            [ -f "\$f" ] && gzip -c "\$f" > ${prefix}_remap_r1.fq.gz && r1_found=true && break
+        done
+    fi
+
+    # Rename R2 FASTQ
+    r2_found=false
+    for f in *_swapped_alleles_r2.fq.gz; do
+        [ -f "\$f" ] && mv "\$f" ${prefix}_remap_r2.fq.gz && r2_found=true && break
+    done
+    if [ "\$r2_found" = "false" ]; then
+        for f in *_swapped_alleles_r2.fq; do
+            [ -f "\$f" ] && gzip -c "\$f" > ${prefix}_remap_r2.fq.gz && r2_found=true && break
+        done
+    fi
+
+    # Rename to_remap and keep BAMs
+    for f in *_to_remap.bam; do
+        [ -f "\$f" ] && [ "\$f" != "${prefix}_to_remap.bam" ] && mv "\$f" ${prefix}_to_remap.bam && break
+    done
+    for f in *_keep.bam; do
+        [ -f "\$f" ] && [ "\$f" != "${prefix}_keep.bam" ] && mv "\$f" ${prefix}_keep.bam && break
+    done
+
+    # Validate outputs
+    for expected in ${prefix}_remap_r1.fq.gz ${prefix}_remap_r2.fq.gz ${prefix}_to_remap.bam ${prefix}_keep.bam ${prefix}_wasp_data_files.json; do
+        if [ ! -f "\$expected" ]; then
+            echo "ERROR: Expected output \$expected not found" >&2
+            ls -la >&2
             exit 1
         fi
-        if [ \${#matches[@]} -gt 1 ]; then
-            echo "ERROR: Multiple files match '\$pattern': \${matches[*]}" >&2
-            exit 1
-        fi
-        if [ "\${matches[0]}" != "\$target" ]; then
-            mv "\${matches[0]}" "\$target" || exit 1
-        fi
-    }
-    rename_single_file "*_remap_r1.fq.gz" "${prefix}_remap_r1.fq.gz"
-    rename_single_file "*_remap_r2.fq.gz" "${prefix}_remap_r2.fq.gz"
-    rename_single_file "*_to_remap.bam"   "${prefix}_to_remap.bam"
-    rename_single_file "*_keep.bam"       "${prefix}_keep.bam"
+    done
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":

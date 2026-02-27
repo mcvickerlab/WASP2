@@ -60,10 +60,10 @@ nextflow_workflow {
                     ],
                     file("${projectDir}/tests/stub/fragments.tsv.gz"),
                     file("${projectDir}/tests/stub/fragments.tsv.gz.tbi"),
-                    file('NO_FILE'),  // barcodes (optional)
-                    file('NO_FILE'),  // peaks (optional)
-                    file('NO_FILE'),  // bam (optional)
-                    file('NO_FILE')   // bai (optional)
+                    file('NO_FILE_BARCODES'),  // barcodes (optional)
+                    file('NO_FILE_PEAKS'),     // peaks (optional)
+                    file('NO_FILE_BAM'),       // bam (optional)
+                    file('NO_FILE_BAI')        // bai (optional)
                 ])
                 """
             }
@@ -101,10 +101,10 @@ nextflow_workflow {
                         has_bam: true,
                         sample: 'NA12878'
                     ],
-                    file('NO_FILE'),  // fragments (not needed when BAM provided)
-                    file('NO_FILE'),  // fragments_tbi
+                    file('NO_FILE_FRAGS'),      // fragments (not needed when BAM provided)
+                    file('NO_FILE_FRAGS_TBI'),  // fragments_tbi
                     file("${projectDir}/tests/stub/barcodes.txt"),  // barcodes
-                    file('NO_FILE'),  // peaks (optional)
+                    file('NO_FILE_PEAKS'),                          // peaks (optional)
                     file("${projectDir}/tests/stub/test.bam"),      // bam
                     file("${projectDir}/tests/stub/test.bam.bai")   // bai
                 ])
@@ -144,10 +144,10 @@ nextflow_workflow {
                     ],
                     file("${projectDir}/tests/stub/fragments.tsv.gz"),
                     file("${projectDir}/tests/stub/fragments.tsv.gz.tbi"),
-                    file('NO_FILE'),
-                    file('NO_FILE'),
-                    file('NO_FILE'),
-                    file('NO_FILE')
+                    file('NO_FILE_BARCODES'),
+                    file('NO_FILE_PEAKS'),
+                    file('NO_FILE_BAM'),
+                    file('NO_FILE_BAI')
                 ])
                 """
             }
@@ -185,10 +185,10 @@ nextflow_workflow {
                     ],
                     file("${projectDir}/tests/stub/fragments.tsv.gz"),
                     file("${projectDir}/tests/stub/fragments.tsv.gz.tbi"),
-                    file('NO_FILE'),
-                    file('NO_FILE'),
-                    file('NO_FILE'),
-                    file('NO_FILE')
+                    file('NO_FILE_BARCODES'),
+                    file('NO_FILE_PEAKS'),
+                    file('NO_FILE_BAM'),
+                    file('NO_FILE_BAI')
                 ])
                 """
             }
@@ -231,8 +231,8 @@ nextflow_process {
                     file("${projectDir}/tests/stub/fragments.tsv.gz.tbi"),
                     file("${projectDir}/tests/stub/variants.bed")
                 ]
-                input[1] = file('NO_FILE')  // barcodes
-                input[2] = file('NO_FILE')  // peaks
+                input[1] = file('NO_FILE_BARCODES')  // barcodes
+                input[2] = file('NO_FILE_PEAKS')      // peaks
                 """
             }
         }

@@ -1,0 +1,147 @@
+{
+    "Should convert counts to parquet format - stub": {
+        "content": [
+            {
+                "0": [
+                    
+                ],
+                "1": [
+                    [
+                        {
+                            "id": "test_sample_parquet",
+                            "single_end": false
+                        },
+                        "test_sample_parquet.parquet:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "2": [
+                    
+                ],
+                "3": [
+                    "versions.yml:md5,7da2bad81663a19763dbebe4a00a0f47"
+                ],
+                "anndata": [
+                    
+                ],
+                "parquet": [
+                    [
+                        {
+                            "id": "test_sample_parquet",
+                            "single_end": false
+                        },
+                        "test_sample_parquet.parquet:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "versions": [
+                    "versions.yml:md5,7da2bad81663a19763dbebe4a00a0f47"
+                ],
+                "zarr": [
+                    
+                ]
+            }
+        ],
+        "meta": {
+            "nf-test": "0.9.2",
+            "nextflow": "25.10.4"
+        },
+        "timestamp": "2026-02-26T01:35:33.130215"
+    },
+    "Should convert counts to anndata format - stub": {
+        "content": [
+            {
+                "0": [
+                    
+                ],
+                "1": [
+                    
+                ],
+                "2": [
+                    [
+                        {
+                            "id": "test_sample_anndata",
+                            "single_end": false
+                        },
+                        "test_sample_anndata.h5ad:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "3": [
+                    "versions.yml:md5,7da2bad81663a19763dbebe4a00a0f47"
+                ],
+                "anndata": [
+                    [
+                        {
+                            "id": "test_sample_anndata",
+                            "single_end": false
+                        },
+                        "test_sample_anndata.h5ad:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "parquet": [
+                    
+                ],
+                "versions": [
+                    "versions.yml:md5,7da2bad81663a19763dbebe4a00a0f47"
+                ],
+                "zarr": [
+                    
+                ]
+            }
+        ],
+        "meta": {
+            "nf-test": "0.9.2",
+            "nextflow": "25.10.4"
+        },
+        "timestamp": "2026-02-26T01:35:45.151569"
+    },
+    "Should convert counts to zarr format - stub": {
+        "content": [
+            {
+                "0": [
+                    [
+                        {
+                            "id": "test_sample",
+                            "single_end": false
+                        },
+                        [
+                            ".zarray:md5,d41d8cd98f00b204e9800998ecf8427e"
+                        ]
+                    ]
+                ],
+                "1": [
+                    
+                ],
+                "2": [
+                    
+                ],
+                "3": [
+                    "versions.yml:md5,7da2bad81663a19763dbebe4a00a0f47"
+                ],
+                "anndata": [
+                    
+                ],
+                "parquet": [
+                    
+                ],
+                "versions": [
+                    "versions.yml:md5,7da2bad81663a19763dbebe4a00a0f47"
+                ],
+                "zarr": [
+                    [
+                        {
+                            "id": "test_sample",
+                            "single_end": false
+                        },
+                        [
+                            ".zarray:md5,d41d8cd98f00b204e9800998ecf8427e"
+                        ]
+                    ]
+                ]
+            }
+        ],
+        "meta": {
+            "nf-test": "0.9.2",
+            "nextflow": "25.10.4"
+        },
+        "timestamp": "2026-02-26T01:35:21.090058"
+    }
+}

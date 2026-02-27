@@ -1,4 +1,4 @@
-##description: Integration test GTF for WASP2 RNA-seq ASE pipeline
+##description: Integration test GTF for WASP2 pipelines (12 genes for OUTRIDER)
 ##provider: WASP2 Test Suite
 ##format: gtf
 chr_test	test	gene	500	5500	.	+	.	gene_id "INTGENE001"; gene_name "IntTestGene1"; gene_biotype "protein_coding";
@@ -6,8 +6,38 @@ chr_test	test	transcript	500	5500	.	+	.	gene_id "INTGENE001"; transcript_id "INT
 chr_test	test	exon	500	1500	.	+	.	gene_id "INTGENE001"; transcript_id "INTTX001"; exon_number "1"; exon_id "INTEXON001";
 chr_test	test	exon	2500	3500	.	+	.	gene_id "INTGENE001"; transcript_id "INTTX001"; exon_number "2"; exon_id "INTEXON002";
 chr_test	test	exon	4500	5500	.	+	.	gene_id "INTGENE001"; transcript_id "INTTX001"; exon_number "3"; exon_id "INTEXON003";
+chr_test	test	gene	5800	6300	.	+	.	gene_id "INTGENE003"; gene_name "IntTestGene3"; gene_biotype "protein_coding";
+chr_test	test	transcript	5800	6300	.	+	.	gene_id "INTGENE003"; transcript_id "INTTX003"; gene_name "IntTestGene3";
+chr_test	test	exon	5800	6300	.	+	.	gene_id "INTGENE003"; transcript_id "INTTX003"; exon_number "1"; exon_id "INTEXON007";
+chr_test	test	gene	6500	7000	.	-	.	gene_id "INTGENE004"; gene_name "IntTestGene4"; gene_biotype "protein_coding";
+chr_test	test	transcript	6500	7000	.	-	.	gene_id "INTGENE004"; transcript_id "INTTX004"; gene_name "IntTestGene4";
+chr_test	test	exon	6500	7000	.	-	.	gene_id "INTGENE004"; transcript_id "INTTX004"; exon_number "1"; exon_id "INTEXON008";
+chr_test	test	gene	7200	7700	.	+	.	gene_id "INTGENE005"; gene_name "IntTestGene5"; gene_biotype "protein_coding";
+chr_test	test	transcript	7200	7700	.	+	.	gene_id "INTGENE005"; transcript_id "INTTX005"; gene_name "IntTestGene5";
+chr_test	test	exon	7200	7700	.	+	.	gene_id "INTGENE005"; transcript_id "INTTX005"; exon_number "1"; exon_id "INTEXON009";
+chr_test	test	gene	7900	8400	.	-	.	gene_id "INTGENE006"; gene_name "IntTestGene6"; gene_biotype "protein_coding";
+chr_test	test	transcript	7900	8400	.	-	.	gene_id "INTGENE006"; transcript_id "INTTX006"; gene_name "IntTestGene6";
+chr_test	test	exon	7900	8400	.	-	.	gene_id "INTGENE006"; transcript_id "INTTX006"; exon_number "1"; exon_id "INTEXON010";
+chr_test	test	gene	8600	9100	.	+	.	gene_id "INTGENE007"; gene_name "IntTestGene7"; gene_biotype "protein_coding";
+chr_test	test	transcript	8600	9100	.	+	.	gene_id "INTGENE007"; transcript_id "INTTX007"; gene_name "IntTestGene7";
+chr_test	test	exon	8600	9100	.	+	.	gene_id "INTGENE007"; transcript_id "INTTX007"; exon_number "1"; exon_id "INTEXON011";
 chr_test	test	gene	10500	15500	.	-	.	gene_id "INTGENE002"; gene_name "IntTestGene2"; gene_biotype "protein_coding";
 chr_test	test	transcript	10500	15500	.	-	.	gene_id "INTGENE002"; transcript_id "INTTX002"; gene_name "IntTestGene2";
 chr_test	test	exon	10500	11500	.	-	.	gene_id "INTGENE002"; transcript_id "INTTX002"; exon_number "1"; exon_id "INTEXON004";
 chr_test	test	exon	12500	13500	.	-	.	gene_id "INTGENE002"; transcript_id "INTTX002"; exon_number "2"; exon_id "INTEXON005";
 chr_test	test	exon	14500	15500	.	-	.	gene_id "INTGENE002"; transcript_id "INTTX002"; exon_number "3"; exon_id "INTEXON006";
+chr_test	test	gene	15800	16300	.	+	.	gene_id "INTGENE008"; gene_name "IntTestGene8"; gene_biotype "protein_coding";
+chr_test	test	transcript	15800	16300	.	+	.	gene_id "INTGENE008"; transcript_id "INTTX008"; gene_name "IntTestGene8";
+chr_test	test	exon	15800	16300	.	+	.	gene_id "INTGENE008"; transcript_id "INTTX008"; exon_number "1"; exon_id "INTEXON012";
+chr_test	test	gene	16500	17000	.	-	.	gene_id "INTGENE009"; gene_name "IntTestGene9"; gene_biotype "protein_coding";
+chr_test	test	transcript	16500	17000	.	-	.	gene_id "INTGENE009"; transcript_id "INTTX009"; gene_name "IntTestGene9";
+chr_test	test	exon	16500	17000	.	-	.	gene_id "INTGENE009"; transcript_id "INTTX009"; exon_number "1"; exon_id "INTEXON013";
+chr_test	test	gene	17200	17700	.	+	.	gene_id "INTGENE010"; gene_name "IntTestGene10"; gene_biotype "protein_coding";
+chr_test	test	transcript	17200	17700	.	+	.	gene_id "INTGENE010"; transcript_id "INTTX010"; gene_name "IntTestGene10";
+chr_test	test	exon	17200	17700	.	+	.	gene_id "INTGENE010"; transcript_id "INTTX010"; exon_number "1"; exon_id "INTEXON014";
+chr_test	test	gene	17900	18400	.	-	.	gene_id "INTGENE011"; gene_name "IntTestGene11"; gene_biotype "protein_coding";
+chr_test	test	transcript	17900	18400	.	-	.	gene_id "INTGENE011"; transcript_id "INTTX011"; gene_name "IntTestGene11";
+chr_test	test	exon	17900	18400	.	-	.	gene_id "INTGENE011"; transcript_id "INTTX011"; exon_number "1"; exon_id "INTEXON015";
+chr_test	test	gene	18600	19100	.	+	.	gene_id "INTGENE012"; gene_name "IntTestGene12"; gene_biotype "protein_coding";
+chr_test	test	transcript	18600	19100	.	+	.	gene_id "INTGENE012"; transcript_id "INTTX012"; gene_name "IntTestGene12";
+chr_test	test	exon	18600	19100	.	+	.	gene_id "INTGENE012"; transcript_id "INTTX012"; exon_number "1"; exon_id "INTEXON016";

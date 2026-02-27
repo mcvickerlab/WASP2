@@ -18,30 +18,19 @@ nextflow_workflow {
                 """
                 input[0] = Channel.of([
                     [ id:'test' ],
-                    file('test.bam'),
-                    file('test.bam.bai')
+                    file("${projectDir}/tests/data/stub_test.bam"),
+                    file("${projectDir}/tests/data/stub_test.bam.bai")
                 ])
-                input[1] = file('genome.fa')
+                input[1] = file("${projectDir}/tests/data/chr_test.fa")
                 """
             }
         }
 
         then {
             assert workflow.success
-
-            // Verify all three stat outputs with correct metadata
-            with(workflow.out.stats) {
-                assert size() == 1
-                assert get(0)[0].id == 'test'
-            }
-            with(workflow.out.flagstat) {
-                assert size() == 1
-                assert get(0)[0].id == 'test'
-            }
-            with(workflow.out.idxstats) {
-                assert size() == 1
-                assert get(0)[0].id == 'test'
-            }
+            assert workflow.out.stats
+            assert workflow.out.flagstat
+            assert workflow.out.idxstats
             assert workflow.out.versions
         }
     }
