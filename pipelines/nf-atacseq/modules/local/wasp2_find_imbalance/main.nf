@@ -23,8 +23,30 @@ process WASP2_FIND_IMBALANCE {
     def args = task.ext.args ?: ''
     def prefix = task.ext.prefix ?: "${meta.id}"
     """
+    # WASP2 v1.4.0 workaround: normalize count-variants output to
+    # the 9-column format expected by find-imbalance Rust backend:
+    #   chrom  pos0  pos  ref  alt  GT  ref_count  alt_count  other_count
+    # count-variants outputs (with --region):
+    #   chrom  pos  ref  alt  GT  region  ref_count  alt_count  other_count
+    # We strip 'region' and insert 'pos0' (= pos - 1).
+    if head -1 ${counts} | grep -q 'region'; then
+        # Strip region column
+        REGION_COL=\$(head -1 ${counts} | tr '\\t' '\\n' | grep -n 'region' | cut -d: -f1)
+        cut -f1-\$((REGION_COL-1)),\$((REGION_COL+1))- ${counts} > ${prefix}_counts_stripped.tsv
+    else
+        cp ${counts} ${prefix}_counts_stripped.tsv
+    fi
+
+    # Insert pos0 column if missing (count-variants lacks it)
+    if ! head -1 ${prefix}_counts_stripped.tsv | grep -q 'pos0'; then
+        awk -F'\\t' 'BEGIN{OFS="\\t"} NR==1{print \$1,"pos0",\$0; next} {print \$1,\$2-1,\$0}' ${prefix}_counts_stripped.tsv | cut -f1,2,4- > ${prefix}_counts_fixed.tsv
+        COUNTS_INPUT=${prefix}_counts_fixed.tsv
+    else
+        COUNTS_INPUT=${prefix}_counts_stripped.tsv
+    fi
+
     wasp2-analyze find-imbalance \\
-        ${counts} \\
+        \$COUNTS_INPUT \\
         --min ${min_count} \\
         --pseudocount ${pseudocount} \\
         ${args} \\

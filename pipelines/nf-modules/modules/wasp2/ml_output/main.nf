@@ -157,13 +157,23 @@ process WASP2_ML_OUTPUT {
             print(f"ERROR: Failed to create AnnData output: {e}", file=sys.stderr)
             sys.exit(1)
 
-    cat <<-END_VERSIONS > versions.yml
-    "${task.process}":
-        wasp2: \$(python -c "import wasp2; print(wasp2.__version__)" 2>/dev/null || echo "dev")
-        pandas: \$(python -c "import pandas; print(pandas.__version__)")
-        zarr: \$(python -c "import zarr; print(zarr.__version__)" 2>/dev/null || echo "N/A")
-        anndata: \$(python -c "import anndata; print(anndata.__version__)" 2>/dev/null || echo "N/A")
-    END_VERSIONS
+    # Write versions.yml
+    with open('versions.yml', 'w') as vf:
+        vf.write('    "${task.process}":\\n')
+        try:
+            import wasp2 as _w2
+            vf.write(f'        wasp2: {_w2.__version__}\\n')
+        except Exception:
+            vf.write('        wasp2: dev\\n')
+        vf.write(f'        pandas: {pd.__version__}\\n')
+        try:
+            vf.write(f'        zarr: {zarr.__version__}\\n')
+        except Exception:
+            vf.write('        zarr: N/A\\n')
+        try:
+            vf.write(f'        anndata: {ad.__version__}\\n')
+        except Exception:
+            vf.write('        anndata: N/A\\n')
     """
 
     stub:

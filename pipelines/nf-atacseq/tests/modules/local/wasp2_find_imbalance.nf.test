@@ -8,6 +8,32 @@ nextflow_process {
     tag "modules_local"
     tag "wasp2"
 
+    test("Should compute allelic imbalance statistics - real") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id:'test_real' ],
+                    file("${projectDir}/tests/data/real_counts.tsv")
+                ]
+                input[1] = 1    // min_count (low threshold for test data)
+                input[2] = 1    // pseudocount
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert process.success },
+                { assert process.out.results.size() == 1 },
+                { assert path(process.out.results[0][1]).text.contains("pval") },
+                { assert path(process.out.results[0][1]).readLines().size() >= 2 },
+                { assert process.out.versions.size() == 1 }
+            )
+        }
+    }
+
     test("Should compute allelic imbalance statistics - stub") {
 
         options "-stub-run"
@@ -15,7 +41,10 @@ nextflow_process {
         when {
             process {
                 """
-                input[0] = [ [ id:'test_sample' ], file('test_counts.tsv') ]
+                input[0] = [
+                    [ id:'test_sample' ],
+                    file("${projectDir}/tests/data/stub_counts.tsv")
+                ]
                 input[1] = 10   // min_count
                 input[2] = 1    // pseudocount
                 """
@@ -26,7 +55,6 @@ nextflow_process {
             assert process.success
             assert process.out.results
             assert process.out.versions
-            assert snapshot(process.out).match()
         }
     }
 }

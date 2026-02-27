@@ -34,7 +34,7 @@ process WASP2_COUNT_SC {
     def prefix = (task.ext.prefix ?: "${meta.id}").replaceAll(/[^a-zA-Z0-9._-]/, '_')
     def sample = meta.sample?.toString()?.replaceAll(/[^a-zA-Z0-9._-]/, '_') ?: ''
     def sample_arg = sample ? "-s ${sample}" : ''
-    def feature_arg = features.name != 'NO_FILE' ? "-f ${features}" : ''
+    def feature_arg = !features.name.startsWith('NO_FILE') ? "-f ${features}" : ''
     """
     set -euo pipefail
 
@@ -91,6 +91,9 @@ import numpy as np
 import pandas as pd
 from scipy import sparse
 import anndata as ad
+
+# Fixed seed for deterministic stub output
+np.random.seed(42)
 
 # Create stub AnnData with allele-specific layers
 n_cells, n_snps = 10, 50

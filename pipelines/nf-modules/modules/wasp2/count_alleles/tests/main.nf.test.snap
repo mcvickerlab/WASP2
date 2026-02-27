@@ -1,0 +1,14 @@
+{
+    "versions_stub": {
+        "content": [
+            [
+                "versions.yml:md5,ea7fb64306546792774a2a6e8e4c5982"
+            ]
+        ],
+        "meta": {
+            "nf-test": "0.9.2",
+            "nextflow": "25.10.4"
+        },
+        "timestamp": "2026-02-25T21:04:16.116587"
+    }
+}

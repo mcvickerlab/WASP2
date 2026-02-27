@@ -1,0 +1,51 @@
+{
+    "Should aggregate per-cell counts to pseudo-bulk - stub": {
+        "content": [
+            {
+                "0": [
+                    [
+                        {
+                            "id": "test_sample"
+                        },
+                        "test_sample_pseudobulk_counts.tsv:md5,8dd6eddd02ac9b332e7461893c1f6452"
+                    ]
+                ],
+                "1": [
+                    [
+                        {
+                            "id": "test_sample"
+                        },
+                        "test_sample_aggregation_stats.tsv:md5,e62b2b0a114e5a2bed549ab875befeb3"
+                    ]
+                ],
+                "2": [
+                    "versions.yml:md5,fdb7ee9107bedde246d78465ab45ac8f"
+                ],
+                "counts": [
+                    [
+                        {
+                            "id": "test_sample"
+                        },
+                        "test_sample_pseudobulk_counts.tsv:md5,8dd6eddd02ac9b332e7461893c1f6452"
+                    ]
+                ],
+                "stats": [
+                    [
+                        {
+                            "id": "test_sample"
+                        },
+                        "test_sample_aggregation_stats.tsv:md5,e62b2b0a114e5a2bed549ab875befeb3"
+                    ]
+                ],
+                "versions": [
+                    "versions.yml:md5,fdb7ee9107bedde246d78465ab45ac8f"
+                ]
+            }
+        ],
+        "meta": {
+            "nf-test": "0.9.2",
+            "nextflow": "25.10.4"
+        },
+        "timestamp": "2026-02-26T01:05:36.796642"
+    }
+}

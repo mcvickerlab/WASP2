@@ -117,8 +117,9 @@ else
     # Gene 2 (INTGENE002): exons at 10500-11500, 12500-13500, 14500-15500 (- strand)
     # Place 5 SNPs in each gene's exonic regions
     #
-    # Two samples: SAMPLE1 has all 10 het, SAMPLE2 has 8 het + 2 hom-ref
-    # This allows testing multi-sample handling and differential allele ratios
+    # Three samples matching BAM filenames: sample1 has all 10 het,
+    # sample2 has 8 het + 2 hom-ref, sample3 has 6 het + 4 hom-ref
+    # Sample names MUST be lowercase to match BAM SM tags and samplesheet
 
     cat > variants.vcf << 'EOVCF'
 ##fileformat=VCFv4.2
@@ -129,19 +130,19 @@ else
 ##INFO=<ID=DP,Number=1,Type=Integer,Description="Total Depth">
 ##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
 ##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Read Depth">
-#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	SAMPLE1	SAMPLE2
-chr_test	750	snp001	C	T	100	PASS	DP=50	GT:DP	0/1:50	0/1:50
-chr_test	1200	snp002	T	G	100	PASS	DP=50	GT:DP	0/1:50	0/1:50
-chr_test	2800	snp003	A	C	100	PASS	DP=50	GT:DP	0/1:50	0/1:50
-chr_test	3200	snp004	G	A	100	PASS	DP=50	GT:DP	0/1:50	0/0:50
-chr_test	5000	snp005	G	T	100	PASS	DP=50	GT:DP	0/1:50	0/1:50
-chr_test	10800	snp006	T	C	100	PASS	DP=50	GT:DP	0/1:50	0/1:50
-chr_test	11200	snp007	A	G	100	PASS	DP=50	GT:DP	0/1:50	0/1:50
-chr_test	12800	snp008	C	A	100	PASS	DP=50	GT:DP	0/1:50	0/0:50
-chr_test	13200	snp009	G	T	100	PASS	DP=50	GT:DP	0/1:50	0/1:50
-chr_test	15000	snp010	A	C	100	PASS	DP=50	GT:DP	0/1:50	0/1:50
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	sample1	sample2	sample3
+chr_test	750	snp001	C	T	100	PASS	DP=50	GT:DP	0/1:50	0/1:50	0/1:50
+chr_test	1200	snp002	T	G	100	PASS	DP=50	GT:DP	0/1:50	0/1:50	0/1:50
+chr_test	2800	snp003	A	C	100	PASS	DP=50	GT:DP	0/1:50	0/1:50	0/0:50
+chr_test	3200	snp004	G	A	100	PASS	DP=50	GT:DP	0/1:50	0/0:50	0/0:50
+chr_test	5000	snp005	G	T	100	PASS	DP=50	GT:DP	0/1:50	0/1:50	0/1:50
+chr_test	10800	snp006	T	C	100	PASS	DP=50	GT:DP	0/1:50	0/1:50	0/0:50
+chr_test	11200	snp007	A	G	100	PASS	DP=50	GT:DP	0/1:50	0/1:50	0/1:50
+chr_test	12800	snp008	C	A	100	PASS	DP=50	GT:DP	0/1:50	0/0:50	0/0:50
+chr_test	13200	snp009	G	T	100	PASS	DP=50	GT:DP	0/1:50	0/1:50	0/1:50
+chr_test	15000	snp010	A	C	100	PASS	DP=50	GT:DP	0/1:50	0/1:50	0/0:50
 EOVCF
-    echo "  ✓ Created variants.vcf (10 het SNPs, 2 samples)"
+    echo "  ✓ Created variants.vcf (10 het SNPs, 3 samples)"
 fi
 
 # Compress and index VCF
