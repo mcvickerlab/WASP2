@@ -154,7 +154,7 @@ class TestCountingParity:
         vcf_path = str(shared_data["vcf"])
 
         # Get het variants by chromosome
-        variants_by_chrom = parse_het_variants_from_vcf(vcf_path, sample="SAMPLE1")
+        variants_by_chrom = parse_het_variants_from_vcf(vcf_path, sample="sample1")
 
         # Collect Python counts
         python_counts = {}
