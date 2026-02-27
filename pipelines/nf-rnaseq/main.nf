@@ -227,11 +227,14 @@ workflow RNASEQ_ASE {
 
     //
     // STEP 5: Count alleles at heterozygous SNPs
+    // Note: GTF not passed to count step because WASP2 v1.4.0 find-imbalance
+    // Rust backend does not support gene-annotated count formats.
+    // Gene annotation can be added post-hoc by intersecting with GTF.
     //
     WASP2_COUNT_ALLELES(
         WASP2_FILTER_REMAPPED.out.bam,
         ch_vcf.first(),
-        ch_gtf
+        []
     )
     ch_versions = ch_versions.mix(WASP2_COUNT_ALLELES.out.versions)
 

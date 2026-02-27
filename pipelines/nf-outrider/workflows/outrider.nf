@@ -125,7 +125,8 @@ workflow OUTRIDER {
         params.outrider_zScore,
         params.outrider_q ?: 0,           // 0 = auto-estimate encoding dimension
         params.outrider_iterations,
-        params.outrider_convergence
+        params.outrider_convergence,
+        params.outrider_min_count ?: 10   // min count per gene for expression filter
     )
     ch_outliers = OUTRIDER_FIT.out.results
     ch_versions = ch_versions.mix(OUTRIDER_FIT.out.versions)

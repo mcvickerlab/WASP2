@@ -19,7 +19,7 @@ nextflow_process {
                 """
                 input[0] = [
                     [ id:'test_real' ],
-                    file("${projectDir}/tests/data/sample.counts_real.tsv")
+                    file("${projectDir}/tests/data/test_counts.tsv")
                 ]
                 """
             }

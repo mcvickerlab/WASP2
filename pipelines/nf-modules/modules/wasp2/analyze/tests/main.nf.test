@@ -36,12 +36,14 @@ nextflow_process {
 
     test("wasp2_analyze - counts - real") {
 
+        config "./min_count.config"
+
         when {
             process {
                 """
                 input[0] = [
                     [ id:'test_real', phased:false ],
-                    file("${projectDir}/tests/data/sample.counts_real.tsv")
+                    file("${projectDir}/tests/data/test_counts.tsv")
                 ]
                 """
             }

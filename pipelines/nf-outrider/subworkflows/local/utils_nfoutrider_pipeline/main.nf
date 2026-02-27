@@ -68,21 +68,7 @@ workflow PIPELINE_COMPLETION {
     multiqc_report  // channel: multiqc report
 
     main:
-    // Completion message
-    workflow.onComplete {
-        if (workflow.success) {
-            log.info "Pipeline completed successfully!"
-            log.info "Results are available in: ${outdir}"
-        } else {
-            log.error "Pipeline completed with errors"
-        }
-    }
-
-    // Error handling
-    workflow.onError {
-        log.error "Pipeline execution stopped with an error"
-        log.error "Error message: ${workflow.errorMessage}"
-    }
+    log.info "Pipeline output directory: ${params.outdir}"
 }
 
 /*

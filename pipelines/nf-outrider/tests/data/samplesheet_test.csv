@@ -1,4 +1,4 @@
 sample,bam,bai
-sample1,/iblm/netapp/data3/jjaureguy/gvl_files/wasp2/WASP2-final/pipelines/nf-outrider/tests/data/sample1.bam,/iblm/netapp/data3/jjaureguy/gvl_files/wasp2/WASP2-final/pipelines/nf-outrider/tests/data/sample1.bam.bai
-sample2,/iblm/netapp/data3/jjaureguy/gvl_files/wasp2/WASP2-final/pipelines/nf-outrider/tests/data/sample2.bam,/iblm/netapp/data3/jjaureguy/gvl_files/wasp2/WASP2-final/pipelines/nf-outrider/tests/data/sample2.bam.bai
-sample3,/iblm/netapp/data3/jjaureguy/gvl_files/wasp2/WASP2-final/pipelines/nf-outrider/tests/data/sample3.bam,/iblm/netapp/data3/jjaureguy/gvl_files/wasp2/WASP2-final/pipelines/nf-outrider/tests/data/sample3.bam.bai
+sample1,${projectDir}/tests/data/sample1.bam,${projectDir}/tests/data/sample1.bam.bai
+sample2,${projectDir}/tests/data/sample2.bam,${projectDir}/tests/data/sample2.bam.bai
+sample3,${projectDir}/tests/data/sample3.bam,${projectDir}/tests/data/sample3.bam.bai

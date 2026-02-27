@@ -1,2 +1,2 @@
 sample,fastq_1,fastq_2,sample_name
-test_sample1,tests/data/sample1_R1.fq.gz,tests/data/sample1_R2.fq.gz,SAMPLE1
+test_sample1,tests/data/sample1_R1.fq.gz,tests/data/sample1_R2.fq.gz,sample1

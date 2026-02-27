@@ -115,26 +115,7 @@ workflow PIPELINE_COMPLETION {
 
     main:
     //
-    // Completion summary
+    // Completion summary (logged at script scope, not inside named workflow)
     //
-    workflow.onComplete {
-        if (workflow.success) {
-            log.info "-" * 60
-            log.info "Pipeline completed successfully!"
-            log.info "-" * 60
-            log.info "Output directory: ${outdir}"
-            log.info "Duration: ${workflow.duration}"
-            log.info "-" * 60
-        } else {
-            log.error "-" * 60
-            log.error "Pipeline completed with errors"
-            log.error "-" * 60
-            log.error "Check '.nextflow.log' for details"
-            log.error "-" * 60
-        }
-    }
-
-    workflow.onError {
-        log.error "Pipeline execution stopped with the following error: ${workflow.errorMessage}"
-    }
+    log.info "Pipeline output directory: ${params.outdir}"
 }
