@@ -171,6 +171,10 @@ pipelines/*/.nf-test-*.nf
 # Temporary test output
 test_data/
 test_results/
+test-output/
+results_stub/
+pipelines/*/test-output/
+pipelines/*/results_stub/
 
 # Claude Code memory files (per-directory)
 **/CLAUDE.md

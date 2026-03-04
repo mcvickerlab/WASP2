@@ -8,6 +8,32 @@ nextflow_process {
     tag "modules_local"
     tag "wasp2"
 
+    test("Should perform statistical testing for allelic imbalance - real") {
+
+        when {
+            params {
+                min_count = 1
+            }
+            process {
+                """
+                input[0] = [
+                    [ id:'test_real' ],
+                    file("${projectDir}/tests/data/real_counts.tsv")
+                ]
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert process.success },
+                { assert process.out.results.size() == 1 },
+                { assert path(process.out.results[0][1]).readLines().size() >= 2 },
+                { assert process.out.versions.size() == 1 }
+            )
+        }
+    }
+
     test("Should perform statistical testing for allelic imbalance - stub") {
 
         options "-stub-run"

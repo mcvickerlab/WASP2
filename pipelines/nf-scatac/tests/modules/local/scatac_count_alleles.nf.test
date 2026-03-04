@@ -21,8 +21,8 @@ nextflow_process {
                     file('fragments.tsv.gz.tbi'),
                     file('snps.bed')
                 ]
-                input[1] = file('NO_FILE')  // No barcode filter
-                input[2] = file('NO_FILE')  // No peak filter
+                input[1] = file('NO_FILE_BARCODES')  // No barcode filter
+                input[2] = file('NO_FILE_PEAKS')      // No peak filter
                 """
             }
         }
@@ -50,7 +50,7 @@ nextflow_process {
                     file('snps.bed')
                 ]
                 input[1] = file('barcodes.txt')
-                input[2] = file('NO_FILE')
+                input[2] = file('NO_FILE_PEAKS')
                 """
             }
         }
@@ -76,7 +76,7 @@ nextflow_process {
                     file('fragments.tsv.gz.tbi'),
                     file('snps.bed')
                 ]
-                input[1] = file('NO_FILE')
+                input[1] = file('NO_FILE_BARCODES')
                 input[2] = file('peaks.bed')
                 """
             }

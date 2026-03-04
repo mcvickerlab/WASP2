@@ -15,8 +15,8 @@ process SCATAC_COUNT_ALLELES {
 
     conda "${projectDir}/../nf-modules/modules/wasp2/environment.yml"
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
-        'https://depot.galaxyproject.org/singularity/wasp2:1.2.1--pyhdfd78af_0' :
-        'biocontainers/wasp2:1.2.1--pyhdfd78af_0' }"
+        'docker://ghcr.io/mcvickerlab/wasp2:1.4.0' :
+        'ghcr.io/mcvickerlab/wasp2:1.4.0' }"
 
     input:
     tuple val(meta), path(fragments), path(fragments_tbi), path(snp_bed)
@@ -34,8 +34,8 @@ process SCATAC_COUNT_ALLELES {
     script:
     def prefix = task.ext.prefix ?: "${meta.id}"
     def min_frags = params.min_fragments_per_cell ?: 1000
-    def filter_barcodes = barcodes.name != 'NO_FILE' ? "true" : "false"
-    def filter_peaks = peaks.name != 'NO_FILE' ? "true" : "false"
+    def filter_barcodes = !barcodes.name.startsWith('NO_FILE') ? "true" : "false"
+    def filter_peaks = !peaks.name.startsWith('NO_FILE') ? "true" : "false"
     """
     set -euo pipefail
 

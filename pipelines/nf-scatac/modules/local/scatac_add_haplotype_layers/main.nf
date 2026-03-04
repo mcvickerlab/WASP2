@@ -20,8 +20,8 @@ process SCATAC_ADD_HAPLOTYPE_LAYERS {
 
     conda "${projectDir}/../nf-modules/modules/wasp2/environment.yml"
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
-        'https://depot.galaxyproject.org/singularity/wasp2:1.2.1--pyhdfd78af_0' :
-        'biocontainers/wasp2:1.2.1--pyhdfd78af_0' }"
+        'docker://ghcr.io/mcvickerlab/wasp2:1.4.0' :
+        'ghcr.io/mcvickerlab/wasp2:1.4.0' }"
 
     input:
     tuple val(meta), path(anndata)
@@ -204,13 +204,15 @@ import pandas as pd
 from scipy import sparse
 import anndata as ad
 
+np.random.seed(42)  # Deterministic stub for reproducible snapshots
+
 # Create stub AnnData with all layers
 n_cells, n_snps = 10, 50
-X = sparse.random(n_cells, n_snps, density=0.3, format='csr')
-ref = sparse.random(n_cells, n_snps, density=0.3, format='csr')
-alt = sparse.random(n_cells, n_snps, density=0.3, format='csr')
-hap1 = sparse.random(n_cells, n_snps, density=0.3, format='csr')
-hap2 = sparse.random(n_cells, n_snps, density=0.3, format='csr')
+X = sparse.random(n_cells, n_snps, density=0.3, format='csr', random_state=42)
+ref = sparse.random(n_cells, n_snps, density=0.3, format='csr', random_state=43)
+alt = sparse.random(n_cells, n_snps, density=0.3, format='csr', random_state=44)
+hap1 = sparse.random(n_cells, n_snps, density=0.3, format='csr', random_state=45)
+hap2 = sparse.random(n_cells, n_snps, density=0.3, format='csr', random_state=46)
 
 obs = pd.DataFrame({
     'n_snps': np.random.randint(10, 50, n_cells),

@@ -1,0 +1,26 @@
+{
+    "stub_workflow_tasks": {
+        "content": [
+            12,
+            [
+                "RNASEQ_ASE:STAR_ALIGN_INITIAL (SAMPLE1)",
+                "RNASEQ_ASE:STAR_ALIGN_INITIAL (SAMPLE2)",
+                "RNASEQ_ASE:STAR_ALIGN_REMAP (SAMPLE1)",
+                "RNASEQ_ASE:STAR_ALIGN_REMAP (SAMPLE2)",
+                "RNASEQ_ASE:WASP2_ANALYZE_IMBALANCE (SAMPLE1)",
+                "RNASEQ_ASE:WASP2_ANALYZE_IMBALANCE (SAMPLE2)",
+                "RNASEQ_ASE:WASP2_COUNT_ALLELES (SAMPLE1)",
+                "RNASEQ_ASE:WASP2_COUNT_ALLELES (SAMPLE2)",
+                "RNASEQ_ASE:WASP2_FILTER_REMAPPED (SAMPLE1)",
+                "RNASEQ_ASE:WASP2_FILTER_REMAPPED (SAMPLE2)",
+                "RNASEQ_ASE:WASP2_UNIFIED_MAKE_READS (SAMPLE1)",
+                "RNASEQ_ASE:WASP2_UNIFIED_MAKE_READS (SAMPLE2)"
+            ]
+        ],
+        "meta": {
+            "nf-test": "0.9.2",
+            "nextflow": "25.10.4"
+        },
+        "timestamp": "2026-02-26T03:17:47.710422"
+    }
+}

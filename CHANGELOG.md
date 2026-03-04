@@ -2,6 +2,39 @@
 
 All notable changes to WASP2 will be documented in this file.
 
+## [1.4.0] - 2026-02-25
+
+### Fixed
+- **14 verified bug fixes** across Python and Rust pipelines:
+  - `not` → `~` on pandas Series for chromosome filtering (#50)
+  - `samples[0]` truncation — pass full list instead of first element (#51)
+  - `--phased`/`--region_col`/`--groupby` forwarded to Rust analysis (#52)
+  - `AttributeError` on `is_gene_file` when no feature file provided (#53)
+  - `NameError` on `json_dict` in mapping pipeline (#54)
+  - Dead expression in `compare_ai.py` snp_cutoff calculation (#55)
+  - VCF genotype Debug-format parsing fragility in Rust (#56)
+  - `remap_names_path` checked in parallel fallback path (#57)
+  - Removed `removed_moved` double-counting in mapping stats (#58)
+  - BGZF reader fallback for standard gzip VCF files (#59)
+  - uint8 → uint16 overflow in single-cell sparse matrices (#60)
+  - Non-deterministic output order from parallel analysis (#62)
+  - Phased check strict equality → issubset (#63)
+  - `.all()` → `.any()` in GTF attribute detection (#64)
+  - Phase detection reads 100 VCF records instead of 1 (#65)
+- Linear model shape mismatch in analysis benchmarks
+- `test_opt_prob` missing argument in test suite
+
+### Added
+- **pixi.toml** for one-command reproducible environments (`pixi install`)
+- **Python 3.13** support (wheels built for 3.10–3.13)
+- **Bioconda recipe** with maturin+Rust build support
+- Mamba/conda installation documentation with miniforge link
+
+### Changed
+- Installation docs reordered: pixi (recommended) → pip → mamba/conda → Docker
+- `release.yml` builds 16 wheels (4 Python × 4 platforms, up from 12)
+- Version consistency checks cover Dockerfile and Singularity.def
+
 ## [1.3.0] - 2025-01-29
 
 ### Added

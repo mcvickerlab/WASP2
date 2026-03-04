@@ -43,7 +43,7 @@ workflow WASP_ALLELIC_SC {
     // Note: .branch uses first-match semantics, so fragment_based is a fallback
     ch_branched = ch_input
         .branch {
-            bam_based: it[5].name != 'NO_FILE'  // has BAM file
+            bam_based: it[5] != null && !it[5].name.startsWith('NO_FILE')  // has BAM file
             fragment_based: true                 // fallback: no BAM, use fragments
         }
 

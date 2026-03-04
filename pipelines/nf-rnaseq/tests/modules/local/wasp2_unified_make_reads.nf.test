@@ -8,6 +8,37 @@ nextflow_process {
     tag "modules_local"
     tag "wasp2"
 
+    test("Should generate swapped-allele reads for remapping - real") {
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id:'test_real', single_end:false, sample:'SAMPLE1' ],
+                    file("${projectDir}/tests/data/real_test.bam"),
+                    file("${projectDir}/tests/data/real_test.bam.bai")
+                ]
+                input[1] = [
+                    [ id:'reference' ],
+                    file("${projectDir}/tests/data/real_test_variants.vcf.gz"),
+                    file("${projectDir}/tests/data/real_test_variants.vcf.gz.tbi")
+                ]
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert process.success },
+                { assert process.out.remap_fastq.size() == 1 },
+                { assert process.out.to_remap_bam.size() == 1 },
+                { assert process.out.keep_bam.size() == 1 },
+                { assert process.out.wasp_json.size() == 1 },
+                { assert process.out.versions.size() == 1 }
+            )
+        }
+    }
+
     test("Should generate swapped-allele reads for remapping - stub") {
 
         options "-stub-run"

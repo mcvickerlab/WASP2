@@ -12,8 +12,8 @@ process WASP2_COUNT_SC {
 
     conda "${moduleDir}/../environment.yml"
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
-        'https://depot.galaxyproject.org/singularity/wasp2:1.2.1--pyhdfd78af_0' :
-        'biocontainers/wasp2:1.2.1--pyhdfd78af_0' }"
+        'docker://ghcr.io/mcvickerlab/wasp2:1.4.0' :
+        'ghcr.io/mcvickerlab/wasp2:1.4.0' }"
 
     input:
     tuple val(meta), path(bam), path(bai)
@@ -34,7 +34,7 @@ process WASP2_COUNT_SC {
     def prefix = (task.ext.prefix ?: "${meta.id}").replaceAll(/[^a-zA-Z0-9._-]/, '_')
     def sample = meta.sample?.toString()?.replaceAll(/[^a-zA-Z0-9._-]/, '_') ?: ''
     def sample_arg = sample ? "-s ${sample}" : ''
-    def feature_arg = features.name != 'NO_FILE' ? "-f ${features}" : ''
+    def feature_arg = !features.name.startsWith('NO_FILE') ? "-f ${features}" : ''
     """
     set -euo pipefail
 
@@ -91,6 +91,9 @@ import numpy as np
 import pandas as pd
 from scipy import sparse
 import anndata as ad
+
+# Fixed seed for deterministic stub output
+np.random.seed(42)
 
 # Create stub AnnData with allele-specific layers
 n_cells, n_snps = 10, 50

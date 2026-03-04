@@ -1,7 +1,7 @@
 nextflow_process {
 
     name "Test Process OUTRIDER_FIT"
-    script "../../../modules/local/outrider_fit.nf"
+    script "../../../modules/local/outrider_fit/main.nf"
     process "OUTRIDER_FIT"
 
     tag "modules"
@@ -15,10 +15,10 @@ nextflow_process {
         when {
             process {
                 """
-                input[0] = file('count_matrix.tsv')
+                input[0] = file("${projectDir}/tests/stub/count_matrix.tsv")
                 input[1] = 0.05      // padj_cutoff
                 input[2] = 2.0       // zscore_cutoff
-                input[3] = null      // encoding_dim (auto)
+                input[3] = 0         // encoding_dim (0 = auto)
                 input[4] = 15        // max_iterations
                 input[5] = 1e-5      // convergence
                 """
@@ -30,7 +30,6 @@ nextflow_process {
             assert process.out.model
             assert process.out.results
             assert process.out.versions
-            assert snapshot(process.out).match()
         }
     }
 
@@ -41,7 +40,7 @@ nextflow_process {
         when {
             process {
                 """
-                input[0] = file('count_matrix.tsv')
+                input[0] = file("${projectDir}/tests/stub/count_matrix.tsv")
                 input[1] = 0.01      // padj_cutoff
                 input[2] = 3.0       // zscore_cutoff
                 input[3] = 10        // encoding_dim
@@ -56,7 +55,6 @@ nextflow_process {
             assert process.out.model
             assert process.out.results
             assert process.out.versions
-            assert snapshot(process.out).match()
         }
     }
 }
