@@ -1,0 +1,51 @@
+# WASP2 Runtime Environment
+# Source of truth for reproducible installs (conda-lock target)
+# Build deps (rust, libclang, clang, maturin) excluded — only needed to compile
+name: WASP2
+channels:
+  - bioconda
+  - conda-forge
+
+# plink2 and all bioconda bio tools only support linux-64 and osx-64
+# (not osx-arm64, linux-aarch64, or win-64)
+platforms:
+  - linux-64
+  - osx-64
+
+dependencies:
+  # Core Python
+  - python=3.11.*
+
+  # Data processing
+  - numpy>=1.21,<2.0
+  - pandas>=1.5,<3.0
+  - polars>=0.19
+  - scipy>=1.10
+
+  # Bioinformatics (bioconda)
+  - pysam>=0.21
+  - pybedtools>=0.9
+  - bedtools>=2.30
+  - bcftools>=1.10
+  - samtools>=1.10
+  - htslib>=1.10
+  - bwa>=0.7
+  - anndata>=0.8,<0.12
+  - scanpy>=1.9
+  - plink2
+
+  # CLI
+  - typer>=0.12
+  - rich>=13.0
+  - typing_extensions
+
+  # Dev
+  - pytest>=7.0
+  - pytest-cov>=4.0
+  - mypy>=1.0
+  - ruff>=0.9
+
+  # Pip-only runtime deps
+  - pip
+  - pip:
+    - Pgenlib>=0.90

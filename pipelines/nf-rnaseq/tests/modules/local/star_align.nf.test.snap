@@ -1,0 +1,184 @@
+{
+    "Should align single-end reads with STAR - stub": {
+        "content": [
+            {
+                "0": [
+                    [
+                        {
+                            "id": "test_sample_se",
+                            "single_end": true
+                        },
+                        "test_sample_se.Aligned.sortedByCoord.out.bam:md5,d41d8cd98f00b204e9800998ecf8427e",
+                        "test_sample_se.Aligned.sortedByCoord.out.bam.bai:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "1": [
+                    [
+                        {
+                            "id": "test_sample_se",
+                            "single_end": true
+                        },
+                        "test_sample_se.Log.final.out:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "2": [
+                    [
+                        {
+                            "id": "test_sample_se",
+                            "single_end": true
+                        },
+                        "test_sample_se.Log.out:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "3": [
+                    [
+                        {
+                            "id": "test_sample_se",
+                            "single_end": true
+                        },
+                        "test_sample_se.SJ.out.tab:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "4": [
+                    "versions.yml:md5,c9cc52a1314fdf6a45e9b4a57fe89799"
+                ],
+                "bam": [
+                    [
+                        {
+                            "id": "test_sample_se",
+                            "single_end": true
+                        },
+                        "test_sample_se.Aligned.sortedByCoord.out.bam:md5,d41d8cd98f00b204e9800998ecf8427e",
+                        "test_sample_se.Aligned.sortedByCoord.out.bam.bai:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "log_final": [
+                    [
+                        {
+                            "id": "test_sample_se",
+                            "single_end": true
+                        },
+                        "test_sample_se.Log.final.out:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "log_out": [
+                    [
+                        {
+                            "id": "test_sample_se",
+                            "single_end": true
+                        },
+                        "test_sample_se.Log.out:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "sj_tab": [
+                    [
+                        {
+                            "id": "test_sample_se",
+                            "single_end": true
+                        },
+                        "test_sample_se.SJ.out.tab:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "versions": [
+                    "versions.yml:md5,c9cc52a1314fdf6a45e9b4a57fe89799"
+                ]
+            }
+        ],
+        "meta": {
+            "nf-test": "0.9.2",
+            "nextflow": "25.10.4"
+        },
+        "timestamp": "2026-02-26T01:46:30.960097"
+    },
+    "Should align paired-end reads with STAR - stub": {
+        "content": [
+            {
+                "0": [
+                    [
+                        {
+                            "id": "test_sample",
+                            "single_end": false
+                        },
+                        "test_sample.Aligned.sortedByCoord.out.bam:md5,d41d8cd98f00b204e9800998ecf8427e",
+                        "test_sample.Aligned.sortedByCoord.out.bam.bai:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "1": [
+                    [
+                        {
+                            "id": "test_sample",
+                            "single_end": false
+                        },
+                        "test_sample.Log.final.out:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "2": [
+                    [
+                        {
+                            "id": "test_sample",
+                            "single_end": false
+                        },
+                        "test_sample.Log.out:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "3": [
+                    [
+                        {
+                            "id": "test_sample",
+                            "single_end": false
+                        },
+                        "test_sample.SJ.out.tab:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "4": [
+                    "versions.yml:md5,c9cc52a1314fdf6a45e9b4a57fe89799"
+                ],
+                "bam": [
+                    [
+                        {
+                            "id": "test_sample",
+                            "single_end": false
+                        },
+                        "test_sample.Aligned.sortedByCoord.out.bam:md5,d41d8cd98f00b204e9800998ecf8427e",
+                        "test_sample.Aligned.sortedByCoord.out.bam.bai:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "log_final": [
+                    [
+                        {
+                            "id": "test_sample",
+                            "single_end": false
+                        },
+                        "test_sample.Log.final.out:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "log_out": [
+                    [
+                        {
+                            "id": "test_sample",
+                            "single_end": false
+                        },
+                        "test_sample.Log.out:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "sj_tab": [
+                    [
+                        {
+                            "id": "test_sample",
+                            "single_end": false
+                        },
+                        "test_sample.SJ.out.tab:md5,d41d8cd98f00b204e9800998ecf8427e"
+                    ]
+                ],
+                "versions": [
+                    "versions.yml:md5,c9cc52a1314fdf6a45e9b4a57fe89799"
+                ]
+            }
+        ],
+        "meta": {
+            "nf-test": "0.9.2",
+            "nextflow": "25.10.4"
+        },
+        "timestamp": "2026-02-26T01:46:19.010725"
+    }
+}

@@ -4,8 +4,8 @@ process WASP2_FILTER_REMAPPED {
 
     conda "${moduleDir}/../environment.yml"
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
-        'https://depot.galaxyproject.org/singularity/wasp2:1.2.1--pyhdfd78af_0' :
-        'biocontainers/wasp2:1.2.1--pyhdfd78af_0' }"
+        'docker://ghcr.io/mcvickerlab/wasp2:1.4.0' :
+        'ghcr.io/mcvickerlab/wasp2:1.4.0' }"
 
     input:
     tuple val(meta), path(remapped_bam), path(remapped_bai)
@@ -27,11 +27,11 @@ process WASP2_FILTER_REMAPPED {
     def threads = task.cpus ?: 4
     """
     # Filter remapped reads using WASP algorithm
+    # Note: use positional args for BAMs, not --json (which overrides positional args)
     wasp2-map filter-remapped \\
         ${remapped_bam} \\
         ${to_remap_bam} \\
         ${keep_bam} \\
-        --json ${wasp_json} \\
         --out_bam ${prefix}_remapped_filt.bam \\
         --threads ${threads} \\
         --use-rust \\

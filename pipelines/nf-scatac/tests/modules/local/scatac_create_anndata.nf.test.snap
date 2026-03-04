@@ -1,0 +1,126 @@
+{
+    "Should create AnnData with Zarr output - stub": {
+        "content": [
+            {
+                "0": [
+                    [
+                        {
+                            "id": "test_sample_zarr"
+                        },
+                        "test_sample_zarr_allelic.h5ad:md5,8b66deaf104c8e17f66cd4632c588a1d"
+                    ]
+                ],
+                "1": [
+                    [
+                        {
+                            "id": "test_sample_zarr"
+                        },
+                        [
+                            ".zgroup:md5,d41d8cd98f00b204e9800998ecf8427e"
+                        ]
+                    ]
+                ],
+                "2": [
+                    [
+                        {
+                            "id": "test_sample_zarr"
+                        },
+                        "test_sample_zarr_cell_qc.tsv:md5,8ddb1ffa45ba8018102b06e8fcc16028"
+                    ]
+                ],
+                "3": [
+                    "versions.yml:md5,f04af551a185517616b3cd65b6ba6ec7"
+                ],
+                "anndata": [
+                    [
+                        {
+                            "id": "test_sample_zarr"
+                        },
+                        "test_sample_zarr_allelic.h5ad:md5,8b66deaf104c8e17f66cd4632c588a1d"
+                    ]
+                ],
+                "cell_qc": [
+                    [
+                        {
+                            "id": "test_sample_zarr"
+                        },
+                        "test_sample_zarr_cell_qc.tsv:md5,8ddb1ffa45ba8018102b06e8fcc16028"
+                    ]
+                ],
+                "versions": [
+                    "versions.yml:md5,f04af551a185517616b3cd65b6ba6ec7"
+                ],
+                "zarr": [
+                    [
+                        {
+                            "id": "test_sample_zarr"
+                        },
+                        [
+                            ".zgroup:md5,d41d8cd98f00b204e9800998ecf8427e"
+                        ]
+                    ]
+                ]
+            }
+        ],
+        "meta": {
+            "nf-test": "0.9.2",
+            "nextflow": "25.10.4"
+        },
+        "timestamp": "2026-02-26T01:05:25.329358"
+    },
+    "Should create AnnData H5AD from allele counts - stub": {
+        "content": [
+            {
+                "0": [
+                    [
+                        {
+                            "id": "test_sample"
+                        },
+                        "test_sample_allelic.h5ad:md5,8b66deaf104c8e17f66cd4632c588a1d"
+                    ]
+                ],
+                "1": [
+                    
+                ],
+                "2": [
+                    [
+                        {
+                            "id": "test_sample"
+                        },
+                        "test_sample_cell_qc.tsv:md5,8ddb1ffa45ba8018102b06e8fcc16028"
+                    ]
+                ],
+                "3": [
+                    "versions.yml:md5,f04af551a185517616b3cd65b6ba6ec7"
+                ],
+                "anndata": [
+                    [
+                        {
+                            "id": "test_sample"
+                        },
+                        "test_sample_allelic.h5ad:md5,8b66deaf104c8e17f66cd4632c588a1d"
+                    ]
+                ],
+                "cell_qc": [
+                    [
+                        {
+                            "id": "test_sample"
+                        },
+                        "test_sample_cell_qc.tsv:md5,8ddb1ffa45ba8018102b06e8fcc16028"
+                    ]
+                ],
+                "versions": [
+                    "versions.yml:md5,f04af551a185517616b3cd65b6ba6ec7"
+                ],
+                "zarr": [
+                    
+                ]
+            }
+        ],
+        "meta": {
+            "nf-test": "0.9.2",
+            "nextflow": "25.10.4"
+        },
+        "timestamp": "2026-02-26T01:05:13.50788"
+    }
+}

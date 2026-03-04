@@ -1,0 +1,149 @@
+{
+    "Should count fragment overlaps at SNP positions - stub": {
+        "content": [
+            {
+                "0": [
+                    [
+                        {
+                            "id": "test_sample"
+                        },
+                        "test_sample_allele_counts.tsv:md5,8ecc233071c9dfc9a44e06b76cb4b0a4"
+                    ]
+                ],
+                "1": [
+                    [
+                        {
+                            "id": "test_sample"
+                        },
+                        "test_sample_count_stats.tsv:md5,467cc85ecd9abf22415ecd0cbd7c5de3"
+                    ]
+                ],
+                "2": [
+                    "versions.yml:md5,fefc9cd1d217811418c4879c5d83f9dd"
+                ],
+                "counts": [
+                    [
+                        {
+                            "id": "test_sample"
+                        },
+                        "test_sample_allele_counts.tsv:md5,8ecc233071c9dfc9a44e06b76cb4b0a4"
+                    ]
+                ],
+                "stats": [
+                    [
+                        {
+                            "id": "test_sample"
+                        },
+                        "test_sample_count_stats.tsv:md5,467cc85ecd9abf22415ecd0cbd7c5de3"
+                    ]
+                ],
+                "versions": [
+                    "versions.yml:md5,fefc9cd1d217811418c4879c5d83f9dd"
+                ]
+            }
+        ],
+        "meta": {
+            "nf-test": "0.9.2",
+            "nextflow": "25.10.4"
+        },
+        "timestamp": "2026-02-26T01:04:37.191423"
+    },
+    "Should filter by barcode whitelist - stub": {
+        "content": [
+            {
+                "0": [
+                    [
+                        {
+                            "id": "test_sample_filtered"
+                        },
+                        "test_sample_filtered_allele_counts.tsv:md5,8ecc233071c9dfc9a44e06b76cb4b0a4"
+                    ]
+                ],
+                "1": [
+                    [
+                        {
+                            "id": "test_sample_filtered"
+                        },
+                        "test_sample_filtered_count_stats.tsv:md5,467cc85ecd9abf22415ecd0cbd7c5de3"
+                    ]
+                ],
+                "2": [
+                    "versions.yml:md5,fefc9cd1d217811418c4879c5d83f9dd"
+                ],
+                "counts": [
+                    [
+                        {
+                            "id": "test_sample_filtered"
+                        },
+                        "test_sample_filtered_allele_counts.tsv:md5,8ecc233071c9dfc9a44e06b76cb4b0a4"
+                    ]
+                ],
+                "stats": [
+                    [
+                        {
+                            "id": "test_sample_filtered"
+                        },
+                        "test_sample_filtered_count_stats.tsv:md5,467cc85ecd9abf22415ecd0cbd7c5de3"
+                    ]
+                ],
+                "versions": [
+                    "versions.yml:md5,fefc9cd1d217811418c4879c5d83f9dd"
+                ]
+            }
+        ],
+        "meta": {
+            "nf-test": "0.9.2",
+            "nextflow": "25.10.4"
+        },
+        "timestamp": "2026-02-26T01:04:49.223778"
+    },
+    "Should filter by peak regions - stub": {
+        "content": [
+            {
+                "0": [
+                    [
+                        {
+                            "id": "test_sample_peaks"
+                        },
+                        "test_sample_peaks_allele_counts.tsv:md5,8ecc233071c9dfc9a44e06b76cb4b0a4"
+                    ]
+                ],
+                "1": [
+                    [
+                        {
+                            "id": "test_sample_peaks"
+                        },
+                        "test_sample_peaks_count_stats.tsv:md5,467cc85ecd9abf22415ecd0cbd7c5de3"
+                    ]
+                ],
+                "2": [
+                    "versions.yml:md5,fefc9cd1d217811418c4879c5d83f9dd"
+                ],
+                "counts": [
+                    [
+                        {
+                            "id": "test_sample_peaks"
+                        },
+                        "test_sample_peaks_allele_counts.tsv:md5,8ecc233071c9dfc9a44e06b76cb4b0a4"
+                    ]
+                ],
+                "stats": [
+                    [
+                        {
+                            "id": "test_sample_peaks"
+                        },
+                        "test_sample_peaks_count_stats.tsv:md5,467cc85ecd9abf22415ecd0cbd7c5de3"
+                    ]
+                ],
+                "versions": [
+                    "versions.yml:md5,fefc9cd1d217811418c4879c5d83f9dd"
+                ]
+            }
+        ],
+        "meta": {
+            "nf-test": "0.9.2",
+            "nextflow": "25.10.4"
+        },
+        "timestamp": "2026-02-26T01:05:01.430613"
+    }
+}

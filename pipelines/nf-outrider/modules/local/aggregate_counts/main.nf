@@ -4,8 +4,8 @@ process AGGREGATE_COUNTS {
 
     conda "${moduleDir}/../../../environment.yml"
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
-        'https://depot.galaxyproject.org/singularity/wasp2:1.2.1--pyhdfd78af_0' :
-        'biocontainers/wasp2:1.2.1--pyhdfd78af_0' }"
+        'docker://ghcr.io/mcvickerlab/wasp2:1.4.0' :
+        'ghcr.io/mcvickerlab/wasp2:1.4.0' }"
 
     input:
     tuple val(meta), path(counts)
@@ -55,9 +55,9 @@ def parse_gtf_gene_map(gtf_path):
                         key, val = attr.split(' ', 1)
                         attrs[key] = val.strip('"')
                 gene_id = attrs.get('gene_id', 'unknown')
-                # Store gene boundaries
-                for pos in range(start, end + 1, 1000):  # Sample positions
-                    key = f"{chrom}:{pos // 1000}"
+                # Index every 1kb bin this gene overlaps
+                for bin_idx in range(start // 1000, (end // 1000) + 1):
+                    key = f"{chrom}:{bin_idx}"
                     if key not in gene_map:
                         gene_map[key] = []
                     gene_map[key].append((start, end, gene_id))

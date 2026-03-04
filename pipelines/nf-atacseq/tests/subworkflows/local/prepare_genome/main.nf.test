@@ -15,11 +15,11 @@ nextflow_workflow {
 
         when {
             params {
-                fasta = "genome.fa"
-                fasta_fai = null
-                bwa_index = null
+                fasta         = "${projectDir}/tests/data/chr_test.fa"
+                fasta_fai     = null
+                bwa_index     = null
                 bowtie2_index = null
-                aligner = "bwa"
+                aligner       = "bwa"
             }
         }
 
@@ -39,11 +39,11 @@ nextflow_workflow {
 
         when {
             params {
-                fasta = "genome.fa"
-                fasta_fai = null
-                bwa_index = null
+                fasta         = "${projectDir}/tests/data/chr_test.fa"
+                fasta_fai     = null
+                bwa_index     = null
                 bowtie2_index = null
-                aligner = "bowtie2"
+                aligner       = "bowtie2"
             }
         }
 
@@ -63,11 +63,11 @@ nextflow_workflow {
 
         when {
             params {
-                fasta = null
-                fasta_fai = null
-                bwa_index = null
+                fasta         = null
+                fasta_fai     = null
+                bwa_index     = null
                 bowtie2_index = null
-                aligner = "bwa"
+                aligner       = "bwa"
             }
         }
 

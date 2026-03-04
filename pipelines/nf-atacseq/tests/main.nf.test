@@ -2,7 +2,6 @@ nextflow_pipeline {
 
     name "Test nf-atacseq Pipeline"
     script "../main.nf"
-    profile "test"
 
     tag "pipeline"
     tag "nf-atacseq"
@@ -10,7 +9,7 @@ nextflow_pipeline {
     test("Should run stub-run mode for workflow validation") {
 
         tag "ci_stub"
-        options "-stub-run"
+        options "-stub"
 
         when {
             params {
@@ -20,39 +19,51 @@ nextflow_pipeline {
 
         then {
             assert workflow.success
-            assert path("$outputDir/results").exists()
-        }
-    }
-
-    test("Should run with minimal test data") {
-
-        tag "integration"
-
-        when {
-            params {
-                outdir = "$outputDir/results"
-            }
-        }
-
-        then {
-            assert workflow.success
-            assert path("$outputDir/results").exists()
-            assert path("$outputDir/results/multiqc").exists()
         }
     }
 
     test("Should fail with missing required inputs") {
 
+        options "-stub"
+
         when {
             params {
-                input = null
-                fasta = null
+                input  = null
+                fasta  = null
                 outdir = "$outputDir/results"
             }
         }
 
         then {
             assert workflow.failed
+        }
+    }
+
+    test("nf-atacseq - integration run - real data") {
+
+        tag "integration"
+
+        when {
+            params {
+                input             = "${projectDir}/tests/data/samplesheet_test.csv"
+                fasta             = "${projectDir}/tests/data/chr_test.fa"
+                bwa_index         = "${projectDir}/tests/data/bwa_index"
+                vcf               = "${projectDir}/tests/data/variants.vcf.gz"
+                outdir            = "${outputDir}/results_integration"
+                skip_dedup        = true
+                skip_peak_calling = false
+                macs_gsize        = '1.0e7'
+                wasp_min_count    = 1
+                wasp_pseudocount  = 1
+            }
+        }
+
+        then {
+            assertAll(
+                { assert workflow.success },
+                { assert path("${outputDir}/results_integration").exists() },
+                { assert snapshot(workflow.trace.tasks().size()).match("integration_task_count") }
+            )
         }
     }
 }

@@ -1,0 +1,3 @@
+gene_id	ref_count	alt_count	total_count	alt_ratio	sample_id
+GENE001	150	140	290	0.483	sample1
+GENE002	200	180	380	0.474	sample1
