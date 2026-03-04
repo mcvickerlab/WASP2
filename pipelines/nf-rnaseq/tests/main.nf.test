@@ -596,4 +596,32 @@ nextflow_pipeline {
             )
         }
     }
+
+    test("RNASEQ_ASE - integration run - real data") {
+
+        tag "integration"
+
+        when {
+            params {
+                input      = "${projectDir}/tests/data/integration/samplesheet_integration.csv"
+                vcf        = "${projectDir}/tests/data/integration/integration.vcf.gz"
+                star_index = "${projectDir}/tests/data/integration/star_index"
+                gtf        = "${projectDir}/tests/data/integration/integration.gtf"
+                outdir     = "${outputDir}/results_integration"
+                min_count  = 1
+            }
+        }
+
+        then {
+            assertAll(
+                { assert workflow.success },
+                { assert workflow.out.wasp_bam != null },
+                { assert workflow.out.counts != null },
+                { assert workflow.out.results != null },
+                { assert path("${outputDir}/results_integration/counts").exists() },
+                { assert path("${outputDir}/results_integration/analysis").exists() },
+                { assert snapshot(workflow.trace.tasks().size()).match("integration_task_count") }
+            )
+        }
+    }
 }
