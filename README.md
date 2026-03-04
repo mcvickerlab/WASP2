@@ -71,6 +71,24 @@ singularity pull wasp2.sif docker://ghcr.io/mcvickerlab/wasp2:1.4.0
 singularity exec wasp2.sif wasp2-count --help
 ```
 
+### Reproducible Environment (conda-lock)
+
+For fully pinned, reproducible installs (HPC clusters, CI, shared lab environments):
+
+```bash
+# Recommended: mamba (fastest)
+mamba create -n WASP2 --file conda-lock.yml
+
+# Or with conda
+conda-lock install -n WASP2 conda-lock.yml
+```
+
+`conda-lock.yml` pins every package to exact versions with checksums for `linux-64` and `osx-64`. To regenerate after updating `environment.lock.yml`:
+
+```bash
+conda-lock lock -f environment.lock.yml --lockfile conda-lock.yml
+```
+
 See the [documentation](https://mcvickerlab.github.io/WASP2/) for detailed install options and development setup.
 
 ## Quick Start
