@@ -132,4 +132,28 @@ nextflow_pipeline {
             assert workflow.failed
         }
     }
+
+    test("nf-outrider - integration run - real data") {
+
+        tag "integration"
+
+        when {
+            params {
+                input                = "${projectDir}/tests/data/samplesheet_test.csv"
+                vcf                  = "${projectDir}/tests/data/variants.vcf.gz"
+                gtf                  = "${projectDir}/tests/data/annotation.gtf"
+                outdir               = "${outputDir}/results_integration"
+                outrider_iterations  = 2
+                outrider_min_samples = 2
+            }
+        }
+
+        then {
+            assertAll(
+                { assert workflow.success },
+                { assert path("${outputDir}/results_integration").exists() },
+                { assert snapshot(workflow.trace.tasks().size()).match("integration_task_count") }
+            )
+        }
+    }
 }

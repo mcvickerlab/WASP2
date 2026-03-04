@@ -27,6 +27,32 @@ nextflow_pipeline {
             )
         }
     }
+
+    test("nf-scatac - integration run - real data") {
+
+        tag "integration"
+
+        when {
+            params {
+                input                  = "${projectDir}/tests/data/samplesheet_test.csv"
+                vcf                    = "${projectDir}/tests/data/variants.vcf.gz"
+                outdir                 = "${outputDir}/results_integration"
+                min_fragments_per_cell = 1
+                min_cells_per_snp      = 1
+                min_count              = 1
+                skip_pseudobulk        = true
+            }
+        }
+
+        then {
+            assertAll(
+                { assert workflow.success },
+                { assert workflow.out.anndata != null },
+                { assert path("${outputDir}/results_integration").exists() },
+                { assert snapshot(workflow.trace.tasks().size()).match("integration_task_count") }
+            )
+        }
+    }
 }
 
 nextflow_workflow {

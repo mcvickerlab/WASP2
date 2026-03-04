@@ -38,4 +38,32 @@ nextflow_pipeline {
             assert workflow.failed
         }
     }
+
+    test("nf-atacseq - integration run - real data") {
+
+        tag "integration"
+
+        when {
+            params {
+                input             = "${projectDir}/tests/data/samplesheet_test.csv"
+                fasta             = "${projectDir}/tests/data/chr_test.fa"
+                bwa_index         = "${projectDir}/tests/data/bwa_index"
+                vcf               = "${projectDir}/tests/data/variants.vcf.gz"
+                outdir            = "${outputDir}/results_integration"
+                skip_dedup        = true
+                skip_peak_calling = false
+                macs_gsize        = '1.0e7'
+                wasp_min_count    = 1
+                wasp_pseudocount  = 1
+            }
+        }
+
+        then {
+            assertAll(
+                { assert workflow.success },
+                { assert path("${outputDir}/results_integration").exists() },
+                { assert snapshot(workflow.trace.tasks().size()).match("integration_task_count") }
+            )
+        }
+    }
 }
