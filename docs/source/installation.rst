@@ -19,7 +19,7 @@ Or with conda:
    conda install -c conda-forge -c bioconda wasp2
 
 Available for Linux (x86_64, aarch64) and macOS (Intel, Apple Silicon) with
-Python 3.11-3.12.
+Python 3.10-3.13.
 
 Via PyPI
 --------
@@ -78,9 +78,8 @@ For contributing or building from source:
 
    git clone https://github.com/mcvickerlab/WASP2.git
    cd WASP2
-   pixi install              # resolves all deps including Rust toolchain
-   pixi run build            # builds the Rust extension
-   pixi run test             # runs the test suite
+   pixi install        # resolves all deps including Rust toolchain
+   pixi run verify     # build + test suite in one step
 
 `pixi <https://pixi.sh>`_ resolves Python, Rust toolchain, samtools, bcftools,
 bedtools, and htslib automatically. No system packages required.
