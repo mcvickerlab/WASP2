@@ -1,5 +1,16 @@
 # nf-core pipeline configuration
 repository_type: pipeline
+nf_core_version: "3.0"
+
+# nf-core template version this pipeline is based on
+template:
+  skip:
+    - .github/
+    - .gitignore
+    - CODE_OF_CONDUCT.md
+    - LICENSE
+    - assets/email_template.html
+    - lib/
 
 # Linting configuration - skip checks that don't apply to custom pipelines
 lint:
@@ -28,3 +39,8 @@ lint:
   modules_structure: false
   modules_config: false
   modules_json: false
+
+# nf-core modules configuration
+nf_core_modules:
+  https://github.com/nf-core/modules.git:
+    update: true
