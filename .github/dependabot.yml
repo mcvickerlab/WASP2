@@ -1,40 +1,17 @@
 version: 2
 updates:
-  # Python dependencies
-  - package-ecosystem: "pip"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "python"
-    commit-message:
-      prefix: "chore(deps)"
-
-  # Rust dependencies
-  - package-ecosystem: "cargo"
-    directory: "/rust"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "rust"
-    commit-message:
-      prefix: "chore(deps)"
-
-  # GitHub Actions
+  # GitHub Actions SHA pinning only — monthly grouped updates
+  # Python/Rust deps managed via conda-lock.yml and pixi.toml instead
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 5
+      interval: "monthly"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
     labels:
       - "dependencies"
       - "ci"
     commit-message:
-      prefix: "chore(ci)"
+      prefix: "ci"
