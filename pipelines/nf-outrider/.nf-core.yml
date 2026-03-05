@@ -2,6 +2,7 @@
 # See: https://nf-co.re/docs/nf-core-tools/pipelines/lint
 
 repository_type: pipeline
+nf_core_version: "3.0"
 
 # nf-core template version this pipeline is based on
 template:

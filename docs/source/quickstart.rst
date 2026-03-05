@@ -3,15 +3,16 @@ Quick Start
 
 This 5-minute tutorial demonstrates basic WASP2 usage.
 
-Example Data
-------------
+Prerequisites
+-------------
 
-Use the included test data:
+You will need:
 
-.. code-block:: bash
+* A coordinate-sorted, indexed BAM file (``sample.bam`` + ``sample.bam.bai``)
+* A phased VCF file with heterozygous variants (``variants.vcf.gz`` + ``.tbi``)
 
-   cd WASP2-exp
-   ls test_data/
+These are typically produced by your alignment pipeline (BWA-MEM, STAR, etc.)
+followed by variant calling and phasing (GATK, WhatsHap, ShapeIt).
 
 Count Alleles
 -------------
@@ -21,8 +22,9 @@ Count allele-specific reads from a BAM file:
 .. code-block:: bash
 
    wasp2-count count-variants \
-     test_data/CD4_ATACseq_Day1_merged_filtered.sort.bam \
-     test_data/filter_chr10.vcf \
+     sample.bam \
+     variants.vcf.gz \
+     -s SAMPLE_ID \
      --out_file counts.tsv
 
 Output: ``counts.tsv`` with columns:

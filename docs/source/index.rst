@@ -98,7 +98,6 @@ Documentation
    :caption: Development
 
    development
-   seqera_ai_integration
    changelog
 
 Indices and tables
