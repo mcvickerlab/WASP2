@@ -109,9 +109,12 @@ workflow OUTRIDER {
     //
 
     MERGE_COUNTS(
-        ch_gene_counts.map { meta, counts -> counts }.collect()
+        ch_gene_counts
+            .map { meta, counts -> counts }
+            .collect()
+            .map { counts -> [ [id: 'all_samples'], counts ] }
     )
-    ch_versions = ch_versions.mix(MERGE_COUNTS.out.versions)
+    ch_versions = ch_versions.mix(MERGE_COUNTS.out.versions.map { meta, versions -> versions })
 
     //
     // STEP 4: OUTRIDER Aberrant Expression Detection
@@ -128,8 +131,8 @@ workflow OUTRIDER {
         params.outrider_convergence,
         params.outrider_min_count ?: 10   // min count per gene for expression filter
     )
-    ch_outliers = OUTRIDER_FIT.out.results
-    ch_versions = ch_versions.mix(OUTRIDER_FIT.out.versions)
+    ch_outliers = OUTRIDER_FIT.out.results.map { meta, results -> results }
+    ch_versions = ch_versions.mix(OUTRIDER_FIT.out.versions.map { meta, versions -> versions })
 
     //
     // STEP 5: MAE Detection (Optional)
