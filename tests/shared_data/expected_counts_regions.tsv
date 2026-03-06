@@ -1,0 +1,11 @@
+chrom	pos	ref	alt	GT	region	ref_count	alt_count	other_count
+chr_test	750	C	T	C|T	chr_test_499_1500	4	0	0
+chr_test	1200	T	G	T|G	chr_test_499_1500	5	0	0
+chr_test	2800	A	C	A|C	chr_test_2499_3500	1	0	0
+chr_test	3200	G	A	G|A	chr_test_2499_3500	0	0	5
+chr_test	5000	G	T	G|T	chr_test_4499_5500	6	0	0
+chr_test	10800	T	C	T|C	chr_test_10499_11500	6	0	0
+chr_test	11200	A	G	A|G	chr_test_10499_11500	0	0	5
+chr_test	12800	C	A	C|A	chr_test_12499_13500	2	0	0
+chr_test	13200	G	T	G|T	chr_test_12499_13500	0	0	5
+chr_test	15000	A	C	A|C	chr_test_14499_15500	0	0	5

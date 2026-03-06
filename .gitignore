@@ -178,11 +178,25 @@ pipelines/*/results_stub/
 pipelines/*/results_*/
 pipelines/*/artifacts/
 
-# Stray BAM files at repo root
--.bam
-
 # Artifacts directory
 artifacts/
+
+# Benchmark infrastructure (large data/envs/results)
+test_benchmarks/
+
+# Claude Code local state
+.claude/
+
+# Nextflow pipeline-level logs
+pipelines/*/.nextflow.log*
+pipelines/*/.nf-test.log
+
+# Nextflow reports and visualizations
+trace.txt
+timeline.html
+report.html
+dag.svg
+dag.dot
 
 # Claude Code memory files (per-directory)
 **/CLAUDE.md
