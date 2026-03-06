@@ -1,79 +1,67 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/subworkflows/yaml-schema.json
-name: "fastq_align_bowtie2"
-description: Align reads with Bowtie2 and collect BAM statistics
+name: fastq_align_bowtie2
+description: Align reads to a reference genome using bowtie2 then sort with samtools
 keywords:
-  - alignment
-  - bowtie2
-  - bam
-  - map
-  - fastq
+  - align
+  - fasta
+  - genome
+  - reference
 components:
   - bowtie2/align
+  - samtools/sort
   - samtools/index
-  - bam_stats_samtools
+  - samtools/stats
+  - samtools/idxstats
+  - samtools/flagstat
+  - bam_sort_stats_samtools
 input:
+  - meta:
+      type: map
+      description: |
+        Groovy Map containing sample information
+        e.g. [ id:'test', single_end:false ]
   - ch_reads:
-      type: channel
+      type: file
       description: |
-        Channel containing FASTQ reads
-        Structure: [ val(meta), path(reads) ]
-      pattern: "*.{fq,fastq,fq.gz,fastq.gz}"
+        List of input FastQ files of size 1 and 2 for single-end and paired-end data,
+        respectively.
   - ch_index:
-      type: channel
+      type: file
+      description: Bowtie2 genome index files
+      pattern: "*.ebwt"
+  - save_unaligned:
+      type: boolean
       description: |
-        Channel containing Bowtie2 index files
-        Structure: path(index)
-      pattern: "*.bt2"
+        Save reads that do not map to the reference (true) or discard them (false)
+        (default: false)
+  - sort_bam:
+      type: boolean
+      description: |
+        Use samtools sort (true) or samtools view (false)
+      default: false
   - ch_fasta:
-      type: channel
-      description: |
-        Channel containing reference FASTA
-        Structure: path(fasta)
-      pattern: "*.{fa,fasta,fa.gz,fasta.gz}"
+      type: file
+      description: Reference fasta file
+      pattern: "*.{fasta,fa}"
+# TODO Update when we decide on a standard for subworkflow docs
 output:
   - bam:
-      type: channel
-      description: |
-        Aligned BAM file
-        Structure: [ val(meta), path(bam) ]
-      pattern: "*.bam"
-  - bai:
-      type: channel
-      description: |
-        BAM index file
-        Structure: [ val(meta), path(bai) ]
-      pattern: "*.bai"
-  - log_out:
-      type: channel
-      description: |
-        Bowtie2 alignment log
-        Structure: [ val(meta), path(log) ]
-      pattern: "*.log"
-  - stats:
-      type: channel
-      description: |
-        Samtools stats output
-        Structure: [ val(meta), path(stats) ]
-      pattern: "*.stats"
-  - flagstat:
-      type: channel
-      description: |
-        Samtools flagstat output
-        Structure: [ val(meta), path(flagstat) ]
-      pattern: "*.flagstat"
-  - idxstats:
-      type: channel
-      description: |
-        Samtools idxstats output
-        Structure: [ val(meta), path(idxstats) ]
-      pattern: "*.idxstats"
+      type: file
+      description: Output BAM file containing read alignments
+      pattern: "*.{bam}"
   - versions:
-      type: channel
-      description: |
-        Version information
-        Structure: path(versions.yml)
+      type: file
+      description: File containing software versions
       pattern: "versions.yml"
+  - fastq:
+      type: file
+      description: Unaligned FastQ files
+      pattern: "*.fastq.gz"
+  - log:
+      type: file
+      description: Alignment log
+      pattern: "*.log"
 authors:
-  - "@jjaureguy760"
+  - "@drpatelh"
 maintainers:
-  - "@jjaureguy760"
+  - "@drpatelh"

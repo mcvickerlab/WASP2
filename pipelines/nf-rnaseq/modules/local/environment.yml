@@ -1,0 +1,22 @@
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/environment-schema.json
+# Conda environment for nf-rnaseq WASP2 local modules
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python>=3.10
+  - numpy
+  - pandas
+  - polars
+  - scipy
+  - pysam
+  - pybedtools
+  - samtools
+  - bcftools
+  - bedtools
+  - typer
+  - rich
+  - pip
+  - pip:
+    - wasp2==1.2.1

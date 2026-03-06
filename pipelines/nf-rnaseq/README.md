@@ -40,6 +40,9 @@ nextflow run pipelines/nf-rnaseq -profile test_stub,docker
 
 # Full test with minimal data
 nextflow run pipelines/nf-rnaseq -profile test,docker
+
+# Apple Silicon (M1/M2/M3/M4) — add the arm profile
+nextflow run pipelines/nf-rnaseq -profile test,docker,arm
 ```
 
 ## Samplesheet Format
@@ -85,6 +88,10 @@ results/
 - Docker, Singularity, or Conda
 - STAR genome index
 - Indexed VCF with heterozygous variants
+
+> **Apple Silicon (ARM64):** STAR containers are x86_64-only. Use `-profile docker,arm`
+> to enable Rosetta 2 emulation. Requires Docker Desktop 4.16+ with Rosetta enabled.
+> See [Usage Guide](docs/usage.md#apple-silicon--arm64) for details.
 
 ## Example Commands
 

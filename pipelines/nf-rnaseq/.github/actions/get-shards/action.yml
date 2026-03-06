@@ -1,0 +1,19 @@
+name: Get test shards
+description: Get nf-test shards for parallel execution
+inputs:
+  test-path:
+    description: Path to test files
+    required: false
+    default: tests
+outputs:
+  shards:
+    description: JSON array of test shards
+    value: ${{ steps.get-shards.outputs.shards }}
+runs:
+  using: composite
+  steps:
+    - id: get-shards
+      shell: bash
+      run: |
+        shards=$(find ${{ inputs.test-path }} -name "*.nf.test" | jq -R -s -c 'split("\n") | map(select(. != ""))')
+        echo "shards=$shards" >> $GITHUB_OUTPUT

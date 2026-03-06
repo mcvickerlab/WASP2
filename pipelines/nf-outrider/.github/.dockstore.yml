@@ -1,0 +1,5 @@
+version: 1.2
+workflows:
+  - subclass: nfl
+    primaryDescriptorPath: /pipelines/nf-outrider/main.nf
+    publish: true

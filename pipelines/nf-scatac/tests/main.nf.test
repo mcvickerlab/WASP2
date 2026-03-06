@@ -21,6 +21,7 @@ nextflow_pipeline {
                 { assert workflow.success },
                 { assert workflow.out.anndata != null },
                 { assert snapshot(
+                    path("${outputDir}/pipeline_info/versions.yml"),
                     workflow.trace.tasks().size(),
                     workflow.trace.tasks()*.name.sort()
                 ).match("stub_workflow_tasks") }

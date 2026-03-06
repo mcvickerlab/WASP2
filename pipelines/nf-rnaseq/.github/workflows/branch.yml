@@ -1,0 +1,13 @@
+name: nf-core branch protection
+on:
+  pull_request_target:
+    branches: [master, main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PRs
+        if: github.repository == 'mcvickerlab/WASP2'
+        run: |
+          { [[ ${{github.event.pull_request.head.repo.full_name}} == mcvickerlab/WASP2 ]] && [[ $GITHUB_HEAD_REF == "dev" ]]; } || echo "This PR is not from dev. It will be reviewed manually."

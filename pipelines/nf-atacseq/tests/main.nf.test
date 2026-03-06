@@ -13,12 +13,17 @@ nextflow_pipeline {
 
         when {
             params {
-                outdir = "$outputDir/results"
+                outdir = "$outputDir"
             }
         }
 
         then {
-            assert workflow.success
+            assertAll(
+                { assert workflow.success },
+                { assert snapshot(
+                    path("${outputDir}/pipeline_info/versions.yml")
+                ).match("stub_versions") }
+            )
         }
     }
 

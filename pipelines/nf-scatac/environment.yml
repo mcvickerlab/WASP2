@@ -1,0 +1,25 @@
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/environment-schema.json
+# Conda environment for nf-scatac local Python/WASP2 modules
+# (scatac_count_alleles, scatac_create_anndata, scatac_add_haplotype_layers, scatac_pseudobulk)
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python>=3.10
+  - numpy>=1.21,<2.0
+  - pandas>=2.0
+  - polars>=0.19
+  - scipy>=1.10
+  - pysam
+  - pybedtools
+  - samtools
+  - bcftools
+  - bedtools
+  - anndata>=0.8.0
+  - sinto>=0.9.0
+  - typer
+  - rich
+  - pip
+  - pip:
+    - wasp2==1.2.1

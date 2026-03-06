@@ -1,73 +1,73 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/subworkflows/yaml-schema.json
-name: "fastq_align_bwa"
-description: Align reads with BWA-MEM and collect BAM statistics
+name: fastq_align_bwa
+description: Align reads to a reference genome using bwa then sort with samtools
 keywords:
-  - alignment
-  - bwa
-  - bam
-  - map
-  - fastq
+  - align
+  - fasta
+  - genome
+  - reference
 components:
   - bwa/mem
+  - bwa/align
+  - samtools/sort
   - samtools/index
-  - bam_stats_samtools
+  - samtools/stats
+  - samtools/idxstats
+  - samtools/flagstat
+  - bam_sort_stats_samtools
 input:
   - ch_reads:
-      type: channel
       description: |
-        Channel containing FASTQ reads
-        Structure: [ val(meta), path(reads) ]
-      pattern: "*.{fq,fastq,fq.gz,fastq.gz}"
+        List of input FastQ files of size 1 and 2 for single-end and paired-end data,
+        respectively.
+        Structure: [ val(meta), [ path(reads) ] ]
   - ch_index:
-      type: channel
       description: |
-        Channel containing BWA index files
-        Structure: path(index)
-      pattern: "*.{amb,ann,bwt,pac,sa}"
+        BWA genome index files
+        Structure: [ val(meta), path(index) ]
+  - val_sort_bam:
+      type: boolean
+      description: If true bwa modules sort resulting bam files
+      pattern: "true|false"
   - ch_fasta:
-      type: channel
+      type: file
       description: |
-        Channel containing reference FASTA
-        Structure: path(fasta)
-      pattern: "*.{fa,fasta,fa.gz,fasta.gz}"
+        Optional reference fasta file. This only needs to be given if val_sort_bam = true.
+        Structure: [ val(meta), path(fasta) ]
 output:
-  - bam:
-      type: channel
+  - bam_orig:
       description: |
-        Aligned BAM file
+        BAM file produced by bwa
         Structure: [ val(meta), path(bam) ]
-      pattern: "*.bam"
+  - bam:
+      description: |
+        BAM file ordered by samtools
+        Structure: [ val(meta), path(bam) ]
   - bai:
-      type: channel
       description: |
-        BAM index file
+        BAI index of the ordered BAM file
         Structure: [ val(meta), path(bai) ]
-      pattern: "*.bai"
+  - csi:
+      description: |
+        CSI index of the ordered BAM file
+        Structure: [ val(meta), path(csi) ]
   - stats:
-      type: channel
       description: |
-        Samtools stats output
+        File containing samtools stats output
         Structure: [ val(meta), path(stats) ]
-      pattern: "*.stats"
   - flagstat:
-      type: channel
       description: |
-        Samtools flagstat output
+        File containing samtools flagstat output
         Structure: [ val(meta), path(flagstat) ]
-      pattern: "*.flagstat"
   - idxstats:
-      type: channel
       description: |
-        Samtools idxstats output
+        File containing samtools idxstats output
         Structure: [ val(meta), path(idxstats) ]
-      pattern: "*.idxstats"
   - versions:
-      type: channel
       description: |
-        Version information
-        Structure: path(versions.yml)
-      pattern: "versions.yml"
+        Files containing software versions
+        Structure: [ path(versions.yml) ]
 authors:
-  - "@jjaureguy760"
+  - "@JoseEspinosa"
 maintainers:
-  - "@jjaureguy760"
+  - "@JoseEspinosa"

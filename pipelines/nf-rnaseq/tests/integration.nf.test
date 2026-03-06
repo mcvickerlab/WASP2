@@ -12,23 +12,30 @@ nextflow_pipeline {
 
         when {
             params {
+                outdir     = "$outputDir"
                 input      = "${projectDir}/tests/data/integration/samplesheet_integration.csv"
                 vcf        = "${projectDir}/tests/data/integration/integration.vcf.gz"
                 star_index = "${projectDir}/tests/data/integration/star_index"
                 gtf        = "${projectDir}/tests/data/integration/integration.gtf"
-                outdir     = "${outputDir}/results"
                 min_count  = 1
             }
         }
 
         then {
-            // Pipeline completes successfully
-            assert workflow.success
+            assertAll(
+                // Pipeline completes successfully
+                { assert workflow.success },
 
-            // Validate output directories exist
-            assert path("${outputDir}/results/wasp/filtered").exists() : "WASP filtered directory missing"
-            assert path("${outputDir}/results/counts").exists() : "Counts directory missing"
-            assert path("${outputDir}/results/analysis").exists() : "Analysis directory missing"
+                // Snapshot versions for reproducibility
+                { assert snapshot(
+                    path("${outputDir}/pipeline_info/versions.yml")
+                ).match("integration_versions") },
+
+                // Validate output directories exist
+                { assert path("${outputDir}/wasp/filtered").exists() : "WASP filtered directory missing" },
+                { assert path("${outputDir}/counts").exists() : "Counts directory missing" },
+                { assert path("${outputDir}/analysis").exists() : "Analysis directory missing" }
+            )
         }
     }
 }

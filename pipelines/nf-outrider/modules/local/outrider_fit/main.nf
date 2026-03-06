@@ -1,5 +1,5 @@
 process OUTRIDER_FIT {
-    tag "outrider"
+    tag "$meta.id"
     label 'process_high'
     label 'process_high_memory'
 
@@ -9,7 +9,7 @@ process OUTRIDER_FIT {
         'quay.io/biocontainers/bioconductor-outrider:1.26.3--r44he5774e6_0' }"
 
     input:
-    path count_matrix
+    tuple val(meta), path(count_matrix)
     val padj_cutoff
     val zscore_cutoff
     val encoding_dim
@@ -18,16 +18,16 @@ process OUTRIDER_FIT {
     val min_count
 
     output:
-    path "outrider_model.rds"   , emit: model
-    path "outrider_results.tsv" , emit: results
-    path "outrider_summary.html", emit: summary, optional: true
-    path "versions.yml"         , emit: versions
+    tuple val(meta), path("outrider_model.rds")   , emit: model
+    tuple val(meta), path("outrider_results.tsv") , emit: results
+    tuple val(meta), path("outrider_summary.html"), emit: summary, optional: true
+    tuple val(meta), path("versions.yml")         , emit: versions
 
     when:
     task.ext.when == null || task.ext.when
 
     script:
-    def q_arg = encoding_dim ? "q_val <- ${encoding_dim}" : "ods <- estimateBestQ(ods); q_val <- getBestQ(ods)"
+    def q_arg = encoding_dim ? "q_val <- as.integer(${encoding_dim})" : "q_val <- as.integer(round(max(2, min(ncol(ods) - 1, nrow(ods) - 1, 500, 3.7 + 0.16 * ncol(ods)))))"
     """
     set -euo pipefail
 
@@ -64,7 +64,7 @@ process OUTRIDER_FIT {
 
     # Filter low-expressed genes
     min_count_thresh <- ${min_count}
-    min_samples <- max(2, floor(ncol(counts) * 0.5))
+    min_samples <- max(1, floor(ncol(counts) * 0.5))
     row_sums <- rowSums(counts >= min_count_thresh)
     keep_genes <- row_sums >= min_samples
     counts_filtered <- counts[keep_genes, , drop = FALSE]
@@ -77,8 +77,6 @@ process OUTRIDER_FIT {
 
     # Create OutriderDataSet
     ods <- OutriderDataSet(countData = as.matrix(counts_filtered))
-    ods <- filterExpression(ods, minCounts = TRUE, filterGenes = FALSE)
-    ods <- estimateSizeFactors(ods)
 
     # Encoding dimension
     ${q_arg}
@@ -116,6 +114,7 @@ REOF
     """
 
     stub:
+    def prefix = task.ext.prefix ?: "${meta.id}"
     """
     touch outrider_model.rds
     cat <<-END_HEADER > outrider_results.tsv

@@ -1,0 +1,100 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/meta-schema.json
+name: "wasp2_ml_output"
+description: Convert WASP2 allele count TSV to ML-ready formats (Zarr, Parquet, AnnData)
+keywords:
+  - wasp
+  - machine-learning
+  - zarr
+  - parquet
+  - anndata
+  - h5ad
+  - format-conversion
+  - scverse
+
+tools:
+  - wasp2:
+      description: "WASP2: Allele-specific software for robust molecular QTL discovery"
+      homepage: "https://github.com/mcvicker-lab/WASP2"
+      documentation: "https://github.com/mcvicker-lab/WASP2/wiki"
+      doi: "10.1038/nmeth.3582"
+      licence: ["Apache-2.0"]
+      identifier: biotools:wasp
+  - pandas:
+      description: "Powerful data structures for data analysis"
+      homepage: "https://pandas.pydata.org/"
+      documentation: "https://pandas.pydata.org/docs/"
+      licence: ["BSD-3-Clause"]
+      identifier: ""
+  - zarr:
+      description: "Chunked, compressed, N-dimensional arrays"
+      homepage: "https://zarr.readthedocs.io/"
+      documentation: "https://zarr.readthedocs.io/"
+      licence: ["MIT"]
+      identifier: ""
+  - anndata:
+      description: "Annotated data matrices for single-cell and genomics data"
+      homepage: "https://anndata.readthedocs.io/"
+      documentation: "https://anndata.readthedocs.io/"
+      licence: ["BSD-3-Clause"]
+      identifier: ""
+
+input:
+  - - meta:
+        type: map
+        description: |
+          Groovy Map containing sample information
+          e.g. [ id:'sample1', single_end:false ]
+    - counts:
+        type: file
+        description: |
+          Tab-separated allele count file from WASP2_COUNT_ALLELES.
+          Must contain columns: chrom, pos, ref, alt, ref_count, alt_count
+        pattern: "*_counts.tsv"
+  - - output_format:
+        type: string
+        description: |
+          Comma-separated list of output formats to generate.
+          Valid values: zarr, parquet, anndata (or h5ad)
+          e.g. "zarr,parquet,anndata"
+
+output:
+  - zarr:
+      - meta:
+          type: map
+          description: |
+            Groovy Map containing sample information
+            e.g. [ id:'sample1', single_end:false ]
+      - "*.zarr":
+          type: directory
+          description: Zarr store with allele counts (GenVarLoader compatible)
+          pattern: "*.zarr"
+  - parquet:
+      - meta:
+          type: map
+          description: |
+            Groovy Map containing sample information
+            e.g. [ id:'sample1', single_end:false ]
+      - "*.parquet":
+          type: file
+          description: Parquet file with allele counts (Polars/DuckDB compatible)
+          pattern: "*.parquet"
+  - anndata:
+      - meta:
+          type: map
+          description: |
+            Groovy Map containing sample information
+            e.g. [ id:'sample1', single_end:false ]
+      - "*.h5ad":
+          type: file
+          description: AnnData h5ad file with allele counts (scverse compatible)
+          pattern: "*.h5ad"
+  - versions:
+      - "versions.yml":
+          type: file
+          description: File containing software versions
+          pattern: "versions.yml"
+
+authors:
+  - "@Jaureguy760"
+maintainers:
+  - "@Jaureguy760"

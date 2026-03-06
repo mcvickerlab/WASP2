@@ -32,7 +32,7 @@ process STAR_ALIGN {
         --runThreadN ${task.cpus} \\
         --genomeDir ${star_index} \\
         --readFilesIn ${read_files} \\
-        --readFilesCommand zcat \\
+        --readFilesCommand "gunzip -c" \\
         --outFileNamePrefix ${prefix}. \\
         --outSAMtype BAM SortedByCoordinate \\
         --outSAMunmapped Within \\

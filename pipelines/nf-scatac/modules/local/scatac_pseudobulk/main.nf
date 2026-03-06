@@ -38,9 +38,9 @@ process SCATAC_PSEUDOBULK {
     set -euo pipefail
 
     # Aggregate per-cell counts to pseudo-bulk and generate stats in one pass
-    awk -v OFS='\\t' -v min_cells="${min_cells}" -v prefix="${prefix}" '
+    awk -v OFS='\\t' -v min_cells="${min_cells}" -v pb_file="${prefix}_pseudobulk_counts.tsv" -v stats_file="${prefix}_aggregation_stats.tsv" '
     BEGIN {
-        print "chrom", "pos", "ref", "alt", "ref_count", "alt_count" > prefix "_pseudobulk_counts.tsv"
+        print "chrom", "pos", "ref", "alt", "ref_count", "alt_count" > pb_file
     }
     NR > 1 {
         key = \$2 OFS \$3 OFS \$4 OFS \$5
@@ -54,21 +54,21 @@ process SCATAC_PSEUDOBULK {
         filtered_count = 0
         for (key in total) {
             if (cells_per_snp[key] >= min_cells) {
-                print key, total[key], 0 >> prefix "_pseudobulk_counts.tsv"
+                print key, total[key], 0 >> pb_file
                 filtered_count++
             }
         }
 
         # Write aggregation stats
-        print "metric", "value" > prefix "_aggregation_stats.tsv"
-        print "total_cells_input", length(input_cells) >> prefix "_aggregation_stats.tsv"
-        print "total_snps_input", length(input_snps) >> prefix "_aggregation_stats.tsv"
-        print "snps_after_filtering", filtered_count >> prefix "_aggregation_stats.tsv"
+        print "metric", "value" > stats_file
+        print "total_cells_input", length(input_cells) >> stats_file
+        print "total_snps_input", length(input_snps) >> stats_file
+        print "snps_after_filtering", filtered_count >> stats_file
     }' ${cell_counts}
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        awk: \$(awk --version | head -1 | sed 's/GNU Awk //' | cut -d',' -f1)
+        awk: \$(awk --version 2>&1 | head -1 | sed 's/GNU Awk //' | cut -d',' -f1 || echo "unknown")
     END_VERSIONS
     """
 
