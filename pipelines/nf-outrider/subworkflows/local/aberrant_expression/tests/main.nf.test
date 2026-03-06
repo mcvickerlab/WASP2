@@ -27,6 +27,8 @@ nextflow_workflow {
                 input[3] = null      // encoding_dim (auto)
                 input[4] = 15        // max_iterations
                 input[5] = 1e-5      // convergence
+                input[6] = 10        // min_count
+                input[7] = 10        // min_samples
                 """
             }
         }
@@ -56,6 +58,8 @@ nextflow_workflow {
                 input[3] = 5         // explicit encoding_dim
                 input[4] = 10
                 input[5] = 1e-4
+                input[6] = 10        // min_count
+                input[7] = 10        // min_samples
                 """
             }
         }
@@ -84,6 +88,8 @@ nextflow_workflow {
                 input[3] = null
                 input[4] = 20
                 input[5] = 1e-6
+                input[6] = 10        // min_count
+                input[7] = 10        // min_samples
                 """
             }
         }
@@ -110,6 +116,8 @@ nextflow_workflow {
                 input[3] = null
                 input[4] = 15
                 input[5] = 1e-5
+                input[6] = 10        // min_count
+                input[7] = 10        // min_samples
                 """
             }
         }

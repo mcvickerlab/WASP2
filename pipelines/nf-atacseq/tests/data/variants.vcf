@@ -1,0 +1,38 @@
+##fileformat=VCFv4.2
+##source=WASP2_nf_atacseq_test_data_v2
+##reference=chr_test.fa
+##contig=<ID=chr_test,length=20000>
+##INFO=<ID=DP,Number=1,Type=Integer,Description="Total Depth">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Read Depth">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	sample1
+chr_test	2918	snp001	A	G	100	PASS	DP=50	GT:DP	0|1:50
+chr_test	3037	snp002	A	G	100	PASS	DP=50	GT:DP	0|1:50
+chr_test	3077	snp003	C	T	100	PASS	DP=50	GT:DP	0|1:50
+chr_test	3143	snp004	G	A	100	PASS	DP=50	GT:DP	0|1:50
+chr_test	4566	snp005	T	C	100	PASS	DP=50	GT:DP	0|1:50
+chr_test	5189	snp006	A	G	100	PASS	DP=50	GT:DP	0|1:50
+chr_test	6058	snp007	T	C	100	PASS	DP=50	GT:DP	0|1:50
+chr_test	6065	snp008	T	C	100	PASS	DP=50	GT:DP	0|1:50
+chr_test	6736	snp009	T	C	100	PASS	DP=50	GT:DP	0|1:50
+chr_test	6756	snp010	T	C	100	PASS	DP=50	GT:DP	0|1:50
+chr_test	7166	snp011	T	C	100	PASS	DP=50	GT:DP	0|1:50
+chr_test	7300	snp012	G	A	100	PASS	DP=50	GT:DP	0|1:50
+chr_test	7745	snp013	T	C	100	PASS	DP=50	GT:DP	0|1:50
+chr_test	8340	snp014	T	C	100	PASS	DP=50	GT:DP	0|1:50
+chr_test	8429	snp015	C	T	100	PASS	DP=50	GT:DP	0|1:50
+chr_test	11302	snp016	G	A	100	PASS	DP=50	GT:DP	0|1:50
+chr_test	12454	snp017	T	C	100	PASS	DP=50	GT:DP	0|1:50
+chr_test	12676	snp018	A	G	100	PASS	DP=50	GT:DP	0|1:50
+chr_test	12752	snp019	A	G	100	PASS	DP=50	GT:DP	0|1:50
+chr_test	12917	snp020	T	C	100	PASS	DP=50	GT:DP	0|1:50
+chr_test	13437	snp021	A	G	100	PASS	DP=50	GT:DP	0|1:50
+chr_test	14016	snp022	G	A	100	PASS	DP=50	GT:DP	0|1:50
+chr_test	15321	snp023	C	T	100	PASS	DP=50	GT:DP	0|1:50
+chr_test	15569	snp024	T	C	100	PASS	DP=50	GT:DP	0|1:50
+chr_test	16232	snp025	T	C	100	PASS	DP=50	GT:DP	0|1:50
+chr_test	17524	snp026	C	T	100	PASS	DP=50	GT:DP	0|1:50
+chr_test	17593	snp027	C	T	100	PASS	DP=50	GT:DP	0|1:50
+chr_test	17849	snp028	T	C	100	PASS	DP=50	GT:DP	0|1:50
+chr_test	18776	snp029	C	T	100	PASS	DP=50	GT:DP	0|1:50
+chr_test	19480	snp030	T	C	100	PASS	DP=50	GT:DP	0|1:50

@@ -1,0 +1,19 @@
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/environment-schema.json
+# Conda environment for WASP2 ML output module
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python>=3.10
+  - numpy
+  - pandas
+  - polars
+  - scipy
+  - pysam
+  - anndata>=0.8.0
+  - typer
+  - rich
+  - pip
+  - pip:
+    - wasp2==1.2.1

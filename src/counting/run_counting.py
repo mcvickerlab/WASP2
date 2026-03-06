@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import functools
+import logging
 import re
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
 from typing import ParamSpec, TypeVar
+
+import polars as pl
 
 from .count_alleles import make_count_df
 
@@ -327,6 +330,14 @@ def run_count_variants(
         #     region_col=region_col_name)
 
     # Should I include a filt bam step???
+
+    # Guard: if no variants survived intersection, write empty output and return
+    if df.is_empty():
+        logging.getLogger(__name__).warning(
+            "No variants found after intersection — writing empty counts file."
+        )
+        df.write_csv(count_files.out_file, include_header=True, separator="\t")
+        return
 
     # Count
     count_df = make_count_df(bam_file=count_files.bam_file, df=df, use_rust=use_rust)

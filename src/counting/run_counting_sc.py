@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from pathlib import Path
 
@@ -205,6 +206,16 @@ def run_count_variants_sc(
         use_region_names=use_region_names,
         region_col=None,
     )
+
+    # Guard: if no variants survived intersection, warn and write empty output
+    if df.is_empty():
+        logging.getLogger(__name__).warning(
+            "No variants found after intersection — writing empty output file."
+        )
+        import anndata as ad
+
+        ad.AnnData().write_h5ad(count_files.out_file)
+        return
 
     # TODO: handle case where barcode file contains multiple columns
     with open(count_files.barcode_file) as file:

@@ -30,6 +30,17 @@ echo "==================================================================="
 echo "Working directory: $SCRIPT_DIR"
 echo ""
 
+# Detect Apple Silicon / ARM64 and warn about STAR compatibility
+ARCH=$(uname -m)
+if [[ "$ARCH" == "arm64" || "$ARCH" == "aarch64" ]]; then
+    echo "WARNING: Detected ARM architecture ($ARCH)."
+    echo "  STAR does not have native ARM builds. If STAR is not installed"
+    echo "  via Rosetta 2 or an x86_64 emulation layer, genome generation"
+    echo "  will fail. Consider running this script on an x86_64 machine"
+    echo "  or inside a Docker container with --platform linux/amd64."
+    echo ""
+fi
+
 # -----------------------------------------------------------------------------
 # Check prerequisites
 # -----------------------------------------------------------------------------

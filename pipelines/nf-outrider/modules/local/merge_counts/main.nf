@@ -1,5 +1,5 @@
 process MERGE_COUNTS {
-    tag "merge_counts"
+    tag "$meta.id"
     label 'process_medium'
 
     conda "${moduleDir}/../../../environment.yml"
@@ -8,11 +8,11 @@ process MERGE_COUNTS {
         'ghcr.io/mcvickerlab/wasp2:1.4.0' }"
 
     input:
-    path gene_counts  // Collection of gene count files
+    tuple val(meta), path(gene_counts)
 
     output:
-    path "count_matrix.tsv", emit: count_matrix
-    path "versions.yml"    , emit: versions
+    tuple val(meta), path("count_matrix.tsv"), emit: count_matrix
+    tuple val(meta), path("versions.yml")    , emit: versions
 
     when:
     task.ext.when == null || task.ext.when
@@ -114,6 +114,7 @@ EOF
     """
 
     stub:
+    def prefix = task.ext.prefix ?: "${meta.id}"
     """
     cat <<-END_HEADER > count_matrix.tsv
     gene_id	sample1	sample2	sample3

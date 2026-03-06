@@ -22,6 +22,8 @@ workflow ABERRANT_EXPRESSION {
     encoding_dim     // val: encoding dimension (null for auto)
     max_iterations   // val: max OUTRIDER iterations
     convergence      // val: convergence threshold
+    min_count        // val: min count per gene for expression filter
+    min_samples      // val: minimum samples for OUTRIDER fitting
 
     main:
     ch_versions = Channel.empty()
@@ -48,8 +50,8 @@ workflow ABERRANT_EXPRESSION {
     ch_gene_counts
         .count()
         .map { sample_count ->
-            if (sample_count < 15) {
-                log.warn "WARNING: OUTRIDER requires >= 15 samples for reliable results. Found ${sample_count} samples."
+            if (sample_count < min_samples) {
+                log.warn "WARNING: OUTRIDER requires >= ${min_samples} samples for reliable results. Found ${sample_count} samples."
             }
         }
 
@@ -70,7 +72,8 @@ workflow ABERRANT_EXPRESSION {
         zscore_cutoff,
         encoding_dim,
         max_iterations,
-        convergence
+        convergence,
+        min_count
     )
     ch_versions = ch_versions.mix(OUTRIDER_FIT.out.versions)
 

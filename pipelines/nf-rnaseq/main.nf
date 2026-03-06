@@ -18,6 +18,26 @@ nextflow.enable.dsl = 2
 
 /*
 ========================================================================================
+    IMPORT FUNCTIONS
+========================================================================================
+*/
+
+include { paramsHelp; paramsSummaryLog } from 'plugin/nf-validation'
+
+/*
+========================================================================================
+    PRINT HELP MESSAGE
+========================================================================================
+*/
+
+if (params.help) {
+    def help_string = paramsHelp("nextflow run nf-rnaseq --input samplesheet.csv --vcf variants.vcf.gz --star_index /path/to/star_index -profile docker")
+    log.info help_string
+    System.exit(0)
+}
+
+/*
+========================================================================================
     VALIDATE & PRINT PARAMETER SUMMARY
 ========================================================================================
 */

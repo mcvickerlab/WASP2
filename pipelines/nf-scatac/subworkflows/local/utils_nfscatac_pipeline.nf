@@ -35,6 +35,13 @@ workflow PIPELINE_INITIALISATION {
                 error "Samplesheet error for '${row.sample}': provide 'fragments', 'cellranger_dir', or 'bam'"
             }
 
+            // Resolve Nextflow variables that don't interpolate inside CSV data
+            def resolvePath = { String p ->
+                p ? p.replace('${projectDir}', projectDir.toString())
+                     .replace('${launchDir}', launchDir.toString())
+                  : p
+            }
+
             def meta = [
                 id: row.sample,
                 single_end: false,
@@ -47,10 +54,10 @@ workflow PIPELINE_INITIALISATION {
             def fragments = file('NO_FILE_FRAGS')
             def fragments_tbi = file('NO_FILE_FRAGS_TBI')
             if (row.fragments) {
-                fragments = file(row.fragments, checkIfExists: true)
+                fragments = file(resolvePath(row.fragments), checkIfExists: true)
                 fragments_tbi = file("${fragments}.tbi", checkIfExists: true)
             } else if (row.cellranger_dir) {
-                def frag_path = "${row.cellranger_dir}/outs/fragments.tsv.gz"
+                def frag_path = "${resolvePath(row.cellranger_dir)}/outs/fragments.tsv.gz"
                 if (file(frag_path).exists()) {
                     fragments = file(frag_path, checkIfExists: true)
                     fragments_tbi = file("${frag_path}.tbi", checkIfExists: true)
@@ -61,7 +68,7 @@ workflow PIPELINE_INITIALISATION {
             def bam = file('NO_FILE_BAM')
             def bai = file('NO_FILE_BAI')
             if (row.bam && row.bam.trim()) {
-                bam = file(row.bam, checkIfExists: true)
+                bam = file(resolvePath(row.bam), checkIfExists: true)
                 // Try common BAI naming conventions: .bam.bai and .bai
                 def bai_path1 = file("${bam}.bai")
                 def bai_path2 = file("${bam}".replaceAll(/\.bam$/, '.bai'))
@@ -73,7 +80,7 @@ workflow PIPELINE_INITIALISATION {
                     error "Samplesheet error for '${row.sample}': BAM index not found. Tried: ${bai_path1}, ${bai_path2}"
                 }
             } else if (row.cellranger_dir) {
-                def bam_path = "${row.cellranger_dir}/outs/possorted_bam.bam"
+                def bam_path = "${resolvePath(row.cellranger_dir)}/outs/possorted_bam.bam"
                 if (file(bam_path).exists()) {
                     bam = file(bam_path, checkIfExists: true)
                     bai = file("${bam_path}.bai", checkIfExists: true)
@@ -82,12 +89,12 @@ workflow PIPELINE_INITIALISATION {
 
             // Optional: cell barcode whitelist file
             def barcodes = row.barcodes && row.barcodes.trim()
-                ? file(row.barcodes, checkIfExists: true)
+                ? file(resolvePath(row.barcodes), checkIfExists: true)
                 : file('NO_FILE_BARCODES')
 
             // Optional: peak BED file for restricting analysis to peak regions
             def peaks = row.peaks && row.peaks.trim()
-                ? file(row.peaks, checkIfExists: true)
+                ? file(resolvePath(row.peaks), checkIfExists: true)
                 : file('NO_FILE_PEAKS')
 
             [ meta, fragments, fragments_tbi, barcodes, peaks, bam, bai ]

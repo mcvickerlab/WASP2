@@ -1,0 +1,98 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/meta-schema.json
+name: "wasp2_filter_remapped"
+description: Filter remapped reads using the WASP algorithm and merge with non-variant reads
+keywords:
+  - wasp
+  - mapping-bias
+  - filter
+  - remapping
+  - allele-specific
+  - bam
+
+tools:
+  - wasp2:
+      description: "WASP2: Allele-specific software for robust molecular QTL discovery"
+      homepage: "https://github.com/mcvicker-lab/WASP2"
+      documentation: "https://github.com/mcvicker-lab/WASP2/wiki"
+      doi: "10.1038/nmeth.3582"
+      licence: ["Apache-2.0"]
+      identifier: biotools:wasp
+  - samtools:
+      description: "Tools for manipulating next-generation sequencing data"
+      homepage: "https://www.htslib.org/"
+      documentation: "https://www.htslib.org/doc/samtools.html"
+      doi: "10.1093/bioinformatics/btp352"
+      licence: ["MIT"]
+      identifier: biotools:samtools
+
+input:
+  - - meta:
+        type: map
+        description: |
+          Groovy Map containing sample information
+          e.g. [ id:'sample1', single_end:false ]
+    - remapped_bam:
+        type: file
+        description: BAM file from remapping allele-swapped reads
+        pattern: "*.bam"
+    - remapped_bai:
+        type: file
+        description: BAM index for remapped reads
+        pattern: "*.bam.bai"
+  - - _meta2:
+        type: map
+        description: Sample metadata (unused, joined by meta.id)
+    - to_remap_bam:
+        type: file
+        description: Original BAM with reads that overlapped variants (before remapping)
+        pattern: "*_to_remap.bam"
+  - - _meta3:
+        type: map
+        description: Sample metadata (unused, joined by meta.id)
+    - keep_bam:
+        type: file
+        description: BAM with reads not overlapping variants
+        pattern: "*_keep.bam"
+  - - _meta4:
+        type: map
+        description: Sample metadata (unused, joined by meta.id)
+    - wasp_json:
+        type: file
+        description: JSON file from make-reads tracking intermediate file metadata
+        pattern: "*_wasp_data.json"
+
+output:
+  - bam:
+      - meta:
+          type: map
+          description: |
+            Groovy Map containing sample information
+            e.g. [ id:'sample1', single_end:false ]
+      - "*_wasp_filt.bam":
+          type: file
+          description: WASP-filtered and merged BAM (sorted and indexed)
+          pattern: "*_wasp_filt.bam"
+      - "*_wasp_filt.bam.bai":
+          type: file
+          description: BAM index for WASP-filtered BAM
+          pattern: "*_wasp_filt.bam.bai"
+  - stats:
+      - meta:
+          type: map
+          description: |
+            Groovy Map containing sample information
+            e.g. [ id:'sample1', single_end:false ]
+      - "*.filter_stats.txt":
+          type: file
+          description: Text file with filtering statistics (read counts before/after)
+          pattern: "*.filter_stats.txt"
+  - versions:
+      - "versions.yml":
+          type: file
+          description: File containing software versions
+          pattern: "versions.yml"
+
+authors:
+  - "@Jaureguy760"
+maintainers:
+  - "@Jaureguy760"
