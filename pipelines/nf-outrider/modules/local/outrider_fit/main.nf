@@ -27,7 +27,7 @@ process OUTRIDER_FIT {
     task.ext.when == null || task.ext.when
 
     script:
-    def q_arg = encoding_dim ? "q_val <- ${encoding_dim}" : "ods <- estimateBestQ(ods); q_val <- getBestQ(ods)"
+    def q_arg = encoding_dim ? "q_val <- as.integer(${encoding_dim})" : "q_val <- as.integer(round(max(2, min(ncol(ods) - 1, nrow(ods) - 1, 500, 3.7 + 0.16 * ncol(ods)))))"
     """
     set -euo pipefail
 
@@ -64,7 +64,7 @@ process OUTRIDER_FIT {
 
     # Filter low-expressed genes
     min_count_thresh <- ${min_count}
-    min_samples <- max(2, floor(ncol(counts) * 0.5))
+    min_samples <- max(1, floor(ncol(counts) * 0.5))
     row_sums <- rowSums(counts >= min_count_thresh)
     keep_genes <- row_sums >= min_samples
     counts_filtered <- counts[keep_genes, , drop = FALSE]
@@ -77,8 +77,6 @@ process OUTRIDER_FIT {
 
     # Create OutriderDataSet
     ods <- OutriderDataSet(countData = as.matrix(counts_filtered))
-    ods <- filterExpression(ods, minCounts = TRUE, filterGenes = FALSE)
-    ods <- estimateSizeFactors(ods)
 
     # Encoding dimension
     ${q_arg}
