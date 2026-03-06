@@ -1,1 +1,15 @@
-../../../../tests/shared_data/regions.bed
+chr_test	2668	3393	peak_1
+chr_test	4316	4816	peak_2
+chr_test	4939	5439	peak_3
+chr_test	5808	6315	peak_4
+chr_test	6486	7995	peak_5
+chr_test	8090	8679	peak_6
+chr_test	11052	11552	peak_7
+chr_test	12204	13167	peak_8
+chr_test	13187	13687	peak_9
+chr_test	13766	14266	peak_10
+chr_test	15071	15819	peak_11
+chr_test	15982	16482	peak_12
+chr_test	17274	18099	peak_13
+chr_test	18526	19026	peak_14
+chr_test	19230	19730	peak_15
