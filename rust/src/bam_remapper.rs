@@ -585,6 +585,20 @@ fn process_read_pair(
     // Only keep pairs where at least one read differs from original
     let mut haplotype_reads = Vec::new();
 
+    // Pre-count how many haplotypes actually differ from the original.
+    // The filter expects exactly this many pairs to arrive; hardcoding 2
+    // causes het-variant reads (where only 1 haplotype differs) to be
+    // discarded because the filter never sees the "missing" second pair.
+    let total_seqs: usize = r1_haps
+        .iter()
+        .zip(r2_haps.iter())
+        .filter(|((r1_seq, _), (r2_seq, _))| r1_seq != &r1_original || r2_seq != &r2_original)
+        .count();
+
+    if total_seqs == 0 {
+        return Ok(Some(haplotype_reads));
+    }
+
     for (hap_idx, ((r1_seq, r1_qual), (r2_seq, r2_qual))) in
         r1_haps.iter().zip(r2_haps.iter()).enumerate()
     {
@@ -599,7 +613,7 @@ fn process_read_pair(
         let r1_pos = read1.pos() as u32;
         let r2_pos = read2.pos() as u32;
         let seq_num = hap_idx + 1;
-        let total_seqs = 2; // We're generating 2 haplotypes (hap1, hap2)
+        let total_seqs = total_seqs; // Actual count of emitted haplotypes
 
         let base_name = generate_wasp_name(read_name, r1_pos, r2_pos, seq_num, total_seqs);
 
