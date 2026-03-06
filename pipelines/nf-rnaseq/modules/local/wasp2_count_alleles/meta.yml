@@ -1,0 +1,78 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/meta-schema.json
+name: "wasp2_count_alleles"
+description: Count reference and alternate allele reads at heterozygous SNPs for ASE analysis
+keywords:
+  - wasp
+  - allele-specific
+  - allele-counting
+  - ase
+  - heterozygous
+  - snp
+  - rna-seq
+
+tools:
+  - wasp2:
+      description: "WASP2: Allele-specific software for robust molecular QTL discovery"
+      homepage: "https://github.com/mcvicker-lab/WASP2"
+      documentation: "https://github.com/mcvicker-lab/WASP2/wiki"
+      doi: "10.1038/nmeth.3582"
+      licence: ["Apache-2.0"]
+      identifier: biotools:wasp
+
+input:
+  - - meta:
+        type: map
+        description: |
+          Groovy Map containing sample information
+          e.g. [ id:'sample1', single_end:false, sample:'NA12878' ]
+    - bam:
+        type: file
+        description: WASP-filtered BAM file
+        pattern: "*.bam"
+    - bai:
+        type: file
+        description: BAM index file
+        pattern: "*.bam.bai"
+  - - meta2:
+        type: map
+        description: |
+          Groovy Map containing reference metadata
+          e.g. [ id:'reference' ]
+    - vcf:
+        type: file
+        description: VCF file containing variant genotypes
+        pattern: "*.{vcf,vcf.gz,bcf}"
+    - vcf_index:
+        type: file
+        description: VCF index file (tabix .tbi or .csi)
+        pattern: "*.{tbi,csi}"
+  - - gtf:
+        type: file
+        description: |
+          GTF annotation file for gene-level allele counting (optional).
+          When provided, counts are annotated with gene features.
+        pattern: "*.gtf"
+
+output:
+  - counts:
+      - meta:
+          type: map
+          description: |
+            Groovy Map containing sample information
+            e.g. [ id:'sample1', single_end:false ]
+      - "*_counts.tsv":
+          type: file
+          description: |
+            Tab-separated file with allele counts per variant.
+            Columns: chrom, pos, ref, alt, region, ref_count, alt_count, other_count, N
+          pattern: "*_counts.tsv"
+  - versions:
+      - "versions.yml":
+          type: file
+          description: File containing software versions
+          pattern: "versions.yml"
+
+authors:
+  - "@Jaureguy760"
+maintainers:
+  - "@Jaureguy760"

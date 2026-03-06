@@ -1,0 +1,81 @@
+name: scatac_add_haplotype_layers
+description: Add haplotype-resolved count layers to AnnData using phased VCF genotypes
+keywords:
+  - scatac
+  - single-cell
+  - haplotype
+  - phasing
+  - allelic imbalance
+  - anndata
+  - wasp2
+tools:
+  - python:
+      description: Python programming language
+      homepage: https://www.python.org/
+      licence: ["PSF-2.0"]
+  - anndata:
+      description: Annotated multivariate observation data
+      homepage: https://anndata.readthedocs.io/
+      licence: ["BSD-3-Clause"]
+  - pysam:
+      description: Python interface to samtools/htslib for reading VCF/BAM files
+      homepage: https://pysam.readthedocs.io/
+      licence: ["MIT"]
+  - wasp2:
+      description: WASP2 allelic imbalance analysis tools
+      homepage: https://github.com/mcvickerlab/WASP2
+      licence: ["MIT"]
+
+input:
+  - meta:
+      type: map
+      description: |
+        Groovy Map containing sample information
+        e.g. [ id:'test', sample:'donor1' ]
+  - anndata:
+      type: file
+      description: AnnData h5ad file with ref and alt count layers from allele counting
+      pattern: "*.h5ad"
+  - meta2:
+      type: map
+      description: |
+        Groovy Map containing VCF sample information
+  - vcf:
+      type: file
+      description: Phased VCF file containing genotype information for haplotype assignment
+      pattern: "*.vcf.gz"
+  - vcf_index:
+      type: file
+      description: Tabix index for the phased VCF file
+      pattern: "*.vcf.gz.tbi"
+  - create_zarr:
+      type: val
+      description: Boolean flag to optionally output a Zarr copy of the AnnData
+
+output:
+  - meta:
+      type: map
+      description: |
+        Groovy Map containing sample information
+        e.g. [ id:'test', sample:'donor1' ]
+  - anndata:
+      type: file
+      description: AnnData h5ad with haplotype layers (X, ref, alt, hap1, hap2) and phasing metadata in var/uns
+      pattern: "*_with_haplotypes.h5ad"
+  - zarr:
+      type: directory
+      description: Optional Zarr representation of the haplotype-resolved AnnData
+      pattern: "*.zarr"
+  - cell_qc:
+      type: file
+      description: Per-cell QC metrics including counts per layer (total, ref, alt, hap1, hap2)
+      pattern: "*_cell_qc.tsv"
+  - versions:
+      type: file
+      description: File containing software versions
+      pattern: "versions.yml"
+
+authors:
+  - "@Jaureguy760"
+maintainers:
+  - "@Jaureguy760"

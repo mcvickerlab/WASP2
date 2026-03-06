@@ -1,0 +1,56 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/meta-schema.json
+name: "wasp2_analyze_imbalance"
+description: Perform statistical testing for allelic imbalance using likelihood ratio tests
+keywords:
+  - wasp
+  - allelic-imbalance
+  - ase
+  - statistical-testing
+  - likelihood-ratio
+  - rna-seq
+
+tools:
+  - wasp2:
+      description: "WASP2: Allele-specific software for robust molecular QTL discovery"
+      homepage: "https://github.com/mcvicker-lab/WASP2"
+      documentation: "https://github.com/mcvicker-lab/WASP2/wiki"
+      doi: "10.1038/nmeth.3582"
+      licence: ["Apache-2.0"]
+      identifier: biotools:wasp
+
+input:
+  - - meta:
+        type: map
+        description: |
+          Groovy Map containing sample information
+          e.g. [ id:'sample1', single_end:false ]
+    - counts:
+        type: file
+        description: |
+          Tab-separated allele count file from WASP2_COUNT_ALLELES.
+          Must contain columns: chrom, pos, ref, alt, ref_count, alt_count
+        pattern: "*_counts.tsv"
+
+output:
+  - results:
+      - meta:
+          type: map
+          description: |
+            Groovy Map containing sample information
+            e.g. [ id:'sample1', single_end:false ]
+      - "*_ai_results.tsv":
+          type: file
+          description: |
+            Tab-separated file with allelic imbalance test results.
+            Columns: region, snp_count, ref_sum, alt_sum, mu, null_ll, alt_ll, LRT, pvalue, fdr
+          pattern: "*_ai_results.tsv"
+  - versions:
+      - "versions.yml":
+          type: file
+          description: File containing software versions
+          pattern: "versions.yml"
+
+authors:
+  - "@Jaureguy760"
+maintainers:
+  - "@Jaureguy760"
