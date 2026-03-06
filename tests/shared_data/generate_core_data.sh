@@ -6,17 +6,16 @@
 # CLI smoke tests, and container validation.
 #
 # Outputs (all committed to git, ~700K total):
-#   chr_test.fa + .fai          - 20kb synthetic reference genome (2 gene regions)
-#   variants.vcf + .gz + .tbi   - 10 het SNPs across 2 samples
-#   annotation.gtf              - 2 genes, 6 exons
+#   chr_test.fa + .fai          - 20kb random reference genome (high complexity)
+#   variants.vcf + .gz + .tbi   - 30 het SNPs across 3 samples (phased)
+#   annotation.gtf              - 12 genes, 16 exons
 #   regions.bed                 - Peak/region file from exon coordinates
 #   sample{1,2,3}.bam + .bai   - Aligned reads (wgsim + bwa)
 #   bwa_index/                  - BWA index for chr_test.fa
 #   expected_counts.tsv         - WASP2 counting output baseline
 #   expected_analysis.tsv       - WASP2 analysis output baseline (placeholder)
 #
-# Prerequisites: samtools, bgzip, tabix, wgsim, bwa, bcftools
-# Conda env:     conda activate WASP2_dev2
+# Prerequisites: python3, samtools, bgzip, tabix, wgsim, bwa, bcftools
 #
 # Usage:
 #   cd tests/shared_data
@@ -45,9 +44,10 @@ check_tool() {
         echo "  Try: conda activate WASP2_dev2"
         exit 1
     fi
-    echo "  ✓ $1 found: $(which $1)"
+    echo "  OK $1 found: $(which $1)"
 }
 
+check_tool python3
 check_tool samtools
 check_tool bgzip
 check_tool tabix
@@ -58,45 +58,35 @@ check_tool bcftools
 echo ""
 
 # -----------------------------------------------------------------------------
-# Reference genome (reuse nf-rnaseq integration chr_test.fa)
+# Clean up old generated files (force full regeneration)
 # -----------------------------------------------------------------------------
-echo "[2/8] Creating reference genome..."
+echo "[2/8] Generating random reference genome via Python..."
 
-INTEGRATION_FA="../../pipelines/nf-rnaseq/tests/data/integration/chr_test.fa"
+# Remove old reference and index to force regeneration
+rm -f chr_test.fa chr_test.fa.fai
 
-if [[ -f "chr_test.fa" ]]; then
-    echo "  chr_test.fa already exists, skipping"
-else
-    if [[ -f "$INTEGRATION_FA" ]]; then
-        cp "$INTEGRATION_FA" chr_test.fa
-        echo "  ✓ Copied chr_test.fa from nf-rnaseq integration ($(du -h chr_test.fa | cut -f1))"
-    else
-        echo "ERROR: Could not find source genome at $INTEGRATION_FA"
-        exit 1
-    fi
-fi
+# Generate a realistic random reference with the Python script
+python3 generate_reference.py > chr_test.fa
 
 # Index FASTA
-if [[ ! -f "chr_test.fa.fai" ]]; then
-    samtools faidx chr_test.fa
-    echo "  ✓ Created chr_test.fa.fai"
-fi
+samtools faidx chr_test.fa
+echo "  OK Created chr_test.fa ($(du -h chr_test.fa | cut -f1)) + .fai"
 
 echo ""
 
 # -----------------------------------------------------------------------------
-# Annotation GTF (reuse from nf-rnaseq integration)
+# Annotation GTF (keep existing if present, otherwise copy from integration)
 # -----------------------------------------------------------------------------
-echo "[3/8] Creating annotation GTF..."
+echo "[3/8] Checking annotation GTF..."
 
 INTEGRATION_GTF="../../pipelines/nf-rnaseq/tests/data/integration/integration.gtf"
 
 if [[ -f "annotation.gtf" ]]; then
-    echo "  annotation.gtf already exists, skipping"
+    echo "  annotation.gtf already exists, keeping"
 else
     if [[ -f "$INTEGRATION_GTF" ]]; then
         cp "$INTEGRATION_GTF" annotation.gtf
-        echo "  ✓ Copied annotation.gtf from nf-rnaseq integration"
+        echo "  OK Copied annotation.gtf from nf-rnaseq integration"
     else
         echo "ERROR: Could not find source GTF at $INTEGRATION_GTF"
         exit 1
@@ -106,52 +96,146 @@ fi
 echo ""
 
 # -----------------------------------------------------------------------------
-# VCF with 10 het SNPs across 2 samples
+# VCF with 30 het SNPs across 3 samples (REF alleles from actual reference)
 # -----------------------------------------------------------------------------
-echo "[4/8] Creating VCF with 10 het SNPs..."
+echo "[4/8] Creating VCF with 30 phased het SNPs..."
 
-if [[ -f "variants.vcf" ]]; then
-    echo "  variants.vcf already exists, skipping"
-else
-    # Gene 1 (INTGENE001): exons at 500-1500, 2500-3500, 4500-5500 (+ strand)
-    # Gene 2 (INTGENE002): exons at 10500-11500, 12500-13500, 14500-15500 (- strand)
-    # Place 5 SNPs in each gene's exonic regions
-    #
-    # Three samples matching BAM filenames: sample1 has all 10 het,
-    # sample2 has 8 het + 2 hom-ref, sample3 has 6 het + 4 hom-ref
-    # Sample names MUST be lowercase to match BAM SM tags and samplesheet
+# Read actual reference bases at SNP positions using Python
+# This ensures REF alleles match the generated reference exactly
+rm -f variants.vcf variants.vcf.gz variants.vcf.gz.tbi
 
-    cat > variants.vcf << 'EOVCF'
-##fileformat=VCFv4.2
-##fileDate=20260218
-##source=WASP2SharedTestData
-##reference=chr_test.fa
-##contig=<ID=chr_test,length=19800>
-##INFO=<ID=DP,Number=1,Type=Integer,Description="Total Depth">
-##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
-##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Read Depth">
-#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	sample1	sample2	sample3
-chr_test	750	snp001	C	T	100	PASS	DP=50	GT:DP	0/1:50	0/1:50	0/1:50
-chr_test	1200	snp002	T	G	100	PASS	DP=50	GT:DP	0/1:50	0/1:50	0/1:50
-chr_test	2800	snp003	A	C	100	PASS	DP=50	GT:DP	0/1:50	0/1:50	0/0:50
-chr_test	3200	snp004	G	A	100	PASS	DP=50	GT:DP	0/1:50	0/0:50	0/0:50
-chr_test	5000	snp005	G	T	100	PASS	DP=50	GT:DP	0/1:50	0/1:50	0/1:50
-chr_test	10800	snp006	T	C	100	PASS	DP=50	GT:DP	0/1:50	0/1:50	0/0:50
-chr_test	11200	snp007	A	G	100	PASS	DP=50	GT:DP	0/1:50	0/1:50	0/1:50
-chr_test	12800	snp008	C	A	100	PASS	DP=50	GT:DP	0/1:50	0/0:50	0/0:50
-chr_test	13200	snp009	G	T	100	PASS	DP=50	GT:DP	0/1:50	0/1:50	0/1:50
-chr_test	15000	snp010	A	C	100	PASS	DP=50	GT:DP	0/1:50	0/1:50	0/0:50
-EOVCF
-    echo "  ✓ Created variants.vcf (10 het SNPs, 3 samples)"
-fi
+python3 - << 'PYEOF'
+import sys
+
+# Read the reference sequence
+with open("chr_test.fa") as f:
+    lines = f.readlines()
+seq = ''.join(line.strip() for line in lines if not line.startswith('>'))
+
+# Deterministic ALT allele mapping (always different from REF)
+alt_map = {'A': 'C', 'T': 'G', 'G': 'T', 'C': 'A'}
+
+# SNP positions (1-based) spread across gene regions in annotation.gtf:
+#   Gene1 (500-5500):   750, 1200, 2800, 3200, 5000
+#   Gene3 (5800-6300):  6000, 6100
+#   Gene4 (6500-7000):  6700, 6800
+#   Gene5 (7200-7700):  7400, 7500
+#   Gene6 (7900-8400):  8100, 8200
+#   Gene7 (8600-9100):  8800, 8900
+#   Gene2 (10500-15500): 10800, 11200, 12800, 13200, 15000
+#   Gene8 (15800-16300): 16000, 16100
+#   Gene9 (16500-17000): 16700, 16800
+#   Gene10 (17200-17700): 17400, 17500
+#   Gene11 (17900-18400): 18100, 18200
+#   Gene12 (18600-19100): 18800, 18900
+snps = [
+    (750,   "snp001"),
+    (1200,  "snp002"),
+    (2800,  "snp003"),
+    (3200,  "snp004"),
+    (5000,  "snp005"),
+    (6000,  "snp011"),
+    (6100,  "snp012"),
+    (6700,  "snp013"),
+    (6800,  "snp014"),
+    (7400,  "snp015"),
+    (7500,  "snp016"),
+    (8100,  "snp017"),
+    (8200,  "snp018"),
+    (8800,  "snp019"),
+    (8900,  "snp020"),
+    (10800, "snp006"),
+    (11200, "snp007"),
+    (12800, "snp008"),
+    (13200, "snp009"),
+    (15000, "snp010"),
+    (16000, "snp021"),
+    (16100, "snp022"),
+    (16700, "snp023"),
+    (16800, "snp024"),
+    (17400, "snp025"),
+    (17500, "snp026"),
+    (18100, "snp027"),
+    (18200, "snp028"),
+    (18800, "snp029"),
+    (18900, "snp030"),
+]
+
+# Genotype patterns for 3 samples (phased, 0|1)
+# sample1: 28 het, 2 hom-ref   (high het)
+# sample2: 22 het, 8 hom-ref   (medium het)
+# sample3: 22 het, 8 hom-ref   (medium het, different SNPs from sample2)
+genotypes = [
+    # snp001-005 (Gene1)
+    ("0|1", "0|1", "0|1"),
+    ("0|1", "0|1", "0|1"),
+    ("0|1", "0|1", "0|0"),
+    ("0|1", "0|0", "0|0"),
+    ("0|1", "0|1", "0|1"),
+    # snp011-012 (Gene3)
+    ("0|1", "0|1", "0|0"),
+    ("0|1", "0|0", "0|1"),
+    # snp013-014 (Gene4)
+    ("0|1", "0|1", "0|1"),
+    ("0|0", "0|1", "0|1"),
+    # snp015-016 (Gene5)
+    ("0|1", "0|1", "0|0"),
+    ("0|1", "0|0", "0|1"),
+    # snp017-018 (Gene6)
+    ("0|1", "0|1", "0|1"),
+    ("0|0", "0|1", "0|1"),
+    # snp019-020 (Gene7)
+    ("0|1", "0|1", "0|1"),
+    ("0|1", "0|0", "0|1"),
+    # snp006-010 (Gene2)
+    ("0|1", "0|1", "0|0"),
+    ("0|1", "0|1", "0|1"),
+    ("0|1", "0|0", "0|0"),
+    ("0|1", "0|1", "0|1"),
+    ("0|1", "0|1", "0|0"),
+    # snp021-022 (Gene8)
+    ("0|1", "0|1", "0|1"),
+    ("0|1", "0|0", "0|1"),
+    # snp023-024 (Gene9)
+    ("0|1", "0|1", "0|0"),
+    ("0|0", "0|1", "0|1"),
+    # snp025-026 (Gene10)
+    ("0|1", "0|1", "0|1"),
+    ("0|1", "0|0", "0|1"),
+    # snp027-028 (Gene11)
+    ("0|1", "0|1", "0|0"),
+    ("0|0", "0|1", "0|1"),
+    # snp029-030 (Gene12)
+    ("0|1", "0|1", "0|1"),
+    ("0|1", "0|0", "0|1"),
+]
+
+with open("variants.vcf", "w") as f:
+    f.write("##fileformat=VCFv4.2\n")
+    f.write("##fileDate=20260306\n")
+    f.write("##source=WASP2SharedTestData\n")
+    f.write("##reference=chr_test.fa\n")
+    f.write(f"##contig=<ID=chr_test,length={len(seq)}>\n")
+    f.write('##INFO=<ID=DP,Number=1,Type=Integer,Description="Total Depth">\n')
+    f.write('##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">\n')
+    f.write('##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Read Depth">\n')
+    f.write("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tsample1\tsample2\tsample3\n")
+
+    for i, (pos, snp_id) in enumerate(snps):
+        ref = seq[pos - 1]  # 0-based index
+        alt = alt_map[ref]
+        gt1, gt2, gt3 = genotypes[i]
+        f.write(f"chr_test\t{pos}\t{snp_id}\t{ref}\t{alt}\t100\tPASS\tDP=50\tGT:DP\t{gt1}:50\t{gt2}:50\t{gt3}:50\n")
+
+print(f"Created variants.vcf with {len(snps)} SNPs, REF alleles verified against reference", file=sys.stderr)
+PYEOF
+
+echo "  OK Created variants.vcf (30 het SNPs, 3 samples, phased)"
 
 # Compress and index VCF
-if [[ ! -f "variants.vcf.gz" || ! -f "variants.vcf.gz.tbi" ]]; then
-    rm -f variants.vcf.gz variants.vcf.gz.tbi
-    bgzip -c variants.vcf > variants.vcf.gz
-    tabix -p vcf variants.vcf.gz
-    echo "  ✓ Created variants.vcf.gz + .tbi"
-fi
+bgzip -c variants.vcf > variants.vcf.gz
+tabix -p vcf variants.vcf.gz
+echo "  OK Created variants.vcf.gz + .tbi"
 
 echo ""
 
@@ -161,16 +245,8 @@ echo ""
 echo "[5/8] Creating regions BED..."
 
 if [[ -f "regions.bed" ]]; then
-    echo "  regions.bed already exists, skipping"
+    echo "  regions.bed already exists, keeping"
 else
-    # Extract exon coordinates from GTF → BED format
-    # GTF exons from annotation.gtf:
-    #   chr_test 500-1500 (exon 1, gene 1)
-    #   chr_test 2500-3500 (exon 2, gene 1)
-    #   chr_test 4500-5500 (exon 3, gene 1)
-    #   chr_test 10500-11500 (exon 1, gene 2)
-    #   chr_test 12500-13500 (exon 2, gene 2)
-    #   chr_test 14500-15500 (exon 3, gene 2)
     cat > regions.bed << 'EOBED'
 chr_test	499	1500	INTEXON001
 chr_test	2499	3500	INTEXON002
@@ -179,7 +255,7 @@ chr_test	10499	11500	INTEXON004
 chr_test	12499	13500	INTEXON005
 chr_test	14499	15500	INTEXON006
 EOBED
-    echo "  ✓ Created regions.bed (6 exonic regions)"
+    echo "  OK Created regions.bed (6 exonic regions)"
 fi
 
 echo ""
@@ -190,14 +266,12 @@ echo ""
 echo "[6/8] Building BWA index..."
 
 BWA_INDEX_DIR="bwa_index"
-if [[ -f "${BWA_INDEX_DIR}/chr_test.fa.bwt" ]]; then
-    echo "  BWA index already exists, skipping"
-else
-    mkdir -p "$BWA_INDEX_DIR"
-    cp chr_test.fa "$BWA_INDEX_DIR/"
-    bwa index "$BWA_INDEX_DIR/chr_test.fa" 2>&1 | tail -3
-    echo "  ✓ Created BWA index ($(du -sh $BWA_INDEX_DIR | cut -f1))"
-fi
+# Always rebuild BWA index when reference changes
+rm -rf "$BWA_INDEX_DIR"
+mkdir -p "$BWA_INDEX_DIR"
+cp chr_test.fa "$BWA_INDEX_DIR/"
+bwa index "$BWA_INDEX_DIR/chr_test.fa" 2>&1 | tail -3
+echo "  OK Created BWA index ($(du -sh $BWA_INDEX_DIR | cut -f1))"
 
 echo ""
 
@@ -216,10 +290,10 @@ simulate_and_align() {
     local frag_size=$3
     local frag_std=$4
 
-    if [[ -f "${sample_name}.bam" && -f "${sample_name}.bam.bai" ]]; then
-        echo "  ${sample_name}.bam already exists, skipping"
-        return
-    fi
+    # Always regenerate when reference changes
+    rm -f "${sample_name}.bam" "${sample_name}.bam.bai"
+    rm -f "${sample_name}_R1.fq" "${sample_name}_R2.fq"
+    rm -f "${sample_name}_R1.fq.gz" "${sample_name}_R2.fq.gz"
 
     echo "  Simulating ${sample_name} (seed=${seed}, frags=${frag_size}bp)..."
 
@@ -255,7 +329,7 @@ simulate_and_align() {
     gzip -f "${sample_name}_R2.fq"
 
     local read_count=$(samtools view -c "${sample_name}.bam")
-    echo "  ✓ ${sample_name}.bam: ${read_count} aligned reads ($(du -h ${sample_name}.bam | cut -f1))"
+    echo "  OK ${sample_name}.bam: ${read_count} aligned reads ($(du -h ${sample_name}.bam | cut -f1))"
 }
 
 # Sample1: standard RNA-seq-like fragments (seed 42)
@@ -283,13 +357,13 @@ validate_file() {
     if [[ -f "$filepath" ]]; then
         local size=$(stat -c%s "$filepath" 2>/dev/null || stat -f%z "$filepath" 2>/dev/null)
         if [[ $size -ge $min_size ]]; then
-            echo "  ✓ $filepath ($(du -h "$filepath" | cut -f1))"
+            echo "  OK $filepath ($(du -h "$filepath" | cut -f1))"
         else
-            echo "  ✗ $filepath exists but too small (${size} bytes, expected >= ${min_size})"
+            echo "  FAIL $filepath exists but too small (${size} bytes, expected >= ${min_size})"
             ERRORS=$((ERRORS + 1))
         fi
     else
-        echo "  ✗ $filepath NOT FOUND"
+        echo "  FAIL $filepath NOT FOUND"
         ERRORS=$((ERRORS + 1))
     fi
 }
@@ -298,9 +372,9 @@ validate_bam() {
     local bam=$1
     if samtools quickcheck "$bam" 2>/dev/null; then
         local count=$(samtools view -c "$bam")
-        echo "  ✓ $bam passes quickcheck (${count} reads)"
+        echo "  OK $bam passes quickcheck (${count} reads)"
     else
-        echo "  ✗ $bam FAILS quickcheck"
+        echo "  FAIL $bam FAILS quickcheck"
         ERRORS=$((ERRORS + 1))
     fi
 }
@@ -345,6 +419,20 @@ validate_file "sample2_R1.fq.gz" 1000
 validate_file "sample2_R2.fq.gz" 1000
 validate_file "sample3_R1.fq.gz" 1000
 validate_file "sample3_R2.fq.gz" 1000
+
+# -----------------------------------------------------------------------------
+# Quality report: MAPQ + proper pairing
+# -----------------------------------------------------------------------------
+echo ""
+echo "  --- Alignment quality report ---"
+for sample in sample1 sample2 sample3; do
+    total=$(samtools view -c "${sample}.bam")
+    mapq_gt0=$(samtools view -c -q 1 "${sample}.bam")
+    mapq_pct=$(python3 -c "print(f'{100*${mapq_gt0}/${total}:.1f}')")
+    proper=$(samtools view -c -f 2 "${sample}.bam")
+    proper_pct=$(python3 -c "print(f'{100*${proper}/${total}:.1f}')")
+    echo "  ${sample}: ${total} total, ${mapq_gt0} MAPQ>0 (${mapq_pct}%), ${proper} properly paired (${proper_pct}%)"
+done
 
 echo ""
 if [[ $ERRORS -eq 0 ]]; then
