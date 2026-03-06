@@ -200,4 +200,4 @@ dag.dot
 
 # Claude Code memory files (per-directory)
 **/CLAUDE.md
-!./CLAUDE.md
+!/CLAUDE.md

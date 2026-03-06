@@ -41,6 +41,31 @@ repos:
     hooks:
       - id: gitleaks
 
+  # Block common AI agent artifacts from being committed
+  - repo: local
+    hooks:
+      - id: forbid-agent-artifacts
+        name: Block AI agent artifacts
+        entry: "Forbidden: likely an AI agent artifact"
+        language: fail
+        files: |
+          (?x)^(
+            ANALYSIS\.md|
+            SUMMARY\.md|
+            REVIEW\.md|
+            debug_.*\.py|
+            test_scratch.*|
+            tmpclaude.*|
+            .*\.debug\.(py|js|ts)|
+            run_debug.*\.py|
+            -\.bam
+          )$
+      - id: forbid-binaries-in-src
+        name: Block binary files in source directories
+        entry: "Forbidden: binary file in source directory"
+        language: fail
+        files: '^(src|pipelines)/.*\.(bam|bai|vcf\.gz|vcf\.gz\.tbi|sam|fastq\.gz|fq\.gz)$'
+
   # Type checking: basedpyright (stricter Pyright fork)
   - repo: local
     hooks:
