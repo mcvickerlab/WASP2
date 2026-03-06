@@ -1,0 +1,28 @@
+nextflow_pipeline {
+
+    name "Test default pipeline run"
+    script "../main.nf"
+
+    tag "pipeline"
+    tag "default"
+
+    test("Should run default stub-run mode") {
+
+        options "-stub"
+
+        when {
+            params {
+                outdir = "$outputDir"
+            }
+        }
+
+        then {
+            assertAll(
+                { assert workflow.success },
+                { assert snapshot(
+                    path("${outputDir}/pipeline_info/versions.yml")
+                ).match() }
+            )
+        }
+    }
+}

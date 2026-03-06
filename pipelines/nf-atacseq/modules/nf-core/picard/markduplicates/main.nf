@@ -1,22 +1,23 @@
 process PICARD_MARKDUPLICATES {
-    tag "$meta.id"
+    tag "${meta.id}"
     label 'process_medium'
 
-    conda "bioconda::picard=3.1.1"
-    container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
-        'https://depot.galaxyproject.org/singularity/picard:3.1.1--hdfd78af_0' :
-        'biocontainers/picard:3.1.1--hdfd78af_0' }"
+    conda "${moduleDir}/environment.yml"
+    container "${workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container
+        ? 'https://community-cr-prod.seqera.io/docker/registry/v2/blobs/sha256/08/0861295baa7c01fc593a9da94e82b44a729dcaf8da92be8e565da109aa549b25/data'
+        : 'community.wave.seqera.io/library/picard:3.4.0--e9963040df0a9bf6'}"
 
     input:
-    tuple val(meta), path(bam)
-    path  fasta
-    path  fasta_fai
+    tuple val(meta), path(reads)
+    tuple val(meta2), path(fasta)
+    tuple val(meta3), path(fai)
 
     output:
-    tuple val(meta), path("*.markdup.bam"),    emit: bam
-    tuple val(meta), path("*.markdup.bam.bai"), emit: bai
-    tuple val(meta), path("*.metrics.txt"),    emit: metrics
-    path "versions.yml",                       emit: versions
+    tuple val(meta), path("*.bam"), emit: bam, optional: true
+    tuple val(meta), path("*.bai"), emit: bai, optional: true
+    tuple val(meta), path("*.cram"), emit: cram, optional: true
+    tuple val(meta), path("*.metrics.txt"), emit: metrics
+    tuple val("${task.process}"), val('picard'), eval("picard MarkDuplicates --version 2>&1 | sed -n 's/.*Version://p'"), topic: versions, emit: versions_picard
 
     when:
     task.ext.when == null || task.ext.when
@@ -24,38 +25,39 @@ process PICARD_MARKDUPLICATES {
     script:
     def args = task.ext.args ?: ''
     def prefix = task.ext.prefix ?: "${meta.id}"
+    def suffix = task.ext.suffix ?: "${reads.getExtension()}"
+    def reference = fasta ? "--REFERENCE_SEQUENCE ${fasta}" : ""
     def avail_mem = 3072
     if (!task.memory) {
-        log.info '[Picard MarkDuplicates] Available memory not known - defaulting to 3GB'
-    } else {
-        avail_mem = (task.memory.mega*0.8).intValue()
+        log.info('[Picard MarkDuplicates] Available memory not known - defaulting to 3GB. Specify process memory requirements to change this.')
+    }
+    else {
+        avail_mem = (task.memory.mega * 0.8).intValue()
+    }
+
+    if ("${reads}" == "${prefix}.${suffix}") {
+        error("Input and output names are the same, use \"task.ext.prefix\" to disambiguate!")
     }
     """
     picard \\
         -Xmx${avail_mem}M \\
         MarkDuplicates \\
-        $args \\
-        --INPUT $bam \\
-        --OUTPUT ${prefix}.markdup.bam \\
-        --METRICS_FILE ${prefix}.metrics.txt \\
-        --CREATE_INDEX true
-
-    cat <<-END_VERSIONS > versions.yml
-    "${task.process}":
-        picard: \$(picard MarkDuplicates --version 2>&1 | grep -o 'Version:[0-9.]*' | sed 's/Version://')
-    END_VERSIONS
+        ${args} \\
+        --INPUT ${reads} \\
+        --OUTPUT ${prefix}.${suffix} \\
+        ${reference} \\
+        --METRICS_FILE ${prefix}.metrics.txt
     """
 
     stub:
     def prefix = task.ext.prefix ?: "${meta.id}"
+    def suffix = task.ext.suffix ?: "${reads.getExtension()}"
+    if ("${reads}" == "${prefix}.${suffix}") {
+        error("Input and output names are the same, use \"task.ext.prefix\" to disambiguate!")
+    }
     """
-    touch ${prefix}.markdup.bam
-    touch ${prefix}.markdup.bam.bai
+    touch ${prefix}.${suffix}
+    touch ${prefix}.${suffix}.bai
     touch ${prefix}.metrics.txt
-
-    cat <<-END_VERSIONS > versions.yml
-    "${task.process}":
-        picard: 3.1.1
-    END_VERSIONS
     """
 }

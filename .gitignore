@@ -175,6 +175,14 @@ test-output/
 results_stub/
 pipelines/*/test-output/
 pipelines/*/results_stub/
+pipelines/*/results_*/
+pipelines/*/artifacts/
+
+# Stray BAM files at repo root
+-.bam
+
+# Artifacts directory
+artifacts/
 
 # Claude Code memory files (per-directory)
 **/CLAUDE.md

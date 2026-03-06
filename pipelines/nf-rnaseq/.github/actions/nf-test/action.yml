@@ -1,0 +1,15 @@
+name: Run nf-test
+description: Run nf-test for a specific test file
+inputs:
+  test-file:
+    description: Path to the nf-test file
+    required: true
+  profile:
+    description: Nextflow profile to use
+    required: false
+    default: test,docker
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: nf-test test ${{ inputs.test-file }} --profile ${{ inputs.profile }}

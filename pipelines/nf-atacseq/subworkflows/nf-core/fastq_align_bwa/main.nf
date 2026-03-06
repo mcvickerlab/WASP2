@@ -1,56 +1,41 @@
 //
-// Alignment with BWA-MEM
+// Alignment with BWA
 //
 
 include { BWA_MEM                 } from '../../../modules/nf-core/bwa/mem/main'
-include { SAMTOOLS_INDEX          } from '../../../modules/nf-core/samtools/index/main'
-include { BAM_STATS_SAMTOOLS      } from '../bam_stats_samtools/main'
+include { BAM_SORT_STATS_SAMTOOLS } from '../bam_sort_stats_samtools/main'
 
 workflow FASTQ_ALIGN_BWA {
     take:
-    ch_reads   // channel: [ val(meta), path(reads) ]
-    ch_index   // channel: path(index)
-    ch_fasta   // channel: path(fasta)
+    ch_reads        // channel (mandatory): [ val(meta), [ path(reads) ] ]
+    ch_index        // channel (mandatory): [ val(meta2), path(index) ]
+    val_sort_bam    // boolean (mandatory): true or false
+    ch_fasta        // channel (optional) : [ val(meta3), path(fasta) ]
 
     main:
-    ch_versions = Channel.empty()
+    ch_versions = channel.empty()
 
     //
-    // Align reads with BWA-MEM (outputs sorted BAM)
+    // Map reads with BWA
     //
-    BWA_MEM (
-        ch_reads,
-        ch_index,
-        ch_fasta,
-        true  // sort_bam
-    )
-    ch_versions = ch_versions.mix(BWA_MEM.out.versions.first())
+
+    BWA_MEM ( ch_reads, ch_index, ch_fasta, val_sort_bam )
 
     //
-    // Index BAM file
+    // Sort, index BAM file and run samtools stats, flagstat and idxstats
     //
-    SAMTOOLS_INDEX ( BWA_MEM.out.bam )
-    ch_versions = ch_versions.mix(SAMTOOLS_INDEX.out.versions.first())
 
-    //
-    // Join BAM and BAI
-    //
-    ch_bam_bai = BWA_MEM.out.bam
-        .join(SAMTOOLS_INDEX.out.bai, by: [0], failOnMismatch: true)
-
-    //
-    // Run BAM stats
-    //
-    BAM_STATS_SAMTOOLS ( ch_bam_bai, ch_fasta )
-    ch_versions = ch_versions.mix(BAM_STATS_SAMTOOLS.out.versions)
+    BAM_SORT_STATS_SAMTOOLS ( BWA_MEM.out.bam, ch_fasta )
 
     emit:
-    bam      = BWA_MEM.out.bam                    // channel: [ val(meta), path(bam) ]
-    bai      = SAMTOOLS_INDEX.out.bai             // channel: [ val(meta), path(bai) ]
+    bam_orig = BWA_MEM.out.bam                      // channel: [ val(meta), path(bam) ]
 
-    stats    = BAM_STATS_SAMTOOLS.out.stats       // channel: [ val(meta), path(stats) ]
-    flagstat = BAM_STATS_SAMTOOLS.out.flagstat    // channel: [ val(meta), path(flagstat) ]
-    idxstats = BAM_STATS_SAMTOOLS.out.idxstats    // channel: [ val(meta), path(idxstats) ]
+    bam      = BAM_SORT_STATS_SAMTOOLS.out.bam      // channel: [ val(meta), path(bam) ]
+    bai      = BAM_SORT_STATS_SAMTOOLS.out.bai      // channel: [ val(meta), path(bai) ]
+    csi      = BAM_SORT_STATS_SAMTOOLS.out.csi      // channel: [ val(meta), path(csi) ]
+    stats    = BAM_SORT_STATS_SAMTOOLS.out.stats    // channel: [ val(meta), path(stats) ]
+    flagstat = BAM_SORT_STATS_SAMTOOLS.out.flagstat // channel: [ val(meta), path(flagstat) ]
+    idxstats = BAM_SORT_STATS_SAMTOOLS.out.idxstats // channel: [ val(meta), path(idxstats) ]
 
-    versions = ch_versions                        // channel: path(versions.yml)
+    versions = ch_versions                          // channel: [ path(versions.yml) ]
 }

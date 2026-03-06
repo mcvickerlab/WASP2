@@ -13,17 +13,22 @@ nextflow_pipeline {
 
         when {
             params {
+                outdir     = "$outputDir"
                 input      = "${projectDir}/assets/samplesheet_test.csv"
                 vcf        = "${projectDir}/tests/data/test_snps.vcf.gz"
                 star_index = "${projectDir}/tests/data/star_index"
                 gtf        = "${projectDir}/tests/data/test.gtf"
-                outdir     = "${outputDir}/results"
             }
         }
 
         then {
             assertAll(
                 { assert workflow.success },
+
+                // Snapshot versions for reproducibility
+                { assert snapshot(
+                    path("${outputDir}/pipeline_info/versions.yml")
+                ).match("stub_versions") },
 
                 // Snapshot for regression tracking
                 { assert snapshot(

@@ -53,6 +53,7 @@ workflow ATACSEQ {
     ch_versions = ch_versions.mix(PREPARE_GENOME.out.versions)
 
     ch_fasta = PREPARE_GENOME.out.fasta
+    ch_fasta_meta = ch_fasta.map { fasta -> [[id: 'genome'], fasta] }
     ch_vcf   = params.vcf ? Channel.fromPath(params.vcf, checkIfExists: true).collect() : Channel.empty()
 
     //
@@ -60,7 +61,6 @@ workflow ATACSEQ {
     //
     if (!params.skip_fastqc) {
         FASTQC ( ch_samplesheet )
-        ch_versions = ch_versions.mix(FASTQC.out.versions.first())
         ch_multiqc_files = ch_multiqc_files.mix(FASTQC.out.zip.collect { it[1] })
     }
 
@@ -69,13 +69,12 @@ workflow ATACSEQ {
     //
     if (!params.skip_trimming) {
         FASTP (
-            ch_samplesheet,
-            [],     // adapter_fasta
+            ch_samplesheet.map { meta, reads -> [meta, reads, []] },
+            false,  // discard_trimmed_pass
             false,  // save_trimmed_fail
             false   // save_merged
         )
         ch_reads = FASTP.out.reads
-        ch_versions = ch_versions.mix(FASTP.out.versions.first())
         ch_multiqc_files = ch_multiqc_files.mix(FASTP.out.json.collect { it[1] })
     } else {
         ch_reads = ch_samplesheet
@@ -94,8 +93,9 @@ workflow ATACSEQ {
     if (params.aligner == 'bwa') {
         FASTQ_ALIGN_BWA (
             ch_reads,
-            PREPARE_GENOME.out.bwa_index,
-            ch_fasta
+            PREPARE_GENOME.out.bwa_index.map { index -> [[id: 'genome'], index] },
+            true,
+            ch_fasta_meta
         )
         ch_aligned_bam    = FASTQ_ALIGN_BWA.out.bam
         ch_aligned_bai    = FASTQ_ALIGN_BWA.out.bai
@@ -107,6 +107,8 @@ workflow ATACSEQ {
         FASTQ_ALIGN_BOWTIE2 (
             ch_reads,
             PREPARE_GENOME.out.bowtie2_index,
+            false,
+            true,
             ch_fasta
         )
         ch_aligned_bam    = FASTQ_ALIGN_BOWTIE2.out.bam
@@ -130,16 +132,16 @@ workflow ATACSEQ {
     // SUBWORKFLOW: Mark duplicates with Picard and run BAM stats (optional)
     //
     ch_fasta_fai = PREPARE_GENOME.out.fasta_fai
+    ch_fasta_fai_meta = ch_fasta_fai.map { fai -> [[id: 'genome'], fai] }
 
     if (!params.skip_dedup) {
         BAM_MARKDUPLICATES_PICARD (
             ch_bam_indexed.map { meta, bam, bai -> [meta, bam] },
-            ch_fasta,
-            ch_fasta_fai
+            ch_fasta_meta,
+            ch_fasta_fai_meta
         )
         ch_bam_dedup = BAM_MARKDUPLICATES_PICARD.out.bam
             .join(BAM_MARKDUPLICATES_PICARD.out.bai, by: [0], failOnMismatch: true)
-        ch_versions = ch_versions.mix(BAM_MARKDUPLICATES_PICARD.out.versions)
 
         // Add deduplication stats to MultiQC
         ch_multiqc_files = ch_multiqc_files.mix(BAM_MARKDUPLICATES_PICARD.out.metrics.collect { it[1] })
@@ -155,7 +157,7 @@ workflow ATACSEQ {
     //
     if (!params.skip_peak_calling) {
         MACS2_CALLPEAK (
-            ch_bam_dedup.map { meta, bam, bai -> [meta, bam] },
+            ch_bam_dedup.map { meta, bam, bai -> [meta, bam, []] },
             params.macs_gsize
         )
         ch_peaks = MACS2_CALLPEAK.out.peak
@@ -238,16 +240,14 @@ workflow ATACSEQ {
     //
     ch_multiqc_report = Channel.empty()
     if (!params.skip_multiqc) {
-        ch_multiqc_config = Channel.fromPath("${projectDir}/assets/multiqc_config.yml", checkIfExists: false).ifEmpty([])
+        def multiqc_config_file = file("${projectDir}/assets/multiqc_config.yml")
 
         MULTIQC (
-            ch_multiqc_files.collect(),
-            ch_multiqc_config.toList(),
-            [],  // extra_multiqc_config
-            []   // multiqc_logo
+            ch_multiqc_files.collect().map { files ->
+                [ [id: 'multiqc'], files, multiqc_config_file.exists() ? [multiqc_config_file] : [], [], [], [] ]
+            }
         )
-        ch_multiqc_report = MULTIQC.out.report
-        ch_versions = ch_versions.mix(MULTIQC.out.versions)
+        ch_multiqc_report = MULTIQC.out.report.map { meta, report -> report }
     }
 
     emit:

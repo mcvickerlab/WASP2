@@ -1,0 +1,13 @@
+name: nf-core linting comment
+on:
+  workflow_run:
+    workflows: ["nf-core linting"]
+    types: [completed]
+
+jobs:
+  linting-comment:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Post linting comment
+        run: echo "Linting workflow completed"
