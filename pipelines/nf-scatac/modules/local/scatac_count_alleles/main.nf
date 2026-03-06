@@ -77,7 +77,7 @@ process SCATAC_COUNT_ALLELES {
         print "total_barcodes", length(bc)
         print "total_snps", length(snp)
         print "total_fragment_overlaps", tot
-        print "mean_snps_per_cell", length(bc) > 0 ? length(snp)/length(bc) : 0
+        if (length(bc) > 0) print "mean_snps_per_cell", length(snp)/length(bc); else print "mean_snps_per_cell", 0
     }' ${prefix}_allele_counts.tsv > ${prefix}_count_stats.tsv
 
     [ \$(wc -l < ${prefix}_allele_counts.tsv) -lt 2 ] && echo "WARNING: No overlaps found" >&2 || true
@@ -85,7 +85,7 @@ process SCATAC_COUNT_ALLELES {
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
         bedtools: \$(bedtools --version | sed 's/bedtools v//')
-        awk: \$(awk --version | head -1 | sed 's/GNU Awk //' | cut -d',' -f1)
+        awk: \$(awk --version 2>&1 | head -1 | sed 's/GNU Awk //' | cut -d',' -f1 || echo "unknown")
     END_VERSIONS
     """
 

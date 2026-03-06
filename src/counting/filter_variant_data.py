@@ -189,13 +189,13 @@ def parse_intersect_region_new(
         has_header=False,
         infer_schema_length=0,
         new_columns=vcf_cols,
-        schema_overrides=dict(zip(vcf_cols, vcf_schema)),
+        dtypes=dict(zip(vcf_cols, vcf_schema)),
     )
 
     # Check how many region columns
     subset_cols = [vcf_cols[0], *vcf_cols[2:]]  # skip pos0
-    schema = df.collect_schema()
-    intersect_ncols = len(schema.names())
+    schema = df.schema  # OrderedDict in polars <1.0, Schema in >=1.0
+    intersect_ncols = len(list(schema.keys()) if hasattr(schema, 'keys') else schema.names())
 
     # Intersected with peak, check if region col needs to be made
     if intersect_ncols > vcf_ncols:
@@ -208,7 +208,7 @@ def parse_intersect_region_new(
         else:
             df = df.with_columns(
                 pl.concat_str(
-                    [pl.col(i) for i in schema.names()[vcf_ncols : vcf_ncols + 3]], separator="_"
+                    [pl.col(i) for i in (list(schema.keys()) if hasattr(schema, 'keys') else schema.names())[vcf_ncols : vcf_ncols + 3]], separator="_"
                 ).alias(region_col)
             )
 

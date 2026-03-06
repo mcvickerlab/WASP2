@@ -1,0 +1,13 @@
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/environment-schema.json
+# Conda environment for nf-outrider local Python modules
+# (aggregate_counts, merge_counts, mae_detect)
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.11.*
+  - pandas>=2.0
+  - scipy>=1.10
+  - polars>=0.19
+  - numpy>=1.21,<2.0
