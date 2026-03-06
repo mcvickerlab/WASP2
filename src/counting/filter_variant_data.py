@@ -174,6 +174,14 @@ def parse_intersect_region_new(
 
     vcf_ncols = len(vcf_cols)
 
+    # Guard against empty intersection file (0 variants in region)
+    intersect_path = Path(intersect_file)
+    if not intersect_path.exists() or intersect_path.stat().st_size == 0:
+        # Return empty DataFrame with the expected schema (skip pos0)
+        empty_cols = [vcf_cols[0], *vcf_cols[2:]]  # skip pos0
+        empty_schema = {vcf_cols[0]: vcf_schema[0], **dict(zip(vcf_cols[2:], vcf_schema[2:]))}
+        return pl.DataFrame(schema=empty_schema)
+
     # Process with gt
     df = pl.scan_csv(
         intersect_file,
@@ -236,6 +244,13 @@ def parse_intersect_region(
     ValueError
         If BED format is not recognized.
     """
+    # Guard against empty intersection file (0 variants in region)
+    intersect_path = Path(intersect_file)
+    if not intersect_path.exists() or intersect_path.stat().st_size == 0:
+        return pl.DataFrame(
+            schema={"chrom": pl.Categorical, "pos": pl.UInt32, "ref": pl.Categorical, "alt": pl.Categorical}
+        )
+
     df = pl.scan_csv(intersect_file, separator="\t", has_header=False, infer_schema_length=0)
 
     # If we need to use coords as name
