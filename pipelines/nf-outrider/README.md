@@ -37,7 +37,7 @@ RNA-seq BAMs → WASP2 Count → Gene Aggregation → OUTRIDER → Outlier Calls
 
 ```bash
 # Run with Docker
-nextflow run nf-outrider \
+nextflow run pipelines/nf-outrider \
     -profile docker \
     --input samplesheet.csv \
     --vcf variants.vcf.gz \
@@ -45,11 +45,14 @@ nextflow run nf-outrider \
     --outdir results
 
 # Run with Singularity (HPC)
-nextflow run nf-outrider \
+nextflow run pipelines/nf-outrider \
     -profile singularity \
     --input samplesheet.csv \
     --vcf variants.vcf.gz \
     --gtf annotation.gtf
+
+# Local test with chr21 1000 Genomes data
+nextflow run pipelines/nf-outrider -profile test_local,docker
 ```
 
 ## Input
@@ -131,7 +134,23 @@ results/
 
 # Test with minimal data
 -profile test
+
+# Local test with chr21 1000 Genomes data
+-profile test_local
 ```
+
+## Validation with chr21 1000 Genomes Data
+
+Run a quick validation using chr21 data from the 1000 Genomes Project:
+
+```bash
+# Uses pre-configured chr21 BAMs, VCF, and GTF
+nextflow run pipelines/nf-outrider -profile test_local,docker
+
+# Expect: ~3-5 min runtime, OUTRIDER outlier calls + MAE results for chr21 genes
+```
+
+This profile uses chr21-only BAMs, a chr21 VCF, and a chr21 GTF annotation, providing a fast end-to-end validation without downloading full genomes.
 
 ## OUTRIDER Algorithm
 
@@ -177,7 +196,7 @@ If you use nf-outrider, please cite:
 - [OUTRIDER Paper](https://doi.org/10.1016/j.ajhg.2018.10.025)
 - [OUTRIDER GitHub](https://github.com/gagneurlab/OUTRIDER)
 - [nf-core/drop](https://nf-co.re/drop/dev/) (reference implementation)
-- [WASP2 Documentation](https://github.com/your-org/WASP2)
+- [WASP2 Documentation](https://github.com/mcvickerlab/WASP2)
 
 ## License
 

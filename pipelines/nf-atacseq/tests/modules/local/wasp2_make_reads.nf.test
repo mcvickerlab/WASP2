@@ -7,14 +7,15 @@ nextflow_process {
     tag "modules"
     tag "modules_local"
     tag "wasp2"
+    tag "wasp2_make_reads"
 
-    test("Should generate swapped-allele reads for remapping - real") {
+    test("wasp2_make_reads - paired_end - real") {
 
         when {
             process {
                 """
                 input[0] = [
-                    [ id:'test_real', single_end:false, sample_name:'SAMPLE1' ],
+                    [ id:'test_real', single_end:false, sample_name:'sample1' ],
                     file("${projectDir}/tests/data/real_test.bam"),
                     file("${projectDir}/tests/data/real_test.bam.bai")
                 ]
@@ -25,16 +26,42 @@ nextflow_process {
 
         then {
             assertAll(
+                // Process completes successfully
                 { assert process.success },
+
+                // FASTQ outputs: paired-end swapped-allele reads
+                { assert process.out.fastq.size() == 1 },
+                { assert path(process.out.fastq[0][1]).exists() },
+                { assert path(process.out.fastq[0][2]).exists() },
+                { assert path(process.out.fastq[0][1]).toFile().size() > 0 },
+                { assert path(process.out.fastq[0][2]).toFile().size() > 0 },
+
+                // to_remap BAM: reads that overlap variants and need remapping
                 { assert process.out.to_remap_bam.size() == 1 },
+                { assert path(process.out.to_remap_bam[0][1]).exists() },
+                { assert path(process.out.to_remap_bam[0][1]).toFile().size() > 0 },
+
+                // keep BAM: reads that don't overlap variants (pass through)
                 { assert process.out.keep_bam.size() == 1 },
+                { assert path(process.out.keep_bam[0][1]).exists() },
+
+                // JSON: WASP data tracking file for filter-remapped step
                 { assert process.out.json.size() == 1 },
-                { assert process.out.versions.size() == 1 }
+                { assert path(process.out.json[0][1]).exists() },
+                { assert path(process.out.json[0][1]).text.length() > 2 },
+
+                // versions.yml emitted
+                { assert process.out.versions.size() == 1 },
+                { assert path(process.out.versions[0]).text.contains("wasp2") },
+
+                // meta map preserved
+                { assert process.out.fastq[0][0].id == 'test_real' },
+                { assert process.out.to_remap_bam[0][0].id == 'test_real' }
             )
         }
     }
 
-    test("Should generate swapped-allele reads for remapping - stub") {
+    test("wasp2_make_reads - paired_end - stub") {
 
         options "-stub-run"
 
@@ -42,7 +69,7 @@ nextflow_process {
             process {
                 """
                 input[0] = [
-                    [ id:'test_sample', single_end:false, sample_name:'NA12878' ],
+                    [ id:'test_sample', single_end:false, sample_name:'sample1' ],
                     file("${projectDir}/tests/data/stub_test.bam"),
                     file("${projectDir}/tests/data/stub_test.bam.bai")
                 ]
@@ -52,12 +79,22 @@ nextflow_process {
         }
 
         then {
-            assert process.success
-            assert process.out.fastq
-            assert process.out.to_remap_bam
-            assert process.out.keep_bam
-            assert process.out.json
-            assert process.out.versions
+            assertAll(
+                { assert process.success },
+
+                // All output channels emitted
+                { assert process.out.fastq.size() == 1 },
+                { assert process.out.to_remap_bam.size() == 1 },
+                { assert process.out.keep_bam.size() == 1 },
+                { assert process.out.json.size() == 1 },
+                { assert process.out.versions.size() == 1 },
+
+                // Stub versions contain expected tool
+                { assert snapshot(process.out.versions).match("versions_stub") },
+
+                // meta map preserved through stub
+                { assert process.out.fastq[0][0].id == 'test_sample' }
+            )
         }
     }
 }

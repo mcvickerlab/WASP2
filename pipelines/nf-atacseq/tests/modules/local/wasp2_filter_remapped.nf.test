@@ -7,8 +7,72 @@ nextflow_process {
     tag "modules"
     tag "modules_local"
     tag "wasp2"
+    tag "wasp2_filter_remapped"
 
-    test("Should filter remapped reads and produce WASP-corrected BAM - stub") {
+    // -------------------------------------------------------------------------
+    // Real test: requires WASP2 container with wasp2-map and samtools.
+    // Input files must be actual BAM/JSON from a prior make-reads + remap step.
+    // To generate these, run the pipeline test profile or use:
+    //   cd tests/data && bash generate_test_data.sh
+    // then run make-reads + bwa remap manually on the outputs.
+    //
+    // Until real intermediate files are generated, this test is tagged
+    // 'wasp2_filter_remapped_real' so it can be selectively skipped.
+    // -------------------------------------------------------------------------
+
+    test("wasp2_filter_remapped - real") {
+
+        tag "wasp2_filter_remapped_real"
+
+        when {
+            process {
+                """
+                // Uses shared test data symlinked into tests/data/
+                // real_test.bam -> shared_data/sample1.bam (aligned reads)
+                // These serve as stand-ins; a full integration test requires
+                // actual make-reads output. The process will validate via
+                // wasp2-map filter-remapped + samtools index + samtools flagstat.
+                input[0] = [
+                    [ id:'test_real', single_end:false ],
+                    file("${projectDir}/tests/data/real_test.bam"),
+                    file("${projectDir}/tests/data/real_test.bam.bai"),
+                    file("${projectDir}/tests/data/real_test.bam"),
+                    file("${projectDir}/tests/data/real_test.bam"),
+                    file("${projectDir}/tests/data/real_wasp_data.json")
+                ]
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                // Process completes successfully
+                { assert process.success },
+
+                // BAM output: filtered WASP-corrected BAM + index
+                { assert process.out.bam.size() == 1 },
+                { assert path(process.out.bam[0][1]).exists() },
+                { assert path(process.out.bam[0][1]).toFile().size() > 0 },
+                { assert path(process.out.bam[0][2]).exists() },
+                { assert path(process.out.bam[0][2]).toFile().size() > 0 },
+
+                // Stats output: samtools flagstat results
+                { assert process.out.stats.size() == 1 },
+                { assert path(process.out.stats[0][1]).exists() },
+                { assert path(process.out.stats[0][1]).text.contains("mapped") },
+
+                // versions.yml emitted with both tools
+                { assert process.out.versions.size() == 1 },
+                { assert path(process.out.versions[0]).text.contains("wasp2") },
+                { assert path(process.out.versions[0]).text.contains("samtools") },
+
+                // meta map preserved
+                { assert process.out.bam[0][0].id == 'test_real' }
+            )
+        }
+    }
+
+    test("wasp2_filter_remapped - stub") {
 
         options "-stub-run"
 
@@ -28,10 +92,23 @@ nextflow_process {
         }
 
         then {
-            assert process.success
-            assert process.out.bam
-            assert process.out.stats
-            assert process.out.versions
+            assertAll(
+                { assert process.success },
+
+                // All output channels emitted
+                { assert process.out.bam.size() == 1 },
+                { assert process.out.stats.size() == 1 },
+                { assert process.out.versions.size() == 1 },
+
+                // Stub versions contain expected tools
+                { assert snapshot(process.out.versions).match("versions_stub") },
+
+                // Stats file exists with stub content
+                { assert path(process.out.stats[0][1]).exists() },
+
+                // meta map preserved through stub
+                { assert process.out.bam[0][0].id == 'test_sample' }
+            )
         }
     }
 }

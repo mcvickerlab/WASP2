@@ -52,6 +52,9 @@ nf-scatac/
 nextflow run . -profile docker \
   --input samplesheet.csv \
   --vcf variants.vcf.gz
+
+# Local test with chr21 1000 Genomes data
+nextflow run pipelines/nf-scatac -profile test_local,docker
 ```
 
 ## Samplesheet Format
@@ -171,6 +174,12 @@ nf-test test tests/subworkflows/wasp_allelic_sc.nf.test
 nf-test test tests/subworkflows/generate_fragments.nf.test
 ```
 
+### Local Test (chr21 data)
+
+```bash
+nextflow run pipelines/nf-scatac -profile test_local,docker
+```
+
 ### Integration Tests (Real Data)
 
 Run full pipeline with GM12878 scATAC-seq data:
@@ -182,6 +191,19 @@ nextflow run . -profile test_real,singularity
 Test data locations:
 - **BAM**: `/iblm/netapp/data3/aho/project_data/wasp2/10x_cellranger_atac/gm12878_el4/`
 - **VCF**: `/iblm/netapp/data1/aho/variants/NA12878.vcf.gz`
+
+## Validation with chr21 1000 Genomes Data
+
+Run a quick validation using chr21 data from the 1000 Genomes Project:
+
+```bash
+# Uses pre-configured chr21 test fragments and VCF
+nextflow run pipelines/nf-scatac -profile test_local,docker
+
+# Expect: ~2-5 min runtime, per-cell allele counts at chr21 het SNPs
+```
+
+This profile uses chr21-only fragment files and a chr21 VCF, providing a fast end-to-end validation without downloading full genomes.
 
 ## Output
 

@@ -1,0 +1,93 @@
+# WASP2 Nextflow pipeline lint workflow
+# Runs nf-core pipelines lint on all 4 Nextflow pipelines
+
+name: Nextflow Lint
+
+on:
+  push:
+    branches: [master, dev]
+  pull_request:
+    branches: [master, dev]
+
+permissions:
+  contents: read
+
+jobs:
+  # ===========================================================================
+  # nf-core pipelines lint (matrix: 4 pipelines)
+  # ===========================================================================
+  nf-lint:
+    name: nf-core lint (${{ matrix.pipeline }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        pipeline: [nf-atacseq, nf-rnaseq, nf-scatac, nf-outrider]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: "3.12"
+
+      - name: Install Nextflow
+        uses: nf-core/setup-nextflow@v2
+
+      - name: Install nf-core tools
+        run: pip install nf-core
+
+      - name: Run nf-core pipelines lint
+        working-directory: pipelines/${{ matrix.pipeline }}
+        run: |
+          # Run lint and capture output + exit code
+          # Expected: exactly 1 failure for manifest.name not starting with nf-core/
+          set +e
+          nf-core pipelines lint --json lint-results.json 2>&1 | tee lint-output.txt
+          LINT_EXIT=$?
+          set -e
+
+          if [ "$LINT_EXIT" -eq 0 ]; then
+            echo "Lint passed with no failures."
+            exit 0
+          fi
+
+          # Parse the JSON results to check if the only failure is the expected one
+          # nf-core lint JSON has: {passed, warned, failed, ignored}
+          FAIL_COUNT=$(python3 -c "
+          import json, sys
+          with open('lint-results.json') as f:
+              data = json.load(f)
+          failed = data.get('failed', [])
+          # Filter out the expected manifest.name failure
+          unexpected = [f for f in failed if not (
+              'manifest.name' in str(f) and 'nf-core' in str(f)
+          )]
+          print(len(unexpected))
+          ")
+
+          if [ "$FAIL_COUNT" -eq 0 ]; then
+            echo ""
+            echo "====================================================================="
+            echo "Lint complete. Only expected failure: manifest.name not nf-core/*"
+            echo "====================================================================="
+            exit 0
+          else
+            echo ""
+            echo "====================================================================="
+            echo "ERROR: $FAIL_COUNT unexpected lint failure(s) detected!"
+            echo "====================================================================="
+            python3 -c "
+          import json
+          with open('lint-results.json') as f:
+              data = json.load(f)
+          failed = data.get('failed', [])
+          unexpected = [f for f in failed if not (
+              'manifest.name' in str(f) and 'nf-core' in str(f)
+          )]
+          for f in unexpected:
+              print(f)
+          "
+            exit 1
+          fi

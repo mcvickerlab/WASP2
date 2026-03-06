@@ -41,6 +41,9 @@ nextflow run pipelines/nf-rnaseq -profile test_stub,docker
 # Full test with minimal data
 nextflow run pipelines/nf-rnaseq -profile test,docker
 
+# Local test with chr21 1000 Genomes data
+nextflow run pipelines/nf-rnaseq -profile test_local,docker
+
 # Apple Silicon (M1/M2/M3/M4) — add the arm profile
 nextflow run pipelines/nf-rnaseq -profile test,docker,arm
 ```
@@ -141,6 +144,19 @@ nextflow run pipelines/nf-rnaseq -profile docker \
 
 - [Usage Guide](docs/usage.md) - Detailed parameter documentation
 - [Output Description](docs/output.md) - Output file formats and interpretation
+
+## Validation with chr21 1000 Genomes Data
+
+Run a quick validation using chr21 data from the 1000 Genomes Project:
+
+```bash
+# Uses pre-configured chr21 test data (NA12878)
+nextflow run pipelines/nf-rnaseq -profile test_local,docker
+
+# Expect: ~3-5 min runtime, ASE counts at chr21 het SNPs
+```
+
+This profile uses downsampled chr21 FASTQ reads, a chr21-only STAR index, and a chr21 VCF, providing a fast end-to-end validation without downloading full genomes.
 
 ## Testing
 
