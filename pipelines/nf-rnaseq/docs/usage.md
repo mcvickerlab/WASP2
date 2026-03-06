@@ -158,6 +158,10 @@ STAR --runMode genomeGenerate \
     --sjdbOverhang 100
 ```
 
+> **Apple Silicon (ARM) note:** STAR genome index generation must be run on an
+> x86_64 machine or under Rosetta 2 / Docker `--platform linux/amd64` emulation.
+> See [Apple Silicon / ARM64](#apple-silicon--arm64) below for details.
+
 ## Pipeline Workflow
 
 ```
@@ -197,6 +201,50 @@ STAR --runMode genomeGenerate \
 ```
 
 ## Troubleshooting
+
+### Apple Silicon / ARM64
+
+STAR and several bioinformatics containers are only available as x86_64 (amd64)
+images. On Apple Silicon Macs (M1/M2/M3/M4), Docker must run these containers
+under Rosetta 2 emulation. The pipeline provides a dedicated `arm` profile for
+this:
+
+```bash
+# Docker on Apple Silicon — add the arm profile
+nextflow run pipelines/nf-rnaseq -profile docker,arm \
+    --input samplesheet.csv \
+    --vcf variants.vcf.gz \
+    --star_index /path/to/star_index
+
+# Local test on Apple Silicon
+nextflow run pipelines/nf-rnaseq -profile test_local,docker,arm
+```
+
+The `arm` profile adds `--platform linux/amd64` to `docker.runOptions`, forcing
+Docker Desktop to pull and execute amd64 images via Rosetta 2.
+
+**Prerequisites for ARM:**
+- Docker Desktop 4.16+ with Rosetta 2 emulation enabled
+  (Settings > General > "Use Rosetta for x86_64/amd64 emulation on Apple Silicon")
+- Expect ~2-3x slower execution compared to native x86_64
+
+**STAR genome index on ARM:**
+STAR genome index generation (`--runMode genomeGenerate`) must also be run under
+amd64 emulation. You can generate the index inside a Docker container:
+
+```bash
+docker run --platform linux/amd64 --rm -v $(pwd):/data -w /data \
+    community.wave.seqera.io/library/htslib_samtools_star_gawk:ae438e9a604351a4 \
+    STAR --runMode genomeGenerate \
+        --runThreadN 4 \
+        --genomeDir star_index \
+        --genomeFastaFiles genome.fa \
+        --sjdbGTFfile genes.gtf \
+        --sjdbOverhang 100
+```
+
+Alternatively, generate the index on an x86_64 machine and transfer the
+`star_index/` directory to your ARM Mac.
 
 ### Common Issues
 
