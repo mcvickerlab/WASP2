@@ -126,7 +126,7 @@ python-source = "src"
 module-name = "wasp2_rust"
 python-packages = ["counting", "mapping", "analysis", "wasp2", "***REMOVED***"]
 bindings = "pyo3"
-strip = true
+strip = false
 include = ["LICENSE", "README.md"]
 
 [tool.pytest.ini_options]
