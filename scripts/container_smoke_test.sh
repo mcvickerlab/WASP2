@@ -64,6 +64,15 @@ for cmd in wasp2-count wasp2-map wasp2-analyze; do
         FAIL=$((FAIL + 1))
     fi
 done
+
+# wasp2-ipscore doesn't have --version, check --help instead
+if wasp2-ipscore --help > /dev/null 2>&1; then
+    echo "  PASS: wasp2-ipscore --help"
+    PASS=$((PASS + 1))
+else
+    echo "  FAIL: wasp2-ipscore --help"
+    FAIL=$((FAIL + 1))
+fi
 echo ""
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -96,7 +105,7 @@ if [[ -f "$DATA_DIR/sample1.bam" && -f "$DATA_DIR/variants.vcf.gz" ]]; then
     if wasp2-count count-variants \
         "$DATA_DIR/sample1.bam" \
         "$DATA_DIR/variants.vcf.gz" \
-        --samples SAMPLE1 \
+        --samples sample1 \
         --out "$TMP_DIR/counts.tsv" \
         2>/dev/null; then
 
