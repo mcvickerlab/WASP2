@@ -1,66 +1,70 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/subworkflows/yaml-schema.json
-name: "bam_sort_stats_samtools"
-description: Sort BAM files and collect statistics with samtools
+name: bam_sort_stats_samtools
+description: Sort SAM/BAM/CRAM file
 keywords:
-  - bam
   - sort
-  - statistics
-  - samtools
+  - bam
+  - sam
+  - cram
 components:
   - samtools/sort
   - samtools/index
+  - samtools/stats
+  - samtools/idxstats
+  - samtools/flagstat
   - bam_stats_samtools
 input:
-  - ch_bam:
-      type: channel
+  - meta:
+      type: map
       description: |
-        Channel containing unsorted BAM files
-        Structure: [ val(meta), path(bam) ]
-      pattern: "*.bam"
-  - ch_fasta:
-      type: channel
-      description: |
-        Channel containing reference FASTA for stats calculation
-        Structure: path(fasta)
-      pattern: "*.{fa,fasta,fa.gz,fasta.gz}"
-output:
+        Groovy Map containing sample information
+        e.g. [ id:'test', single_end:false ]
   - bam:
-      type: channel
+      type: file
+      description: BAM/CRAM/SAM file
+      pattern: "*.{bam,cram,sam}"
+  - fasta:
+      type: file
+      description: Reference genome fasta file
+      pattern: "*.{fasta,fa}"
+# TODO Update when we decide on a standard for subworkflow docs
+output:
+  - meta:
+      type: map
       description: |
-        Sorted BAM file
-        Structure: [ val(meta), path(bam) ]
-      pattern: "*.sorted.bam"
+        Groovy Map containing sample information
+        e.g. [ id:'test', single_end:false ]
+  - bam:
+      type: file
+      description: Sorted BAM/CRAM/SAM file
+      pattern: "*.{bam,cram,sam}"
   - bai:
-      type: channel
-      description: |
-        BAM index file
-        Structure: [ val(meta), path(bai) ]
-      pattern: "*.bai"
+      type: file
+      description: BAM/CRAM/SAM index file
+      pattern: "*.{bai,crai,sai}"
+  - crai:
+      type: file
+      description: BAM/CRAM/SAM index file
+      pattern: "*.{bai,crai,sai}"
   - stats:
-      type: channel
-      description: |
-        Samtools stats output
-        Structure: [ val(meta), path(stats) ]
-      pattern: "*.stats"
+      type: file
+      description: File containing samtools stats output
+      pattern: "*.{stats}"
   - flagstat:
-      type: channel
-      description: |
-        Samtools flagstat output
-        Structure: [ val(meta), path(flagstat) ]
-      pattern: "*.flagstat"
+      type: file
+      description: File containing samtools flagstat output
+      pattern: "*.{flagstat}"
   - idxstats:
-      type: channel
-      description: |
-        Samtools idxstats output with per-chromosome counts
-        Structure: [ val(meta), path(idxstats) ]
-      pattern: "*.idxstats"
+      type: file
+      description: File containing samtools idxstats output
+      pattern: "*.{idxstats}"
   - versions:
-      type: channel
-      description: |
-        Version information
-        Structure: path(versions.yml)
+      type: file
+      description: File containing software versions
       pattern: "versions.yml"
 authors:
-  - "@jjaureguy760"
+  - "@drpatelh"
+  - "@ewels"
 maintainers:
-  - "@jjaureguy760"
+  - "@drpatelh"
+  - "@ewels"

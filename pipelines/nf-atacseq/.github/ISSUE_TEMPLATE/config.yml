@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: WASP2 Documentation
+    url: https://wasp2.readthedocs.io
+    about: Check the documentation for usage help

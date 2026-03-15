@@ -2,17 +2,19 @@ process SAMTOOLS_INDEX {
     tag "$meta.id"
     label 'process_low'
 
-    conda "bioconda::samtools=1.19"
+    conda "${moduleDir}/environment.yml"
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
-        'https://depot.galaxyproject.org/singularity/samtools:1.19--h50ea8bc_0' :
-        'biocontainers/samtools:1.19--h50ea8bc_0' }"
+        'https://depot.galaxyproject.org/singularity/samtools:1.22.1--h96c455f_0' :
+        'biocontainers/samtools:1.22.1--h96c455f_0' }"
 
     input:
-    tuple val(meta), path(bam)
+    tuple val(meta), path(input)
 
     output:
-    tuple val(meta), path("*.bai"), emit: bai
-    path "versions.yml",            emit: versions
+    tuple val(meta), path("*.bai") , optional:true, emit: bai
+    tuple val(meta), path("*.csi") , optional:true, emit: csi
+    tuple val(meta), path("*.crai"), optional:true, emit: crai
+    tuple val("${task.process}"), val('samtools'), eval("samtools version | sed '1!d;s/.* //'"), emit: versions_samtools, topic: versions
 
     when:
     task.ext.when == null || task.ext.when
@@ -20,21 +22,18 @@ process SAMTOOLS_INDEX {
     script:
     def args = task.ext.args ?: ''
     """
-    samtools index $args -@ $task.cpus $bam
-
-    cat <<-END_VERSIONS > versions.yml
-    "${task.process}":
-        samtools: \$(samtools --version | head -n1 | sed 's/samtools //')
-    END_VERSIONS
+    samtools \\
+        index \\
+        -@ ${task.cpus} \\
+        $args \\
+        $input
     """
 
     stub:
+    def args = task.ext.args ?: ''
+    def extension = file(input).getExtension() == 'cram' ?
+                    "crai" : args.contains("-c") ?  "csi" : "bai"
     """
-    touch ${bam}.bai
-
-    cat <<-END_VERSIONS > versions.yml
-    "${task.process}":
-        samtools: 1.19
-    END_VERSIONS
+    touch ${input}.${extension}
     """
 }

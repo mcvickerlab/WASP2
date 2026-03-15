@@ -1,6 +1,6 @@
 # nf-atacseq
 
-[![nf-atacseq Tests](https://github.com/your-org/WASP2/actions/workflows/nf-atacseq-tests.yml/badge.svg)](https://github.com/your-org/WASP2/actions/workflows/nf-atacseq-tests.yml)
+[![nf-atacseq CI](https://github.com/mcvickerlab/WASP2/actions/workflows/ci.yml/badge.svg)](https://github.com/mcvickerlab/WASP2/actions/workflows/ci.yml)
 
 ATAC-seq Allelic Imbalance (AI) Pipeline with WASP2 mapping bias correction.
 
@@ -60,6 +60,12 @@ nextflow run pipelines/nf-atacseq -profile test,docker
 nextflow run pipelines/nf-atacseq -profile test,docker -stub-run  # Workflow validation only
 ```
 
+### Local Test (chr21 data)
+
+```bash
+nextflow run pipelines/nf-atacseq -profile test_local,docker
+```
+
 ## Samplesheet Format
 
 ```csv
@@ -112,6 +118,19 @@ results/
 
 See [docs/output.md](docs/output.md) for detailed output descriptions.
 
+## Validation with chr21 1000 Genomes Data
+
+Run a quick validation using chr21 data from the 1000 Genomes Project:
+
+```bash
+# Uses pre-configured chr21 test data (NA12878, HG00096)
+nextflow run pipelines/nf-atacseq -profile test_local,docker
+
+# Expect: ~2-5 min runtime, allele counts at chr21 het SNPs
+```
+
+This profile uses downsampled chr21 FASTQ reads and a chr21-only VCF, providing a fast end-to-end validation without downloading full genomes.
+
 ## Testing
 
 ### Run nf-test Suite
@@ -148,6 +167,7 @@ nextflow run . -profile test -stub-run
 | `singularity` | Run with Singularity containers |
 | `conda` | Run with Conda environments |
 | `test` | Minimal test configuration |
+| `test_local` | Local test with chr21 1000 Genomes data |
 | `test_full` | Full test with real data |
 
 ## Pipeline DAG
@@ -168,7 +188,7 @@ FASTQ → FastQC → Fastp → BWA/Bowtie2 → Samtools → Picard → MACS2 →
 
 If you use nf-atacseq, please cite:
 
-- **WASP2**: [GitHub Repository](https://github.com/your-org/WASP2)
+- **WASP2**: [GitHub Repository](https://github.com/mcvickerlab/WASP2)
 - **Nextflow**: Di Tommaso, P., et al. (2017). Nextflow enables reproducible computational workflows. *Nature Biotechnology*.
 
 ## License
@@ -177,5 +197,5 @@ MIT License - see [LICENSE](../../LICENSE) for details.
 
 ## Support
 
-- [Issues](https://github.com/your-org/WASP2/issues)
+- [Issues](https://github.com/mcvickerlab/WASP2/issues)
 - [Documentation](docs/)

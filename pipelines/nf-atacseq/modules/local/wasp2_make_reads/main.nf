@@ -65,6 +65,12 @@ process WASP2_MAKE_READS {
         [ -f "\$f" ] && [ "\$f" != "${prefix}_keep.bam" ] && mv "\$f" ${prefix}_keep.bam && break
     done
 
+    # Update JSON to reflect renamed files
+    bam_prefix=\$(basename ${bam} .bam)
+    if [ "\$bam_prefix" != "${prefix}" ]; then
+        sed -i "s|\$bam_prefix|${prefix}|g" ${prefix}_wasp_data_files.json
+    fi
+
     # Validate outputs
     for expected in ${prefix}_remap_r1.fq.gz ${prefix}_remap_r2.fq.gz ${prefix}_to_remap.bam ${prefix}_keep.bam ${prefix}_wasp_data_files.json; do
         if [ ! -f "\$expected" ]; then

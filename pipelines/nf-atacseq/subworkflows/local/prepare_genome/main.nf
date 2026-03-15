@@ -3,7 +3,7 @@
 //
 
 include { BWA_INDEX      } from '../../../modules/nf-core/bwa/index/main'
-include { BOWTIE2_BUILD  } from '../../../modules/nf-core/bowtie2/index/main'
+include { BOWTIE2_BUILD  } from '../../../modules/nf-core/bowtie2/build/main'
 include { SAMTOOLS_FAIDX } from '../../../modules/nf-core/samtools/faidx/main'
 
 workflow PREPARE_GENOME {
@@ -32,9 +32,8 @@ workflow PREPARE_GENOME {
         ch_fasta_fai = Channel.fromPath(params.fasta_fai, checkIfExists: true)
             .map { fai -> [[id: file(params.fasta).baseName], fai] }
     } else {
-        SAMTOOLS_FAIDX ( ch_fasta )
+        SAMTOOLS_FAIDX ( ch_fasta.map { meta, fasta -> [meta, fasta, []] }, false )
         ch_fasta_fai = SAMTOOLS_FAIDX.out.fai
-        ch_versions = ch_versions.mix(SAMTOOLS_FAIDX.out.versions)
     }
 
     //
@@ -47,7 +46,6 @@ workflow PREPARE_GENOME {
         } else {
             BWA_INDEX ( ch_fasta )
             ch_bwa_index = BWA_INDEX.out.index.map { meta, index -> index }
-            ch_versions = ch_versions.mix(BWA_INDEX.out.versions)
         }
     }
 
@@ -61,7 +59,6 @@ workflow PREPARE_GENOME {
         } else {
             BOWTIE2_BUILD ( ch_fasta )
             ch_bowtie2_index = BOWTIE2_BUILD.out.index.map { meta, index -> index }
-            ch_versions = ch_versions.mix(BOWTIE2_BUILD.out.versions)
         }
     }
 

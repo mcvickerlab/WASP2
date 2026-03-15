@@ -1,0 +1,34 @@
+----------------------------------------------------
+                            ${workflow.manifest.name} v${workflow.manifest.version}
+----------------------------------------------------
+Run Name: $runName
+
+<% if (success) {
+    out << "## ${workflow.manifest.name} execution completed successfully! ##"
+} else {
+    out << """####################################################
+## ${workflow.manifest.name} execution completed unsuccessfully! ##
+####################################################
+The exit status of the task that caused the workflow execution to fail was: $exitStatus.
+The full error message was:
+
+${errorReport}
+"""
+} %>
+
+
+The workflow was completed at $dateComplete (duration: $duration)
+
+The command used to launch the workflow was as follows:
+
+  $commandLine
+
+
+
+Pipeline Configuration:
+-----------------------
+<% for (e in summary) { %>  ${e.key.padRight(30)}: ${e.value}
+<% } %>
+
+--
+${workflow.manifest.name}

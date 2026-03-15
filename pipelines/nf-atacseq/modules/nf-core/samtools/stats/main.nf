@@ -1,48 +1,40 @@
 process SAMTOOLS_STATS {
     tag "$meta.id"
-    label 'process_low'
+    label 'process_single'
 
-    conda "bioconda::samtools=1.19"
+    conda "${moduleDir}/environment.yml"
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
-        'https://depot.galaxyproject.org/singularity/samtools:1.19--h50ea8bc_0' :
-        'biocontainers/samtools:1.19--h50ea8bc_0' }"
+        'https://depot.galaxyproject.org/singularity/samtools:1.22.1--h96c455f_0' :
+        'biocontainers/samtools:1.22.1--h96c455f_0' }"
 
     input:
-    tuple val(meta), path(bam), path(bai)
-    path  fasta
+    tuple val(meta), path(input), path(input_index)
+    tuple val(meta2), path(fasta)
 
     output:
     tuple val(meta), path("*.stats"), emit: stats
-    path "versions.yml",              emit: versions
+    tuple val("${task.process}"), val('samtools'), eval('samtools version | sed "1!d;s/.* //"'), emit: versions_samtools, topic: versions
 
     when:
     task.ext.when == null || task.ext.when
 
     script:
-    def args = task.ext.args ?: ''
-    def prefix = task.ext.prefix ?: "${meta.id}"
+    def args      = task.ext.args ?: ''
+    def prefix    = task.ext.prefix ?: "${meta.id}"
     def reference = fasta ? "--reference ${fasta}" : ""
     """
-    samtools stats \\
-        $args \\
-        $reference \\
-        $bam \\
+    samtools \\
+        stats \\
+        ${args} \\
+        --threads ${task.cpus} \\
+        ${reference} \\
+        ${input} \\
         > ${prefix}.stats
-
-    cat <<-END_VERSIONS > versions.yml
-    "${task.process}":
-        samtools: \$(samtools --version | head -n1 | sed 's/samtools //')
-    END_VERSIONS
     """
 
     stub:
     def prefix = task.ext.prefix ?: "${meta.id}"
     """
     touch ${prefix}.stats
-
-    cat <<-END_VERSIONS > versions.yml
-    "${task.process}":
-        samtools: 1.19
-    END_VERSIONS
     """
 }

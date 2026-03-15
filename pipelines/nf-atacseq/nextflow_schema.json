@@ -226,32 +226,25 @@
                 }
             }
         },
-        "max_job_request_options": {
-            "title": "Max resource options",
+        "institutional_config_options": {
+            "title": "Institutional config options",
             "type": "object",
-            "fa_icon": "fas fa-server",
-            "description": "Set the maximum resource limits for pipeline processes.",
+            "fa_icon": "fas fa-university",
+            "description": "Parameters used to describe centralised config profiles. These should not be edited.",
             "properties": {
-                "max_cpus": {
-                    "type": "integer",
-                    "default": 16,
-                    "minimum": 1,
-                    "description": "Maximum number of CPUs that can be requested for any single process.",
-                    "fa_icon": "fas fa-microchip"
-                },
-                "max_memory": {
+                "custom_config_base": {
                     "type": "string",
-                    "default": "128.GB",
-                    "pattern": "^\\d+(\\.\\d+)?\\.?\\s*(K|M|G|T)?B$",
-                    "description": "Maximum amount of memory that can be requested for any single process.",
-                    "fa_icon": "fas fa-memory"
+                    "default": "https://raw.githubusercontent.com/nf-core/configs/master",
+                    "description": "Base URL for loading nf-core custom config profiles.",
+                    "hidden": true,
+                    "fa_icon": "fas fa-users-cog"
                 },
-                "max_time": {
+                "custom_config_version": {
                     "type": "string",
-                    "default": "240.h",
-                    "pattern": "^(\\d+\\.?\\s*(s|m|h|d)\\.?\\s*)+$",
-                    "description": "Maximum amount of time that can be requested for any single process.",
-                    "fa_icon": "fas fa-clock"
+                    "default": "master",
+                    "description": "Git tag/branch for nf-core custom config profiles.",
+                    "hidden": true,
+                    "fa_icon": "fas fa-users-cog"
                 }
             }
         },
@@ -277,9 +270,16 @@
                 },
                 "tracedir": {
                     "type": "string",
-                    "default": "${params.outdir}/pipeline_info",
+                    "default": "./results/pipeline_info",
                     "description": "Directory to keep pipeline Nextflow trace, timeline, report, and DAG files.",
                     "fa_icon": "fas fa-folder"
+                },
+                "validate_params": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Boolean whether to validate parameters against the schema at runtime.",
+                    "fa_icon": "fas fa-check-square",
+                    "hidden": true
                 }
             }
         }
@@ -292,7 +292,7 @@
         { "$ref": "#/definitions/aligner_options" },
         { "$ref": "#/definitions/wasp2_options" },
         { "$ref": "#/definitions/processing_options" },
-        { "$ref": "#/definitions/max_job_request_options" },
+        { "$ref": "#/definitions/institutional_config_options" },
         { "$ref": "#/definitions/generic_options" }
     ]
 }

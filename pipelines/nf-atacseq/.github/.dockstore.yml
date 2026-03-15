@@ -1,0 +1,5 @@
+version: 1.2
+workflows:
+  - subclass: nfl
+    primaryDescriptorPath: /pipelines/nf-atacseq/main.nf
+    publish: true

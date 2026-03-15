@@ -26,6 +26,10 @@ workflow WASP_MAPPING {
     main:
     ch_versions = Channel.empty()
 
+    // Wrap plain path channels with meta for nf-core modules
+    ch_index_meta = ch_aligner_index.map { index -> [[id: 'genome'], index] }
+    ch_fasta_meta = ch_fasta.map { fasta -> [[id: 'genome'], fasta] }
+
     //
     // MODULE: Generate reads with swapped alleles for remapping
     //
@@ -53,29 +57,26 @@ workflow WASP_MAPPING {
     if (aligner == 'bwa') {
         BWA_MEM(
             ch_remap_reads,
-            ch_aligner_index,
-            ch_fasta,
+            ch_index_meta,
+            ch_fasta_meta,
             true  // sort_bam
         )
         ch_remapped_raw = BWA_MEM.out.bam
-        ch_versions = ch_versions.mix(BWA_MEM.out.versions.first())
     } else {
         BOWTIE2_ALIGN(
             ch_remap_reads,
-            ch_aligner_index,
-            ch_fasta,
+            ch_index_meta,
+            ch_fasta_meta,
             false,  // save_unaligned
             true    // sort_bam
         )
-        ch_remapped_raw = BOWTIE2_ALIGN.out.aligned
-        ch_versions = ch_versions.mix(BOWTIE2_ALIGN.out.versions.first())
+        ch_remapped_raw = BOWTIE2_ALIGN.out.bam
     }
 
     //
     // MODULE: Index remapped BAM (aligners already sort when sort_bam=true)
     //
     SAMTOOLS_INDEX(ch_remapped_raw)
-    ch_versions = ch_versions.mix(SAMTOOLS_INDEX.out.versions.first())
 
     // Combine BAM with index
     ch_remapped = ch_remapped_raw
