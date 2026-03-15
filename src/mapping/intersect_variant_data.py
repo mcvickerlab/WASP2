@@ -10,9 +10,8 @@ import logging
 import os
 import subprocess
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-import numpy as np
-import polars as pl
 import pysam
 
 # Multi-format variant support
@@ -24,6 +23,9 @@ from wasp2_rust import intersect_bam_bed as _rust_intersect
 from wasp2_rust import intersect_bam_bed_multi as _rust_intersect_multi
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    import polars as pl
 
 
 def vcf_to_bed(
@@ -148,7 +150,7 @@ def make_intersect_df(
     intersect_file: str,
     samples: list[str],
     is_paired: bool = True,
-) -> pl.DataFrame:
+) -> "pl.DataFrame":
     """Parse intersection file into a typed polars DataFrame.
 
     Parameters
@@ -165,6 +167,9 @@ def make_intersect_df(
     pl.DataFrame
         Parsed intersection data with alleles split by sample.
     """
+    import numpy as np
+    import polars as pl
+
     # Create Dataframe
     df = pl.scan_csv(intersect_file, separator="\t", has_header=False, infer_schema_length=0)
 

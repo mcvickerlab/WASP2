@@ -82,6 +82,8 @@ LABEL maintainer="Jeff Jaureguy <jeffpjaureguy@gmail.com>"
 # Install runtime deps + temporary build deps for pybedtools C++ extension
 # Combined into one RUN to minimize layers; build tools purged at the end
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    # PID 1 init for proper signal handling (Nextflow/HPC)
+    tini \
     # Bioinformatics tools
     samtools \
     bcftools \
@@ -106,14 +108,16 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip install /tmp/*.whl \
     && rm -rf /tmp/*.whl \
     && apt-get purge -y --auto-remove g++ zlib1g-dev \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && ! command -v g++
 
 WORKDIR /app
 
 # Verify non-Python tools are available (Python tools skipped during build
 # because Polars uses AVX2 instructions that fail under QEMU emulation
 # on ARM64 CI runners building linux/amd64 images)
-RUN samtools --version && bcftools --version && bedtools --version
+RUN samtools --version && bcftools --version && bedtools --version \
+    && ***REMOVED*** --help > /dev/null 2>&1
 
 # Create non-root user for security
 RUN groupadd -g 1000 wasp2 && \
@@ -146,6 +150,8 @@ WORKDIR /data
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD wasp2-count --version || exit 1
+
+ENTRYPOINT ["tini", "--"]
 
 # Default command
 CMD ["wasp2-count", "--help"]

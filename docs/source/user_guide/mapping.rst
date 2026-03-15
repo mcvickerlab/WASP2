@@ -1,221 +1,148 @@
-Mapping Module (WASP)
-=====================
+Mapping Module
+==============
 
 Overview
 --------
 
-The WASP (Weighted Allele-Specific Mapping) algorithm corrects reference bias by remapping reads with all possible alleles.
+``wasp2-map`` implements the WASP remap-and-filter workflow for removing
+reference mapping bias before allele counting.
 
-What is Reference Bias?
-~~~~~~~~~~~~~~~~~~~~~~~~
+The public CLI has two commands:
 
-Reference bias occurs when reads containing alternate alleles align worse than reads with reference alleles, leading to false allelic imbalance signals.
+1. ``make-reads``: find reads overlapping sample variants and generate
+   allele-swapped FASTQ files for remapping
+2. ``filter-remapped``: keep only remapped reads that return to the same locus
 
-WASP Solution
-~~~~~~~~~~~~~
+There is no separate ``find-intersecting-snps`` command in WASP2. That overlap
+step is part of ``make-reads``.
 
-1. Identify reads overlapping heterozygous SNPs
-2. Generate alternative reads (swap alleles)
-3. Remap both original and swapped reads
-4. Keep only reads that map to the same location
+Typical Workflow
+----------------
 
-Purpose
--------
-
-* Correct reference bias in RNA-seq, ATAC-seq
-* Improve accuracy of allelic imbalance detection
-* Required before allele counting
-
-When to Use
-~~~~~~~~~~~
-
-Use WASP when:
-* Reads will be used for allelic analysis
-* Reference genome differs from sample genotype
-* High-confidence bias correction needed
-
-Workflow
---------
-
-Complete WASP workflow has 3 steps:
-
-Step 1: Find Intersecting SNPs
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Identify reads overlapping heterozygous SNPs:
-
-.. code-block:: bash
-
-   wasp2-map find-intersecting-snps \
-     input.bam \
-     variants.vcf \
-     --output intersecting.bam
-
-Output: BAM file with reads overlapping SNPs.
-
-Step 2: Generate Remapping Reads
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Create reads with swapped alleles:
+Step 1: Generate swapped reads
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: bash
 
    wasp2-map make-reads \
-     intersecting.bam \
-     variants.vcf \
-     --samples sample1 \
-     --output remap_reads.fastq
+     sample.bam \
+     variants.vcf.gz \
+     --samples SAMPLE1 \
+     --out_dir wasp_output
 
-Output: FASTQ file(s) with alternative allele sequences.
+This writes:
 
-Step 3: Remap and Filter
-~~~~~~~~~~~~~~~~~~~~~~~~~
+* ``sample_to_remap.bam``: original reads that must be remapped
+* ``sample_keep.bam``: reads that never overlapped eligible variants
+* ``sample_swapped_alleles_r1.fq`` and ``sample_swapped_alleles_r2.fq``:
+  swapped FASTQ reads to realign
+* ``sample_wasp_data_files.json``: metadata for ``filter-remapped``
 
-User remaps with their aligner (BWA, STAR, etc.):
+Step 2: Realign swapped reads
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. code-block:: bash
-
-   # Example with BWA
-   bwa mem -t 8 reference.fa remap_reads.fastq | \
-     samtools sort -o remapped.bam -
-
-Then filter to consistent mappings:
+Use the same aligner and alignment settings used for the original BAM.
 
 .. code-block:: bash
 
-   wasp2-map filt-remapped-reads \
-     intersecting.bam \
-     remapped.bam \
-     --output filtered.bam
+   bwa mem -M -t 8 genome.fa \
+     wasp_output/sample_swapped_alleles_r1.fq \
+     wasp_output/sample_swapped_alleles_r2.fq | \
+     samtools sort -o wasp_output/sample_remapped.bam -
 
-Output: BAM file with bias-corrected reads.
+   samtools index wasp_output/sample_remapped.bam
 
-CLI Reference
--------------
-
-find-intersecting-snps
-~~~~~~~~~~~~~~~~~~~~~~
+Step 3: Filter remapped reads
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: bash
 
-   wasp2-map find-intersecting-snps [OPTIONS] BAM VCF
+   wasp2-map filter-remapped \
+     wasp_output/sample_remapped.bam \
+     --wasp_data_json wasp_output/sample_wasp_data_files.json \
+     --out_bam wasp_output/sample_wasp_filtered.bam
 
-Options:
-* ``--samples``: Filter by sample genotype
-* ``--output``: Output BAM file
+You can also provide ``to_remap_bam`` and ``keep_bam`` positionally instead of
+``--wasp_data_json``.
 
-make-reads
-~~~~~~~~~~
+Command Reference
+-----------------
+
+``make-reads``
+~~~~~~~~~~~~~~
 
 .. code-block:: bash
 
-   wasp2-map make-reads [OPTIONS] BAM VCF
+   wasp2-map make-reads [OPTIONS] BAM VARIANTS
 
-Options:
-* ``--samples``: Sample name(s)
-* ``--output``: Output FASTQ prefix
-* ``--paired``: Paired-end mode
+Important options:
 
-filt-remapped-reads
+* ``--samples`` / ``-s``: sample name(s) used to select het variants
+* ``--out_dir`` / ``-o``: output directory
+* ``--out_json`` / ``-j``: explicit metadata JSON path
+* ``--indels``: include indels as well as SNPs
+* ``--threads``: BAM I/O threads
+
+Notes:
+
+* paired-end input is required
+* phased genotypes are strongly recommended
+* supported variant formats are VCF, VCF.GZ, BCF, and PGEN
+
+``filter-remapped``
 ~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: bash
 
-   wasp2-map filt-remapped-reads [OPTIONS] ORIGINAL REMAPPED
+   wasp2-map filter-remapped [OPTIONS] REMAPPED_BAM [TO_REMAP_BAM] [KEEP_BAM]
 
-Options:
-* ``--output``: Filtered BAM file
-* ``--keep_read_file``: Save kept read IDs
+Important options:
 
-Input Requirements
-------------------
+* ``--wasp_data_json`` / ``-j``: load ``to_remap_bam`` and ``keep_bam`` from
+  ``make-reads`` metadata
+* ``--out_bam`` / ``-o``: output BAM path
+* ``--remap_keep_bam``: optional BAM of remapped reads that passed filtering
+* ``--remap_keep_file``: optional text file of kept read names
+* ``--same-locus-slop``: positional tolerance for same-locus matching
+* ``--threads``: BAM I/O threads
 
-* **Original BAM**: Aligned reads from initial mapping
-* **VCF File**: Phased heterozygous SNPs (recommended)
-* **Reference Genome**: Same as used for original alignment
+Interpreting Outputs
+--------------------
 
-Output Interpretation
----------------------
+Common outcomes after ``filter-remapped``:
 
-WASP Filter Rate
-~~~~~~~~~~~~~~~~
+* reads kept because they remap to the same locus
+* reads dropped because they remap elsewhere
+* reads dropped because they fail to remap cleanly
 
-Typical filter rates:
-* **Good**: 95-99% reads kept
-* **Acceptable**: 90-95% reads kept
-* **Concerning**: <90% reads kept (check data quality)
+The final WASP-corrected BAM is the output of ``filter-remapped`` merged with
+the ``*_keep.bam`` reads that never required remapping.
 
-Low filter rate may indicate:
-* Poor mapping quality
-* High SNP density
-* Problematic reference genome
-
-Complete Example
-----------------
-
-Full WASP workflow:
+Example
+-------
 
 .. code-block:: bash
 
-   # Step 1: Find SNP-overlapping reads
-   wasp2-map find-intersecting-snps \
-     original.bam \
-     phased_variants.vcf \
-     --samples NA12878 \
-     --output intersecting.bam
-
-   # Step 2: Generate remapping reads
    wasp2-map make-reads \
-     intersecting.bam \
-     phased_variants.vcf \
-     --samples NA12878 \
-     --paired \
-     --output remap
+     sample.bam \
+     variants.vcf.gz \
+     --samples SAMPLE1 \
+     --out_dir wasp_output
 
-   # Step 3: Remap (user's aligner)
-   bwa mem -t <threads> reference.fa \
-     remap_R1.fastq remap_R2.fastq | \
-     samtools sort -o remapped.bam -
-   samtools index remapped.bam
+   bwa mem -M -t 8 genome.fa \
+     wasp_output/sample_swapped_alleles_r1.fq \
+     wasp_output/sample_swapped_alleles_r2.fq | \
+     samtools sort -o wasp_output/sample_remapped.bam -
 
-   # Step 4: Filter
-   wasp2-map filt-remapped-reads \
-     intersecting.bam \
-     remapped.bam \
-     --output filtered_wasp.bam
+   samtools index wasp_output/sample_remapped.bam
 
-   # Step 5: Count alleles (use filtered BAM)
-   wasp2-count count-variants \
-     filtered_wasp.bam \
-     phased_variants.vcf \
-     --samples NA12878
-
-Performance Tips
-----------------
-
-* Use multi-threading for remapping step
-* Filter VCF to high-quality SNPs only
-* Use phased genotypes when available
-
-Common Issues
--------------
-
-Many Reads Filtered
-~~~~~~~~~~~~~~~~~~~~
-
-* Check remapping quality (MAPQ scores)
-* Verify same reference genome used
-* Consider relaxing mapping parameters
-
-Slow Remapping
-~~~~~~~~~~~~~~
-
-* Use multi-threading (``-t`` flag)
-* Process chromosomes in parallel
-* Consider downsampling for testing
+   wasp2-map filter-remapped \
+     wasp_output/sample_remapped.bam \
+     --wasp_data_json wasp_output/sample_wasp_data_files.json \
+     --out_bam wasp_output/sample_wasp_filtered.bam
 
 Next Steps
 ----------
 
-* :doc:`counting` - Count alleles from WASP-filtered BAM
-* :doc:`analysis` - Analyze allelic imbalance
+* :doc:`counting` to count alleles from the WASP-filtered BAM
+* :doc:`analysis` to test for allelic imbalance

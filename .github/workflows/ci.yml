@@ -146,8 +146,8 @@ jobs:
 
       - name: Run cargo test
         working-directory: rust
-        run: cargo test
+        run: PYO3_PYTHON=$(command -v python3) cargo test
 
       - name: Run clippy
         working-directory: rust
-        run: cargo clippy -- -W warnings
+        run: PYO3_PYTHON=$(command -v python3) cargo clippy -- -W warnings
