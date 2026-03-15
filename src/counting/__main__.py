@@ -80,7 +80,7 @@ def count_variants(
             "-r",
             help=(
                 "Only use variants overlapping regions in file. "
-                "Accepts BED or MACS2 formatted .(narrow/broad)Peak files. "
+                "Accepts BED, MACS2 .(narrow/broad)Peak, GTF, or GFF3 files. "
             ),
         ),
     ] = None,
@@ -126,7 +126,7 @@ def count_variants(
             "--feat",
             help=(
                 "Feature type in gtf/gff3 for counting intersecting SNPs. "
-                "Defaults to 'exon' for snp counting"
+                "Defaults to 'gene' when present."
             ),
         ),
     ] = None,
@@ -237,10 +237,9 @@ def count_variants_sc(
             "--regions",
             "-r",
             help=(
-                "Features used in single-cell experiment. "
+                "Features used in single-cell ATAC experiment. "
                 "Only use variants overlapping features in file. "
-                "Accepts BED or MACS2 formatted .(narrow/broad)Peak files. "
-                "TODO: Implement genes gtf/gff format"
+                "Accepts BED or MACS2 .(narrow/broad)Peak files."
             ),
         ),
     ] = None,

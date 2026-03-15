@@ -1999,6 +1999,7 @@ dependencies = [
  "noodles-core",
  "noodles-vcf",
  "pyo3",
+ "pyo3-build-config",
  "rayon",
  "rust-htslib",
  "rustc-hash 2.1.1",

@@ -68,7 +68,7 @@ Identify reads overlapping heterozygous SNPs and generate allele-swapped version
 
    wasp2-map make-reads sample.bam variants.vcf.gz \
      --samples SAMPLE1 \
-     --out-dir wasp_output/
+     --out_dir wasp_output
 
 This produces (where ``sample`` is your BAM file prefix):
 
@@ -103,9 +103,9 @@ The WASP filter compares original and remapped positions:
 .. code-block:: bash
 
    wasp2-map filter-remapped \
-     wasp_output/sample_to_remap.bam \
      wasp_output/sample_remapped.bam \
-     wasp_output/sample_wasp_filtered.bam
+     --wasp_data_json wasp_output/sample_wasp_data_files.json \
+     --out_bam wasp_output/sample_wasp_filtered.bam
 
 Understanding Filter Statistics
 -------------------------------
@@ -172,7 +172,7 @@ Complete Workflow Script
    echo "Step 1: Creating swapped reads..."
    wasp2-map make-reads $BAM $VCF \
      --samples $SAMPLE \
-     --out-dir $OUTDIR/
+     --out_dir $OUTDIR
 
    # Step 2: Remap with same aligner
    echo "Step 2: Remapping swapped reads..."
@@ -185,9 +185,9 @@ Complete Workflow Script
    # Step 3: Filter biased reads
    echo "Step 3: Filtering biased reads..."
    wasp2-map filter-remapped \
-     $OUTDIR/${PREFIX}_to_remap.bam \
      $OUTDIR/${PREFIX}_remapped.bam \
-     $OUTDIR/${PREFIX}_wasp_filtered.bam
+     --wasp_data_json $OUTDIR/${PREFIX}_wasp_data_files.json \
+     --out_bam $OUTDIR/${PREFIX}_wasp_filtered.bam
 
    # Step 4: Merge with non-overlapping reads
    echo "Step 4: Merging final BAM..."
