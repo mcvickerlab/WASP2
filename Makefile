@@ -3,6 +3,7 @@
 
 .PHONY: all build install test test-quick test-sanity lint format clean help
 .PHONY: download-sanity-data sanity-data-local rust-build rust-test
+.PHONY: test-mapping-parity
 
 # Configuration
 PYTHON ?= python
@@ -48,7 +49,7 @@ rust-dev:  ## Build Rust extension in debug mode (faster compile)
 	$(MATURIN) develop -m $(RUST_DIR)/Cargo.toml
 
 rust-test:  ## Run Rust unit tests
-	cd $(RUST_DIR) && $(CARGO) test
+	cd $(RUST_DIR) && PYO3_PYTHON=$$($(PYTHON) -c "import sys; print(sys.executable)") $(CARGO) test
 
 rust-bench:  ## Run Rust benchmarks
 	cd $(RUST_DIR) && $(CARGO) bench
@@ -67,6 +68,9 @@ test-quick:  ## Run quick validation tests only
 
 test-rust:  ## Run Rust-specific tests
 	$(PYTEST) $(TESTS_DIR) -v --tb=short -m "rust"
+
+test-mapping-parity:  ## Run mapping parity tests against legacy and unified paths
+	$(PYTEST) $(TESTS_DIR)/regression/test_mapping_stage_parity.py -v --tb=short
 
 test-integration:  ## Run integration tests
 	$(PYTEST) $(TESTS_DIR) -v --tb=short -m "integration"

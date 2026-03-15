@@ -1,0 +1,9 @@
+email_template.html
+*.config
+.nextflow*
+work/
+results/
+.nf-test/
+nextflow_schema.json
+*.nf
+assets/

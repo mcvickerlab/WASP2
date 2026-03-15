@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from pathlib import Path
 
@@ -98,39 +99,13 @@ class WaspCountSC:
                 self.intersect_file = str(
                     Path(self.temp_loc) / f"{variant_prefix}_intersect_regions.bed"
                 )
-                self.is_gene_file = False
-            elif re.search(r"\.g[tf]f(?:\.gz)?$", f_ext, re.I):
-                self.feature_type = "genes"
-                self.intersect_file = str(
-                    Path(self.temp_loc) / f"{variant_prefix}_intersect_genes.bed"
-                )
-                self.is_gene_file = True
-                gtf_prefix = re.split(r".g[tf]f", Path(self.feature_file).name)[0]
-                self.gtf_bed = str(Path(self.temp_loc) / f"{gtf_prefix}.bed")
-                self.use_feature_names = True  # Use feature attributes as region names
-            elif re.search(r"\.gff3(?:\.gz)?$", f_ext, re.I):
-                self.feature_type = "genes"
-                self.intersect_file = str(
-                    Path(self.temp_loc) / f"{variant_prefix}_intersect_genes.bed"
-                )
-                self.is_gene_file = True
-                gtf_prefix = re.split(r".gff3", Path(self.feature_file).name)[0]
-                self.gtf_bed = str(Path(self.temp_loc) / f"{gtf_prefix}.bed")
-                self.use_feature_names = True  # Use feature attributes as feature names
             else:
                 raise ValueError(
-                    f"Invalid feature file type. Expected .bed, .gtf, or .gff3, got: {self.feature_file}"
+                    f"Invalid feature file type. Expected BED or MACS2 peak file, got: {self.feature_file}"
                 )
 
         else:
             self.intersect_file = self.vcf_bed
-            self.is_gene_file = False
-
-        # TODO UPDATE THIS WHEN I ADD AUTOPARSERS
-        if self.is_gene_file:
-            # Possible edge case of vcf and gtf prefix conflict
-            if self.vcf_bed == self.gtf_bed:
-                self.gtf_bed = str(Path(self.temp_loc) / "genes.bed")
 
 
 @tempdir_decorator
@@ -144,7 +119,7 @@ def run_count_variants_sc(
     out_file: str | None = None,
     temp_loc: str | None = None,
 ) -> None:
-    """Run single-cell variant counting pipeline.
+    """Run single-cell ATAC variant counting pipeline.
 
     Parameters
     ----------
@@ -155,7 +130,7 @@ def run_count_variants_sc(
     barcode_file : str
         Path to cell barcode file (one barcode per line).
     feature_file : str | None, optional
-        Path to feature/region file (BED, GTF, or GFF3).
+        Path to feature/region file (BED or MACS2 peak file).
     samples : str | list[str] | None, optional
         Sample ID(s) to process.
     use_region_names : bool, optional
@@ -192,13 +167,13 @@ def run_count_variants_sc(
     )
 
     assert count_files.feature_file is not None
+
     intersect_vcf_region(
         vcf_file=count_files.vcf_bed,
         region_file=count_files.feature_file,
         out_file=count_files.intersect_file,
     )
 
-    # TODO: handle use_region_names better
     df = parse_intersect_region_new(
         intersect_file=count_files.intersect_file,
         samples=count_files.samples,
@@ -206,13 +181,26 @@ def run_count_variants_sc(
         region_col=None,
     )
 
+    # Guard: if no variants survived intersection, warn and write empty output
+    if df.is_empty():
+        logging.getLogger(__name__).warning(
+            "No variants found after intersection — writing empty output file."
+        )
+        import anndata as ad
+
+        ad.AnnData().write_h5ad(count_files.out_file)
+        return
+
     # TODO: handle case where barcode file contains multiple columns
     with open(count_files.barcode_file) as file:
         bc_dict = {line.rstrip(): i for i, line in enumerate(file)}
 
     # Generate Output
     adata = make_count_matrix(
-        bam_file=count_files.bam_file, df=df, bc_dict=bc_dict, include_samples=count_files.samples
+        bam_file=count_files.bam_file,
+        df=df,
+        bc_dict=bc_dict,
+        include_samples=count_files.samples,
     )
 
     # Write outputs

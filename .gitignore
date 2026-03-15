@@ -154,6 +154,11 @@ benchmark_figures/
 # Sanity test data (downloaded from GitHub releases)
 tests/sanity/data/
 
+# Real data test files (downloaded from 1000 Genomes, ~2-3 GB)
+tests/real_data/data/
+tests/real_data/samplesheets/
+tests/real_data/configs/
+
 # Nextflow runtime
 .nextflow/
 .nextflow.log*
@@ -175,7 +180,29 @@ test-output/
 results_stub/
 pipelines/*/test-output/
 pipelines/*/results_stub/
+pipelines/*/results_*/
+pipelines/*/artifacts/
+
+# Artifacts directory
+artifacts/
+
+# Benchmark infrastructure (large data/envs/results)
+test_benchmarks/
+
+# Claude Code local state
+.claude/
+
+# Nextflow pipeline-level logs
+pipelines/*/.nextflow.log*
+pipelines/*/.nf-test.log
+
+# Nextflow reports and visualizations
+trace.txt
+timeline.html
+report.html
+dag.svg
+dag.dot
 
 # Claude Code memory files (per-directory)
 **/CLAUDE.md
-!./CLAUDE.md
+!/CLAUDE.md

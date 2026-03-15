@@ -1,0 +1,73 @@
+name: Bug Report
+description: Report a bug in wasp2/nf-outrider
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug in **wasp2/nf-outrider**.
+        Please fill out the sections below to help us diagnose the issue.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description of the bug
+      description: A clear and concise description of what the bug is.
+    validations:
+      required: true
+
+  - type: textarea
+    id: command
+    attributes:
+      label: Command used and target workflow
+      description: |
+        Please provide the full command you used to run the pipeline.
+        Include all parameters and profiles.
+      placeholder: |
+        nextflow run main.nf -profile docker,test --outdir results
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Relevant output / error message
+      description: |
+        Please copy and paste the relevant output or error message.
+        This will be automatically formatted into code.
+      render: console
+    validations:
+      required: true
+
+  - type: textarea
+    id: system
+    attributes:
+      label: System information
+      description: |
+        Please provide details about your computing environment.
+      value: |
+        - Nextflow version:
+        - Container engine (Docker/Singularity/Conda):
+        - Container version:
+        - OS:
+        - Hardware (local/HPC/cloud):
+    validations:
+      required: true
+
+  - type: textarea
+    id: nextflow-version
+    attributes:
+      label: Nextflow log
+      description: |
+        Paste the output of `nextflow log last` or the relevant `.nextflow.log` contents.
+      render: console
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Add any other context about the problem here (screenshots, sample data, config files).
+    validations:
+      required: false

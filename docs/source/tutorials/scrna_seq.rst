@@ -162,7 +162,7 @@ Run the single-cell allele counting:
      cellranger_output/outs/possorted_genome_bam.bam \
      phased_variants.vcf.gz \
      barcodes_celltype.tsv \
-     --region genes.gtf \
+     --feature genes.gtf \
      --samples SAMPLE_ID \
      --out_file allele_counts.h5ad
 
@@ -293,7 +293,7 @@ Low Read Counts
 Single-cell data is sparse. Consider:
 
 * Using pseudo-bulk aggregation by cell type
-* Lowering ``--min-count`` threshold
+* Lowering ``--min`` / ``--min_count`` threshold
 * Focusing on highly expressed genes
 
 Memory Issues

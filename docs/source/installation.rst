@@ -1,25 +1,16 @@
 Installation
 ============
 
-Via Bioconda (Recommended)
---------------------------
-
-`Bioconda <https://bioconda.github.io>`_ installs WASP2 and **all** dependencies
-(samtools, bcftools, bedtools, htslib) in one command. Requires
-`miniforge <https://github.com/conda-forge/miniforge>`_.
+Via Bioconda
+------------
 
 .. code-block:: bash
 
    mamba install -c conda-forge -c bioconda wasp2
 
-Or with conda:
-
-.. code-block:: bash
-
-   conda install -c conda-forge -c bioconda wasp2
-
-Available for Linux (x86_64, aarch64) and macOS (Intel, Apple Silicon) with
-Python 3.11-3.12.
+Bioconda installs WASP2 together with the external command-line dependencies
+required by the workflows, including ``samtools``, ``bcftools``, and
+``bedtools``.
 
 Via PyPI
 --------
@@ -28,74 +19,58 @@ Via PyPI
 
    pip install wasp2
 
-Pre-built wheels include the Rust extension and bundled htslib for Linux
-(x86_64, aarch64) and macOS (Intel, Apple Silicon) with Python 3.10-3.13.
-
-.. note::
-
-   The PyPI package does not include samtools, bcftools, or bedtools.
-   Install them separately before running WASP2:
-
-   * On Ubuntu/Debian: ``sudo apt-get install bcftools bedtools samtools``
-   * On macOS: ``brew install bcftools bedtools samtools``
-   * Via conda: ``mamba install -c bioconda samtools bcftools bedtools``
+The PyPI wheel includes the WASP2 Python package and Rust extension, but it
+does not install external tools such as ``samtools``, ``bcftools``, or
+``bedtools``. Install those separately before running mapping or counting.
 
 Via Docker
 ----------
 
-WASP2 is available as a multi-platform Docker image (linux/amd64 + linux/arm64)
-with all dependencies pre-installed:
+The Docker image is the most reproducible fully bundled option available in
+this environment.
 
 .. code-block:: bash
 
    docker pull ghcr.io/mcvickerlab/wasp2:1.4.0
 
-   # Run a command
-   docker run --rm -v /path/to/data:/data ghcr.io/mcvickerlab/wasp2:1.4.0 \
-       wasp2-count count-variants /data/sample.bam /data/variants.vcf
-
-   # Interactive shell
-   docker run -it --rm -v /path/to/data:/data ghcr.io/mcvickerlab/wasp2:1.4.0 bash
-
-The image includes samtools, bcftools, bedtools, and the Rust-accelerated backend.
+   docker run --rm ghcr.io/mcvickerlab/wasp2:1.4.0 wasp2-count --help
+   docker run --rm ghcr.io/mcvickerlab/wasp2:1.4.0 wasp2-map --help
+   docker run --rm ghcr.io/mcvickerlab/wasp2:1.4.0 wasp2-analyze --help
+   docker run --rm ghcr.io/mcvickerlab/wasp2:1.4.0 wasp2-ipscore --help
 
 Via Singularity/Apptainer
 -------------------------
 
-For HPC environments that don't support Docker:
+For HPC environments that require SIF images:
 
 .. code-block:: bash
 
    singularity pull wasp2.sif docker://ghcr.io/mcvickerlab/wasp2:1.4.0
    singularity exec wasp2.sif wasp2-count --help
 
+or with Apptainer:
+
+.. code-block:: bash
+
+   apptainer pull wasp2.sif docker://ghcr.io/mcvickerlab/wasp2:1.4.0
+   apptainer exec wasp2.sif wasp2-count --help
+
+.. note::
+
+   Docker was validated in this development environment. ``apptainer`` /
+   ``singularity`` binaries were not available locally during this doc update,
+   so those examples reflect the intended pull/exec workflow but were not
+   executed here.
+
 Development Installation
 ------------------------
-
-For contributing or building from source:
 
 .. code-block:: bash
 
    git clone https://github.com/mcvickerlab/WASP2.git
    cd WASP2
-   pixi install              # resolves all deps including Rust toolchain
-   pixi run build            # builds the Rust extension
-   pixi run test             # runs the test suite
-
-`pixi <https://pixi.sh>`_ resolves Python, Rust toolchain, samtools, bcftools,
-bedtools, and htslib automatically. No system packages required.
-
-Compiling pgenlib
-~~~~~~~~~~~~~~~~~
-
-WASP2 optionally uses `pgenlib <https://github.com/chrchang/plink-ng/tree/master/2.0/Python>`_
-for PLINK2 file I/O. This requires a C compiler:
-
-* On Ubuntu/Debian: ``sudo apt-get install build-essential python3-dev``
-* On macOS: ``xcode-select --install``
-* On RHEL/Fedora: ``sudo dnf install gcc gcc-c++ python3-devel``
-
-pgenlib is installed automatically via pip when you install WASP2.
+   pixi install
+   pixi run verify
 
 Verification
 ------------
@@ -105,3 +80,4 @@ Verification
    wasp2-count --help
    wasp2-map --help
    wasp2-analyze --help
+   wasp2-ipscore --help

@@ -60,6 +60,7 @@ Documentation
    user_guide/mapping
    user_guide/analysis
    user_guide/single_cell
+   user_guide/ipscore
 
 .. toctree::
    :maxdepth: 2
@@ -98,7 +99,6 @@ Documentation
    :caption: Development
 
    development
-   seqera_ai_integration
    changelog
 
 Indices and tables

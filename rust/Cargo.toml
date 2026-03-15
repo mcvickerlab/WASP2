@@ -33,6 +33,9 @@ flate2 = "1.1"         # For gzip decompression
 criterion = { version = "0.8", features = ["html_reports"] }
 tempfile = "3.25"
 
+[build-dependencies]
+pyo3-build-config = "0.28.2"
+
 # Benchmarks removed for clean release (benchmark files in paper branch only)
 # [[bench]]
 # name = "mapping_filter_bench"
