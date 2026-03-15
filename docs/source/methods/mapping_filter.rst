@@ -132,7 +132,10 @@ The WASP filter compares original and remapped positions:
 
 .. code-block:: bash
 
-   wasp2-map filter-remapped original_to_remap.bam remapped.bam output.bam
+   wasp2-map filter-remapped \
+     remapped.bam \
+     --wasp_data_json sample_wasp_data_files.json \
+     --out_bam output.bam
 
 A read passes if:
 
@@ -272,7 +275,7 @@ The typical WASP2 workflow:
 
    # Step 2: Create swapped reads
    wasp2-map make-reads sample.bam variants.vcf \
-     --samples SAMPLE1 --out-dir wasp_temp/
+     --samples SAMPLE1 --out_dir wasp_temp
 
    # Step 3: Remap swapped reads (SAME ALIGNER!)
    bwa mem -M genome.fa wasp_temp/swapped_r1.fq wasp_temp/swapped_r2.fq | \

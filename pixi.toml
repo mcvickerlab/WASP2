@@ -66,6 +66,7 @@ verify = "wasp2-count --help && wasp2-map --help && wasp2-analyze --help && pyth
 build = "maturin develop --release -m rust/Cargo.toml"
 # Run tests
 test = "pytest tests/ -v --tb=short --ignore=tests/benchmarks -m 'not benchmark'"
+test-mapping-parity = "pytest tests/regression/test_mapping_stage_parity.py -v --tb=short"
 # Run benchmarks
 bench = "pytest tests/benchmarks/ -v --tb=short"
 # Lint
