@@ -20,6 +20,19 @@ from .count_alleles import find_read_aln_pos
 logger = logging.getLogger(__name__)
 
 
+def _sparse_from_counts(
+    counts: defaultdict[tuple[int, int], int],
+    shape: tuple[int, int],
+) -> csr_matrix:
+    if not counts:
+        return csr_matrix(shape, dtype=np.uint16)
+    return csr_matrix(
+        (list(counts.values()), list(zip(*counts.keys()))),
+        shape=shape,
+        dtype=np.uint16,
+    )
+
+
 class CountStatsSC:
     """Container for mutable single-cell counting statistics.
 
@@ -101,7 +114,12 @@ def make_count_matrix(
     # Maybe do this automatically and parse feature col instead?
     snp_df_cols = ["chrom", "pos", "ref", "alt"]
     if include_samples is not None:
-        snp_df_cols.extend(include_samples)
+        sample_cols = list(include_samples)
+        missing_sample_cols = [col for col in sample_cols if col not in df.columns]
+        if missing_sample_cols and len(sample_cols) == 1 and "GT" in df.columns:
+            sample_name = sample_cols[0]
+            df = df.with_columns(pl.col("GT").alias(sample_name))
+        snp_df_cols.extend(sample_cols)
 
     # Might be more memory efficient to use pandas index instead...
     snp_df = df.select(snp_df_cols).unique(maintain_order=True).with_row_index()
@@ -135,23 +153,10 @@ def make_count_matrix(
 
     # Create sparse matrices
     # sparse array is recommended...but doesnt work with adata
-    sparse_ref = csr_matrix(
-        (list(sc_counts.ref_count.values()), list(zip(*sc_counts.ref_count.keys()))),
-        shape=(snp_df.shape[0], len(bc_dict)),
-        dtype=np.uint16,
-    )
-
-    sparse_alt = csr_matrix(
-        (list(sc_counts.alt_count.values()), list(zip(*sc_counts.alt_count.keys()))),
-        shape=(snp_df.shape[0], len(bc_dict)),
-        dtype=np.uint16,
-    )
-
-    sparse_other = csr_matrix(
-        (list(sc_counts.other_count.values()), list(zip(*sc_counts.other_count.keys()))),
-        shape=(snp_df.shape[0], len(bc_dict)),
-        dtype=np.uint16,
-    )
+    matrix_shape = (snp_df.shape[0], len(bc_dict))
+    sparse_ref = _sparse_from_counts(sc_counts.ref_count, matrix_shape)
+    sparse_alt = _sparse_from_counts(sc_counts.alt_count, matrix_shape)
+    sparse_other = _sparse_from_counts(sc_counts.other_count, matrix_shape)
 
     # Create anndata With total as X
     adata = ad.AnnData(
@@ -171,17 +176,19 @@ def make_count_matrix(
     if include_samples is not None:
         adata.uns["samples"] = include_samples
 
-    # TODO: Allow for other features besides 'region' using include_features
-    # Could be case of no features, or feature is gene
-    if "region" in df.columns:
-        # Get unique snps and associated regions
+    feature_cols = include_features or []
+    if not feature_cols and "region" in df.columns:
+        feature_cols = ["region"]
 
-        # Create dict during analysis step instead
-        adata.uns["feature"] = (
+    if feature_cols:
+        feature_df = (
             df.join(snp_df, on=["chrom", "pos", "ref", "alt"], how="left")
-            .select(["region", "index"])
-            .to_pandas()
+            .select([*feature_cols, "index"])
+            .unique(maintain_order=True)
         )
+        if "region" not in feature_df.columns:
+            feature_df = feature_df.with_columns(pl.col(feature_cols[0]).alias("region"))
+        adata.uns["feature"] = feature_df.to_pandas()
 
         # region_snp_dict = dict(
         #     df.join(snp_df, on=["chrom", "pos", "ref", "alt"], how="left"

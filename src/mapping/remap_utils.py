@@ -1,12 +1,14 @@
 import logging
 from collections.abc import Generator
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
-import polars as pl
 from pysam import AlignedSegment, AlignmentFile
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    import polars as pl
 
 
 # Generator for iterating through bam
@@ -127,13 +129,13 @@ def _build_ref2read_maps(read: AlignedSegment) -> tuple[dict[int, int], dict[int
 
 
 def get_read_het_data(
-    read_df: pl.DataFrame,
+    read_df: "pl.DataFrame",
     read: AlignedSegment,
     col_list: list[str],
     max_seqs: int | None = None,
     include_indels: bool = False,
     insert_qual: int = 30,
-) -> tuple[list[str], list[Any], list[pl.Series]] | None:
+) -> tuple[list[str], list[Any], list["pl.Series"]] | None:
     """Extract heterozygous variant data from read with indel support.
 
     Args:
@@ -150,6 +152,8 @@ def get_read_het_data(
         split_qual: List of quality score segments
         allele_series: List of polars Series with allele data
     """
+    import polars as pl
+
     pos_list = read_df.select(["start", "stop"]).rows()
 
     assert read.query_sequence is not None, "Read has no query sequence"

@@ -106,12 +106,12 @@ def parse_gene_file(
     if feature is None:
         feature_list = df.select(pl.col("feature").unique()).to_series()
 
-        if "exon" in feature_list:
-            feature = "exon"
+        if "gene" in feature_list:
+            feature = "gene"
         elif "transcript" in feature_list:
             feature = "transcript"
-        elif "gene" in feature_list:
-            feature = "gene"
+        elif "exon" in feature_list:
+            feature = "exon"
         else:
             logger.warning("exon, gene or transcript not found in feature list: %s", feature_list)
 
@@ -317,6 +317,7 @@ def parse_intersect_genes_new(
 
     # AFTER performing gtf_to_bed and intersecting!
     df = pl.scan_csv(intersect_file, separator="\t", has_header=False, infer_schema_length=0)
+    schema_names = list(df.collect_schema().names())
 
     vcf_schema = [
         pl.col("chrom").cast(pl.Categorical),
@@ -326,12 +327,12 @@ def parse_intersect_genes_new(
     ]
 
     # Expect at min 10 cols, 11 if GT included
-    if len(df.columns) > 10:
-        subset_cols = [df.columns[i] for i in [0, 2, 3, 4, 5, -2, -1]]
+    if len(schema_names) > 10:
+        subset_cols = [schema_names[i] for i in [0, 2, 3, 4, 5, -2, -1]]
         new_cols = ["chrom", "pos", "ref", "alt", "GT", attribute, parent_attribute]
         vcf_schema.append(pl.col("GT").cast(pl.Categorical))
     else:
-        subset_cols = [df.columns[i] for i in [0, 2, 3, 4, -2, -1]]
+        subset_cols = [schema_names[i] for i in [0, 2, 3, 4, -2, -1]]
         new_cols = ["chrom", "pos", "ref", "alt", attribute, parent_attribute]
 
     # Parse dataframe columns

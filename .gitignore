@@ -154,6 +154,11 @@ benchmark_figures/
 # Sanity test data (downloaded from GitHub releases)
 tests/sanity/data/
 
+# Real data test files (downloaded from 1000 Genomes, ~2-3 GB)
+tests/real_data/data/
+tests/real_data/samplesheets/
+tests/real_data/configs/
+
 # Nextflow runtime
 .nextflow/
 .nextflow.log*
