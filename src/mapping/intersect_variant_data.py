@@ -150,7 +150,7 @@ def make_intersect_df(
     intersect_file: str,
     samples: list[str],
     is_paired: bool = True,
-) -> "pl.DataFrame":
+) -> pl.DataFrame:
     """Parse intersection file into a typed polars DataFrame.
 
     Parameters
