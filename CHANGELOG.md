@@ -2,6 +2,12 @@
 
 All notable changes to WASP2 will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+- Restored canonical WASP filter contract in Rust counting path. Removed 6 SAM flag filters (`is_secondary`, `is_supplementary`, `is_duplicate`, `is_qcfail`, `!is_proper_pair`) introduced in the 1.2.0 migration (commit a72ffba) across `rust/src/bam_counter.rs`, `rust/src/mapping_filter.rs`, and `rust/src/bam_filter.rs`. Retained `is_unmapped` for crash safety. Restores byte-level parity with the pre-1.3.0 Python counter on STAR-aligned RNA (0/17,728 rows differ on reference donor) and within 0.10% on BWA-aligned ATAC. Callers who relied on the defensive filters should pre-filter BAMs upstream (e.g., `samtools view -F 0x904`). Aligns behavior with the canonical WASP documentation that BAM pre-filtering is the caller's responsibility (van de Geijn et al. 2015, Nat Methods 10.1038/nmeth.3582).
+- `tests/test_rust_python_counting_parity.py` Python reference updated to match the new filter contract (only `unmapped` skipped).
+
 ## [1.4.0] - 2026-02-25
 
 ### Fixed
