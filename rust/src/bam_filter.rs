@@ -124,9 +124,7 @@ fn phase2_collect_remap_names(
         result?;
         processed += 1;
 
-        // Skip unmapped, secondary, supplementary, QC fail, duplicate
-        // Flags: 0x4=unmapped, 0x100=secondary, 0x800=supplementary, 0x200=QC fail, 0x400=duplicate
-        if read.flags() & (0x4 | 0x100 | 0x800 | 0x200 | 0x400) != 0 {
+        if read.flags() & 0x4 != 0 {
             continue;
         }
 
