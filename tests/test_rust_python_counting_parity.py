@@ -8,7 +8,8 @@ matches the Rust semantics exactly:
 - Single BAM fetch per chromosome spanning all variant positions
 - Each read assigned to the earliest-encounter-index SNP it overlaps
 - Seen-reads set accumulates across positions (each read counted once)
-- BAM flag filtering: unmapped, secondary, supplementary, duplicate skipped
+- BAM flag filtering: only unmapped skipped (canonical WASP contract —
+  caller is responsible for BAM pre-filtering)
 
 This catches any numerical differences between the Rust and Python
 implementations that golden-file tests (which compare Rust output to
@@ -39,7 +40,7 @@ def python_count_snp_alleles(bam_path: str, chrom: str, snp_list: list[tuple]):
        aligned base at. A read is counted at exactly one position.
     3. Seen-reads set accumulates across all positions (paired-end mates
        and multi-overlap reads are counted only once per chromosome).
-    4. BAM flag filtering: skip unmapped, secondary, supplementary, duplicate.
+    4. BAM flag filtering: skip only unmapped (canonical WASP contract).
 
     Args:
         bam_path: Path to BAM file.
@@ -67,7 +68,7 @@ def python_count_snp_alleles(bam_path: str, chrom: str, snp_list: list[tuple]):
 
     with pysam.AlignmentFile(bam_path, "rb") as bam:
         for read in bam.fetch(chrom, max(0, min_pos - 1), max_pos + 1):
-            if read.is_unmapped or read.is_secondary or read.is_supplementary or read.is_duplicate:
+            if read.is_unmapped:
                 continue
 
             qname = read.query_name
