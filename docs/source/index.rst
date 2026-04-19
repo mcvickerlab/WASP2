@@ -65,7 +65,6 @@ Documentation
    user_guide/mapping
    user_guide/analysis
    user_guide/single_cell
-   user_guide/***REMOVED***
 
 .. toctree::
    :maxdepth: 2

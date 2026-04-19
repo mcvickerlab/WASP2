@@ -64,15 +64,6 @@ for cmd in wasp2-count wasp2-map wasp2-analyze; do
         FAIL=$((FAIL + 1))
     fi
 done
-
-# ***REMOVED*** doesn't have --version, check --help instead
-if ***REMOVED*** --help > /dev/null 2>&1; then
-    echo "  PASS: ***REMOVED*** --help"
-    PASS=$((PASS + 1))
-else
-    echo "  FAIL: ***REMOVED*** --help"
-    FAIL=$((FAIL + 1))
-fi
 echo ""
 
 # ─────────────────────────────────────────────────────────────────────────────

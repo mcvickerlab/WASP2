@@ -5,24 +5,23 @@
 The Docker image validated for this update is:
 
 ```bash
-ghcr.io/mcvickerlab/wasp2:1.4.0
+ghcr.io/mcvickerlab/wasp2:1.4.1
 ```
 
 Pull and inspect the available CLI tools:
 
 ```bash
-docker pull ghcr.io/mcvickerlab/wasp2:1.4.0
+docker pull ghcr.io/mcvickerlab/wasp2:1.4.1
 
-docker run --rm ghcr.io/mcvickerlab/wasp2:1.4.0 wasp2-count --help
-docker run --rm ghcr.io/mcvickerlab/wasp2:1.4.0 wasp2-map --help
-docker run --rm ghcr.io/mcvickerlab/wasp2:1.4.0 wasp2-analyze --help
-docker run --rm ghcr.io/mcvickerlab/wasp2:1.4.0 ***REMOVED*** --help
+docker run --rm ghcr.io/mcvickerlab/wasp2:1.4.1 wasp2-count --help
+docker run --rm ghcr.io/mcvickerlab/wasp2:1.4.1 wasp2-map --help
+docker run --rm ghcr.io/mcvickerlab/wasp2:1.4.1 wasp2-analyze --help
 ```
 
 Mount local data when running workflows:
 
 ```bash
-docker run --rm -v "$PWD":/data ghcr.io/mcvickerlab/wasp2:1.4.0 \
+docker run --rm -v "$PWD":/data ghcr.io/mcvickerlab/wasp2:1.4.1 \
   wasp2-count count-variants /data/sample.bam /data/variants.vcf.gz -o /data/counts.tsv
 ```
 
@@ -31,14 +30,14 @@ docker run --rm -v "$PWD":/data ghcr.io/mcvickerlab/wasp2:1.4.0 \
 For HPC environments using SIF images:
 
 ```bash
-singularity pull wasp2.sif docker://ghcr.io/mcvickerlab/wasp2:1.4.0
+singularity pull wasp2.sif docker://ghcr.io/mcvickerlab/wasp2:1.4.1
 singularity exec wasp2.sif wasp2-count --help
 ```
 
 or:
 
 ```bash
-apptainer pull wasp2.sif docker://ghcr.io/mcvickerlab/wasp2:1.4.0
+apptainer pull wasp2.sif docker://ghcr.io/mcvickerlab/wasp2:1.4.1
 apptainer exec wasp2.sif wasp2-count --help
 ```
 
@@ -49,7 +48,7 @@ installed locally.
 ## Mapping Example
 
 ```bash
-docker run --rm -v "$PWD":/data ghcr.io/mcvickerlab/wasp2:1.4.0 \
+docker run --rm -v "$PWD":/data ghcr.io/mcvickerlab/wasp2:1.4.1 \
   wasp2-map make-reads /data/sample.bam /data/variants.vcf.gz \
   --samples sample1 \
   --out_dir /data/remap_dir
@@ -58,7 +57,7 @@ docker run --rm -v "$PWD":/data ghcr.io/mcvickerlab/wasp2:1.4.0 \
 After realigning the swapped FASTQ reads with your aligner of choice:
 
 ```bash
-docker run --rm -v "$PWD":/data ghcr.io/mcvickerlab/wasp2:1.4.0 \
+docker run --rm -v "$PWD":/data ghcr.io/mcvickerlab/wasp2:1.4.1 \
   wasp2-map filter-remapped /data/remapped.bam \
   --wasp_data_json /data/remap_dir/sample_wasp_data_files.json \
   --out_bam /data/filtered.bam
@@ -67,7 +66,7 @@ docker run --rm -v "$PWD":/data ghcr.io/mcvickerlab/wasp2:1.4.0 \
 ## Counting Example
 
 ```bash
-docker run --rm -v "$PWD":/data ghcr.io/mcvickerlab/wasp2:1.4.0 \
+docker run --rm -v "$PWD":/data ghcr.io/mcvickerlab/wasp2:1.4.1 \
   wasp2-count count-variants /data/filtered.bam /data/variants.vcf.gz \
   --samples sample1 \
   --region /data/genes.gtf \
@@ -78,4 +77,3 @@ docker run --rm -v "$PWD":/data ghcr.io/mcvickerlab/wasp2:1.4.0 \
 
 - The image contains the WASP2 package plus `samtools`, `bcftools`, and `bedtools`.
 - The documented public mapping workflow is `make-reads -> realign -> filter-remapped`.
-- `***REMOVED***` is present in the container alongside the main analysis tools.

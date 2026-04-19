@@ -36,7 +36,6 @@ this environment.
    docker run --rm ghcr.io/mcvickerlab/wasp2:1.4.1 wasp2-count --help
    docker run --rm ghcr.io/mcvickerlab/wasp2:1.4.1 wasp2-map --help
    docker run --rm ghcr.io/mcvickerlab/wasp2:1.4.1 wasp2-analyze --help
-   docker run --rm ghcr.io/mcvickerlab/wasp2:1.4.1 ***REMOVED*** --help
 
 Via Singularity/Apptainer
 -------------------------
@@ -80,4 +79,3 @@ Verification
    wasp2-count --help
    wasp2-map --help
    wasp2-analyze --help
-   ***REMOVED*** --help

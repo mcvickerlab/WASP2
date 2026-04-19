@@ -50,12 +50,11 @@ singularity exec wasp2.sif wasp2-count --help
 
 ## CLI Tools
 
-WASP2 installs four command-line entry points:
+WASP2 installs three command-line entry points:
 
 - `wasp2-map`
 - `wasp2-count`
 - `wasp2-analyze`
-- `***REMOVED***`
 
 ## Quick Start
 
@@ -100,14 +99,6 @@ wasp2-analyze find-imbalance-sc \
   barcode_groups.tsv \
   --sample sample1 \
   -o ai_results.tsv
-```
-
-## CVPC Utilities
-
-```bash
-***REMOVED*** inventory --output inventory.tsv
-***REMOVED*** manifest --output manifest.csv
-***REMOVED*** validate
 ```
 
 See the [documentation](https://mcvickerlab.github.io/WASP2/) for complete
