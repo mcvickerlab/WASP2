@@ -11,9 +11,9 @@
 
 ```
 RNA-seq BAMs → WASP2 Count → Gene Aggregation → OUTRIDER → Outlier Calls
-                    ↓                              ↓
-              61× faster than              Autoencoder-based
-              GATK ASEReadCounter          outlier detection
+                                                     ↓
+                                           Autoencoder-based
+                                           outlier detection
                     ↓
               MAE Detection (binomial)
 ```

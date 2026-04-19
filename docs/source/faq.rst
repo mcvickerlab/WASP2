@@ -133,6 +133,19 @@ Common causes:
 This typically means mapping bias is driving the signal. Run the WASP remapping
 step (``wasp2-map``) before counting. See :doc:`user_guide/mapping`.
 
+**For ATAC-seq, do I need to use WASP-remapped BAMs?**
+
+Yes. WASP2 counting applies only the unmapped filter (see :doc:`methods/mapping_filter`
+"Canonical Filter Contract"); it does **not** correct reference mapping bias
+on its own. You must run ``wasp2-map make-reads`` + re-alignment +
+``wasp2-map filter-remapped`` first, then pass the resulting
+``*_wasp_filt_rmdup.bam`` to ``wasp2-count``. Counting on raw BWA output
+leaves reference bias uncorrected — reads carrying the alt allele are
+systematically under-represented.
+
+The same requirement applies to RNA-seq and scATAC-seq. The only difference
+is the aligner used in the re-alignment step (STAR for RNA, BWA for ATAC).
+
 Troubleshooting
 ---------------
 

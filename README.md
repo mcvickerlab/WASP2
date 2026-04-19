@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/source/_static/banner.svg" alt="WASP2 - Allele-Specific Analysis Pipeline" width="100%">
+  <img src="https://raw.githubusercontent.com/mcvickerlab/WASP2/master/docs/source/_static/banner.svg" alt="WASP2 - Allele-Specific Analysis Pipeline" width="100%">
 </p>
 
 <p align="center">
@@ -37,14 +37,14 @@ The PyPI package does not install external tools such as `samtools`,
 ### Docker
 
 ```bash
-docker pull ghcr.io/mcvickerlab/wasp2:1.4.0
-docker run --rm ghcr.io/mcvickerlab/wasp2:1.4.0 wasp2-count --help
+docker pull ghcr.io/mcvickerlab/wasp2:1.4.1
+docker run --rm ghcr.io/mcvickerlab/wasp2:1.4.1 wasp2-count --help
 ```
 
 ### Singularity/Apptainer
 
 ```bash
-singularity pull wasp2.sif docker://ghcr.io/mcvickerlab/wasp2:1.4.0
+singularity pull wasp2.sif docker://ghcr.io/mcvickerlab/wasp2:1.4.1
 singularity exec wasp2.sif wasp2-count --help
 ```
 

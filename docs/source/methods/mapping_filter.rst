@@ -143,6 +143,30 @@ A read passes if:
 2. The mapping position matches the original within tolerance
 3. For paired-end reads, both mates satisfy the above
 
+Canonical Filter Contract (v1.4.1+)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+WASP2 filter-remapped and count-variants apply **only the unmapped filter**
+(SAM flag ``0x4``). Secondary, supplementary, duplicate, QC-fail, and
+not-proper-pair reads are **not** filtered by WASP2 itself.
+
+This is deliberate, following the canonical WASP contract from
+van de Geijn et al. 2015:
+
+    *"This program does not perform filtering of reads based on mappability.
+    It is assumed that the input BAM files are filtered appropriately prior
+    to calling this script."* — ``bmvdgeijn/WASP`` ``CHT/bam2h5.py``
+
+If your pipeline needs those defensive filters, apply them upstream:
+
+.. code-block:: bash
+
+   samtools view -F 0x904 in.bam -o filtered.bam
+   # 0x904 = secondary (0x100) | supplementary (0x800) | duplicate (0x400)
+
+Earlier WASP2 releases (v1.2.0–v1.4.0) applied six SAM flag filters
+internally. See ``CHANGELOG.md`` for details.
+
 **Same-Locus Test**
 
 For SNPs, exact position matching is required:

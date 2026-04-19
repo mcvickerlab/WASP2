@@ -54,6 +54,8 @@ overlapping that genomic coordinate:
 
    # Simplified pseudocode
    for read in bam.fetch(chrom, pos, pos + 1):
+       if read.is_unmapped:
+           continue  # Only BAM flag filter applied; see "Canonical Filter Contract"
        query_pos = find_aligned_position(read, pos)
        if query_pos is not None:
            base = read.query_sequence[query_pos]
@@ -63,6 +65,14 @@ overlapping that genomic coordinate:
                alt_count += 1
            else:
                other_count += 1
+
+.. note::
+
+   As of v1.4.1 WASP2 applies **only** the unmapped filter during counting.
+   Secondary, supplementary, duplicate, QC-fail, and not-proper-pair reads
+   are **not** dropped. Callers that want those filters should pre-filter
+   BAMs (``samtools view -F 0x904``). See
+   :doc:`mapping_filter` for the full canonical-contract rationale.
 
 CIGAR-Aware Position Finding
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^

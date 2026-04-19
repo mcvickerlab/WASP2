@@ -25,10 +25,10 @@
 
 ## Module Inventory
 
-| Module | Function | Performance |
-|--------|----------|-------------|
-| WASP2_COUNT | Allelic read counting | Rust: 61× faster |
-| WASP2_MAP | Read remapping/filtering | Rust: 5× faster |
+| Module | Function | Implementation |
+|--------|----------|----------------|
+| WASP2_COUNT | Allelic read counting | Rust-accelerated |
+| WASP2_MAP | Read remapping/filtering | Rust-accelerated |
 | WASP2_ANALYZE | Statistical analysis | Rust-backed |
 | WASP2_COUNT_ALLELES | Single-cell counting | Rust |
 | WASP2_ANALYZE_IMBALANCE | SC imbalance | Rust |

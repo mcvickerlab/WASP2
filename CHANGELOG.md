@@ -69,7 +69,9 @@ All notable changes to WASP2 will be documented in this file.
 ## [1.2.0] - 2025-01-23
 
 ### Added
-- **61× faster WASP filtering** via Rust optimization (validated r² > 0.99 vs GATK)
+- Rust-accelerated WASP filtering (``filter-remapped``) replaces the legacy
+  Python path. Benchmarks against prior Python implementation are in
+  ``tests/benchmarks/``.
 - INDEL support in variant processing
 - bcftools and samtools added to environment.yml
 - nf-test infrastructure for Nextflow modules

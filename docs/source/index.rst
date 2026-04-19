@@ -15,11 +15,14 @@ Features
 --------
 
 * **Unbiased Mapping**: WASP algorithm for correcting reference bias
+  (van de Geijn et al. 2015, Nat Methods 10.1038/nmeth.3582)
 * **Allele Counting**: Count allele-specific reads from BAM files
-* **Statistical Analysis**: Beta-binomial models for allelic imbalance detection
-* **Single-Cell Support**: Specialized tools for single-cell RNA-seq
-* **Type-Safe**: 100% type hint coverage for robust code
-* **Well-Tested**: Comprehensive regression and integration tests
+* **Statistical Analysis**: Beta-binomial likelihood-ratio tests for allelic
+  imbalance
+* **Single-Cell Support**: Specialized tools for single-cell RNA-seq and
+  scATAC-seq
+* **Rust-Accelerated**: Rust-backed BAM filtering and counting for large
+  cohorts
 
 Quick Start
 -----------
@@ -51,6 +54,8 @@ Documentation
 
    installation
    quickstart
+   choosing_workflow
+   faq
 
 .. toctree::
    :maxdepth: 2
@@ -72,8 +77,6 @@ Documentation
    tutorials/scrna_seq
    tutorials/scatac_workflow
    tutorials/comparative_imbalance
-   tutorials/atac_seq_workflow
-   tutorials/statistical_methods_tutorial
 
 .. toctree::
    :maxdepth: 2

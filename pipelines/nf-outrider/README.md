@@ -16,9 +16,9 @@ nf-outrider integrates WASP2's high-performance allele counting with OUTRIDER's 
 
 ```
 RNA-seq BAMs → WASP2 Count → Gene Aggregation → OUTRIDER → Outlier Calls
-                    ↓                              ↓
-              61× faster than              Autoencoder-based
-              GATK ASEReadCounter          outlier detection
+                                                     ↓
+                                           Autoencoder-based
+                                           outlier detection
                     ↓
               MAE Detection (binomial)
 ```
@@ -27,7 +27,7 @@ RNA-seq BAMs → WASP2 Count → Gene Aggregation → OUTRIDER → Outlier Calls
 
 | Feature | nf-core/drop | nf-outrider |
 |---------|--------------|-------------|
-| Allele counting | GATK ASEReadCounter (1600s) | **WASP2 (26s, 61× faster)** |
+| Allele counting | GATK ASEReadCounter | **WASP2 (Rust-accelerated)** |
 | Acceleration | None | **Rust-accelerated** |
 | Statistics | Binomial | **Binomial with FDR correction** |
 | MAE detection | Standard | **Enhanced with FDR-corrected binomial test** |

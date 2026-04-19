@@ -31,12 +31,12 @@ this environment.
 
 .. code-block:: bash
 
-   docker pull ghcr.io/mcvickerlab/wasp2:1.4.0
+   docker pull ghcr.io/mcvickerlab/wasp2:1.4.1
 
-   docker run --rm ghcr.io/mcvickerlab/wasp2:1.4.0 wasp2-count --help
-   docker run --rm ghcr.io/mcvickerlab/wasp2:1.4.0 wasp2-map --help
-   docker run --rm ghcr.io/mcvickerlab/wasp2:1.4.0 wasp2-analyze --help
-   docker run --rm ghcr.io/mcvickerlab/wasp2:1.4.0 ***REMOVED*** --help
+   docker run --rm ghcr.io/mcvickerlab/wasp2:1.4.1 wasp2-count --help
+   docker run --rm ghcr.io/mcvickerlab/wasp2:1.4.1 wasp2-map --help
+   docker run --rm ghcr.io/mcvickerlab/wasp2:1.4.1 wasp2-analyze --help
+   docker run --rm ghcr.io/mcvickerlab/wasp2:1.4.1 ***REMOVED*** --help
 
 Via Singularity/Apptainer
 -------------------------
@@ -45,14 +45,14 @@ For HPC environments that require SIF images:
 
 .. code-block:: bash
 
-   singularity pull wasp2.sif docker://ghcr.io/mcvickerlab/wasp2:1.4.0
+   singularity pull wasp2.sif docker://ghcr.io/mcvickerlab/wasp2:1.4.1
    singularity exec wasp2.sif wasp2-count --help
 
 or with Apptainer:
 
 .. code-block:: bash
 
-   apptainer pull wasp2.sif docker://ghcr.io/mcvickerlab/wasp2:1.4.0
+   apptainer pull wasp2.sif docker://ghcr.io/mcvickerlab/wasp2:1.4.1
    apptainer exec wasp2.sif wasp2-count --help
 
 .. note::
