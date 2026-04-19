@@ -135,21 +135,11 @@ The Rust implementation provides:
 - **Memory efficiency**: Stream through BAM without loading all reads
 - **htslib integration**: Direct access to BAM index for efficient queries
 
-Performance Characteristics
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-.. table:: Counting Performance
-   :widths: 30 35 35
-
-   =================== ======================== ========================
-   Dataset Size        Python (pysam)           Rust (wasp2_rust)
-   =================== ======================== ========================
-   10,000 SNPs         ~45 seconds              ~5 seconds
-   100,000 SNPs        ~7 minutes               ~40 seconds
-   1,000,000 SNPs      ~70 minutes              ~6 minutes
-   =================== ======================== ========================
-
-*Benchmarks on typical ATAC-seq data with 100M reads, single thread.*
+The Rust counter is substantially faster than the pure-Python pysam path
+(roughly an order of magnitude on typical ATAC-seq data in internal
+testing). Exact throughput depends on read length, BAM index density,
+storage type, and thread count — measure on your own hardware before
+planning large batches.
 
 Quality Filtering
 -----------------

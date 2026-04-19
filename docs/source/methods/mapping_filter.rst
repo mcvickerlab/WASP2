@@ -65,12 +65,19 @@ A read passes the WASP filter if and only if:
 This criterion ensures that the read would have mapped identically regardless
 of which allele it carried, eliminating differential mappability.
 
-**Theorem**: After WASP filtering, the probability of mapping is equal for
-reads from either allele:
+Under the assumption that the aligner's scoring is deterministic and
+depends only on the read sequence and reference coordinate — the standard
+case for seed-and-extend aligners at typical parameter settings — the
+mapping probability becomes approximately equal for either allele after
+filtering:
 
 .. math::
 
-   P(\text{map} | \text{ref allele}) = P(\text{map} | \text{alt allele})
+   P(\text{map} \mid \text{ref allele}) \approx P(\text{map} \mid \text{alt allele})
+
+See [vandeGeijn2015]_ §Methods for the original argument. The equality is
+exact under deterministic mapping and approximate for aligners with
+stochastic tie-breaking or heuristic multi-mapper resolution.
 
 Implementation Details
 ----------------------
@@ -216,38 +223,29 @@ The Rust implementation provides:
 - **Streaming comparison**: Memory-efficient position matching
 - **htslib integration**: Native BAM format support
 
-Performance Characteristics
----------------------------
+Performance
+-----------
 
-.. table:: WASP Filter Performance
-   :widths: 30 35 35
-
-   =================== ======================== ========================
-   Reads to Filter     Python Implementation    Rust Implementation
-   =================== ======================== ========================
-   1 million           ~5 minutes               ~30 seconds
-   10 million          ~50 minutes              ~5 minutes
-   100 million         ~8 hours                 ~50 minutes
-   =================== ======================== ========================
-
-*Benchmarks with coordinate-sorted BAM, single thread.*
+The Rust implementation is substantially faster than a pure-Python filter
+path (roughly an order of magnitude on coordinate-sorted BAMs of 1–100M
+reads in internal testing). Exact throughput depends on storage type,
+thread count, and read length; run on your own hardware for accurate
+numbers.
 
 Expected Filter Rates
 ^^^^^^^^^^^^^^^^^^^^^
 
-Typical filter rates depend on data type and variant density:
+Filter rates vary with data type, variant density, aligner, and tolerance
+settings. As a rough developer-experience guide only:
 
-.. table:: Typical Filter Rates by Data Type
-   :widths: 25 25 50
+- RNA-seq: on the order of a few percent to ~15%; higher near splice
+  junctions and in indel-dense regions.
+- ATAC-seq / ChIP-seq: on the order of a few percent.
+- WGS: typically lower than RNA-seq at comparable variant density.
 
-   ============ ============ ==========================================
-   Data Type    Filter Rate  Notes
-   ============ ============ ==========================================
-   RNA-seq      5-15%        Higher near splice junctions
-   ATAC-seq     2-8%         Lower due to shorter reads
-   ChIP-seq     3-10%        Depends on peak locations
-   WGS          1-5%         Lowest filter rate
-   ============ ============ ==========================================
+Outlier filter rates (well above these ranges) usually indicate a mismatch
+between the original and remap aligner versions/parameters, CNV-rich
+regions, or errors in the variant call set — not a WASP failure.
 
 Limitations and Considerations
 ------------------------------
@@ -316,4 +314,12 @@ The typical WASP2 workflow:
 See Also
 --------
 
-- :doc:`counting_algorithm` - Allele counting after WASP filtering
+- :doc:`counting_algorithm` — Allele counting after WASP filtering
+
+References
+----------
+
+.. [vandeGeijn2015] van de Geijn B, McVicker G, Gilad Y, Pritchard JK (2015).
+   WASP: allele-specific software for robust molecular quantitative trait
+   locus discovery. *Nature Methods* 12:1061-1063.
+   https://doi.org/10.1038/nmeth.3582

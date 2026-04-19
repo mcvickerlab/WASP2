@@ -1,212 +1,85 @@
-Comparative Imbalance Analysis Tutorial
-=======================================
+Comparative Imbalance Analysis
+==============================
 
-This tutorial provides a comprehensive guide to detecting **differential allelic imbalance**
-between cell types, conditions, or biological groups using WASP2's comparative analysis module.
+Compare allelic imbalance between biological groups — cell types, conditions,
+sex, treatment status — using ``wasp2-analyze compare-imbalance``.
 
-Overview
---------
+What this tests
+---------------
 
-**What is Comparative Imbalance Analysis?**
-
-While standard allelic imbalance (AI) analysis detects whether a genomic region shows
-preferential expression of one allele, comparative imbalance analysis asks a different
-question: **Does the degree of imbalance differ between groups?**
-
-This is powerful for identifying:
-
-* **Cell-type-specific regulatory variation** - Regions where different cell types show
-  distinct allelic preferences
-* **Condition-dependent effects** - Treatment-induced changes in allelic regulation
-* **Sex differences** - Chromatin regions with sex-biased allelic accessibility
-* **Developmental dynamics** - Stage-specific changes in allelic regulation
-
-**Statistical Approach**
-
-WASP2 uses a **likelihood ratio test (LRT)** to compare two hypotheses:
+Standard allelic-imbalance analysis asks whether a region shows a preference
+for one allele. Comparative analysis asks whether the *degree* of imbalance
+differs between groups:
 
 .. code-block:: text
 
-   Null Hypothesis (H0):     Both groups share the same allelic imbalance (μ_combined)
-   Alternative Hypothesis (H1): Groups have different imbalance (μ₁ ≠ μ₂)
+   H0:  Both groups share the same allelic imbalance (mu_combined)
+   H1:  Groups have different imbalance (mu_1 != mu_2)
 
-   Test Statistic:  LRT = -2 × (log L_null - log L_alt)
-   P-value:         P(χ²(df=1) > LRT)
+   Test statistic:  LRT = -2 * (log L_null - log L_alt)
+   P-value:         P(chi^2(df=1) > LRT)
 
-The test accounts for overdispersion using beta-binomial modeling and applies
-Benjamini-Hochberg FDR correction for multiple testing.
+See :doc:`/methods/statistical_models` for the full model and
+:doc:`/user_guide/single_cell` for input-data formats.
 
-Prerequisites
--------------
+Inputs
+------
 
-**Software:**
+Two files are required:
 
-* WASP2 (``pip install wasp2``)
-* Python with scanpy/pandas for visualization (optional)
-* R with Seurat for cell type annotation (optional)
+1. **AnnData count matrix** (``.h5ad``) with ``ref`` and ``alt`` layers, a
+   genotype column in ``.obs`` for your sample, and a ``group`` column in
+   ``.var`` identifying the per-cell group assignment. Produced by
+   ``wasp2-count count-variants-sc``.
 
-**Data Requirements:**
+2. **Barcode-to-group TSV** — two columns, no header, tab-separated.
 
-* AnnData count matrix (``.h5ad``) with allele counts per cell per SNP
-* Barcode-to-group mapping file (TSV)
-* Groups can be: cell types, conditions, sex, treatment status, etc.
+   .. code-block:: text
 
-Input Data Format
------------------
+      AAACGAACAGTCAGTT-1    excitatory_neurons
+      AAACGAAGTCGCTCTA-1    inhibitory_neurons
+      AAAGGATCATCGATGT-1    astrocytes
 
-Count Matrix (.h5ad)
-~~~~~~~~~~~~~~~~~~~~
+   Barcodes must match those in the count matrix exactly (including any
+   ``-1`` suffix). For exporting barcode maps from Seurat or Scanpy, see
+   :doc:`/user_guide/single_cell`.
 
-Your AnnData object should have this structure:
+Example: comparing cell types
+-----------------------------
 
-.. code-block:: text
-
-   AnnData object (n_snps × n_cells)
-   ├── .obs                 # SNP metadata (rows)
-   │   ├── index            # SNP identifiers
-   │   └── [sample_name]    # Genotypes: '0|1', '1|0', '0/1', '1/0'
-   │
-   ├── .var                 # Cell metadata (columns)
-   │   └── group            # Cell type/group assignment
-   │
-   ├── .layers
-   │   ├── "ref"            # Reference allele counts (sparse matrix)
-   │   └── "alt"            # Alternate allele counts (sparse matrix)
-   │
-   └── .uns
-       ├── feature          # DataFrame: SNP → region mapping
-       └── samples          # List of sample names
-
-**Create counts from BAM + VCF:**
+With counts in ``allele_counts.h5ad`` and cell-type assignments in
+``barcode_celltype_map.tsv``, run per-group imbalance first, then compare:
 
 .. code-block:: bash
 
-   wasp2-count count-variants-sc \
-     aligned.bam \
-     phased_variants.vcf.gz \
-     barcodes.txt \
-     --samples SAMPLE_ID \
-     --feature peaks.bed \
-     --out_file allele_counts.h5ad
-
-Barcode Map (TSV)
-~~~~~~~~~~~~~~~~~
-
-A two-column tab-separated file (no header) mapping cell barcodes to groups:
-
-.. code-block:: text
-
-   AAACGAACAGTCAGTT-1    excitatory_neurons
-   AAACGAAGTCGCTCTA-1    inhibitory_neurons
-   AAACGAAGTGAACCTA-1    excitatory_neurons
-   AAAGGATCATCGATGT-1    astrocytes
-   AAAGGATGTGCAACGA-1    microglia
-
-**Important:** Barcodes must exactly match those in the count matrix (including any ``-1`` suffix).
-
-Tutorial 1: Cell Type Comparison
---------------------------------
-
-This tutorial demonstrates comparing allelic imbalance between neuronal subtypes.
-
-Step 1: Prepare Input Files
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-**Export cell type annotations from Seurat:**
-
-.. code-block:: r
-
-   library(Seurat)
-
-   # Load your analyzed Seurat object
-   seurat_obj <- readRDS("brain_snATAC.rds")
-
-   # Create barcode-to-celltype mapping
-   barcode_df <- data.frame(
-     barcode = colnames(seurat_obj),
-     celltype = Idents(seurat_obj)
-   )
-
-   # Write without header
-   write.table(
-     barcode_df,
-     "barcode_celltype_map.tsv",
-     sep = "\t", quote = FALSE,
-     row.names = FALSE, col.names = FALSE
-   )
-
-**Verify the barcode file:**
-
-.. code-block:: bash
-
-   # Check format
-   head barcode_celltype_map.tsv
-   # AAACGAACAGTCAGTT-1	excitatory_neurons
-   # AAACGAAGTCGCTCTA-1	inhibitory_neurons
-
-   # Count cells per type
-   cut -f2 barcode_celltype_map.tsv | sort | uniq -c | sort -rn
-   #   2500 excitatory_neurons
-   #   1800 inhibitory_neurons
-   #   1200 astrocytes
-   #    800 oligodendrocytes
-
-Step 2: Run Per-Group Imbalance Analysis
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-First, analyze imbalance within each cell type:
-
-.. code-block:: bash
-
+   # Per-group imbalance within each cell type
    wasp2-analyze find-imbalance-sc \
      allele_counts.h5ad \
      barcode_celltype_map.tsv \
-     --sample SAMPLE_ID \
-     --phased \
-     --min 10 \
-     -z 3
+     --sample SAMPLE_ID --phased --min 10 -z 3
 
-This produces per-celltype result files (e.g., ``ai_results_excitatory_neurons.tsv``).
-
-Step 3: Run Comparative Analysis
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Compare imbalance between specific cell types:
-
-.. code-block:: bash
-
-   # Compare excitatory vs inhibitory neurons
+   # Pairwise comparison between two named groups
    wasp2-analyze compare-imbalance \
      allele_counts.h5ad \
      barcode_celltype_map.tsv \
      --sample SAMPLE_ID \
      --groups "excitatory_neurons,inhibitory_neurons" \
-     --phased \
-     --min 15
+     --phased --min 15
 
-**Compare all pairwise combinations:**
-
-.. code-block:: bash
-
-   # Omit --groups to compare all cell types
+   # Omit --groups to compare all cell types pairwise
    wasp2-analyze compare-imbalance \
      allele_counts.h5ad \
      barcode_celltype_map.tsv \
-     --sample SAMPLE_ID \
-     --phased \
-     --min 15
+     --sample SAMPLE_ID --phased --min 15
 
-This produces output files for each pairwise comparison:
+Pairwise output files are named ``ai_results_<group1>_<group2>.tsv``.
 
-* ``ai_results_excitatory_neurons_inhibitory_neurons.tsv``
-* ``ai_results_excitatory_neurons_astrocytes.tsv``
-* ``ai_results_inhibitory_neurons_astrocytes.tsv``
-* ...
+Other common comparisons — sex, treatment, developmental stage — use the
+same command with a different ``barcode_map.tsv``. The biology varies; the
+command does not.
 
-Step 4: Interpret Results
-~~~~~~~~~~~~~~~~~~~~~~~~~
-
-**Output columns explained:**
+Output columns
+--------------
 
 .. list-table::
    :header-rows: 1
@@ -215,331 +88,101 @@ Step 4: Interpret Results
    * - Column
      - Description
    * - ``region``
-     - Genomic region (peak or gene) identifier
+     - Genomic region identifier
    * - ``num_snps``
-     - Number of shared heterozygous SNPs used for comparison
+     - Shared heterozygous SNPs used for the comparison
    * - ``combined_mu``
-     - Reference allele frequency under null hypothesis (shared between groups)
-   * - ``mu1``
-     - Reference allele frequency in group 1 (e.g., excitatory neurons)
-   * - ``mu2``
-     - Reference allele frequency in group 2 (e.g., inhibitory neurons)
-   * - ``null_ll``
-     - Log-likelihood under null hypothesis (shared μ)
-   * - ``alt_ll``
-     - Log-likelihood under alternative hypothesis (separate μ values)
+     - Reference-allele frequency under H0 (pooled across groups)
+   * - ``mu1``, ``mu2``
+     - Per-group reference-allele frequencies
+   * - ``null_ll``, ``alt_ll``
+     - Log-likelihoods under H0 / H1
    * - ``pval``
-     - Likelihood ratio test p-value
+     - Likelihood-ratio-test p-value
    * - ``fdr_pval``
-     - FDR-corrected p-value (Benjamini-Hochberg)
+     - Benjamini–Hochberg adjusted p-value
 
-**Filtering significant results:**
+Interpretation: ``|mu1 - mu2| > 0.1`` is a meaningful difference in allele
+preference; ``fdr_pval < 0.05`` declares significance after multiple-testing
+correction.
 
-.. code-block:: bash
+Visualization
+-------------
 
-   # Significant differential imbalance (FDR < 0.05)
-   awk -F'\t' 'NR==1 || $9 < 0.05' ai_results_excitatory_neurons_inhibitory_neurons.tsv \
-     > significant_differential_AI.tsv
-
-   # Large effect size (>15% difference in allele frequency)
-   awk -F'\t' 'NR==1 || ($4 - $5 > 0.15 || $5 - $4 > 0.15)' significant_differential_AI.tsv \
-     > large_effect_differential_AI.tsv
-
-**Interpret μ values:**
-
-* ``mu < 0.5``: Alternate allele favored
-* ``mu > 0.5``: Reference allele favored
-* ``|mu1 - mu2| > 0.1``: Meaningful difference (~20% shift in allele preference)
-
-Tutorial 2: Sex Differences Analysis
-------------------------------------
-
-Identify regions with sex-biased allelic imbalance in chromatin accessibility.
-
-Step 1: Create Sex-Labeled Barcode Map
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+A minimal volcano plot:
 
 .. code-block:: python
 
    import pandas as pd
-   import scanpy as sc
-
-   # Load your annotated data
-   adata = sc.read_h5ad("processed_snATAC.h5ad")
-
-   # Create barcode-to-sex mapping
-   barcode_df = pd.DataFrame({
-       'barcode': adata.obs_names,
-       'sex': adata.obs['donor_sex']  # 'male' or 'female'
-   })
-
-   # Write without header
-   barcode_df.to_csv('barcode_sex_map.tsv', sep='\t', header=False, index=False)
-
-Step 2: Run Comparative Analysis
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: bash
-
-   wasp2-analyze compare-imbalance \
-     allele_counts.h5ad \
-     barcode_sex_map.tsv \
-     --sample SAMPLE_ID \
-     --groups "male,female" \
-     --phased \
-     --min 20 \
-     --out_file ai_results_sex_comparison.tsv
-
-Step 3: Identify Sex-Biased Regions
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: bash
-
-   # Extract significant sex differences
-   awk -F'\t' 'NR==1 || $9 < 0.01' ai_results_sex_comparison.tsv > sex_biased_regions.tsv
-
-   # Count by chromosome (expect enrichment on X)
-   cut -f1 sex_biased_regions.tsv | grep -E "^chr" | cut -d: -f1 | sort | uniq -c
-
-Tutorial 3: Treatment vs Control
---------------------------------
-
-Compare allelic imbalance before and after drug treatment.
-
-Step 1: Prepare Condition Labels
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: python
-
-   import pandas as pd
-
-   # Load metadata with treatment status
-   metadata = pd.read_csv("sample_metadata.csv")
-
-   # Create barcode-to-condition mapping
-   barcode_df = pd.DataFrame({
-       'barcode': metadata['cell_barcode'],
-       'condition': metadata['treatment_status']  # 'treated' or 'control'
-   })
-
-   barcode_df.to_csv('barcode_treatment_map.tsv', sep='\t', header=False, index=False)
-
-Step 2: Run Analysis
-~~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: bash
-
-   wasp2-analyze compare-imbalance \
-     allele_counts.h5ad \
-     barcode_treatment_map.tsv \
-     --sample SAMPLE_ID \
-     --groups "treated,control" \
-     --min 15 \
-     --out_file ai_results_treatment.tsv
-
-Step 3: Identify Treatment-Responsive Regions
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: python
-
-   import pandas as pd
-
-   # Load results
-   results = pd.read_csv('ai_results_treated_control.tsv', sep='\t')
-
-   # Significant treatment effects
-   significant = results[results['fdr_pval'] < 0.05]
-   print(f"Found {len(significant)} treatment-responsive regions")
-
-   # Direction of change
-   treatment_gain = significant[significant['mu1'] > significant['mu2'] + 0.1]
-   treatment_loss = significant[significant['mu2'] > significant['mu1'] + 0.1]
-
-   print(f"Regions with increased ref allele in treatment: {len(treatment_gain)}")
-   print(f"Regions with decreased ref allele in treatment: {len(treatment_loss)}")
-
-Visualization Examples
-----------------------
-
-Volcano Plot
-~~~~~~~~~~~~
-
-.. code-block:: python
-
-   import pandas as pd
-   import matplotlib.pyplot as plt
    import numpy as np
-
-   # Load results
-   results = pd.read_csv('ai_results_excitatory_neurons_inhibitory_neurons.tsv', sep='\t')
-
-   # Calculate effect size (difference in mu)
-   results['effect_size'] = results['mu1'] - results['mu2']
-   results['-log10_pval'] = -np.log10(results['pval'] + 1e-300)
-
-   # Create volcano plot
-   fig, ax = plt.subplots(figsize=(10, 8))
-
-   # Non-significant points
-   ns = results['fdr_pval'] >= 0.05
-   ax.scatter(results.loc[ns, 'effect_size'],
-              results.loc[ns, '-log10_pval'],
-              c='gray', alpha=0.5, s=10, label='Not significant')
-
-   # Significant points
-   sig = results['fdr_pval'] < 0.05
-   ax.scatter(results.loc[sig, 'effect_size'],
-              results.loc[sig, '-log10_pval'],
-              c='red', alpha=0.7, s=20, label='FDR < 0.05')
-
-   ax.axhline(-np.log10(0.05), color='black', linestyle='--', alpha=0.5)
-   ax.axvline(0, color='black', linestyle='-', alpha=0.3)
-
-   ax.set_xlabel('Effect Size (μ₁ - μ₂)', fontsize=12)
-   ax.set_ylabel('-log₁₀(p-value)', fontsize=12)
-   ax.set_title('Differential Allelic Imbalance:\nExcitatory vs Inhibitory Neurons', fontsize=14)
-   ax.legend()
-
-   plt.tight_layout()
-   plt.savefig('differential_AI_volcano.png', dpi=150)
-
-Heatmap of Top Hits
-~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: python
-
-   import pandas as pd
-   import seaborn as sns
    import matplotlib.pyplot as plt
 
-   # Load results from multiple comparisons
-   comparisons = [
-       ('excitatory', 'inhibitory'),
-       ('excitatory', 'astrocyte'),
-       ('inhibitory', 'astrocyte'),
-   ]
+   results = pd.read_csv('ai_results_excitatory_inhibitory.tsv', sep='\t')
+   results['effect'] = results['mu1'] - results['mu2']
+   results['neglog10p'] = -np.log10(results['pval'].clip(lower=1e-300))
 
-   # Collect mu values for top regions
-   all_results = {}
-   for g1, g2 in comparisons:
-       df = pd.read_csv(f'ai_results_{g1}_{g2}.tsv', sep='\t')
-       all_results[(g1, g2)] = df.set_index('region')
-
-   # Find regions significant in any comparison
-   sig_regions = set()
-   for df in all_results.values():
-       sig_regions.update(df[df['fdr_pval'] < 0.05].index[:20])  # Top 20 each
-
-   # Build heatmap matrix (mu values per cell type)
-   celltypes = ['excitatory', 'inhibitory', 'astrocyte']
-   heatmap_data = pd.DataFrame(index=list(sig_regions), columns=celltypes)
-
-   for region in sig_regions:
-       for g1, g2 in comparisons:
-           if region in all_results[(g1, g2)].index:
-               row = all_results[(g1, g2)].loc[region]
-               heatmap_data.loc[region, g1] = row['mu1']
-               heatmap_data.loc[region, g2] = row['mu2']
-
-   # Plot heatmap
-   fig, ax = plt.subplots(figsize=(8, 12))
-   sns.heatmap(heatmap_data.astype(float), cmap='RdBu_r', center=0.5,
-               vmin=0, vmax=1, ax=ax, cbar_kws={'label': 'Ref Allele Frequency (μ)'})
-   ax.set_title('Cell-Type-Specific Allelic Imbalance', fontsize=14)
+   fig, ax = plt.subplots(figsize=(8, 6))
+   sig = results['fdr_pval'] < 0.05
+   ax.scatter(results.loc[~sig, 'effect'], results.loc[~sig, 'neglog10p'],
+              c='lightgrey', s=8, label='FDR >= 0.05')
+   ax.scatter(results.loc[sig, 'effect'], results.loc[sig, 'neglog10p'],
+              c='crimson', s=14, label='FDR < 0.05')
+   ax.axhline(-np.log10(0.05), ls='--', c='black', alpha=0.4)
+   ax.axvline(0, ls='-', c='black', alpha=0.3)
+   ax.set(xlabel='mu1 - mu2', ylabel='-log10(p)',
+          title='Excitatory vs. inhibitory neurons')
+   ax.legend()
    plt.tight_layout()
-   plt.savefig('differential_AI_heatmap.png', dpi=150)
 
-Command-Line Reference
+For heatmaps across many cell types or overlap with eQTL/cis-QTL tables, see
+the :doc:`/user_guide/analysis` guide.
+
+Command-line reference
 ----------------------
 
-Full Parameter List
-~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: bash
-
-   wasp2-analyze compare-imbalance --help
+.. code-block:: text
 
    Usage: wasp2-analyze compare-imbalance [OPTIONS] ADATA BARCODE_MAP
 
-   Arguments:
      ADATA        AnnData file with allele counts (.h5ad)
      BARCODE_MAP  TSV file mapping barcodes to groups
 
-   Options:
-     --groups TEXT        Comma-separated groups to compare (default: all)
-     --min INTEGER        Minimum allele count per region per group (default: 10)
-     --pseudocount INT    Pseudocount for zero counts (default: 1)
+     --groups TEXT        Comma-separated groups (default: all pairwise)
+     --min INT            Minimum allele count per region per group [10]
+     --pseudocount INT    Pseudocount for zero counts [1]
      --sample TEXT        Sample name for genotype filtering
      --phased             Use phased genotype information
-     -z, --z_cutoff INT   Remove outlier SNPs above z-score threshold
-     --out_file TEXT      Output file path
+     -z, --z_cutoff INT   Z-score outlier filter
+     --out_file TEXT      Output path
 
-Best Practices
+Good practices
 --------------
 
-Data Quality
-~~~~~~~~~~~~
+- Run on WASP-filtered BAMs to remove mapping-bias artifacts
+  (:doc:`/methods/mapping_filter`).
+- Use ``--min 15`` or higher for robust estimates when per-group coverage
+  is moderate.
+- Apply ``-z 3`` to drop SNP outliers from CNVs or mapping artifacts.
+- Check that groups have comparable sequencing depth; very uneven depth can
+  produce false-positive differences.
+- Validate top hits in an independent cohort or with an orthogonal assay.
 
-* **Use WASP-filtered BAMs** to remove mapping bias artifacts
-* **Require sufficient counts** (``--min 15`` or higher for robust estimates)
-* **Apply z-score filtering** (``-z 3``) to remove outliers from CNVs or mapping artifacts
-
-Statistical Power
-~~~~~~~~~~~~~~~~~
-
-* **Merge similar groups** if individual populations have low cell counts
-* **Use phased genotypes** when available for improved power
-* **Focus on regions with multiple SNPs** for more reliable estimates
-
-Interpretation
-~~~~~~~~~~~~~~
-
-* **Biological replication** - Validate across independent samples
-* **Effect size matters** - Consider the absolute difference between μ₁ and μ₂ alongside p-values
-* **Integrate with eQTL data** - Connect to known regulatory variants
-* **Orthogonal validation** - Confirm top hits with targeted methods
-
-Common Issues
+Common issues
 -------------
 
-Low Power / Few Significant Results
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+**Few significant results.** Increase coverage, merge similar populations to
+increase per-group counts, or use phased genotypes if available.
 
-* Increase sequencing depth
-* Merge similar cell types to increase counts per group
-* Lower ``--min`` threshold (with caution)
-* Use phased genotypes if available
+**Too many significant results.** Check for batch effects between groups,
+confirm WASP filtering was applied, and use a stricter FDR threshold.
 
-Too Many Significant Results
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-* Check for batch effects between groups
-* Verify WASP filtering was applied
-* Use stricter FDR threshold (e.g., 0.01)
-* Check that groups have similar sequencing depth
-
-Memory Issues
-~~~~~~~~~~~~~
-
-Process chromosomes separately:
-
-.. code-block:: bash
-
-   for chr in chr{1..22}; do
-     wasp2-count count-variants-sc \
-       sample.bam variants.vcf.gz barcodes.tsv \
-       --region peaks_${chr}.bed \
-       --out_file counts_${chr}.h5ad
-
-     wasp2-analyze compare-imbalance \
-       counts_${chr}.h5ad \
-       barcode_celltype_map.tsv \
-       --out_file results_${chr}.tsv
-   done
+**Memory.** For large cohorts, process chromosomes separately and concatenate
+results.
 
 See Also
 --------
 
-* :doc:`/user_guide/analysis` - Statistical methods and parameters
-* :doc:`/user_guide/single_cell` - Single-cell data formats
-* :doc:`/tutorials/scrna_seq` - Basic scRNA-seq tutorial
+- :doc:`/user_guide/analysis` — analysis-CLI reference and parameters
+- :doc:`/user_guide/single_cell` — input data formats, barcode exports
+- :doc:`/tutorials/scrna_seq` — basic single-cell workflow
+- :doc:`/methods/statistical_models` — the LRT underlying this test
