@@ -69,7 +69,7 @@ FROM python:3.11-slim-bookworm
 
 # Version: keep in sync with rust/Cargo.toml (single source of truth)
 # Run scripts/check-version-consistency.sh to verify
-ARG VERSION=1.4.0
+ARG VERSION=1.4.1
 
 LABEL org.opencontainers.image.source="https://github.com/mcvickerlab/WASP2"
 LABEL org.opencontainers.image.description="WASP2: Allele-specific analysis of NGS data with Rust acceleration"
