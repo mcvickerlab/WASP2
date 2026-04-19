@@ -1,272 +1,124 @@
 Development Guide
 =================
 
-Contributing to WASP2
----------------------
+Contributions are welcome. This page covers the WASP2-specific bits; for
+generic Python tooling (pytest, black, pre-commit) refer to each project's
+own docs.
 
-We welcome contributions! This guide helps you get started.
-
-Development Setup
------------------
-
-Clone Repository
-~~~~~~~~~~~~~~~~
+Setup
+-----
 
 .. code-block:: bash
 
    git clone https://github.com/mcvickerlab/WASP2
-   cd WASP2-exp
-
-Install Development Dependencies
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: bash
-
+   cd WASP2
    pip install -e ".[dev]"
-
-This installs:
-* pytest (testing)
-* mypy (type checking)
-* black (code formatting)
-* flake8 (linting)
-* pre-commit (git hooks)
-
-Install Pre-commit Hooks
-~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: bash
-
    pre-commit install
 
-Hooks run automatically before each commit:
-* Black formatting
-* Flake8 linting
-* mypy type checking
-* Quick tests
+The ``[dev]`` extra pulls in pytest, mypy, black, flake8, pre-commit, and
+Sphinx. Pre-commit runs formatting + linting + mypy + a quick test subset
+on every commit.
 
-Code Standards
+Code standards
 --------------
 
-Type Hints
-~~~~~~~~~~
-
-WASP2 has 100% type hint coverage. All new code must include type hints:
-
-.. code-block:: python
-
-   def count_alleles(
-       bam_file: str,
-       vcf_file: str,
-       min_count: int = 10
-   ) -> pd.DataFrame:
-       """Count alleles from BAM file."""
-       ...
-
-Formatting
-~~~~~~~~~~
-
-Use Black with 100-character lines:
+- **Type hints are required** on new public API. WASP2 maintains full
+  mypy coverage on ``src/counting``, ``src/mapping``, and ``src/analysis``.
+- **Line length 100**, enforced by black.
+- **Ruff** runs as the primary lint tool; flake8 is retained for
+  docstring-specific rules.
+- **Tests** live in ``tests/``. All new features need a test. Maintain
+  ≥80% line coverage.
 
 .. code-block:: bash
 
-   black src/ --line-length=100
-
-Linting
-~~~~~~~
-
-Pass Flake8 checks:
-
-.. code-block:: bash
-
-   flake8 src/ --max-line-length=100
-
-Testing
--------
-
-Run Tests Locally
-~~~~~~~~~~~~~~~~~
-
-.. code-block:: bash
-
-   # All tests
-   pytest tests/ -v
-
-   # Fast tests only (skip slow integration tests)
-   pytest tests/ -v -m "not slow"
-
-   # With coverage
-   pytest tests/ --cov=src --cov-report=html
-
-Test Requirements
-~~~~~~~~~~~~~~~~~
-
-* All new features need tests
-* Maintain >80% code coverage
-* Tests must pass in CI before merge
-
-Type Checking
--------------
-
-Run mypy:
-
-.. code-block:: bash
+   pytest tests/ -v                  # full suite
+   pytest tests/ -v -m "not slow"    # fast subset
+   pytest tests/ --cov=src           # coverage
 
    mypy src/counting/ src/mapping/ src/analysis/
 
-All code must pass mypy with 0 errors.
+Branching
+---------
 
-CI/CD Pipeline
+- ``master`` is the release branch. Tagged versions (e.g., ``v1.4.1``)
+  trigger PyPI + Docker publish via GitHub Actions.
+- ``dev`` is the integration branch. Feature PRs target ``dev``, not
+  ``master``.
+- Use short, kebab-case feature branches off ``dev``: ``feat/...``,
+  ``fix/...``, ``docs/...``.
+- After a batch of features merges to ``dev``, a ``dev → master`` PR
+  promotes them; CI runs on both sides of that merge.
+
+Pull requests
+-------------
+
+1. Branch off ``dev``.
+2. Commit changes with descriptive messages; the squash-merge commit on
+   ``dev`` is what ends up in the changelog, so the PR title and body
+   should be clean.
+3. CI must be green: ruff + Rust tests + pytest (Python 3.10 / 3.11 /
+   3.12) + CodeQL.
+4. Code review looks at correctness, type safety, test coverage, docs,
+   and API surface.
+
+Rust layer
+----------
+
+The ``wasp2_rust`` extension is built with maturin against Python 3.10+.
+
+.. code-block:: bash
+
+   cd rust/
+   cargo fmt --check
+   cargo clippy -- -D warnings
+   cargo test
+   maturin develop --release --manifest-path Cargo.toml
+
+Changes to Rust code must keep the parity test
+(``tests/test_rust_python_counting_parity.py``) green — the Rust counter
+must produce byte-identical output to the Python reference implementation
+on the shared chr21 fixture.
+
+Project layout
 --------------
-
-GitHub Actions
-~~~~~~~~~~~~~~
-
-Tests run automatically on every push:
-* Python 3.10 and 3.11
-* Type checking (mypy)
-* Unit tests (pytest)
-* Full pipeline validation
-* Documentation build
-
-CI must pass before PR can be merged.
-
-Pre-commit Hooks
-~~~~~~~~~~~~~~~~
-
-Local checks before commit:
-* Code formatting
-* Type checking
-* Quick tests
-
-To bypass (not recommended):
-
-.. code-block:: bash
-
-   git commit --no-verify
-
-Pull Request Process
---------------------
-
-1. Fork & Branch
-~~~~~~~~~~~~~~~~
-
-.. code-block:: bash
-
-   git checkout -b feature/my-feature
-
-2. Develop & Test
-~~~~~~~~~~~~~~~~~
-
-.. code-block:: bash
-
-   # Make changes
-   vim src/analysis/my_feature.py
-
-   # Add type hints
-   # Write tests
-   # Run locally
-   pytest tests/ -v
-   mypy src/
-
-3. Commit
-~~~~~~~~~
-
-.. code-block:: bash
-
-   git add src/analysis/my_feature.py tests/test_my_feature.py
-   git commit -m "Add my feature"
-
-   # Pre-commit hooks run automatically
-
-4. Push & PR
-~~~~~~~~~~~~
-
-.. code-block:: bash
-
-   git push origin feature/my-feature
-
-   # Open PR on GitHub
-   # CI will run automatically
-   # Request review
-
-Code Review
------------
-
-PRs are reviewed for:
-* Correctness
-* Type safety
-* Test coverage
-* Documentation
-* Code style
-
-Project Structure
------------------
 
 .. code-block:: text
 
-   WASP2-exp/
+   WASP2/
    ├── src/
-   │   ├── counting/       # Allele counting
-   │   ├── mapping/        # WASP remapping
-   │   └── analysis/       # Statistical analysis
-   ├── tests/
-   │   └── regression/     # Regression tests
-   ├── docs/               # Sphinx documentation
-   ├── scripts/            # Utility scripts
-   ├── baselines/          # Test baselines
-   └── test_data/          # Example data
+   │   ├── counting/     # allele counting (Python + Rust bridge)
+   │   ├── mapping/      # WASP remap-and-filter
+   │   └── analysis/     # beta-binomial LRT, FDR
+   ├── rust/             # Rust extension (bam filter, counter)
+   ├── tests/            # pytest + regression
+   ├── docs/             # Sphinx source
+   └── pipelines/        # Nextflow DSL2 workflows
 
-Building Documentation
-----------------------
+Docs
+----
 
 .. code-block:: bash
 
-   cd docs
-   make html
-   open build/html/index.html
+   cd docs && make html
 
-Documentation must build without warnings.
+The live site is built and deployed by GitHub Pages on every push to
+``master``. Docs must build without warnings; cross-references are
+checked by ``sphinx-build -n`` in CI.
 
-Release Process
----------------
+Releases
+--------
 
-1. Update version in ``pyproject.toml``
-2. Update ``docs/source/changelog.rst``
-3. Merge to main
-4. Tag release: ``git tag v1.1.0``
-5. Push tag: ``git push origin v1.1.0``
-6. Publish to PyPI: ``python -m build && twine upload dist/*``
+1. Update ``pyproject.toml`` and ``rust/Cargo.toml`` versions (they share
+   one source of truth — ``pyproject.toml`` reads from Cargo).
+2. Update ``CHANGELOG.md``.
+3. Merge ``dev → master``.
+4. Tag: ``git tag vX.Y.Z && git push origin vX.Y.Z``.
+5. The ``release.yml`` workflow builds wheels and publishes to PyPI via
+   OIDC trusted publishing; ``docker.yml`` publishes the ghcr.io image.
 
-AI-Assisted Development
------------------------
-
-WASP2 pipeline development benefits from AI tooling. See the full integration guide:
-:doc:`/seqera_ai_integration`
-
-Recommended Workflow
-~~~~~~~~~~~~~~~~~~~~
-
-1. **Design**: Use Claude Code for architecture and complex logic
-2. **Generate**: Use Seqera AI for DSL2 syntax and nf-test templates
-3. **Validate**: Use Anthropic life-sciences scripts for environment checks
-4. **Review**: Use Claude Code for code review and optimization
-
-Tool Selection
-~~~~~~~~~~~~~~
-
-* **Architecture and design** → Claude Code
-* **Nextflow DSL2 syntax** → Seqera AI
-* **nf-test generation** → Seqera AI
-* **Environment validation** → ``nextflow run . -profile test -preview``
-
-Getting Help
+Getting help
 ------------
 
-* **Issues**: https://github.com/mcvickerlab/WASP2/issues
-* **Discussions**: GitHub Discussions
-* **Email**: Contact maintainers
-
-License
--------
-
-WASP2 is released under the MIT License. See LICENSE file.
+- Issues and feature requests: https://github.com/mcvickerlab/WASP2/issues
+- Discussions: GitHub Discussions
