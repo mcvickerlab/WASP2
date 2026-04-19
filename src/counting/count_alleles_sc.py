@@ -108,10 +108,8 @@ def make_count_matrix(
         AnnData object with count matrices in layers (ref, alt, other).
     """
     chrom_list = df.get_column("chrom").unique(maintain_order=True)
-    # chrom_list = chrom_list[:3] # Testing purposes
 
     # Add genotypes annotations
-    # Maybe do this automatically and parse feature col instead?
     snp_df_cols = ["chrom", "pos", "ref", "alt"]
     if include_samples is not None:
         sample_cols = list(include_samples)
@@ -121,7 +119,6 @@ def make_count_matrix(
             df = df.with_columns(pl.col("GT").alias(sample_name))
         snp_df_cols.extend(sample_cols)
 
-    # Might be more memory efficient to use pandas index instead...
     snp_df = df.select(snp_df_cols).unique(maintain_order=True).with_row_index()
 
     sc_counts = CountStatsSC()  # Class that holds total count data
@@ -152,7 +149,6 @@ def make_count_matrix(
                 )
 
     # Create sparse matrices
-    # sparse array is recommended...but doesnt work with adata
     matrix_shape = (snp_df.shape[0], len(bc_dict))
     sparse_ref = _sparse_from_counts(sc_counts.ref_count, matrix_shape)
     sparse_alt = _sparse_from_counts(sc_counts.alt_count, matrix_shape)
@@ -164,8 +160,7 @@ def make_count_matrix(
         layers={"ref": sparse_ref, "alt": sparse_alt, "other": sparse_other},
     )
 
-    # Annotate adata: Figure out what to add to adata here vs later
-    adata.obs = snp_df.to_pandas()  # Maybe just switch to pandas? Should i set no copy?
+    adata.obs = snp_df.to_pandas()
     adata.obs["ref_count"] = adata.layers["ref"].sum(axis=1, dtype=np.uint16).T.A1
     adata.obs["alt_count"] = adata.layers["alt"].sum(axis=1, dtype=np.uint16).T.A1
 

@@ -105,8 +105,6 @@ def gtf_to_bed(
         .select(["seqname", "start", "end", attribute])
     )
 
-    # TODO Extra validation and may want to return some data?
-
     # Write to BED
     df.write_csv(out_bed, separator="\t", include_header=False)
 
@@ -129,7 +127,6 @@ def intersect_vcf_region(
     out_file : str | Path
         Output intersection file path.
     """
-    # Parse region file before or after???
     intersect_cmd = ["bedtools", "intersect", "-a", str(vcf_file), "-b", str(region_file), "-wb"]
 
     # write intersect out

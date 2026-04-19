@@ -58,7 +58,6 @@ def adata_count_qc(
 
         adata.obs["index"] = adata.obs.index  # Replace index column
 
-    # TODO add options to identify and filter GT errors
     if gt_error is not None:
         pass
 
@@ -175,9 +174,6 @@ def get_imbalance_sc(
 
         df_dict[group_name] = df
 
-    # Should I return something?
-    # Maybe compile all of the dataframes?
-
     return df_dict
 
 
@@ -281,7 +277,6 @@ def get_imbalance_per_group(
         group_results.append((region, snp_count, mu, null_ll, alt_ll, pval))
 
     # Create allelic imbalance df
-    # Polars vs pandas??
     df: pd.DataFrame = pd.DataFrame(
         group_results, columns=["region", "num_snps", "mu", "null_ll", "alt_ll", "pval"]
     )

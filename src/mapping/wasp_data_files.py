@@ -55,14 +55,11 @@ class WaspDataFiles:
 
             else:
                 self.samples = [s.strip() for s in self.samples.split(",")]
-                # self.samples = self.samples.split(",") # should i strip spaces?
 
         # At this point, self.samples is normalized to Optional[List[str]]
 
         # Check if variant file is phased (only works for VCF/BCF, not PGEN)
         if self.is_phased is None and self.samples is not None:
-            # TODO GOTTA FIX THIS TO CHECK IF PHASED
-            # Note: This only works for VCF/BCF files, PGEN doesn't store phase in the same way
             variant_path = Path(self.variant_file)
             suffix = variant_path.suffix.lower()
             if suffix in (".vcf", ".bcf") or str(variant_path).lower().endswith(".vcf.gz"):
@@ -79,23 +76,18 @@ class WaspDataFiles:
                     if n_checked > 0 and n_phased > n_checked // 2:
                         self.is_phased = True
                     else:
-                        # TODO GOTTA WARN UNPHASED BAD
-                        # TODO WARN SOME UNPHASED WHILE OTHERS PHASED
                         self.is_phased = False
             else:
                 # PGEN format - assume phased (user should specify if not)
                 self.is_phased = True
 
         if self.out_dir is None:
-            self.out_dir = Path(bam_file).parent  # change to cwd?
+            self.out_dir = Path(bam_file).parent
 
-        # TODO handle temp loc, maybe make default if temp not made?
-        # Temporary workaround until figure out temp dir options
         if self.temp_loc is None:
             self.temp_loc = self.out_dir
 
         # Generate intermediate files
-        # Maybe use easy defalt names if temp loc in use
 
         # Handle different variant file extensions for prefix extraction
         variant_name = Path(self.variant_file).name

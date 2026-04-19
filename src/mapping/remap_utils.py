@@ -36,7 +36,6 @@ def paired_read_gen_stat(
     read_dict = {}
     discard_set = set()
 
-    # DO I need multiple iterators???
     for read in bam.fetch(chrom, multiple_iterators=False):
         if not read.is_proper_pair:
             discard_set.add(read.query_name)

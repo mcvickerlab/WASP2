@@ -217,9 +217,6 @@ def make_intersect_df(
 
     df = df.with_columns(expr_list).unnest([*samples, "read"]).with_columns(cast_list)
 
-    # should i remove instead of keep first?
-    df = df.unique(
-        ["chrom", "read", "mate", "start", "stop"], keep="first"
-    )  # Doesnt remove dup snp in pair?
+    df = df.unique(["chrom", "read", "mate", "start", "stop"], keep="first")
 
     return df.collect()

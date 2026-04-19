@@ -23,7 +23,6 @@ def run_ai_comparison(
     out_file: str | Path | None = None,
     z_cutoff: float | None = None,
 ) -> None:
-    # Might be smart to change some of the defaults in the class
     # Create data class that holds input data
     ai_files: WaspAnalysisSC = WaspAnalysisSC(
         adata_file=count_file,
