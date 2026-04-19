@@ -14,11 +14,11 @@ WASP2 supports four major data types. Use this guide to find your workflow.
    * - **Bulk RNA-seq**
      - BAM + phased VCF
      - Allele-specific expression (ASE)
-     - :doc:`tutorials/rna_seq`
+     - :doc:`tutorials/bulk_workflow`
    * - **Bulk ATAC-seq**
      - BAM + phased VCF
      - Allele-specific chromatin accessibility
-     - :doc:`tutorials/atac_seq_workflow`
+     - :doc:`tutorials/bulk_workflow`
    * - **scRNA-seq (10x)**
      - Cell Ranger BAM + VCF + barcodes
      - Per-cell or per-cell-type ASE
@@ -38,15 +38,14 @@ Decision Flowchart
 
 **Step 2: Bulk or single-cell RNA-seq?**
 
-* Bulk RNA-seq → :doc:`tutorials/rna_seq`
+* Bulk RNA-seq → :doc:`tutorials/bulk_workflow`
 * 10x Chromium scRNA-seq → :doc:`tutorials/scrna_seq`
 * Other single-cell protocol → see :doc:`user_guide/single_cell`
 
 **Step 3: Bulk or single-cell ATAC-seq?**
 
-* Bulk ATAC-seq → :doc:`tutorials/atac_seq_workflow`
-* 10x scATAC-seq (fragments file) → :doc:`tutorials/scatac_workflow`
-* 10x scATAC-seq (BAM with CB tag) → :doc:`tutorials/scatac_workflow` (BAM path)
+* Bulk ATAC-seq → :doc:`tutorials/bulk_workflow` (use BED peak file as ``--region``)
+* 10x scATAC-seq → :doc:`tutorials/scatac_workflow`
 
 Do I Need to Run the WASP Remapping Step?
 ------------------------------------------
