@@ -179,9 +179,10 @@ Run full pipeline with GM12878 scATAC-seq data:
 nextflow run . -profile test_real,singularity
 ```
 
-Test data locations:
-- **BAM**: `/iblm/netapp/data3/aho/project_data/wasp2/10x_cellranger_atac/gm12878_el4/`
-- **VCF**: `/iblm/netapp/data1/aho/variants/NA12878.vcf.gz`
+Test data locations are configurable via Nextflow params (`--vcf`, `--input`)
+or through environment variables consumed by `conf/test_real.config` and
+`conf/test_full.config`. The reference runs use GM12878 scATAC-seq
+(10x Genomics) with a matched NA12878 phased VCF; adapt to local paths.
 
 ## Output
 

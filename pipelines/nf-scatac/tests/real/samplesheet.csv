@@ -1,2 +1,5 @@
 sample,fragments,cellranger_dir
-GM12878,/iblm/netapp/data3/aho/project_data/wasp2/10x_cellranger_atac/gm12878_el4/outs/fragments.tsv.gz,/iblm/netapp/data3/aho/project_data/wasp2/10x_cellranger_atac/gm12878_el4
+# Replace the two paths below with absolute paths to your local
+# GM12878 (or matched) 10x scATAC-seq fragments.tsv.gz and the
+# Cell Ranger outs/ directory for that sample.
+GM12878,/path/to/gm12878/outs/fragments.tsv.gz,/path/to/gm12878

@@ -1,7 +1,7 @@
 STAR version=2.7.11b
 STAR compilation time,server,dir=2024-01-29T15:15:38+0000 :/opt/conda/conda-bld/star_1706541070242/work/source
 ##### Command Line:
-/iblm/netapp/home/jjaureguy/mambaforge/envs/WASP2_dev2/bin/STAR-avx2 --runMode genomeGenerate --genomeDir star_index --genomeFastaFiles chr_test.fa --genomeSAindexNbases 6 --runThreadN 2 --outFileNamePrefix star_index/
+STAR-avx2 --runMode genomeGenerate --genomeDir star_index --genomeFastaFiles chr_test.fa --genomeSAindexNbases 6 --runThreadN 2 --outFileNamePrefix star_index/
 ##### Initial USER parameters from Command Line:
 outFileNamePrefix                 star_index/
 ###### All USER parameters from Command Line:
@@ -23,7 +23,7 @@ outFileNamePrefix                 star_index/
 
 -------------------------------
 ##### Final effective command line:
-/iblm/netapp/home/jjaureguy/mambaforge/envs/WASP2_dev2/bin/STAR-avx2   --runMode genomeGenerate      --runThreadN 2   --genomeDir star_index   --genomeFastaFiles chr_test.fa      --genomeSAindexNbases 6   --outFileNamePrefix star_index/
+STAR-avx2   --runMode genomeGenerate      --runThreadN 2   --genomeDir star_index   --genomeFastaFiles chr_test.fa      --genomeSAindexNbases 6   --outFileNamePrefix star_index/
 ----------------------------------------
 
 Number of fastq files for each mate = 1

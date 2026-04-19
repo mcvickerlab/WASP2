@@ -2,26 +2,29 @@
 #
 # Create chr21 sanity test data from HG00731 RNA-seq data.
 #
-# This script extracts chr21 subset from the existing HG00731 benchmark data
+# This script extracts chr21 subset from existing HG00731 benchmark data
 # and generates expected outputs by running the WASP2 pipeline.
 #
 # Usage:
+#   export WASP2_HG00731_SRC=/path/to/hg00731/data
 #   ./scripts/create_sanity_data.sh [OUTPUT_DIR]
 #
 # Requirements:
 #   - samtools
 #   - bcftools (with tabix)
 #   - WASP2 environment activated
-#
-# Source data:
-#   /iblm/netapp/data3/jjaureguy/gvl_files/wasp2/WASP2_extensive_evaluation/
-#   WASP2_current/cvpc/WASP2-exp/paper/figure2/data/hg00731/
+#   - WASP2_HG00731_SRC env var pointing at directory containing
+#     original.bam and HG00731_het_only_chr.vcf.v4.2.gz
 
 set -euo pipefail
 
 # Configuration
-SRC_DIR="/iblm/netapp/data3/jjaureguy/gvl_files/wasp2/WASP2_extensive_evaluation/WASP2_current/cvpc/WASP2-exp/paper/figure2/data/hg00731"
-OUT_DIR="${1:-/iblm/netapp/data3/jjaureguy/gvl_files/wasp2/WASP2_extensive_evaluation/WASP2_current/cvpc/WASP2-exp/benchmarking/sanity_test}"
+SRC_DIR="${WASP2_HG00731_SRC:-}"
+if [[ -z "${SRC_DIR}" ]]; then
+    echo "Error: set WASP2_HG00731_SRC to the HG00731 benchmark data dir" >&2
+    exit 1
+fi
+OUT_DIR="${1:-${WASP2_SANITY_DATA_DIR:-$(pwd)/benchmarking/sanity_test}}"
 VERSION="v1"
 CHROMOSOME="chr21"
 
