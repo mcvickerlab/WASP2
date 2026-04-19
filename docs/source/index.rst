@@ -71,7 +71,6 @@ Documentation
 
    tutorials/bulk_workflow
    tutorials/single_cell_workflow
-   tutorials/comparative_imbalance
 
 .. toctree::
    :maxdepth: 2

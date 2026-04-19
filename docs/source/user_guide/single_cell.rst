@@ -373,7 +373,6 @@ the specified groups, using a likelihood ratio test with FDR correction.
 
 For comprehensive coverage of comparative analysis, see:
 
-* :doc:`/tutorials/comparative_imbalance` - Detailed comparative analysis tutorial
 * :doc:`analysis` - Statistical methods for comparative imbalance
 
 See Also
