@@ -155,12 +155,9 @@ def make_count_df(bam_file: str, df: pl.DataFrame, use_rust: bool = True) -> pl.
         orient="row",
     )
 
-    # possibly find better solution
     df = df.with_columns([pl.col("chrom").cast(chrom_enum)]).join(
         count_df, on=["chrom", "pos"], how="left"
     )
-
-    # df = df.join(count_df, on=["chrom", "pos"], how="left")
 
     return df
 

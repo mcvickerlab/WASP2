@@ -19,7 +19,6 @@ from .as_analysis import clamp_rho, opt_phased_new, opt_prob, opt_unphased_dp
 logger = logging.getLogger(__name__)
 
 
-# Use these functions to figure out how to optimize per group
 def get_imbalance_func(
     ref_count: NDArray[np.integer[Any]],
     n_count: NDArray[np.integer[Any]],
@@ -105,7 +104,6 @@ def get_compared_imbalance(
     if sample is None:
         phased = False
 
-    # Should I be comparing all combos by default??? Seems like a lot
     if groups is None:
         groups = list(adata.var["group"].dropna().unique())
         logger.info("Comparing all combinations of available groups")
@@ -154,14 +152,12 @@ def get_compared_imbalance(
 
     # process counts on a per group basis to avoid recalculating
     group_dict: dict[str, Any] = {}
-    # group_data = namedtuple("group_data", ["ref_counts", "n_counts", "phase_data", "region_snp_dict"]) # Maybe include the gt_array instead of min_idx
     group_data = namedtuple("group_data", ["ref_counts", "n_counts", "region_snp_df"])
 
     for group_name in groups:
         # Subset by group
         adata_sub = adata[:, adata.var["group"] == group_name]
 
-        # Create count data per group, should i do pseudocount now or later?
         ref_counts_group = adata_sub.layers["ref"].sum(axis=1, dtype=np.uint16).T.A1 + pseudocount
         alt_counts_group = adata_sub.layers["alt"].sum(axis=1, dtype=np.uint16).T.A1 + pseudocount
         n_counts_group = ref_counts_group + alt_counts_group
@@ -239,7 +235,6 @@ def get_compared_imbalance(
 
             continue
 
-        # This sub function name kinda long...find better name maybe?
         df = compare_imbalance_between_groups(
             disp, ref_counts1, n_counts1, ref_counts2, n_counts2, region_snp_dict, gt_array
         )
@@ -368,7 +363,6 @@ def compare_imbalance_between_groups(
 
         # Add data to output list
 
-        # How should i format this, lots of possible outputs
         group_results.append(
             (region, len(snp_list), combined_mu, alt_mu1, alt_mu2, null_ll, alt_ll, pval)
         )
@@ -412,7 +406,6 @@ def get_compared_imbalance_diff_snps(
     if sample is None:
         phased = False
 
-    # Should I be comparing all combos by default??? Seems like a lot
     if groups is None:
         groups = list(adata.var["group"].dropna().unique())
         logger.info("Comparing all combinations of available groups")
@@ -469,13 +462,12 @@ def get_compared_imbalance_diff_snps(
     group_dict: dict[str, Any] = {}
     group_data = namedtuple(
         "group_data", ["ref_counts", "n_counts", "phase_data", "region_snp_dict"]
-    )  # Maybe include the gt_array instead of min_idx
+    )
 
     for group_name in groups:
         # Subset by group
         adata_sub = adata[:, adata.var["group"] == group_name]
 
-        # Create count data per group, should i do pseudocount now or later?
         ref_counts_group = adata_sub.layers["ref"].sum(axis=1, dtype=np.uint16).T.A1 + pseudocount
         alt_counts_group = adata_sub.layers["alt"].sum(axis=1, dtype=np.uint16).T.A1 + pseudocount
         n_counts_group = ref_counts_group + alt_counts_group
@@ -519,8 +511,6 @@ def get_compared_imbalance_diff_snps(
 
     df_dict: dict[tuple[str, str], pd.DataFrame] = {}
     for group1, group2 in group_combos:
-        # Might be smart to create a cache to prevent repeating calculations
-        # This sub function name kinda long...find better name maybe?
         df = compare_imbalance_between_groups_diff_snps(
             disp, *group_dict[group1], *group_dict[group2]
         )
@@ -632,7 +622,6 @@ def compare_imbalance_between_groups_diff_snps(
 
         # Add data to output list
 
-        # How should i format this, lots of possible outputs
         group_results.append(
             (
                 region,

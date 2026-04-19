@@ -43,12 +43,10 @@ class WaspCountSC:
         out_file: str | None = None,
         temp_loc: str | None = None,
     ) -> None:
-        # TODO: ALSO ACCEPT .h5
-
         # User input files
         self.bam_file = bam_file
         self.variant_file = variant_file
-        self.barcode_file = barcode_file  # Maybe could be optional?
+        self.barcode_file = barcode_file
 
         self.feature_file = feature_file
         self.use_region_names = use_region_names
@@ -89,7 +87,7 @@ class WaspCountSC:
         self.vcf_bed = str(Path(self.temp_loc) / f"{variant_prefix}.bed")
 
         # Parse feature file
-        self.feature_type = None  # maybe use a boolean flag instead
+        self.feature_type = None
 
         if self.feature_file is not None:
             f_ext = "".join(Path(self.feature_file).suffixes)
@@ -158,7 +156,6 @@ def run_count_variants_sc(
     )
 
     # Create intermediary files
-    # Maybe change include_gt based on preparse?
     vcf_to_bed(
         vcf_file=count_files.variant_file,
         out_bed=count_files.vcf_bed,
@@ -191,7 +188,6 @@ def run_count_variants_sc(
         ad.AnnData().write_h5ad(count_files.out_file)
         return
 
-    # TODO: handle case where barcode file contains multiple columns
     with open(count_files.barcode_file) as file:
         bc_dict = {line.rstrip(): i for i, line in enumerate(file)}
 
@@ -205,4 +201,3 @@ def run_count_variants_sc(
 
     # Write outputs
     adata.write_h5ad(count_files.out_file)
-    # TODO: include output options, (ie MTX, dense?)

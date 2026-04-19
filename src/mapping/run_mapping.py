@@ -282,8 +282,6 @@ def run_make_remap_reads(
         temp_loc=temp_loc,
     )
 
-    # print(*vars(wasp_files).items(), sep="\n")
-
     # Create Checks for not integrated options
     if not wasp_files.is_paired:
         raise ValueError("Single-End not Implemented")
@@ -300,7 +298,6 @@ def run_make_remap_reads(
     assert isinstance(wasp_files.samples, list), "samples should be normalized to list"
     assert wasp_files.remap_fq2 is not None, "remap_fq2 should be set when is_paired is True"
 
-    # Should I create cache that checks for premade files??
     Path(str(wasp_files.out_dir)).mkdir(parents=True, exist_ok=True)
 
     # Create Intermediary Files
@@ -329,10 +326,6 @@ def run_make_remap_reads(
         num_samples=len(wasp_files.samples),
     )
 
-    # print("INTERSECTION COMPLETE")
-
-    # If a tempdir already exists??
-
     # Create remap fq
     write_remap_bam(
         wasp_files.to_remap_bam,
@@ -345,10 +338,7 @@ def run_make_remap_reads(
         max_seqs=max_seqs,
     )
 
-    # print("WROTE READS TO BE REMAPPED")
-
     wasp_files.write_data(out_file=out_json)  # export json
-    # print(f"File Data written to JSON...\n{out_json}")
 
 
 # Decorator and Parser for post remap filtering
