@@ -110,7 +110,7 @@ Step 3 — Test for allelic imbalance
 
 The beta-binomial LRT tests :math:`\mu = 0.5` against :math:`\mu \neq 0.5`
 per region, correcting for overdispersion and multiple testing via
-Benjamini–Hochberg (:doc:`/methods/statistical_models`).
+Benjamini–Hochberg (:doc:`/user_guide/analysis`).
 
 ``--phased`` applies only when the VCF GT field uses ``0|1`` / ``1|0``; pass
 it off for unphased data.
@@ -168,5 +168,5 @@ See Also
 - :doc:`/user_guide/counting` — counting CLI reference
 - :doc:`/user_guide/analysis` — analysis CLI reference
 - :doc:`/methods/mapping_filter` — canonical WASP filter contract
-- :doc:`/methods/statistical_models` — the LRT and beta-binomial model
+- :doc:`/user_guide/analysis` — analysis CLI + defaults + contracts
 - :doc:`/tutorials/single_cell_workflow` — single-cell RNA-seq / ATAC-seq

@@ -117,7 +117,7 @@ calibrated for the overdispersion typical of RNA-seq count data.
 
 The standard threshold is FDR < 0.05. For discovery analyses you may want
 FDR < 0.1. For validation or follow-up experiments, consider FDR < 0.01.
-See :doc:`methods/statistical_models` for the BH procedure and the NaN-propagation warning.
+See :doc:`user_guide/analysis` for the BH procedure and the NaN-propagation warning.
 
 **My output has very few significant sites. What's wrong?**
 
