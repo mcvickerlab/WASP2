@@ -102,7 +102,7 @@ Any aligner that produces CB-tagged BAMs will work (STARsolo, Alevin-fry, etc.).
 
 Run WASP2 on the full BAM to get per-cell allele counts, then use the output
 with your cell type annotations in Python (AnnData/Scanpy) to aggregate by
-cell type. See :doc:`tutorials/scrna_seq` for an example.
+cell type. See :doc:`tutorials/single_cell_workflow` for an example.
 
 Output and Results
 ------------------

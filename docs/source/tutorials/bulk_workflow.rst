@@ -170,6 +170,5 @@ See Also
 - :doc:`/user_guide/analysis` — analysis CLI reference
 - :doc:`/methods/mapping_filter` — canonical WASP filter contract
 - :doc:`/methods/statistical_models` — the LRT and beta-binomial model
-- :doc:`/tutorials/scatac_workflow` — single-cell ATAC-seq
-- :doc:`/tutorials/scrna_seq` — single-cell RNA-seq
+- :doc:`/tutorials/single_cell_workflow` — single-cell RNA-seq / ATAC-seq
 - :doc:`/tutorials/comparative_imbalance` — comparing groups
