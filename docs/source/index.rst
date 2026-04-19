@@ -77,12 +77,8 @@ Documentation
    :maxdepth: 2
    :caption: Statistical Methods
 
-   methods/index
-   methods/counting_algorithm
    methods/mapping_filter
    methods/statistical_models
-   methods/dispersion_estimation
-   methods/fdr_correction
 
 .. toctree::
    :maxdepth: 2
