@@ -238,11 +238,7 @@ impl BamCounter {
                     continue;
                 }
             };
-            if record.is_unmapped()
-                || record.is_secondary()
-                || record.is_supplementary()
-                || record.is_duplicate()
-            {
+            if record.is_unmapped() {
                 continue;
             }
             let qname = record.qname().to_vec();

@@ -223,11 +223,7 @@ pub fn filter_bam_wasp(
             Ok(r) => r,
             Err(_) => continue,
         };
-        if rec.is_unmapped()
-            || !rec.is_proper_pair()
-            || rec.is_secondary()
-            || rec.is_supplementary()
-        {
+        if rec.is_unmapped() {
             continue;
         }
 
