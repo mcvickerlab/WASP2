@@ -160,5 +160,5 @@ See Also
 
 - :doc:`/user_guide/single_cell` — barcode format, Seurat/Scanpy export
 - :doc:`/user_guide/analysis` — analysis CLI reference
-- :doc:`/methods/statistical_models` — beta-binomial LRT
+- :doc:`/methods/mapping_filter` — canonical WASP filter contract
 - :doc:`bulk_workflow` — sibling tutorial for bulk RNA-seq / ATAC-seq

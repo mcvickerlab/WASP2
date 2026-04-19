@@ -320,7 +320,7 @@ The typical WASP2 workflow:
 See Also
 --------
 
-- :doc:`statistical_models` — beta-binomial LRT and FDR applied to the counts
+- :doc:`/user_guide/analysis` — beta-binomial LRT + FDR CLI and defaults
 
 References
 ----------
