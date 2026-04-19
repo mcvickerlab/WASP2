@@ -1,57 +1,56 @@
-Beta-Binomial Model for Allelic Imbalance
-==========================================
+Statistical Model
+=================
 
-WASP2 detects allelic imbalance via a beta-binomial likelihood-ratio test.
-The beta-binomial accommodates overdispersion from biological variation,
-PCR amplification, and aggregation of counts across SNPs within a region —
-sources of variance that a simple binomial model cannot absorb.
+WASP2 detects allelic imbalance with a **beta-binomial likelihood-ratio
+test** applied per region (gene or peak). This page documents the model,
+the dispersion-estimation choices, the multiple-testing correction, and
+the WASP2-specific defaults and contracts that are not covered by the
+papers cited below.
+
+For the WASP mapping filter upstream of counting, see
+:doc:`mapping_filter`.
 
 Model
 -----
 
-With :math:`X` the reference count out of :math:`N` total at a site:
+With :math:`X` the reference count out of :math:`N` total reads at a
+site:
 
 .. math::
 
-   p &\sim \text{Beta}(\alpha, \beta) \\
-   X \mid p &\sim \text{Binomial}(N, p)
+   p \sim \text{Beta}(\alpha, \beta), \qquad X \mid p \sim \text{Binomial}(N, p)
 
-WASP2 uses the mean-dispersion parameterization, :math:`\mu = \alpha/(\alpha+\beta)`
-and :math:`\rho = 1/(\alpha+\beta+1)`:
-
-.. math::
-
-   \alpha = \mu \cdot \frac{1 - \rho}{\rho}, \qquad
-   \beta  = (1 - \mu) \cdot \frac{1 - \rho}{\rho}
-
-The variance,
+WASP2 uses the mean-dispersion parameterization
+:math:`\mu = \alpha/(\alpha+\beta)` and :math:`\rho = 1/(\alpha+\beta+1)`:
 
 .. math::
 
-   \text{Var}(X) = N\mu(1-\mu)\left[1 + (N-1)\rho\right],
+   \alpha = \mu\cdot\frac{1-\rho}{\rho}, \qquad \beta = (1-\mu)\cdot\frac{1-\rho}{\rho}, \qquad \text{Var}(X) = N\mu(1-\mu)[1 + (N-1)\rho]
 
-recovers the binomial as :math:`\rho \to 0`. Estimation of :math:`\rho` is
-described in :doc:`dispersion_estimation`.
+Binomial variance is recovered as :math:`\rho \to 0`. The framework
+follows the RASQUAL / MBASED lineage ([Kumasaka2016]_, [Mayba2014]_).
 
-Hypothesis Test
+Hypothesis test
 ---------------
 
 For each region, WASP2 tests
 
 .. math::
 
-   H_0 : \mu = 0.5 \qquad \text{vs.} \qquad H_1 : \mu \neq 0.5
+   H_0: \mu = 0.5 \qquad \text{vs.} \qquad H_1: \mu \neq 0.5
 
-with the likelihood ratio statistic
+with the likelihood-ratio statistic
 
 .. math::
 
-   \Lambda = -2\left[\log \mathcal{L}_0 - \log \mathcal{L}_1\right], \qquad
-   \Lambda \sim \chi^2_1 \text{ under } H_0,
+   \Lambda = -2[\log\mathcal{L}_0 - \log\mathcal{L}_1] \sim \chi^2_1 \text{ under } H_0.
 
-where :math:`\mathcal{L}_1` is maximized over :math:`\mu` with :math:`\rho`
-held at its null-model MLE (profile likelihood in :math:`\mu`). The p-value
-is :math:`P(\chi^2_1 > \Lambda)`.
+.. important::
+
+   **Profile-likelihood convention.** :math:`\rho` is held at its
+   null-model MLE when maximizing :math:`\mathcal{L}_1` over :math:`\mu`
+   (profile likelihood in :math:`\mu`, df = 1). WASP2 does **not** jointly
+   re-estimate :math:`\rho` under :math:`H_1`.
 
 MLE for :math:`\mu` under :math:`H_1`:
 
@@ -61,113 +60,141 @@ MLE for :math:`\mu` under :math:`H_1`:
    from scipy.stats import betabinom
    import numpy as np
 
-   def neg_log_likelihood(mu, ref_counts, n_counts, rho):
+   def neg_ll_mu(mu, ref, n, rho):
        alpha = mu * (1 - rho) / rho
        beta = (1 - mu) * (1 - rho) / rho
-       return -np.sum(betabinom.logpmf(ref_counts, n_counts, alpha, beta))
+       return -np.sum(betabinom.logpmf(ref, n, alpha, beta))
 
-   mu_mle = minimize_scalar(
-       neg_log_likelihood,
-       args=(ref_counts, n_counts, rho),
-       method='bounded',
-       bounds=(0, 1),
-   ).x
+   mu_mle = minimize_scalar(neg_ll_mu, args=(ref, n, rho),
+                            method='bounded', bounds=(0, 1)).x
 
-Dispersion models
------------------
+Dispersion
+----------
 
-WASP2 provides a single pooled :math:`\rho` (default) and a coverage-dependent
-``linear`` model (logit-linear in :math:`N`). See :doc:`dispersion_estimation`
-for the choice criteria and code.
+Estimation of :math:`\rho` is by MLE under :math:`H_0` (:math:`\mu=0.5`).
+WASP2 ships two models:
 
-.. code-block:: python
+- ``single`` (default) — one pooled :math:`\rho` across all regions.
+  Appropriate for small-to-moderate datasets or uniform coverage.
+- ``linear`` — :math:`\text{logit}(\rho_i) = \beta_0 + \beta_1 N_i`.
+  Appropriate for large cohorts with wide coverage ranges, where
+  low-coverage regions show different apparent dispersion from
+  high-coverage ones. Compared to ``single`` via AIC/BIC.
 
-   from analysis.as_analysis import single_model, linear_model
-
-   results = single_model(df, region_col="region", phased=False)
-   results = linear_model(df, region_col="region", phased=False)
+**Implementation contract.** :math:`\rho` is bounded to the open interval
+:math:`(10^{-6},\, 1-10^{-6})` during MLE to avoid the boundary
+singularities of the beta-binomial. In the linear model, the logit is
+clipped to :math:`[-10,\, 10]` before the inverse-logit, preserving
+numerical stability on extreme :math:`N`.
 
 Phased vs. unphased data
-------------------------
+-------------------------
 
 **Phased** genotypes reduce to a direct beta-binomial per SNP, with
 :math:`\mu` or :math:`1-\mu` depending on which haplotype carries the
-reference allele:
+reference allele.
+
+**Unphased** analysis marginalizes over the :math:`2^{n-1}` phase
+configurations for a region of :math:`n` SNPs using a uniform prior
+(dynamic programming over SNPs; approach of [Mayba2014]_):
 
 .. math::
 
-   P(X_i \mid \text{hap}_i) = \text{BetaBinom}(X_i; N_i, \mu_{\text{hap}_i}, \rho)
-
-**Unphased** analysis marginalizes over phase configurations with a uniform
-prior across the :math:`2^{n-1}` phase assignments for a region of :math:`n`
-SNPs, using dynamic programming over SNPs (approach introduced in
-[Mayba2014]_):
-
-.. math::
-
-   P(\mathbf{X}) = \sum_{\phi} P(\mathbf{X} \mid \phi) \, P(\phi),
+   P(\mathbf{X}) = \sum_{\phi} P(\mathbf{X}\mid\phi)\,P(\phi),
    \qquad P(\phi) = 0.5^{n-1}.
 
-Output
-------
+Multiple-testing correction
+---------------------------
 
-.. table:: Columns emitted by the analysis pipeline
+WASP2 applies the Benjamini–Hochberg procedure [Benjamini1995]_ via
+:func:`scipy.stats.false_discovery_control`:
+
+.. code-block:: python
+
+   from scipy.stats import false_discovery_control
+   fdr_pvals = false_discovery_control(pvals, method='bh')
+
+BH controls FDR under independence or positive regression dependence
+(PRDS); :math:`\chi^2_1` p-values from the LRT satisfy these assumptions
+when regions are analyzed independently. For dependent tests across
+overlapping regions, Benjamini–Yekutieli (``method='by'``) is the
+conservative fallback.
+
+.. warning::
+
+   ``scipy.stats.false_discovery_control`` raises on NaN p-values, but a
+   hand-written BH loop based on ``np.minimum.accumulate`` **silently
+   propagates NaN** through the cumulative minimum — every corrected
+   p-value at or above the first NaN becomes NaN. Drop or impute NaN
+   p-values before BH correction.
+
+Defaults and output
+-------------------
+
+WASP2 default parameter values that affect the results:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 25 20 55
+
+   * - Parameter
+     - Default
+     - Meaning
+   * - ``pseudocount``
+     - 1
+     - Added to both ``ref_count`` and ``alt_count``. Laplace-style
+       shrinkage toward :math:`\mu = 0.5` — conservative under :math:`H_0`.
+   * - ``min_count``
+     - 10
+     - Regions with :math:`N < 10` are dropped; below this, power is too
+       low and the MLE is unstable.
+
+Output columns per region:
+
+.. list-table::
+   :header-rows: 1
    :widths: 20 15 65
 
-   ============ ======== ======================================================
-   Column       Type     Interpretation
-   ============ ======== ======================================================
-   null_ll      float    Log-likelihood under :math:`H_0` (:math:`\mu=0.5`)
-   alt_ll       float    Log-likelihood under :math:`H_1` (:math:`\mu=\hat\mu_{\text{MLE}}`)
-   mu           float    MLE of the reference-allele proportion
-   lrt          float    Likelihood ratio statistic
-   pval         float    :math:`\chi^2_1` p-value
-   fdr_pval     float    BH-adjusted p-value (see :doc:`fdr_correction`)
-   ============ ======== ======================================================
+   * - Column
+     - Type
+     - Interpretation
+   * - ``null_ll``
+     - float
+     - Log-likelihood under :math:`H_0` (:math:`\mu=0.5`).
+   * - ``alt_ll``
+     - float
+     - Log-likelihood under :math:`H_1` (:math:`\mu=\hat\mu_{\text{MLE}}`).
+   * - ``mu``
+     - float
+     - MLE of the reference-allele proportion.
+   * - ``lrt``
+     - float
+     - Likelihood-ratio statistic.
+   * - ``pval``
+     - float
+     - :math:`\chi^2_1` p-value.
+   * - ``fdr_pval``
+     - float
+     - BH-adjusted p-value.
 
-:math:`\mu > 0.5` indicates a reference-allele preference; :math:`\mu < 0.5`
-indicates an alternate preference; :math:`|\mu - 0.5|` is the effect size.
-
-Practical notes
----------------
-
-**Pseudocounts.** WASP2 adds :math:`c = 1` to both allele counts by default,
-shrinking estimates slightly toward 0.5. This gives conservative inference and
-avoids log-zero issues at extreme counts.
-
-**Minimum counts.** Regions with :math:`N < \text{min\_count}` (default 10) are
-dropped — low coverage yields poor power and unstable MLEs.
-
-**Region aggregation.** Analyzing at the region level (peaks, genes) rather
-than individual SNPs increases power, reduces the multiple-testing burden, and
-better captures regulatory effects that act across a region.
-
-**Power.** Power depends jointly on :math:`N`, :math:`\mu`, and :math:`\rho`.
-Because WASP2 does not compute analytic power estimates at runtime, we do not
-tabulate values here — power simulations for a given dataset should be run at
-the dataset's own estimated :math:`\hat\rho` rather than relying on generic
-tables.
+:math:`\mu > 0.5` indicates a reference-allele preference;
+:math:`|\mu - 0.5|` is the effect size.
 
 See Also
 --------
 
-- :doc:`dispersion_estimation` — estimating :math:`\rho`
-- :doc:`fdr_correction` — multiple-testing correction
-- :doc:`counting_algorithm` — how counts are produced
-- :doc:`mapping_filter` — WASP remap-and-filter producing the BAM
+- :doc:`mapping_filter` — canonical WASP filter contract, upstream of counts
 
 References
 ----------
 
-.. [Mayba2014] Mayba O, Gilbert HN, Liu J, et al. (2014). MBASED:
-   allele-specific expression detection in cancer tissues and cell lines.
-   *Genome Biology* 15:405. *Introduces the phase-marginalized mixture model.*
-
 .. [Kumasaka2016] Kumasaka N, Knights AJ, Gaffney DJ (2016). Fine-mapping
    cellular QTLs with RASQUAL and ATAC-seq. *Nature Genetics* 48:206-213.
-   *Beta-binomial LRT framework in which WASP2's analysis sits.*
 
-.. [vandeGeijn2015] van de Geijn B, McVicker G, Gilad Y, Pritchard JK (2015).
-   WASP: allele-specific software for robust molecular quantitative trait
-   locus discovery. *Nature Methods* 12:1061-1063. *The mapping-bias
-   correction upstream of the count step.*
+.. [Mayba2014] Mayba O, Gilbert HN, Liu J, et al. (2014). MBASED:
+   allele-specific expression detection in cancer tissues and cell lines.
+   *Genome Biology* 15:405.
+
+.. [Benjamini1995] Benjamini Y, Hochberg Y (1995). Controlling the false
+   discovery rate: A practical and powerful approach to multiple testing.
+   *Journal of the Royal Statistical Society B* 57:289-300.

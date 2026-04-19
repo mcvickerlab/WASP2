@@ -174,6 +174,12 @@ If your pipeline needs those defensive filters, apply them upstream:
 Earlier WASP2 releases (v1.2.0–v1.4.0) applied six SAM flag filters
 internally. See ``CHANGELOG.md`` for details.
 
+**Counting step.** The same canonical contract applies to the allele
+counting step (``wasp2-count count-variants``): only the unmapped filter
+(``0x4``) is applied. All other SAM-flag decisions are the caller's
+responsibility — pre-filter the BAM upstream if defensive filtering is
+needed.
+
 **Same-Locus Test**
 
 For SNPs, exact position matching is required:
@@ -314,7 +320,7 @@ The typical WASP2 workflow:
 See Also
 --------
 
-- :doc:`counting_algorithm` — Allele counting after WASP filtering
+- :doc:`statistical_models` — beta-binomial LRT and FDR applied to the counts
 
 References
 ----------
