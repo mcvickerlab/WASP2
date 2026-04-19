@@ -380,6 +380,6 @@ See Also
 
 --------
 
-* :doc:`/tutorials/scrna_seq` - Complete 10X scRNA-seq tutorial
+* :doc:`/tutorials/single_cell_workflow` - scRNA-seq / scATAC-seq workflow
 * :doc:`analysis` - Statistical analysis methods
 * :doc:`counting` - General allele counting
