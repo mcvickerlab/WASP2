@@ -70,8 +70,7 @@ Documentation
    :caption: Tutorials
 
    tutorials/bulk_workflow
-   tutorials/scrna_seq
-   tutorials/scatac_workflow
+   tutorials/single_cell_workflow
    tutorials/comparative_imbalance
 
 .. toctree::

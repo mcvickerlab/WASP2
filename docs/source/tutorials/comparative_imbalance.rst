@@ -184,5 +184,5 @@ See Also
 
 - :doc:`/user_guide/analysis` — analysis-CLI reference and parameters
 - :doc:`/user_guide/single_cell` — input data formats, barcode exports
-- :doc:`/tutorials/scrna_seq` — basic single-cell workflow
+- :doc:`/tutorials/single_cell_workflow` — single-cell scRNA/scATAC workflow
 - :doc:`/methods/statistical_models` — the LRT underlying this test
