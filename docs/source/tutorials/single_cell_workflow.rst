@@ -75,8 +75,8 @@ Step 3 — Compare groups (optional)
      --phased \
      --out_file differential_imbalance.tsv
 
-For multi-group and all-pairs comparisons, visualization, and
-interpretation, see :doc:`comparative_imbalance`.
+Omit ``--groups`` to compare all available groups pairwise. See
+:doc:`/user_guide/analysis` for the full CLI reference and output columns.
 
 Per-cell vs. pseudo-bulk
 ------------------------
@@ -162,4 +162,3 @@ See Also
 - :doc:`/user_guide/analysis` — analysis CLI reference
 - :doc:`/methods/statistical_models` — beta-binomial LRT
 - :doc:`bulk_workflow` — sibling tutorial for bulk RNA-seq / ATAC-seq
-- :doc:`comparative_imbalance` — comparing groups

@@ -66,7 +66,9 @@ Comparative Single-Cell Analysis
      --out_file compare_ai.tsv
 
 This compares allelic imbalance between the requested groups and writes one TSV
-per comparison.
+per comparison. Each output has per-group columns ``mu1`` and ``mu2`` alongside
+the pooled-null ``combined_mu``, plus ``null_ll`` / ``alt_ll`` / ``pval`` /
+``fdr_pval``.
 
 Notes
 -----
@@ -92,4 +94,3 @@ Next Steps
 ----------
 
 * :doc:`counting` to generate bulk or single-cell counts
-* :doc:`/tutorials/comparative_imbalance` for group-comparison workflows
