@@ -129,17 +129,10 @@ def parse_gene_file(
         elif df.get_column("attribute").str.contains("Name").any():
             attribute = "Name"
         else:
-            # TODO return an error
-            # TODO maybe just use region or coords as a feature
             logger.warning("No 'ID', '%s_id' or 'Name' attribute found. Please include ID", feature)
 
-    # TODO: Figure out best way to handle parent attribute
-
     # Parse parent attributes
-    # Figure out best way to parse and handle this
     if parent_attribute is None:
-        # Defaults to gene(possibly transcript???)
-
         if df.get_column("attribute").str.contains("Parent").any():
             parent_attribute = "Parent"
         elif df.get_column("attribute").str.contains("transcript_id").any():
@@ -149,7 +142,6 @@ def parse_gene_file(
         else:
             parent_attribute = attribute
 
-    # TODO: Allow for count output without parent column
     assert attribute is not None, "Could not determine attribute from gene file"
     assert parent_attribute is not None, "Could not determine parent_attribute from gene file"
     if parent_attribute == attribute:
@@ -258,12 +250,8 @@ def parse_intersect_genes(
             }
         )
 
-    # AFTER performing gtf_to_bed and intersecting!
     df = pl.scan_csv(intersect_file, separator="\t", has_header=False, infer_schema_length=0)
 
-    # Should i poossibly consider diff number of cols?
-
-    # Might want to do checks for wrong number of columns
     subset_cols = [df.columns[i] for i in [0, 2, 3, 4, -2, -1]]
     new_cols = ["chrom", "pos", "ref", "alt", attribute, parent_attribute]
 

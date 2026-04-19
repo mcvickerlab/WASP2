@@ -59,10 +59,9 @@ class WaspAnalysisData:
         # User input data
         self.count_file = count_file
         self.region_col = region_col
-        self.groupby = groupby  # group by region or parent?
+        self.groupby = groupby
         self.out_file = out_file
 
-        # TODO parse vcf for phased instead of default unphased
         self.phased: bool = bool(phased)
 
         # Default to single dispersion model
@@ -108,15 +107,14 @@ class WaspAnalysisData:
                 "Parent",
                 "parent",
             }:
-                self.groupby = count_cols[region_idx + 1]  # Set group
+                self.groupby = count_cols[region_idx + 1]
             else:
-                # Maybe throw error instead
                 logger.warning("%s not found in columns %s", self.groupby, count_cols)
                 self.groupby = None
 
         # Create default outfile
         if self.out_file is None:
-            self.out_file = str(Path.cwd() / "ai_results.tsv")  # do this after
+            self.out_file = str(Path.cwd() / "ai_results.tsv")
 
 
 def run_ai_analysis(
@@ -192,7 +190,6 @@ def run_ai_analysis(
     )
     ai_df = pd.DataFrame(results)
 
-    # Maybe give option to sort or not sort by pval
     if "fdr_pval" in ai_df.columns:
         ai_df = ai_df.sort_values(by="fdr_pval", ascending=True)
 

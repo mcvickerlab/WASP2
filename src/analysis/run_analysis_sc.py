@@ -36,10 +36,9 @@ class WaspAnalysisSC:
         self.model = model
         self.out_file = out_file
         self.phased = phased
-        self.z_cutoff = z_cutoff  # Should i default to something like 4 or 5?
+        self.z_cutoff = z_cutoff
 
         # Default to single dispersion model
-        # TODO ADD GROUP DISP and other model types
         if (self.model is None) or (self.model not in {"single"}):
             self.model = "single"
 
@@ -48,7 +47,6 @@ class WaspAnalysisSC:
             self.min_count = 10
 
         if self.pseudocount is None:
-            # self.pseudocount = 0 # either 0 or 1 for default
             self.pseudocount = 1
 
         # Make sure min and pseudocounts are valid
@@ -132,13 +130,10 @@ def process_adata_inputs(
                 f"Please input a sample from list: {sample_list}"
             )
         else:
-            # We gotta subset to include het genotypes now
             if not any(i in ["1|0", "0|1", "1/0", "0/1"] for i in adata.obs[sample].unique()):
                 raise ValueError(f"Heterozygous genotypes not found for sample: {sample}.")
 
-            # adata = adata[adata.obs[sample].isin(['1|0', '0|1', '1/0', '0/1'])]
-
-            # Using copy instead of view stops implicit mod warning, need to check memory usage
+            # Copy (not view) avoids implicit-modification warning downstream.
             adata = adata[adata.obs[sample].isin(["1|0", "0|1", "1/0", "0/1"])].copy()
             adata.obs = adata.obs.reset_index(
                 drop=True
@@ -234,13 +229,8 @@ def run_ai_analysis_sc(
 
     adata_inputs = process_adata_inputs(ad.read_h5ad(ai_files.adata_file), ai_files=ai_files)
 
-    # print(*vars(ai_files).items(), sep="\n") # For debugging
-    # print(adata_inputs) # For debugging
-
     # Update class attributes
     ai_files.update_data(adata_inputs)
-
-    # adata = adata_inputs.adata # Hold parsed adata file obj in memory
 
     # Prefilter and hold adata data in memory
     adata = adata_count_qc(adata_inputs.adata, z_cutoff=ai_files.z_cutoff, gt_error=None)

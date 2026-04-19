@@ -115,7 +115,7 @@ class WaspCountFiles:
         self.skip_vcf_to_bed = precomputed_vcf_bed is not None
 
         # Parse region file
-        self.region_type = None  # maybe use a boolean flag instead
+        self.region_type = None
 
         if self.region_file is not None:
             f_ext = "".join(Path(self.region_file).suffixes)
@@ -162,7 +162,6 @@ class WaspCountFiles:
             )
         self.skip_intersect = precomputed_intersect is not None
 
-        # TODO UPDATE THIS WHEN I ADD AUTOPARSERS
         if self.is_gene_file:
             # Possible edge case of vcf and gtf prefix conflict
             if self.vcf_bed == self.gtf_bed:
@@ -249,14 +248,9 @@ def run_count_variants(
         precomputed_intersect=precomputed_intersect,
     )
 
-    # print(*vars(count_files).items(), sep="\n") # For debugging
     with_gt = False
     if (count_files.samples is not None) and (len(count_files.samples) == 1):
         with_gt = True
-
-        # temporarily disable for ASE
-        # if not count_files.is_gene_file:
-        #     with_gt = True
 
     # Create Intermediary Files
     if not count_files.skip_vcf_to_bed:
@@ -268,7 +262,6 @@ def run_count_variants(
             include_indels=include_indels,
         )
 
-    # TODO PARSE GENE FEATURES AND ATTRIBUTES
     region_col_name = None  # Defaults to 'region' as region name
     intersect_genes = False
 
@@ -276,7 +269,6 @@ def run_count_variants(
     if count_files.region_file is not None:
         # Check if we need to prepare genes for intersection
         if count_files.gtf_bed is not None:
-            # TODO UPDATE THIS WHEN I ADD AUTOPARSERS AND VALIDATORS
             gene_data = make_gene_data(
                 gene_file=count_files.region_file,
                 out_bed=count_files.gtf_bed,
@@ -300,7 +292,6 @@ def run_count_variants(
             )
 
     # Create Variant Dataframe
-    # TODO validate
     if intersect_genes:
         df = parse_intersect_genes_new(
             intersect_file=count_files.intersect_file,
@@ -321,18 +312,9 @@ def run_count_variants(
             use_region_names=count_files.use_region_names,
             region_col=region_col_name,
         )
-        # df = parse_intersect_region(
-        #     intersect_file=count_files.intersect_file,
-        #     use_region_names=count_files.use_region_names,
-        #     region_col=region_col_name)
-
-    # Should I include a filt bam step???
 
     # Count
     count_df = make_count_df(bam_file=count_files.bam_file, df=df, use_rust=use_rust)
 
     # Write counts
     count_df.write_csv(count_files.out_file, include_header=True, separator="\t")
-
-    # Should i return for use in analysis pipeline?
-    # return count_df
