@@ -110,8 +110,7 @@ Step 3 — Test for allelic imbalance
 
 The beta-binomial LRT tests :math:`\mu = 0.5` against :math:`\mu \neq 0.5`
 per region, correcting for overdispersion and multiple testing via
-Benjamini–Hochberg (:doc:`/methods/statistical_models`,
-:doc:`/methods/fdr_correction`).
+Benjamini–Hochberg (:doc:`/methods/statistical_models`).
 
 ``--phased`` applies only when the VCF GT field uses ``0|1`` / ``1|0``; pass
 it off for unphased data.
