@@ -77,7 +77,6 @@ Documentation
    :caption: Statistical Methods
 
    methods/mapping_filter
-   methods/statistical_models
 
 .. toctree::
    :maxdepth: 2
