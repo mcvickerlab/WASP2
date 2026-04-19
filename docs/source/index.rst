@@ -53,7 +53,6 @@ Documentation
    :caption: Getting Started
 
    installation
-   quickstart
    choosing_workflow
    faq
 
