@@ -271,6 +271,7 @@ fn analyze_imbalance(
     let analysis_method = match method {
         "single" => analysis::AnalysisMethod::Single,
         "linear" => analysis::AnalysisMethod::Linear,
+        "per_donor" => analysis::AnalysisMethod::PerDonor,
         _ => {
             return Err(PyRuntimeError::new_err(format!(
                 "Unknown method: {}",
@@ -299,6 +300,8 @@ fn analyze_imbalance(
     let mut ref_count_idx: usize = 4;
     let mut alt_count_idx: usize = 5;
     let mut min_fields: usize = 7;
+    // Optional donor/sample column (used by the per_donor model)
+    let mut sample_idx: Option<usize> = None;
     let mut header_seen = false;
 
     for line in reader.lines() {
@@ -315,6 +318,8 @@ fn analyze_imbalance(
                 alt_count_idx = 7;
                 min_fields = 9;
             }
+            // Detect an optional `sample` column by name (per_donor input)
+            sample_idx = headers.iter().position(|h| *h == "sample");
             continue;
         }
 
@@ -337,12 +342,15 @@ fn analyze_imbalance(
         // Create region identifier (chrom_pos_pos+1 format to match Python)
         let region = format!("{}_{}_{}", chrom, pos, pos + 1);
 
+        let sample = sample_idx.and_then(|si| fields.get(si).map(|s| s.to_string()));
+
         variants.push(analysis::VariantCounts {
             chrom,
             pos,
             ref_count,
             alt_count,
             region,
+            sample,
         });
     }
 
