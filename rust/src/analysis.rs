@@ -90,6 +90,19 @@ fn clamp_rho(rho: f64) -> f64 {
     rho.clamp(RHO_EPSILON, 1.0 - RHO_EPSILON)
 }
 
+/// Sigmoid function (inverse logit): expit(x) = 1 / (1 + e^-x)
+///
+/// Numerically stable implementation that avoids overflow for large |x|.
+#[inline]
+fn expit(x: f64) -> f64 {
+    if x >= 0.0 {
+        1.0 / (1.0 + (-x).exp())
+    } else {
+        let e = x.exp();
+        e / (1.0 + e)
+    }
+}
+
 // ============================================================================
 // Core Statistical Functions
 // ============================================================================
@@ -169,6 +182,36 @@ fn optimize_dispersion(ref_counts: &[u32], n_array: &[u32]) -> Result<f64> {
     Ok(result)
 }
 
+/// Optimize linear dispersion parameters using Nelder-Mead
+///
+/// Python equivalent: `minimize(opt_linear, x0=(0, 0), method="Nelder-Mead")`
+/// Fits ρ = expit(d1 + N × d2) to the data.
+fn optimize_dispersion_linear(ref_counts: &[u32], n_array: &[u32]) -> Result<(f64, f64)> {
+    let objective = |params: [f64; 2]| -> f64 {
+        let (d1, d2) = (params[0], params[1]);
+        let mut neg_ll = 0.0;
+
+        for (&ref_count, &n) in ref_counts.iter().zip(n_array.iter()) {
+            // Clamp to prevent overflow in expit
+            let exp_in = (d1 + n as f64 * d2).clamp(-10.0, 10.0);
+            let rho = clamp_rho(expit(exp_in));
+            let alpha = 0.5 * (1.0 - rho) / rho;
+
+            // Beta-binomial log-pmf with α = β (null: p=0.5)
+            if let Ok(bb) = rv::dist::BetaBinomial::new(n, alpha, alpha) {
+                use rv::traits::HasDensity;
+                neg_ll -= bb.ln_f(&(ref_count as u64));
+            } else {
+                return f64::INFINITY;
+            }
+        }
+
+        neg_ll
+    };
+
+    nelder_mead_2d(objective, [0.0, 0.0], 1e-6, 1000)
+}
+
 /// Optimize probability parameter for alternative model
 ///
 /// Python equivalent: `parse_opt()` calling `minimize_scalar(opt_prob, ...)`
@@ -246,6 +289,114 @@ where
     }
 
     Ok(if fc < fd { c } else { d })
+}
+
+/// Nelder-Mead simplex optimization for 2D functions
+///
+/// Used for fitting linear dispersion parameters (d1, d2).
+/// Equivalent to scipy's minimize(..., method="Nelder-Mead")
+fn nelder_mead_2d<F>(f: F, x0: [f64; 2], tol: f64, max_iter: usize) -> Result<(f64, f64)>
+where
+    F: Fn([f64; 2]) -> f64,
+{
+    // Standard Nelder-Mead coefficients
+    let alpha = 1.0; // reflection
+    let gamma = 2.0; // expansion
+    let rho = 0.5; // contraction
+    let sigma = 0.5; // shrinkage
+
+    // Initialize simplex: equilateral triangle around x0
+    let step = 1.0;
+    let mut simplex = [
+        (x0, f(x0)),
+        ([x0[0] + step, x0[1]], f([x0[0] + step, x0[1]])),
+        ([x0[0], x0[1] + step], f([x0[0], x0[1] + step])),
+    ];
+
+    for _iter in 0..max_iter {
+        // Sort by function value (ascending)
+        simplex.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+
+        let (x_best, f_best) = simplex[0];
+        let (x_worst, f_worst) = simplex[2];
+        let (x_second, f_second) = simplex[1];
+
+        // Check convergence: simplex size
+        let size = ((x_worst[0] - x_best[0]).powi(2) + (x_worst[1] - x_best[1]).powi(2)).sqrt();
+        if size < tol {
+            return Ok((x_best[0], x_best[1]));
+        }
+
+        // Centroid of all points except worst
+        let centroid = [
+            (x_best[0] + x_second[0]) / 2.0,
+            (x_best[1] + x_second[1]) / 2.0,
+        ];
+
+        // Reflection
+        let x_r = [
+            centroid[0] + alpha * (centroid[0] - x_worst[0]),
+            centroid[1] + alpha * (centroid[1] - x_worst[1]),
+        ];
+        let f_r = f(x_r);
+
+        if f_r < f_second && f_r >= f_best {
+            // Accept reflection
+            simplex[2] = (x_r, f_r);
+            continue;
+        }
+
+        if f_r < f_best {
+            // Try expansion
+            let x_e = [
+                centroid[0] + gamma * (x_r[0] - centroid[0]),
+                centroid[1] + gamma * (x_r[1] - centroid[1]),
+            ];
+            let f_e = f(x_e);
+
+            if f_e < f_r {
+                simplex[2] = (x_e, f_e);
+            } else {
+                simplex[2] = (x_r, f_r);
+            }
+            continue;
+        }
+
+        // f_r >= f_second: try contraction
+        let x_c = if f_r < f_worst {
+            // Outside contraction
+            [
+                centroid[0] + rho * (x_r[0] - centroid[0]),
+                centroid[1] + rho * (x_r[1] - centroid[1]),
+            ]
+        } else {
+            // Inside contraction
+            [
+                centroid[0] + rho * (x_worst[0] - centroid[0]),
+                centroid[1] + rho * (x_worst[1] - centroid[1]),
+            ]
+        };
+        let f_c = f(x_c);
+
+        if f_c < f_worst {
+            simplex[2] = (x_c, f_c);
+            continue;
+        }
+
+        // Shrink toward best point
+        for i in 1..3 {
+            let (x_i, _) = simplex[i];
+            let x_new = [
+                x_best[0] + sigma * (x_i[0] - x_best[0]),
+                x_best[1] + sigma * (x_i[1] - x_best[1]),
+            ];
+            simplex[i] = (x_new, f(x_new));
+        }
+    }
+
+    // Return best point after max iterations
+    simplex.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+    Ok((simplex[0].0[0], simplex[0].0[1]))
 }
 
 // ============================================================================
@@ -377,6 +528,116 @@ pub fn single_model(variants: Vec<VariantCounts>) -> Result<Vec<ImbalanceResult>
     Ok(results)
 }
 
+/// Linear dispersion model analysis
+///
+/// Python equivalent: `linear_model()` in as_analysis.py
+/// Uses ρ = expit(d1 + N × d2) where d1, d2 are globally optimized parameters.
+pub fn linear_model(variants: Vec<VariantCounts>) -> Result<Vec<ImbalanceResult>> {
+    if variants.is_empty() {
+        return Ok(vec![]);
+    }
+
+    // Extract ref_counts and N for all variants
+    let ref_counts: Vec<u32> = variants.iter().map(|v| v.ref_count).collect();
+    let n_array: Vec<u32> = variants.iter().map(|v| v.ref_count + v.alt_count).collect();
+
+    // Step 1: Optimize linear dispersion parameters (d1, d2)
+    eprintln!("Optimizing linear dispersion parameters...");
+    let (d1, d2) = optimize_dispersion_linear(&ref_counts, &n_array)?;
+    eprintln!("  d1 = {:.6}, d2 = {:.6}", d1, d2);
+
+    // Step 2: Compute per-variant rho array
+    let rho_array: Vec<f64> = n_array
+        .iter()
+        .map(|&n| {
+            let exp_in = (d1 + n as f64 * d2).clamp(-10.0, 10.0);
+            clamp_rho(expit(exp_in))
+        })
+        .collect();
+
+    // Step 3: Group by region
+    let mut region_map: HashMap<String, Vec<usize>> = HashMap::new();
+    for (i, variant) in variants.iter().enumerate() {
+        region_map
+            .entry(variant.region.clone())
+            .or_default()
+            .push(i);
+    }
+
+    eprintln!(
+        "Optimizing imbalance likelihood for {} regions...",
+        region_map.len()
+    );
+
+    // Step 4: Calculate null and alternative likelihoods per region (parallel)
+    let results: Result<Vec<_>> = region_map
+        .par_iter()
+        .map(|(region, indices)| -> Result<ImbalanceResult> {
+            // Extract counts and rho for this region
+            let region_ref: Vec<u32> = indices.iter().map(|&i| ref_counts[i]).collect();
+            let region_n: Vec<u32> = indices.iter().map(|&i| n_array[i]).collect();
+            let region_rho: Vec<f64> = indices.iter().map(|&i| rho_array[i]).collect();
+
+            // Null model: prob = 0.5, using per-variant rho
+            let mut null_ll = 0.0;
+            for ((&ref_count, &n), &rho) in region_ref
+                .iter()
+                .zip(region_n.iter())
+                .zip(region_rho.iter())
+            {
+                let alpha = 0.5 * (1.0 - rho) / rho;
+                let bb = rv::dist::BetaBinomial::new(n, alpha, alpha)
+                    .context("Failed to create beta-binomial for null")?;
+                use rv::traits::HasDensity;
+                null_ll += bb.ln_f(&(ref_count as u64));
+            }
+
+            // Alternative model: optimize prob using per-variant rho
+            // For simplicity, use average rho for optimization (matches Python behavior)
+            let avg_rho = region_rho.iter().sum::<f64>() / region_rho.len() as f64;
+            let (alt_ll, mu) = optimize_prob(&region_ref, &region_n, avg_rho)?;
+
+            // Likelihood ratio test
+            let lrt = -2.0 * (null_ll - alt_ll);
+
+            // P-value from chi-squared distribution (df=1)
+            let chi2 = ChiSquared::new(1.0).context("Failed to create chi-squared distribution")?;
+            let pval = 1.0 - chi2.cdf(lrt);
+
+            // Sum counts for this region
+            let total_ref: u32 = region_ref.iter().sum();
+            let total_alt: u32 = indices.iter().map(|&i| variants[i].alt_count).sum();
+            let total_n = total_ref + total_alt;
+
+            Ok(ImbalanceResult {
+                region: region.clone(),
+                ref_count: total_ref,
+                alt_count: total_alt,
+                n: total_n,
+                snp_count: indices.len(),
+                null_ll,
+                alt_ll,
+                mu,
+                lrt,
+                pval,
+                fdr_pval: 0.0,
+            })
+        })
+        .collect();
+
+    let mut results = results?;
+
+    // Step 5: FDR correction
+    let pvals: Vec<f64> = results.iter().map(|r| r.pval).collect();
+    let fdr_pvals = fdr_correction(&pvals);
+
+    for (result, fdr_pval) in results.iter_mut().zip(fdr_pvals.iter()) {
+        result.fdr_pval = *fdr_pval;
+    }
+
+    Ok(results)
+}
+
 /// Main entry point for allelic imbalance analysis
 ///
 /// Python equivalent: `get_imbalance()` in as_analysis.py
@@ -403,9 +664,7 @@ pub fn analyze_imbalance(
     // Run analysis based on method
     let mut results = match config.method {
         AnalysisMethod::Single => single_model(filtered)?,
-        AnalysisMethod::Linear => {
-            return Err(anyhow::anyhow!("Linear model not yet implemented"));
-        }
+        AnalysisMethod::Linear => linear_model(filtered)?,
     };
 
     // Remove pseudocounts from results
