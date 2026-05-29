@@ -9,7 +9,7 @@ use rayon::prelude::*;
 use rv::dist::BetaBinomial;
 use rv::traits::HasDensity;
 use statrs::distribution::{ChiSquared, ContinuousCDF};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 // ============================================================================
 // Data Structures
@@ -29,6 +29,19 @@ pub struct VariantCounts {
     /// Genotype phase relative to the reference allele: 0 = ref|alt, 1 = alt|ref.
     /// `None` when genotypes are absent or unphased. Required by phased analysis.
     pub gt: Option<u8>,
+}
+
+/// Deduplication key for matching Python's `df[keep_cols].drop_duplicates()`.
+/// Used to remove exact duplicate observations before analysis.
+#[derive(Hash, Eq, PartialEq)]
+struct DedupeKey {
+    chrom: String,
+    pos: u32,
+    region: String,
+    ref_count: u32,
+    alt_count: u32,
+    n: u32,
+    gt: Option<u8>, // Include GT when phased=true
 }
 
 /// Statistical results for a region
@@ -96,6 +109,31 @@ const RHO_EPSILON: f64 = 1e-10;
 #[inline]
 fn clamp_rho(rho: f64) -> f64 {
     rho.clamp(RHO_EPSILON, 1.0 - RHO_EPSILON)
+}
+
+/// Deduplicate variants to match Python's `df[keep_cols].drop_duplicates()`.
+///
+/// Python keeps columns: chrom, pos, ref_count, alt_count, N, region (+ GT if phased)
+/// and removes exact duplicate rows. This ensures parity with Python's behavior.
+fn deduplicate_variants(variants: Vec<VariantCounts>, phased: bool) -> Vec<VariantCounts> {
+    let mut seen: HashSet<DedupeKey> = HashSet::new();
+    let mut result = Vec::with_capacity(variants.len());
+
+    for v in variants {
+        let key = DedupeKey {
+            chrom: v.chrom.clone(),
+            pos: v.pos,
+            region: v.region.clone(),
+            ref_count: v.ref_count,
+            alt_count: v.alt_count,
+            n: v.ref_count + v.alt_count,
+            gt: if phased { v.gt } else { None },
+        };
+        if seen.insert(key) {
+            result.push(v);
+        }
+    }
+    result
 }
 
 /// Sigmoid function (inverse logit): expit(x) = 1 / (1 + e^-x)
@@ -1080,11 +1118,30 @@ pub fn analyze_imbalance(
 
     eprintln!("Processing {} variants after filtering", filtered.len());
 
+    // Deduplicate variants for Python parity (single and linear models only).
+    // Python's get_imbalance() does: df[keep_cols].drop_duplicates()
+    // Per-donor model skips dedup as it's a Rust-only feature.
+    let deduped = if config.method != AnalysisMethod::PerDonor {
+        let before = filtered.len();
+        let after = deduplicate_variants(filtered, config.phased);
+        if after.len() < before {
+            eprintln!(
+                "Deduplicated {} → {} variants ({} duplicates removed)",
+                before,
+                after.len(),
+                before - after.len()
+            );
+        }
+        after
+    } else {
+        filtered
+    };
+
     // Run analysis based on method
     let mut results = match config.method {
-        AnalysisMethod::Single => single_model(filtered, config.phased)?,
-        AnalysisMethod::Linear => linear_model(filtered, config.phased)?,
-        AnalysisMethod::PerDonor => per_donor_model(filtered)?,
+        AnalysisMethod::Single => single_model(deduped, config.phased)?,
+        AnalysisMethod::Linear => linear_model(deduped, config.phased)?,
+        AnalysisMethod::PerDonor => per_donor_model(deduped)?,
     };
 
     // Remove pseudocounts from results
