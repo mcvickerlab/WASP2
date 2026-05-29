@@ -2,6 +2,20 @@
 
 All notable changes to WASP2 will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- `--per-variant` / `--snv-solo` flag for `wasp2 analysis find_imbalance` to test each SNV
+  independently instead of grouping by a region column (forces per-variant even when a region
+  column is present; mutually exclusive with `--region_col`).
+
+### Changed
+- `--phased` and `--region_col` are now forwarded to the Rust analysis backend (previously parsed
+  but dropped, so the Rust path always ran unphased / feature-grouped).
+- `--groupby` now raises a clear error on the Rust analysis backend instead of being silently
+  ignored — it only re-keys the grouping column, so use `--region_col <parent_column>` for
+  parent-level grouping (identical result).
+
 ## [1.4.1] - 2026-04-18
 
 ### Changed
@@ -17,7 +31,7 @@ All notable changes to WASP2 will be documented in this file.
 - **14 verified bug fixes** across Python and Rust pipelines:
   - `not` → `~` on pandas Series for chromosome filtering (#50)
   - `samples[0]` truncation — pass full list instead of first element (#51)
-  - `--phased`/`--region_col`/`--groupby` forwarded to Rust analysis (#52)
+  - `--phased`/`--region_col` forwarded to Rust analysis (#52). (`--groupby` is **not** forwarded to the Rust backend; see Unreleased.)
   - `AttributeError` on `is_gene_file` when no feature file provided (#53)
   - `NameError` on `json_dict` in mapping pipeline (#54)
   - Dead expression in `compare_ai.py` snp_cutoff calculation (#55)

@@ -55,7 +55,17 @@ class WaspAnalysisData:
         out_file: str | None = None,
         region_col: str | None = None,
         groupby: str | None = None,
+        per_variant: bool = False,
     ) -> None:
+        # Per-variant (SNV-solo) mode cannot also name a region column: per-variant tests each
+        # SNV independently, whereas region_col groups variants by that column.
+        if per_variant and region_col is not None:
+            raise ValueError(
+                "per_variant cannot be combined with region_col: per-variant tests each SNV "
+                "independently, while region_col groups by that column. Choose one."
+            )
+        self.per_variant: bool = per_variant
+
         # User input data
         self.count_file = count_file
         self.region_col = region_col
@@ -91,8 +101,9 @@ class WaspAnalysisData:
             min_cols = 7
             region_idx = 4
 
-        # Check regions
-        if self.region_col is None:
+        # Check regions. Skip auto-detect in per-variant mode so region_col stays None
+        # (which the Rust backend interprets as per-variant chrom_pos grouping).
+        if self.region_col is None and not self.per_variant:
             if len(count_cols) > min_cols:
                 self.region_col = count_cols[region_idx]
 
@@ -126,6 +137,7 @@ def run_ai_analysis(
     out_file: str | None = None,
     region_col: str | None = None,
     groupby: str | None = None,
+    per_variant: bool = False,
 ) -> None:
     """Run allelic imbalance analysis pipeline.
 
@@ -146,13 +158,26 @@ def run_ai_analysis(
     region_col : str | None, optional
         Column name for grouping variants.
     groupby : str | None, optional
-        Additional grouping column.
+        Additional grouping column (not supported by the Rust backend; raises if set).
+    per_variant : bool, optional
+        Test each SNV independently (per-variant) instead of grouping by a region column.
+        Forces per-variant even when a region column is present. Default False.
 
     Raises
     ------
     RuntimeError
         If Rust analysis extension is not available.
     """
+    # Fail closed: --groupby is not supported by the Rust backend. It only re-keys the grouping
+    # column (region_col = groupby), so the identical result is obtained with --region_col <parent>.
+    # Erroring prevents silently returning feature-level results when parent-level was requested.
+    if groupby is not None:
+        raise RuntimeError(
+            "--groupby (parent-level grouping) is not supported by the Rust analysis backend. "
+            "Since groupby only re-keys the grouping column, group by the parent column directly "
+            "with --region_col <parent_column> instead."
+        )
+
     # Store analysis data and params
     ai_files = WaspAnalysisData(
         count_file,
@@ -163,17 +188,8 @@ def run_ai_analysis(
         out_file=out_file,
         region_col=region_col,
         groupby=groupby,
+        per_variant=per_variant,
     )
-
-    # Warn about params not yet forwarded to Rust backend
-    unsupported = {
-        "--phased": ai_files.phased,
-        "--region_col": ai_files.region_col is not None,
-        "--groupby": ai_files.groupby is not None,
-    }
-    for flag, active in unsupported.items():
-        if active:
-            logger.warning("%s is not yet supported by the Rust analysis backend; ignored", flag)
 
     # Run analysis pipeline (Rust only)
     if rust_analyze_imbalance is None:
@@ -187,6 +203,8 @@ def run_ai_analysis(
         min_count=ai_files.min_count,
         pseudocount=ai_files.pseudocount,
         method=ai_files.model,
+        phased=ai_files.phased,
+        region_col=ai_files.region_col,
     )
     ai_df = pd.DataFrame(results)
 

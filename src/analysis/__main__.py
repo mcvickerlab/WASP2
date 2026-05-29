@@ -129,6 +129,19 @@ def find_imbalance(
             ),
         ),
     ] = None,
+    per_variant: Annotated[
+        bool,
+        typer.Option(
+            "--per-variant",
+            "--snv-solo",
+            "--per_variant",
+            help=(
+                "Test each SNV independently (per-variant) instead of grouping by region/peak. "
+                "Forces per-variant even when a region column is present. "
+                "Cannot be combined with --region_col."
+            ),
+        ),
+    ] = False,
 ) -> None:
     run_ai_analysis(
         count_file=counts,
@@ -139,6 +152,7 @@ def find_imbalance(
         out_file=out_file,
         region_col=region_col,
         groupby=groupby,
+        per_variant=per_variant,
     )
 
 

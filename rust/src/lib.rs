@@ -255,13 +255,15 @@ fn remap_all_chromosomes(
 ///     print(f"{r['region']}: pval={r['pval']:.4f}")
 /// ```
 #[pyfunction]
-#[pyo3(signature = (tsv_path, min_count=10, pseudocount=1, method="single"))]
+#[pyo3(signature = (tsv_path, min_count=10, pseudocount=1, method="single", phased=false, region_col=None))]
 fn analyze_imbalance(
     py: Python,
     tsv_path: &str,
     min_count: u32,
     pseudocount: u32,
     method: &str,
+    phased: bool,
+    region_col: Option<String>,
 ) -> PyResult<Py<PyAny>> {
     use pyo3::types::{PyDict, PyList};
     use std::fs::File;
@@ -284,6 +286,7 @@ fn analyze_imbalance(
         min_count,
         pseudocount,
         method: analysis_method,
+        phased,
     };
 
     // Read TSV file
@@ -300,6 +303,10 @@ fn analyze_imbalance(
     let mut ref_count_idx: usize = 4;
     let mut alt_count_idx: usize = 5;
     let mut min_fields: usize = 7;
+    // GT column index (only present in 9-col format)
+    let mut gt_idx: Option<usize> = None;
+    // Region column index (use input region names instead of chrom_pos format)
+    let mut region_idx: Option<usize> = None;
     // Optional donor/sample column (used by the per_donor model)
     let mut sample_idx: Option<usize> = None;
     let mut header_seen = false;
@@ -317,9 +324,25 @@ fn analyze_imbalance(
                 ref_count_idx = 6;
                 alt_count_idx = 7;
                 min_fields = 9;
+                gt_idx = Some(5);
             }
             // Detect an optional `sample` column by name (per_donor input)
             sample_idx = headers.iter().position(|h| *h == "sample");
+            // Resolve grouping column from the region_col argument (mirror Python get_imbalance):
+            //   Some(name) => group by that column (error if the column is absent)
+            //   None       => per-variant grouping (chrom_pos), ignoring any "region" column
+            region_idx = match &region_col {
+                Some(name) => match headers.iter().position(|h| *h == name.as_str()) {
+                    Some(ix) => Some(ix),
+                    None => {
+                        return Err(PyRuntimeError::new_err(format!(
+                            "region_col '{}' not found in header columns: {:?}",
+                            name, headers
+                        )))
+                    }
+                },
+                None => None,
+            };
             continue;
         }
 
@@ -339,10 +362,27 @@ fn analyze_imbalance(
             .parse::<u32>()
             .map_err(|e| PyRuntimeError::new_err(format!("Invalid alt_count: {}", e)))?;
 
-        // Create region identifier (chrom_pos_pos+1 format to match Python)
-        let region = format!("{}_{}_{}", chrom, pos, pos + 1);
+        // region_col=Some => use that column verbatim; region_col=None => per-variant chrom_pos.
+        // The chrom_pos label matches Python's df["chrom"] + "_" + df["pos"] for SNV-solo parity.
+        let region = match region_idx {
+            Some(ri) => fields
+                .get(ri)
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| format!("{}_{}", chrom, pos)),
+            None => format!("{}_{}", chrom, pos),
+        };
 
         let sample = sample_idx.and_then(|si| fields.get(si).map(|s| s.to_string()));
+
+        // Parse the phased genotype (GT) column when present.
+        // Only fully-phased hets map to a value; everything else (unphased,
+        // homozygous, missing) is None. Emits ONLY Some(0)/Some(1)/None so
+        // downstream `1 - g` on u8 never underflows.
+        let gt: Option<u8> = gt_idx.and_then(|gi| match fields.get(gi) {
+            Some(&"0|1") => Some(0),
+            Some(&"1|0") => Some(1),
+            _ => None,
+        });
 
         variants.push(analysis::VariantCounts {
             chrom,
@@ -351,6 +391,7 @@ fn analyze_imbalance(
             alt_count,
             region,
             sample,
+            gt,
         });
     }
 
