@@ -24,6 +24,8 @@ pub struct VariantCounts {
     pub ref_count: u32,
     pub alt_count: u32,
     pub region: String,
+    /// Donor/sample identifier; required only by the per_donor model.
+    pub sample: Option<String>,
 }
 
 /// Statistical results for a region
@@ -52,8 +54,9 @@ pub struct AnalysisConfig {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AnalysisMethod {
-    Single, // Single dispersion parameter
-    Linear, // Linear dispersion model
+    Single,   // Single global dispersion parameter
+    Linear,   // Linear dispersion model: rho = expit(d1 + N*d2)
+    PerDonor, // Per-donor dispersion: rho fit separately per sample
 }
 
 impl Default for AnalysisConfig {
@@ -664,6 +667,182 @@ pub fn linear_model(variants: Vec<VariantCounts>) -> Result<Vec<ImbalanceResult>
     Ok(results)
 }
 
+/// Fit per-donor dispersion (rho) via bounded MLE, one value per `sample`.
+///
+/// Python equivalent: `compute_per_donor_rho()` — each donor's rho is the
+/// symmetric beta-binomial MLE over all that donor's observations, bounded to
+/// (1e-6, 1-1e-6). No extra floor (matches locked donor_rho.tsv: min ~7e-6).
+fn compute_donor_rho(variants: &[VariantCounts]) -> Result<HashMap<String, f64>> {
+    // Group observation indices by donor
+    let mut donor_map: HashMap<String, Vec<usize>> = HashMap::new();
+    for (i, v) in variants.iter().enumerate() {
+        let donor = v.sample.clone().ok_or_else(|| {
+            anyhow::anyhow!("per_donor model requires a 'sample' column in the counts TSV")
+        })?;
+        donor_map.entry(donor).or_default().push(i);
+    }
+
+    // Fit rho per donor in parallel (golden-section on symmetric beta-binomial)
+    donor_map
+        .par_iter()
+        .map(|(donor, idx)| -> Result<(String, f64)> {
+            let dref: Vec<u32> = idx.iter().map(|&i| variants[i].ref_count).collect();
+            let dn: Vec<u32> = idx
+                .iter()
+                .map(|&i| variants[i].ref_count + variants[i].alt_count)
+                .collect();
+            let objective = |rho: f64| -> f64 {
+                let rho = clamp_rho(rho);
+                let a = 0.5 * (1.0 - rho) / rho;
+                match betabinom_logpmf_sum(&dref, &dn, a, a) {
+                    Ok(ll) => -ll,
+                    Err(_) => f64::INFINITY,
+                }
+            };
+            // Bounds (1e-6, 1-1e-6) match scipy minimize_scalar(method="bounded")
+            let rho = golden_section_search(objective, 1e-6, 1.0 - 1e-6, 1e-6)?;
+            Ok((donor.clone(), rho))
+        })
+        .collect()
+}
+
+/// Per-donor dispersion model analysis.
+///
+/// Python equivalent: WASP2 `per_donor` extension — fit rho per `sample`, then
+/// run the standard per-region beta-binomial LRT using each observation's
+/// donor-specific rho (per-observation rho in BOTH null and alternative).
+pub fn per_donor_model(variants: Vec<VariantCounts>) -> Result<Vec<ImbalanceResult>> {
+    if variants.is_empty() {
+        return Ok(vec![]);
+    }
+
+    // Step 1: fit per-donor dispersion
+    eprintln!("Fitting per-donor dispersion...");
+    let donor_rho = compute_donor_rho(&variants)?;
+    eprintln!("  Fit rho for {} donors", donor_rho.len());
+    // Emit fitted rho (for validation against locked donor_rho.tsv)
+    let mut donors_sorted: Vec<(&String, &f64)> = donor_rho.iter().collect();
+    donors_sorted.sort_by(|a, b| a.0.cmp(b.0));
+    for (donor, rho) in donors_sorted {
+        eprintln!("DONOR_RHO\t{}\t{:.8}", donor, rho);
+    }
+
+    // Step 2: per-observation rho = each obs's donor rho
+    let ref_counts: Vec<u32> = variants.iter().map(|v| v.ref_count).collect();
+    let n_array: Vec<u32> = variants.iter().map(|v| v.ref_count + v.alt_count).collect();
+    let rho_array: Vec<f64> = variants
+        .iter()
+        .map(|v| {
+            let donor = v
+                .sample
+                .as_ref()
+                .expect("sample present (checked in compute_donor_rho)");
+            clamp_rho(
+                *donor_rho
+                    .get(donor)
+                    .expect("donor rho fit for every sample"),
+            )
+        })
+        .collect();
+
+    // Step 3: group by region
+    let mut region_map: HashMap<String, Vec<usize>> = HashMap::new();
+    for (i, variant) in variants.iter().enumerate() {
+        region_map
+            .entry(variant.region.clone())
+            .or_default()
+            .push(i);
+    }
+    eprintln!(
+        "Optimizing imbalance likelihood for {} regions...",
+        region_map.len()
+    );
+
+    // Step 4: per-region null/alt LL + LRT, using per-observation rho
+    let results: Result<Vec<_>> = region_map
+        .par_iter()
+        .map(|(region, indices)| -> Result<ImbalanceResult> {
+            let region_ref: Vec<u32> = indices.iter().map(|&i| ref_counts[i]).collect();
+            let region_n: Vec<u32> = indices.iter().map(|&i| n_array[i]).collect();
+            let region_rho: Vec<f64> = indices.iter().map(|&i| rho_array[i]).collect();
+
+            use rv::traits::HasDensity;
+
+            // Null model: prob = 0.5, per-observation rho
+            let mut null_ll = 0.0;
+            for ((&ref_count, &n), &rho) in region_ref
+                .iter()
+                .zip(region_n.iter())
+                .zip(region_rho.iter())
+            {
+                let alpha = 0.5 * (1.0 - rho) / rho;
+                let bb = rv::dist::BetaBinomial::new(n, alpha, alpha)
+                    .context("Failed to create beta-binomial for null")?;
+                null_ll += bb.ln_f(&(ref_count as u64));
+            }
+
+            // Alternative model: optimize one pi, per-observation rho
+            // (matches Python _alt_ll: a=pi(1-rho)/rho, b=(1-pi)(1-rho)/rho)
+            let alt_obj = |pi: f64| -> f64 {
+                let pi = pi.clamp(1e-6, 1.0 - 1e-6);
+                let mut nll = 0.0;
+                for ((&ref_count, &n), &rho) in region_ref
+                    .iter()
+                    .zip(region_n.iter())
+                    .zip(region_rho.iter())
+                {
+                    let a = pi * (1.0 - rho) / rho;
+                    let b = (1.0 - pi) * (1.0 - rho) / rho;
+                    match rv::dist::BetaBinomial::new(n, a, b) {
+                        Ok(bb) => nll -= bb.ln_f(&(ref_count as u64)),
+                        Err(_) => return f64::INFINITY,
+                    }
+                }
+                nll
+            };
+            let mu = golden_section_search(alt_obj, 1e-6, 1.0 - 1e-6, 1e-6)?;
+            let alt_ll = -alt_obj(mu);
+
+            // Likelihood ratio test (clamped at 0 like Python)
+            let lrt = (-2.0 * (null_ll - alt_ll)).max(0.0);
+            let chi2 = ChiSquared::new(1.0).context("Failed to create chi-squared distribution")?;
+            let pval = 1.0 - chi2.cdf(lrt);
+
+            let total_ref: u32 = region_ref.iter().sum();
+            let total_alt: u32 = indices.iter().map(|&i| variants[i].alt_count).sum();
+            let total_n = total_ref + total_alt;
+
+            Ok(ImbalanceResult {
+                region: region.clone(),
+                ref_count: total_ref,
+                alt_count: total_alt,
+                n: total_n,
+                snp_count: indices.len(),
+                null_ll,
+                alt_ll,
+                mu,
+                lrt,
+                pval,
+                fdr_pval: 0.0,
+            })
+        })
+        .collect();
+
+    let mut results = results?;
+
+    // Deterministic output order
+    results.sort_by(|a, b| a.region.cmp(&b.region));
+
+    // FDR correction (BH)
+    let pvals: Vec<f64> = results.iter().map(|r| r.pval).collect();
+    let fdr_pvals = fdr_correction(&pvals);
+    for (result, fdr_pval) in results.iter_mut().zip(fdr_pvals.iter()) {
+        result.fdr_pval = *fdr_pval;
+    }
+
+    Ok(results)
+}
+
 /// Main entry point for allelic imbalance analysis
 ///
 /// Python equivalent: `get_imbalance()` in as_analysis.py
@@ -691,6 +870,7 @@ pub fn analyze_imbalance(
     let mut results = match config.method {
         AnalysisMethod::Single => single_model(filtered)?,
         AnalysisMethod::Linear => linear_model(filtered)?,
+        AnalysisMethod::PerDonor => per_donor_model(filtered)?,
     };
 
     // Remove pseudocounts from results
