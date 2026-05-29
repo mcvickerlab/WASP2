@@ -165,10 +165,10 @@ def run_ai_analysis(
         groupby=groupby,
     )
 
-    # Warn about params not yet forwarded to Rust backend
+    # Warn about params not yet forwarded to Rust backend.
+    # --phased and --region_col are now supported by the Rust backend and forwarded below;
+    # --groupby (parent-level secondary grouping) is not yet implemented in Rust.
     unsupported = {
-        "--phased": ai_files.phased,
-        "--region_col": ai_files.region_col is not None,
         "--groupby": ai_files.groupby is not None,
     }
     for flag, active in unsupported.items():
@@ -187,6 +187,8 @@ def run_ai_analysis(
         min_count=ai_files.min_count,
         pseudocount=ai_files.pseudocount,
         method=ai_files.model,
+        phased=ai_files.phased,
+        region_col=ai_files.region_col,
     )
     ai_df = pd.DataFrame(results)
 
