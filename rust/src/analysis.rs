@@ -26,6 +26,9 @@ pub struct VariantCounts {
     pub region: String,
     /// Donor/sample identifier; required only by the per_donor model.
     pub sample: Option<String>,
+    /// Genotype phase relative to the reference allele: 0 = ref|alt, 1 = alt|ref.
+    /// `None` when genotypes are absent or unphased. Required by phased analysis.
+    pub gt: Option<u8>,
 }
 
 /// Statistical results for a region
@@ -50,6 +53,7 @@ pub struct AnalysisConfig {
     pub min_count: u32,
     pub pseudocount: u32,
     pub method: AnalysisMethod,
+    pub phased: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -65,6 +69,7 @@ impl Default for AnalysisConfig {
             min_count: 10,
             pseudocount: 1,
             method: AnalysisMethod::Single,
+            phased: false,
         }
     }
 }
@@ -276,6 +281,141 @@ fn optimize_prob(ref_counts: &[u32], n_array: &[u32], disp: f64) -> Result<(f64,
     Ok((alt_ll, mu))
 }
 
+/// Optimize probability for phased data using known genotype phase.
+///
+/// Python equivalent: `parse_opt()` phased branch calling
+/// `minimize_scalar(opt_phased_new, ...)` in as_analysis.py (L213-256, L118-140).
+///
+/// The phase array is first normalized so the first SNP is the reference
+/// (`if gt[0] > 0 { gt = 1 - gt }`), matching Python's
+/// `if gt_array[0] > 0: gt_array = 1 - gt_array`. The objective then sums
+/// `opt_prob(|prob - gt_i|, disp, ref_i, n_i)` across the region and is
+/// minimized over `prob` in (0, 1).
+///
+/// # Arguments
+/// * `ref_counts` - Reference allele counts for the region
+/// * `n_array` - Total counts for the region
+/// * `gt_array` - Genotype phase per variant (0 or 1)
+/// * `disp` - Dispersion parameter (scalar; per-region as in single/linear alt path)
+///
+/// # Returns
+/// Tuple of (alt_ll, mu) - alternative-model log-likelihood and imbalance proportion
+fn optimize_prob_phased(
+    ref_counts: &[u32],
+    n_array: &[u32],
+    gt_array: &[u8],
+    disp: f64,
+) -> Result<(f64, f64)> {
+    // Normalize phase so the first SNP is with respect to ref (matches Python).
+    let flip = gt_array.first().is_some_and(|&g| g > 0);
+    let gt_norm: Vec<u8> = gt_array
+        .iter()
+        .map(|&g| if flip { 1 - g } else { g })
+        .collect();
+
+    // objective(prob) = Σ opt_prob(|prob - gt_i|, disp, ref_i, n_i)
+    let objective = |prob: f64| -> f64 {
+        let mut sum = 0.0;
+        for ((&k, &n), &g) in ref_counts.iter().zip(n_array.iter()).zip(gt_norm.iter()) {
+            let phased_prob = (prob - g as f64).abs();
+            match opt_prob(phased_prob, disp, k, n) {
+                Ok(nll) => sum += nll,
+                Err(_) => return f64::INFINITY,
+            }
+        }
+        sum
+    };
+
+    let mu = golden_section_search(objective, 0.0, 1.0, 1e-6)?;
+    let alt_ll = -objective(mu);
+    Ok((alt_ll, mu))
+}
+
+/// Optimize probability for unphased data using dynamic programming.
+///
+/// Python equivalent: `opt_unphased_dp()` in as_analysis.py
+///
+/// This marginalizes over unknown phase using dynamic programming. At each
+/// position after the first, we consider both phase possibilities and weight
+/// them equally (0.5 each), accumulating likelihood across the region.
+///
+/// # Arguments
+/// * `prob` - Probability parameter (0 to 1)
+/// * `disp` - Dispersion parameter(s). If slice length > 1, first element is for
+///   first position and remaining elements are for subsequent positions.
+/// * `first_ref` - Reference count for first position
+/// * `first_n` - Total count for first position
+/// * `phase_ref` - Reference counts for subsequent positions
+/// * `phase_n` - Total counts for subsequent positions
+///
+/// # Returns
+/// Negative log-likelihood value (for minimization)
+pub fn optimize_prob_unphased_dp(
+    prob: f64,
+    disp: &[f64],
+    first_ref: u32,
+    first_n: u32,
+    phase_ref: &[u32],
+    phase_n: &[u32],
+) -> Result<f64> {
+    // Split per-variant dispersion for first vs subsequent positions (linear model)
+    let (first_disp, phase_disp): (f64, &[f64]) = if disp.len() > 1 {
+        (disp[0], &disp[1..])
+    } else {
+        // Scalar dispersion: use same value for all positions
+        (disp[0], disp)
+    };
+
+    // Get likelihood of first position (negative log-likelihood)
+    let first_ll = opt_prob(prob, first_disp, first_ref, first_n)?;
+
+    // If no subsequent positions, just return first_ll
+    if phase_ref.is_empty() {
+        return Ok(first_ll);
+    }
+
+    // Compute likelihoods for subsequent positions under both phase hypotheses
+    // phase1_like: pmf with prob
+    // phase2_like: pmf with (1 - prob)
+    let mut prev_like: f64 = 1.0;
+
+    for (i, (&ref_count, &n)) in phase_ref.iter().zip(phase_n.iter()).enumerate() {
+        // Get dispersion for this position
+        let rho = if phase_disp.len() > 1 {
+            clamp_rho(phase_disp[i.min(phase_disp.len() - 1)])
+        } else {
+            clamp_rho(phase_disp[0])
+        };
+
+        // Phase 1: use prob
+        let alpha1 = prob * (1.0 - rho) / rho;
+        let beta1 = (1.0 - prob) * (1.0 - rho) / rho;
+        let bb1 = BetaBinomial::new(n, alpha1, beta1)
+            .context("Failed to create beta-binomial for phase1")?;
+        let p1 = bb1.f(&(ref_count as u64)); // pmf (not log)
+
+        // Phase 2: use (1 - prob)
+        let alpha2 = (1.0 - prob) * (1.0 - rho) / rho;
+        let beta2 = prob * (1.0 - rho) / rho;
+        let bb2 = BetaBinomial::new(n, alpha2, beta2)
+            .context("Failed to create beta-binomial for phase2")?;
+        let p2 = bb2.f(&(ref_count as u64)); // pmf (not log)
+
+        // DP update: marginalize over both phases with equal weight
+        let p1_combined = prev_like * p1;
+        let p2_combined = prev_like * p2;
+        prev_like = 0.5 * p1_combined + 0.5 * p2_combined;
+    }
+
+    // Return first_ll + (-ln(prev_like))
+    // Handle edge case where prev_like might be 0 or very small
+    if prev_like <= 0.0 || !prev_like.is_finite() {
+        return Ok(f64::INFINITY);
+    }
+
+    Ok(first_ll + (-prev_like.ln()))
+}
+
 /// Golden section search for 1D optimization
 ///
 /// Simple but robust method for bounded scalar optimization.
@@ -467,7 +607,7 @@ pub fn fdr_correction(pvals: &[f64]) -> Vec<f64> {
 /// Single dispersion model analysis
 ///
 /// Python equivalent: `single_model()` in as_analysis.py
-pub fn single_model(variants: Vec<VariantCounts>) -> Result<Vec<ImbalanceResult>> {
+pub fn single_model(variants: Vec<VariantCounts>, phased: bool) -> Result<Vec<ImbalanceResult>> {
     if variants.is_empty() {
         return Ok(vec![]);
     }
@@ -510,8 +650,44 @@ pub fn single_model(variants: Vec<VariantCounts>) -> Result<Vec<ImbalanceResult>
             // Null model: prob = 0.5 (no imbalance)
             let null_ll = betabinom_logpmf_sum(&region_ref, &region_n, null_param, null_param)?;
 
-            // Alternative model: optimize prob
-            let (alt_ll, mu) = optimize_prob(&region_ref, &region_n, disp)?;
+            // Alternative model: optimize prob (phase-aware routing)
+            let all_gt = indices.iter().all(|&i| variants[i].gt.is_some());
+            let (alt_ll, mu) = if phased && indices.len() > 1 && all_gt {
+                // Phased multi-SNP region: use known genotype phase.
+                let region_gt: Vec<u8> = indices
+                    .iter()
+                    .map(|&i| variants[i].gt.expect("gt present (checked by all_gt)"))
+                    .collect();
+                optimize_prob_phased(&region_ref, &region_n, &region_gt, disp)?
+            } else if !phased && indices.len() > 1 {
+                // Unphased multi-SNP region: marginalize over phase via DP,
+                // minimizing opt_unphased_dp over prob in (0, 1)
+                // (first = index 0, phase = remaining), matching Python's
+                // parse_opt() unphased branch (minimize_scalar(opt_unphased_dp,...)).
+                let disp_slice = [disp];
+                let first_ref = region_ref[0];
+                let first_n = region_n[0];
+                let phase_ref = &region_ref[1..];
+                let phase_n = &region_n[1..];
+                let objective = |prob: f64| -> f64 {
+                    match optimize_prob_unphased_dp(
+                        prob,
+                        &disp_slice,
+                        first_ref,
+                        first_n,
+                        phase_ref,
+                        phase_n,
+                    ) {
+                        Ok(nll) => nll,
+                        Err(_) => f64::INFINITY,
+                    }
+                };
+                let mu = golden_section_search(objective, 0.0, 1.0, 1e-6)?;
+                let alt_ll = -objective(mu);
+                (alt_ll, mu)
+            } else {
+                optimize_prob(&region_ref, &region_n, disp)?
+            };
 
             // Likelihood ratio test
             let lrt = -2.0 * (null_ll - alt_ll);
@@ -561,7 +737,7 @@ pub fn single_model(variants: Vec<VariantCounts>) -> Result<Vec<ImbalanceResult>
 ///
 /// Python equivalent: `linear_model()` in as_analysis.py
 /// Uses ρ = expit(d1 + N × d2) where d1, d2 are globally optimized parameters.
-pub fn linear_model(variants: Vec<VariantCounts>) -> Result<Vec<ImbalanceResult>> {
+pub fn linear_model(variants: Vec<VariantCounts>, phased: bool) -> Result<Vec<ImbalanceResult>> {
     if variants.is_empty() {
         return Ok(vec![]);
     }
@@ -624,7 +800,45 @@ pub fn linear_model(variants: Vec<VariantCounts>) -> Result<Vec<ImbalanceResult>
             // Alternative model: optimize prob using per-variant rho
             // For simplicity, use average rho for optimization (matches Python behavior)
             let avg_rho = region_rho.iter().sum::<f64>() / region_rho.len() as f64;
-            let (alt_ll, mu) = optimize_prob(&region_ref, &region_n, avg_rho)?;
+            // Phase-aware routing (disp = avg_rho scalar, matching the existing
+            // single/linear alt path).
+            let all_gt = indices.iter().all(|&i| variants[i].gt.is_some());
+            let (alt_ll, mu) = if phased && indices.len() > 1 && all_gt {
+                // Phased multi-SNP region: use known genotype phase.
+                let region_gt: Vec<u8> = indices
+                    .iter()
+                    .map(|&i| variants[i].gt.expect("gt present (checked by all_gt)"))
+                    .collect();
+                optimize_prob_phased(&region_ref, &region_n, &region_gt, avg_rho)?
+            } else if !phased && indices.len() > 1 {
+                // Unphased multi-SNP region: marginalize over phase via DP,
+                // minimizing opt_unphased_dp over prob in (0, 1)
+                // (first = index 0, phase = remaining), matching Python's
+                // parse_opt() unphased branch (minimize_scalar(opt_unphased_dp,...)).
+                let disp_slice = [avg_rho];
+                let first_ref = region_ref[0];
+                let first_n = region_n[0];
+                let phase_ref = &region_ref[1..];
+                let phase_n = &region_n[1..];
+                let objective = |prob: f64| -> f64 {
+                    match optimize_prob_unphased_dp(
+                        prob,
+                        &disp_slice,
+                        first_ref,
+                        first_n,
+                        phase_ref,
+                        phase_n,
+                    ) {
+                        Ok(nll) => nll,
+                        Err(_) => f64::INFINITY,
+                    }
+                };
+                let mu = golden_section_search(objective, 0.0, 1.0, 1e-6)?;
+                let alt_ll = -objective(mu);
+                (alt_ll, mu)
+            } else {
+                optimize_prob(&region_ref, &region_n, avg_rho)?
+            };
 
             // Likelihood ratio test
             let lrt = -2.0 * (null_ll - alt_ll);
@@ -868,8 +1082,8 @@ pub fn analyze_imbalance(
 
     // Run analysis based on method
     let mut results = match config.method {
-        AnalysisMethod::Single => single_model(filtered)?,
-        AnalysisMethod::Linear => linear_model(filtered)?,
+        AnalysisMethod::Single => single_model(filtered, config.phased)?,
+        AnalysisMethod::Linear => linear_model(filtered, config.phased)?,
         AnalysisMethod::PerDonor => per_donor_model(filtered)?,
     };
 
@@ -966,5 +1180,61 @@ mod tests {
         let f = |x: f64| (x - 0.7).powi(2);
         let min = golden_section_search(f, 0.0, 1.0, 1e-6).unwrap();
         assert!((min - 0.7).abs() < 1e-5);
+    }
+
+    #[test]
+    fn test_optimize_prob_unphased_dp_single_position() {
+        // Test with only first position (no subsequent positions)
+        let disp = vec![0.1];
+        let result = optimize_prob_unphased_dp(0.5, &disp, 10, 20, &[], &[]).unwrap();
+        // Should just return first_ll from opt_prob
+        let expected = opt_prob(0.5, 0.1, 10, 20).unwrap();
+        assert!(
+            (result - expected).abs() < 1e-10,
+            "Single position: result={}, expected={}",
+            result,
+            expected
+        );
+    }
+
+    #[test]
+    fn test_optimize_prob_unphased_dp_multiple_positions() {
+        // Test with multiple positions
+        let disp = vec![0.1];
+        let phase_ref = vec![8, 12];
+        let phase_n = vec![20, 25];
+        let result = optimize_prob_unphased_dp(0.5, &disp, 10, 20, &phase_ref, &phase_n).unwrap();
+        // Result should be finite and positive
+        assert!(result.is_finite(), "Result should be finite");
+        assert!(result > 0.0, "Negative log-likelihood should be positive");
+    }
+
+    #[test]
+    fn test_optimize_prob_unphased_dp_per_variant_disp() {
+        // Test with per-variant dispersion (linear model)
+        let disp = vec![0.1, 0.15, 0.2]; // first pos: 0.1, subsequent: [0.15, 0.2]
+        let phase_ref = vec![8, 12];
+        let phase_n = vec![20, 25];
+        let result = optimize_prob_unphased_dp(0.5, &disp, 10, 20, &phase_ref, &phase_n).unwrap();
+        assert!(
+            result.is_finite(),
+            "Result should be finite with per-variant disp"
+        );
+        assert!(result > 0.0, "Negative log-likelihood should be positive");
+    }
+
+    #[test]
+    fn test_optimize_prob_unphased_dp_asymmetric_prob() {
+        // Test with asymmetric probability (imbalance)
+        let disp = vec![0.1];
+        let phase_ref = vec![15, 18]; // More ref alleles
+        let phase_n = vec![20, 25];
+        let result_balanced =
+            optimize_prob_unphased_dp(0.5, &disp, 10, 20, &phase_ref, &phase_n).unwrap();
+        let result_imbalanced =
+            optimize_prob_unphased_dp(0.7, &disp, 14, 20, &phase_ref, &phase_n).unwrap();
+        // Both should be finite
+        assert!(result_balanced.is_finite());
+        assert!(result_imbalanced.is_finite());
     }
 }
