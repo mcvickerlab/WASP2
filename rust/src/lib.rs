@@ -255,7 +255,7 @@ fn remap_all_chromosomes(
 ///     print(f"{r['region']}: pval={r['pval']:.4f}")
 /// ```
 #[pyfunction]
-#[pyo3(signature = (tsv_path, min_count=10, pseudocount=1, method="single", phased=false))]
+#[pyo3(signature = (tsv_path, min_count=10, pseudocount=1, method="single", phased=false, region_col=None))]
 fn analyze_imbalance(
     py: Python,
     tsv_path: &str,
@@ -263,6 +263,7 @@ fn analyze_imbalance(
     pseudocount: u32,
     method: &str,
     phased: bool,
+    region_col: Option<String>,
 ) -> PyResult<Py<PyAny>> {
     use pyo3::types::{PyDict, PyList};
     use std::fs::File;
@@ -327,8 +328,21 @@ fn analyze_imbalance(
             }
             // Detect an optional `sample` column by name (per_donor input)
             sample_idx = headers.iter().position(|h| *h == "sample");
-            // Detect a `region` column to use input region names for grouping
-            region_idx = headers.iter().position(|h| *h == "region");
+            // Resolve grouping column from the region_col argument (mirror Python get_imbalance):
+            //   Some(name) => group by that column (error if the column is absent)
+            //   None       => per-variant grouping (chrom_pos), ignoring any "region" column
+            region_idx = match &region_col {
+                Some(name) => match headers.iter().position(|h| *h == name.as_str()) {
+                    Some(ix) => Some(ix),
+                    None => {
+                        return Err(PyRuntimeError::new_err(format!(
+                            "region_col '{}' not found in header columns: {:?}",
+                            name, headers
+                        )))
+                    }
+                },
+                None => None,
+            };
             continue;
         }
 
@@ -348,13 +362,14 @@ fn analyze_imbalance(
             .parse::<u32>()
             .map_err(|e| PyRuntimeError::new_err(format!("Invalid alt_count: {}", e)))?;
 
-        // Use input region column if present, otherwise create chrom_pos_pos+1 format
+        // region_col=Some => use that column verbatim; region_col=None => per-variant chrom_pos.
+        // The chrom_pos label matches Python's df["chrom"] + "_" + df["pos"] for SNV-solo parity.
         let region = match region_idx {
             Some(ri) => fields
                 .get(ri)
                 .map(|s| s.to_string())
-                .unwrap_or_else(|| format!("{}_{}_{}", chrom, pos, pos + 1)),
-            None => format!("{}_{}_{}", chrom, pos, pos + 1),
+                .unwrap_or_else(|| format!("{}_{}", chrom, pos)),
+            None => format!("{}_{}", chrom, pos),
         };
 
         let sample = sample_idx.and_then(|si| fields.get(si).map(|s| s.to_string()));
