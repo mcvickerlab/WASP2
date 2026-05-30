@@ -190,8 +190,8 @@ def make_count_matrix(
     )
 
     adata.obs = snp_df.to_pandas()
-    adata.obs["ref_count"] = adata.layers["ref"].sum(axis=1, dtype=np.uint16).T.A1
-    adata.obs["alt_count"] = adata.layers["alt"].sum(axis=1, dtype=np.uint16).T.A1
+    adata.obs["ref_count"] = adata.layers["ref"].sum(axis=1).T.A1
+    adata.obs["alt_count"] = adata.layers["alt"].sum(axis=1).T.A1
 
     # Add barcode names
     adata.var_names = bc_dict.keys()

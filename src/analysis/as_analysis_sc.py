@@ -85,8 +85,8 @@ def get_imbalance_sc(
     # region_cutoff = min_count + (2*pseudocount)
     snp_cutoff = 2 * pseudocount
 
-    ref_counts = adata.layers["ref"].sum(axis=1, dtype=np.uint16).T.A1 + pseudocount
-    alt_counts = adata.layers["alt"].sum(axis=1, dtype=np.uint16).T.A1 + pseudocount
+    ref_counts = adata.layers["ref"].sum(axis=1).T.A1 + pseudocount
+    alt_counts = adata.layers["alt"].sum(axis=1).T.A1 + pseudocount
     n_counts = ref_counts + alt_counts
 
     # Calculate dispersion across dataset
@@ -116,8 +116,8 @@ def get_imbalance_sc(
         adata_sub = adata[:, adata.var["group"] == group_name]
 
         # Create count data per group
-        ref_counts_group = adata_sub.layers["ref"].sum(axis=1, dtype=np.uint16).T.A1 + pseudocount
-        alt_counts_group = adata_sub.layers["alt"].sum(axis=1, dtype=np.uint16).T.A1 + pseudocount
+        ref_counts_group = adata_sub.layers["ref"].sum(axis=1).T.A1 + pseudocount
+        alt_counts_group = adata_sub.layers["alt"].sum(axis=1).T.A1 + pseudocount
         n_counts_group = ref_counts_group + alt_counts_group
 
         nonzero_idx = np.where(n_counts_group > snp_cutoff)  # Get indices where counts were found
