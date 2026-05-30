@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import timeit
 from collections import defaultdict
 from collections.abc import Iterator
@@ -18,6 +19,14 @@ from scipy.sparse import csr_matrix
 from .count_alleles import find_read_aln_pos
 
 logger = logging.getLogger(__name__)
+
+# Try to import the Rust single-cell counter (optional; Python fallback always available)
+try:
+    from wasp2_rust import BamCounterSC as _RustSC
+
+    RUST_SC_AVAILABLE = True
+except ImportError:
+    RUST_SC_AVAILABLE = False
 
 
 def _sparse_from_counts(
@@ -86,6 +95,7 @@ def make_count_matrix(
     bc_dict: dict[str, int],
     include_samples: list[str] | None = None,
     include_features: list[str] | None = None,
+    use_rust: bool = True,
 ) -> ad.AnnData:
     """Create sparse count matrix from BAM and variant data.
 
@@ -101,6 +111,9 @@ def make_count_matrix(
         Sample columns to include from variant data, by default None.
     include_features : list[str] | None, optional
         Feature columns to include, by default None.
+    use_rust : bool, optional
+        Use the Rust per-cell counter when available, by default True. Falls back
+        to the pure-Python ``count_bc_snp_alleles`` if the extension is missing.
 
     Returns
     -------
@@ -123,30 +136,46 @@ def make_count_matrix(
 
     sc_counts = CountStatsSC()  # Class that holds total count data
 
-    with AlignmentFile(bam_file, "rb") as bam:
-        for chrom in chrom_list:
-            chrom_df = snp_df.filter(pl.col("chrom") == chrom)
+    rust_path = use_rust and RUST_SC_AVAILABLE
 
-            start = timeit.default_timer()
+    if rust_path:
+        start = timeit.default_timer()
+        count_bc_snp_alleles_rust(
+            bam_file=bam_file,
+            bc_dict=bc_dict,
+            snp_df=snp_df,
+            sc_counts=sc_counts,
+        )
+        logger.info(
+            "Rust SC counter: %d SNPs across %d chromosomes in %.2f s",
+            snp_df.shape[0],
+            chrom_list.len(),
+            timeit.default_timer() - start,
+        )
+    else:
+        with AlignmentFile(bam_file, "rb") as bam:
+            for chrom in chrom_list:
+                chrom_df = snp_df.filter(pl.col("chrom") == chrom)
 
-            try:
-                count_bc_snp_alleles(
-                    bam=bam,
-                    bc_dict=bc_dict,
-                    chrom=chrom,
-                    snp_list=chrom_df.select(["index", "pos", "ref", "alt"]).iter_rows(),
-                    sc_counts=sc_counts,
-                )
+                start = timeit.default_timer()
 
-            except ValueError:
-                logger.warning("Skipping %s: Contig not found!", chrom)
-            else:
-                logger.info(
-                    "%s: Counted %d SNPs in %.2f seconds",
-                    chrom,
-                    chrom_df.height,
-                    timeit.default_timer() - start,
-                )
+                try:
+                    count_bc_snp_alleles(
+                        bam=bam,
+                        bc_dict=bc_dict,
+                        chrom=chrom,
+                        snp_list=chrom_df.select(["index", "pos", "ref", "alt"]).iter_rows(),
+                        sc_counts=sc_counts,
+                    )
+                except ValueError:
+                    logger.warning("Skipping %s: Contig not found!", chrom)
+                else:
+                    logger.info(
+                        "%s: Counted %d SNPs in %.2f seconds",
+                        chrom,
+                        chrom_df.height,
+                        timeit.default_timer() - start,
+                    )
 
     # Create sparse matrices
     matrix_shape = (snp_df.shape[0], len(bc_dict))
@@ -196,6 +225,74 @@ def make_count_matrix(
     adata.uns["count_stats"] = sc_counts.stats_to_df()
 
     return adata
+
+
+def count_bc_snp_alleles_rust(
+    bam_file: str,
+    bc_dict: dict[str, int],
+    snp_df: pl.DataFrame,
+    sc_counts: CountStatsSC,
+    threads: int | None = None,
+) -> None:
+    """Rust-accelerated per-cell allele counting for ALL chromosomes in one call.
+
+    Mirrors :func:`count_bc_snp_alleles`, filling the same
+    ``sc_counts.ref_count`` / ``alt_count`` / ``other_count`` defaultdicts keyed
+    by ``(snp_idx, bc_idx)`` so downstream sparse-matrix assembly is unchanged.
+
+    Passing every region in a single call lets the Rust counter parallelize
+    across chromosomes via Rayon (the previous per-chromosome calls never did).
+
+    Parameters
+    ----------
+    bam_file : str
+        Path to BAM file with cell barcodes.
+    bc_dict : dict[str, int]
+        Mapping of cell barcodes to indices.
+    snp_df : pl.DataFrame
+        DataFrame with columns ``index``, ``chrom``, ``pos``, ``ref``, ``alt``
+        for every SNP across all chromosomes.
+    sc_counts : CountStatsSC
+        Statistics container to update with counts (COO-filled in place).
+    threads : int | None, optional
+        Number of Rayon worker threads (parallelizes across chromosomes). When
+        ``None``, reads ``WASP2_RUST_THREADS``; if that is unset, defaults to
+        ``min(8, os.cpu_count())`` so the accelerated path is fast out-of-the-box
+        (single-thread is ~1.5x slower than pysam; cross-chromosome parallelism is
+        the speedup). Set ``WASP2_RUST_THREADS=1`` to force the serial path.
+    """
+    cpu_default = min(8, os.cpu_count() or 1)
+    rust_threads_env = os.environ.get("WASP2_RUST_THREADS") if threads is None else None
+    try:
+        rust_threads = (
+            threads
+            if threads is not None
+            else (int(rust_threads_env) if rust_threads_env else cpu_default)
+        )
+    except ValueError:
+        rust_threads = cpu_default
+    rust_threads = max(1, rust_threads)
+
+    # Build region tuples: (snp_idx, chrom, pos, ref, alt) for ALL chromosomes.
+    regions = list(snp_df.select(["index", "chrom", "pos", "ref", "alt"]).iter_rows())
+
+    # Call Rust counter; min_qual=0 matches WASP2 behavior (no quality filtering)
+    counter = _RustSC(bam_file)
+    coo = counter.count_bc_alleles(regions, bc_dict, 0, rust_threads)
+
+    # Fill the COO results into the shared accumulators keyed by (snp_idx, bc_idx)
+    for snp_idx, bc_idx, ref_count, alt_count, other_count in coo:
+        key = (snp_idx, bc_idx)
+        if ref_count:
+            sc_counts.ref_count[key] += ref_count
+        if alt_count:
+            sc_counts.alt_count[key] += alt_count
+        if other_count:
+            sc_counts.other_count[key] += other_count
+
+    # Bookkeeping consistent with count_bc_snp_alleles (per-chrom num_snps).
+    for chrom, n in snp_df.group_by("chrom").len().iter_rows():
+        sc_counts.num_snps[chrom] += n
 
 
 def count_bc_snp_alleles(
