@@ -224,6 +224,53 @@ def make_count_matrix(
     # Write out count stats
     adata.uns["count_stats"] = sc_counts.stats_to_df()
 
+    # --- Orientation flip (Issue #2): obs=SNPs/var=cells -> obs=cells/var=SNPs ---
+    # Everything above assembles the historical orientation (obs=SNPs, var=barcodes)
+    # EXACTLY as before, so the count VALUES are unchanged. A single transpose at the
+    # end adopts the scverse/AnnData convention (obs=observations=cells,
+    # var=variables=features=SNPs): X and every layer are transposed together, and the
+    # obs<->var annotations are swapped (the SNP table + per-SNP ref_count/alt_count
+    # move to var; the barcodes become obs_names). This is exactly transpose-invariant
+    # vs the old golden (the COO/triplet multiset is identical; only axis order flips).
+    adata = adata.transpose()
+
+    # AnnData.transpose() yields CSC for the transposed CSR matrices; re-densify the
+    # sparse representation back to CSR for downstream consistency with the producer's
+    # prior CSR contract (callers/analyzer index rows = cells).
+    if hasattr(adata.X, "tocsr"):
+        adata.X = adata.X.tocsr()
+    for _layer in adata.layers:
+        _mat = adata.layers[_layer]
+        if hasattr(_mat, "tocsr"):
+            adata.layers[_layer] = _mat.tocsr()
+
+    # var_names = scverse-convention SNP id "chrom:pos:ref>alt" (the exact format the
+    # haplotype module scatac_add_haplotype_layers looks up against the phased VCF).
+    # Without this, var_names default to positional integers and the module's literal
+    # var_names lookup silently matches nothing (n_phased=0). The integer COO key stays
+    # in the var "index" column, so counts and the analyzer are unaffected.
+    adata.var_names = (
+        adata.var["chrom"].astype(str)
+        + ":"
+        + adata.var["pos"].astype(str)
+        + ":"
+        + adata.var["ref"].astype(str)
+        + ">"
+        + adata.var["alt"].astype(str)
+    )
+
+    # Orientation contract: var carries the SNP table, obs_names are the barcodes,
+    # and X is (n_cells, n_SNP). These guard against a silent axis regression.
+    assert {"chrom", "pos", "ref", "alt"}.issubset(set(adata.var.columns)), (
+        "orientation contract: var must carry the SNP table (chrom/pos/ref/alt)"
+    )
+    assert list(adata.obs_names) == list(bc_dict.keys()), (
+        "orientation contract: obs_names must be the cell barcodes"
+    )
+    assert adata.shape == (len(bc_dict), snp_df.shape[0]), (
+        "orientation contract: X.shape must be (n_cells, n_SNP)"
+    )
+
     return adata
 
 
