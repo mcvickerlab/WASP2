@@ -285,6 +285,32 @@ except ImportError as e:
    # See: https://github.com/samtools/htslib#building-htslib
    ```
 
+## Multi-allelic policy
+
+VCF→BED conversion is **biallelic-only by default** across all backends. Multi-allelic sites are
+dropped at the VCF→BED stage (before allele counting; the read counter itself has no allele-count
+concept). The Rust `noodles` path does this **natively** (`alt_alleles.len() > 1` → skip;
+`vcf_to_bed.rs`), which is *equivalent to* `bcftools -m2 -M2` but uses no subprocess; the
+pysam/cyvcf2 + bcftools fallbacks use the **literal** `bcftools view -m2 -M2`. This keeps the
+biallelic reference/alternate imbalance model consistent and avoids near-duplicate per-ALT SNVs
+that lose reads to per-chromosome read deduplication and undercount their neighbors.
+
+**Provenance — this restores the original WASP2 behavior.** The pre-refactor release
+(`archive/master-pre-v1.3.0`) hard-coded `bcftools view -m2 -M2 -v snps` in both
+`src/counting/filter_variant_data.py` and `src/mapping/intersect_variant_data.py`, so biallelic-only
+was the published, paper-consistent default. The v1.2.0 migration to the `wasp2.io` layer **removed
+`-m2 -M2`** (commented "to include multi-allelic het sites"), silently introducing multi-allelic
+inclusion. Defaulting `biallelic_only=True` restores the original behavior — across the Rust path
+(native gate) and the bcftools fallbacks (literal flag) alike.
+
+Pass `--include-multiallelic` (CLI: `count-variants`, `count-variants-sc`, `make-reads`) or
+`biallelic_only=False` (Python: `variants_to_bed`, `VCFSource.to_bed`) to opt back into the
+post-v1.2.0 multi-allelic behavior, which emits one BED row per heterozygous ALT at multi-allelic
+sites.
+
+We recommend normalizing inputs with `bcftools norm -m-` so that genuine multi-allelic calls are
+split into biallelic records and retained, rather than dropped.
+
 ## References
 
 - **cyvcf2 Paper**: Pedersen BS, Quinlan AR (2017). cyvcf2: fast, flexible variant analysis with Python. *Bioinformatics* 33(12):1867-1869. [doi:10.1093/bioinformatics/btx057](https://academic.oup.com/bioinformatics/article/33/12/1867/2971439)

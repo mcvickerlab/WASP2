@@ -58,6 +58,18 @@ WASP2 installs three command-line entry points:
 
 ## Quick Start
 
+> **Prerequisite — normalize your VCF first.** WASP2's allelic-imbalance model is biallelic.
+> Split multi-allelic records and left-align before running:
+>
+> ```bash
+> bcftools norm -m- -f reference.fa input.vcf.gz -Oz -o input.norm.vcf.gz
+> bcftools index -t input.norm.vcf.gz
+> ```
+>
+> By default WASP2 keeps **biallelic SNVs only** (multi-allelic sites are dropped, equivalent to
+> `bcftools view -m2 -M2`). Pass `--include-multiallelic` to `count-variants`, `count-variants-sc`,
+> or `make-reads` to instead emit one row per ALT at any remaining multi-allelic sites.
+
 ### 1. Correct mapping bias
 
 ```bash
