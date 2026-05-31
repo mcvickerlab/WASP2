@@ -116,6 +116,7 @@ def run_count_variants_sc(
     use_region_names: bool = False,
     out_file: str | None = None,
     temp_loc: str | None = None,
+    biallelic_only: bool = True,
 ) -> None:
     """Run single-cell ATAC variant counting pipeline.
 
@@ -161,6 +162,7 @@ def run_count_variants_sc(
         out_bed=count_files.vcf_bed,
         samples=count_files.samples,
         include_gt=True,
+        biallelic_only=biallelic_only,
     )
 
     assert count_files.feature_file is not None

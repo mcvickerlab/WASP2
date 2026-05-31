@@ -24,6 +24,7 @@ def variants_to_bed(
     use_legacy: bool = False,
     include_indels: bool = False,
     max_indel_len: int = 10,
+    biallelic_only: bool = True,
 ) -> Path:
     """Convert variant file to BED format.
 
@@ -69,6 +70,7 @@ def variants_to_bed(
             include_gt=include_gt,
             include_indels=include_indels,
             max_indel_len=max_indel_len,
+            biallelic_only=biallelic_only,
         )
 
     # Use VariantSource for all formats
@@ -80,6 +82,7 @@ def variants_to_bed(
             include_genotypes=include_gt,
             include_indels=include_indels,
             max_indel_len=max_indel_len,
+            biallelic_only=biallelic_only,
         )
 
     return out_bed
@@ -92,14 +95,15 @@ def _vcf_to_bed_bcftools(
     include_gt: bool = True,
     include_indels: bool = False,
     max_indel_len: int = 10,
+    biallelic_only: bool = True,
 ) -> Path:
     """Legacy vcf_to_bed using bcftools subprocess.
 
     This is the original implementation for backward compatibility.
     Prefer variants_to_bed() which uses VariantSource.
 
-    Note: Multi-allelic sites are now included (removed -m2 -M2 filter)
-    to match bcftools -g het behavior used by WASP2-Python benchmark.
+    Note: multi-allelic handling is controlled by `biallelic_only` (default True drops
+    multi-allelic via -m2 -M2; set False to retain multi-allelic het sites).
 
     Args:
         vcf_file: Path to VCF/VCF.GZ/BCF file
@@ -115,12 +119,14 @@ def _vcf_to_bed_bcftools(
     vcf_file = Path(vcf_file)
     out_bed = Path(out_bed)
 
-    # Base commands - NOTE: Removed -m2 -M2 to include multi-allelic het sites
+    # Base commands. biallelic_only adds -m2 -M2 (restrict to biallelic SNVs); gated, default off.
     view_cmd = [
         "bcftools",
         "view",
         str(vcf_file),
     ]
+    if biallelic_only:
+        view_cmd.extend(["-m2", "-M2"])
 
     # Add variant type filter
     if include_indels:

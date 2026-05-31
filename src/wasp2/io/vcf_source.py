@@ -88,6 +88,10 @@ class VCFSource(VariantSource):
         # Lazy-computed variant count
         self._variant_count: int | None = None
 
+        # Biallelic policy: drop multi-allelic records on read by default (the AI model is
+        # biallelic; the reader / _get_alleles paths assume a single ALT). Set False to keep.
+        self.biallelic_only: bool = True
+
     @property
     def samples(self) -> list[str]:
         """Get list of sample IDs from VCF header.
@@ -183,9 +187,11 @@ class VCFSource(VariantSource):
             if het_only and genotype != Genotype.HET:
                 continue
 
-            # Create Variant object (use first ALT if multi-allelic)
             ref = record.ref
             assert ref is not None
+            # Biallelic policy: drop multi-allelic sites rather than silently keeping first ALT.
+            if self.biallelic_only and record.alts is not None and len(record.alts) > 1:
+                continue
             alt = record.alts[0] if record.alts else ref
             variant = Variant(chrom=record.chrom, pos=record.pos, ref=ref, alt=alt, id=record.id)
 
@@ -285,9 +291,11 @@ class VCFSource(VariantSource):
             else:
                 genotype = self._parse_gt(gt)
 
-            # Create Variant (use first ALT)
             ref = record.ref
             assert ref is not None
+            # Biallelic policy: drop multi-allelic sites rather than silently keeping first ALT.
+            if self.biallelic_only and record.alts is not None and len(record.alts) > 1:
+                continue
             alt = record.alts[0] if record.alts else ref
             variant = Variant(chrom=record.chrom, pos=record.pos, ref=ref, alt=alt, id=record.id)
 
@@ -305,6 +313,7 @@ class VCFSource(VariantSource):
         include_genotypes: bool = True,
         include_indels: bool = False,
         max_indel_len: int = 10,
+        biallelic_only: bool = True,
     ) -> Path:
         r"""Export variants to BED format file.
 
@@ -349,6 +358,7 @@ class VCFSource(VariantSource):
                     include_indels=include_indels,
                     max_indel_len=max_indel_len,
                     include_genotypes=include_genotypes,
+                    biallelic_only=biallelic_only,
                 )
                 return output
             except Exception as e:
@@ -356,7 +366,13 @@ class VCFSource(VariantSource):
 
         # Fallback to bcftools subprocess
         return self._to_bed_bcftools(
-            output, samples, het_only, include_genotypes, include_indels, max_indel_len
+            output,
+            samples,
+            het_only,
+            include_genotypes,
+            include_indels,
+            max_indel_len,
+            biallelic_only,
         )
 
     def _to_bed_bcftools(
@@ -367,15 +383,16 @@ class VCFSource(VariantSource):
         include_genotypes: bool,
         include_indels: bool,
         max_indel_len: int,
+        biallelic_only: bool = True,
     ) -> Path:
         """Export variants to BED using bcftools subprocess (fallback).
 
         This is the original implementation using bcftools.
-        Note: Multi-allelic sites are now included (removed -m2 -M2 filter)
-        to match bcftools -g het behavior used by WASP2-Python benchmark.
+        Note: multi-allelic handling is controlled by `biallelic_only` (default True drops
+        multi-allelic via -m2 -M2; set False to retain multi-allelic het sites).
         """
         # Build bcftools commands based on parameters
-        # NOTE: Removed -m2 -M2 biallelic filter to include multi-allelic het sites
+        # NOTE: biallelic_only adds -m2 -M2 below (restrict to biallelic SNVs)
 
         # Base view command
         view_cmd = [
@@ -383,6 +400,10 @@ class VCFSource(VariantSource):
             "view",
             str(self.path),
         ]
+
+        # biallelic_only adds -m2 -M2 (restrict to biallelic SNVs); gated, default off.
+        if biallelic_only:
+            view_cmd.extend(["-m2", "-M2"])
 
         # Add variant type filter
         if include_indels:

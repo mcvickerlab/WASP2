@@ -187,6 +187,17 @@ def count_variants(
             ),
         ),
     ] = False,
+    biallelic_only: Annotated[
+        bool,
+        typer.Option(
+            "--biallelic-only/--include-multiallelic",
+            help=(
+                "Keep only biallelic SNVs, dropping multi-allelic sites "
+                "(bcftools -m2 -M2 equivalent). Default. "
+                "Use --include-multiallelic to emit one row per ALT at multi-allelic sites."
+            ),
+        ),
+    ] = True,
 ) -> None:
     run_count_variants(
         bam_file=bam,
@@ -203,6 +214,7 @@ def count_variants(
         precomputed_vcf_bed=vcf_bed,
         precomputed_intersect=intersect_bed,
         include_indels=include_indels,
+        biallelic_only=biallelic_only,
     )
 
 
@@ -269,6 +281,17 @@ def count_variants_sc(
             ),
         ),
     ] = None,
+    biallelic_only: Annotated[
+        bool,
+        typer.Option(
+            "--biallelic-only/--include-multiallelic",
+            help=(
+                "Keep only biallelic SNVs, dropping multi-allelic sites "
+                "(bcftools -m2 -M2 equivalent). Default. "
+                "Use --include-multiallelic to emit one row per ALT at multi-allelic sites."
+            ),
+        ),
+    ] = True,
 ) -> None:
     run_count_variants_sc(
         bam_file=bam,
@@ -278,4 +301,5 @@ def count_variants_sc(
         samples=samples,
         out_file=out_file,
         temp_loc=temp_loc,
+        biallelic_only=biallelic_only,
     )

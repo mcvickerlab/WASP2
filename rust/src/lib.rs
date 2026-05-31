@@ -770,7 +770,7 @@ fn unified_make_reads_parallel_py(
 /// print(f"Wrote {count} het variants")
 /// ```
 #[pyfunction]
-#[pyo3(signature = (vcf_path, bed_path, samples=None, het_only=true, include_indels=false, max_indel_len=10, include_genotypes=true))]
+#[pyo3(signature = (vcf_path, bed_path, samples=None, het_only=true, include_indels=false, max_indel_len=10, include_genotypes=true, biallelic_only=true))]
 fn vcf_to_bed_py(
     vcf_path: &str,
     bed_path: &str,
@@ -779,6 +779,7 @@ fn vcf_to_bed_py(
     include_indels: bool,
     max_indel_len: usize,
     include_genotypes: bool,
+    biallelic_only: bool,
 ) -> PyResult<usize> {
     let config = vcf_to_bed::VcfToBedConfig {
         samples,
@@ -786,6 +787,7 @@ fn vcf_to_bed_py(
         include_indels,
         max_indel_len,
         include_genotypes,
+        biallelic_only,
     };
 
     vcf_to_bed::vcf_to_bed(vcf_path, bed_path, &config)

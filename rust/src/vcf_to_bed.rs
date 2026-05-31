@@ -39,6 +39,9 @@ pub struct VcfToBedConfig {
     pub max_indel_len: usize,
     /// Include genotype column in output
     pub include_genotypes: bool,
+    /// Only keep biallelic sites (exactly one ALT allele); DEFAULT true (drops
+    /// multi-allelic sites, matching bcftools -m2 -M2). Set false to retain per-ALT rows.
+    pub biallelic_only: bool,
 }
 
 impl Default for VcfToBedConfig {
@@ -49,6 +52,7 @@ impl Default for VcfToBedConfig {
             include_indels: false,
             max_indel_len: 10,
             include_genotypes: true,
+            biallelic_only: true,
         }
     }
 }
@@ -223,6 +227,15 @@ fn process_vcf_record<W: Write>(
 
     if alt_alleles.is_empty() {
         return Ok(None); // No valid ALT alleles
+    }
+
+    // Biallelic-only filter (equivalent to bcftools -m2 -M2): drop multi-allelic sites.
+    // The reference/alternate allelic-imbalance model is biallelic, and emitting each ALT
+    // of a multi-allelic site as a separate SNV yields near-duplicate sites that lose reads
+    // to the global per-chromosome read deduplication, undercounting their neighbors.
+    // Gated; default off retains the multi-allelic behavior.
+    if config.biallelic_only && alt_alleles.len() > 1 {
+        return Ok(None);
     }
 
     // Get chromosome and position
@@ -508,6 +521,7 @@ mod tests {
             include_indels: false,
             max_indel_len: 10,
             include_genotypes: true,
+            biallelic_only: false,
         };
 
         let count = vcf_to_bed(vcf.path(), bed.path(), &config).unwrap();
@@ -535,6 +549,7 @@ mod tests {
             include_indels: true,
             max_indel_len: 10,
             include_genotypes: true,
+            biallelic_only: false,
         };
 
         let count = vcf_to_bed(vcf.path(), bed.path(), &config).unwrap();
@@ -554,6 +569,7 @@ mod tests {
             include_indels: false,
             max_indel_len: 10,
             include_genotypes: true,
+            biallelic_only: false,
         };
 
         let count = vcf_to_bed(vcf.path(), bed.path(), &config).unwrap();
@@ -599,24 +615,77 @@ mod tests {
             include_indels: false,
             max_indel_len: 10,
             include_genotypes: true,
+            biallelic_only: true, // default policy: drop multi-allelic sites
         };
 
         let count = vcf_to_bed(vcf.path(), bed.path(), &config).unwrap();
 
-        // Should include:
-        // - pos 100: 1 het SNP (biallelic)
-        // - pos 200: 1 het for ALT A (0|1)
-        // - pos 300: 1 het for ALT C (0|2)
-        // - pos 400: 2 hets for ALT A and ALT G (1|2 is het for both)
-        // Total: 5 het entries
-        assert_eq!(count, 5);
+        // Under biallelic_only=true (default policy) only the biallelic het at pos 100
+        // survives; every multi-allelic site (200/300/400/500) is dropped at the gate.
+        // Total: 1 het entry.
+        assert_eq!(count, 1);
 
         // Read output and verify
         let content = std::fs::read_to_string(bed.path()).unwrap();
         let lines: Vec<&str> = content.lines().collect();
-        assert_eq!(lines.len(), 5);
+        assert_eq!(lines.len(), 1);
 
-        // Verify multi-allelic sites are present
+        // The biallelic het at pos 100 is retained ...
+        assert!(
+            lines.iter().any(|l| l.contains("chr1\t99\t100\tA\tG")),
+            "Biallelic het at pos 100 should be retained"
+        );
+        // ... and every multi-allelic site is dropped.
+        assert!(
+            !lines
+                .iter()
+                .any(|l| l.contains("\t199\t200\t") || l.contains("\t299\t300\t")),
+            "Multi-allelic sites must be dropped under biallelic_only default"
+        );
+    }
+
+    /// With biallelic_only=false (opt back in), multi-allelic sites still emit one row per het ALT.
+    #[test]
+    fn test_vcf_to_bed_include_multiallelic() {
+        let mut vcf = NamedTempFile::new().unwrap();
+        writeln!(vcf, "##fileformat=VCFv4.2").unwrap();
+        writeln!(vcf, "##contig=<ID=chr1,length=1000000>").unwrap();
+        writeln!(
+            vcf,
+            "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">"
+        )
+        .unwrap();
+        writeln!(
+            vcf,
+            "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSAMPLE1"
+        )
+        .unwrap();
+        writeln!(vcf, "chr1\t100\t.\tA\tG\t.\t.\t.\tGT\t0|1").unwrap();
+        writeln!(vcf, "chr1\t200\t.\tC\tA,T\t.\t.\t.\tGT\t0|1").unwrap();
+        writeln!(vcf, "chr1\t300\t.\tG\tA,C\t.\t.\t.\tGT\t0|2").unwrap();
+        writeln!(vcf, "chr1\t400\t.\tT\tA,G\t.\t.\t.\tGT\t1|2").unwrap();
+        writeln!(vcf, "chr1\t500\t.\tA\tG,C\t.\t.\t.\tGT\t0|0").unwrap();
+        vcf.flush().unwrap();
+
+        let bed = NamedTempFile::new().unwrap();
+
+        let config = VcfToBedConfig {
+            samples: Some(vec!["SAMPLE1".to_string()]),
+            het_only: true,
+            include_indels: false,
+            max_indel_len: 10,
+            include_genotypes: true,
+            biallelic_only: false, // opt back into multi-allelic inclusion
+        };
+
+        let count = vcf_to_bed(vcf.path(), bed.path(), &config).unwrap();
+
+        // pos100:1 + pos200(0|1->A):1 + pos300(0|2->C):1 + pos400(1|2->A,G):2 = 5
+        assert_eq!(count, 5);
+
+        let content = std::fs::read_to_string(bed.path()).unwrap();
+        let lines: Vec<&str> = content.lines().collect();
+        assert_eq!(lines.len(), 5);
         assert!(
             lines.iter().any(|l| l.contains("chr1\t199\t200\tC\tA")),
             "Missing multi-allelic het 0|1 for A"

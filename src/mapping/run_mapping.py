@@ -40,6 +40,7 @@ def run_make_remap_reads_unified(
     out_dir: str | None = None,
     include_indels: bool = False,
     max_indel_len: int = 10,
+    biallelic_only: bool = True,
     max_seqs: int = 64,
     threads: int = 8,
     compression_threads: int = 1,
@@ -132,6 +133,7 @@ def run_make_remap_reads_unified(
             samples=samples,
             include_indels=include_indels,
             max_indel_len=max_indel_len,
+            biallelic_only=biallelic_only,
         )
         step_prefix = "Step 2/2"
     else:
@@ -234,6 +236,7 @@ def run_make_remap_reads(
     out_json: str | None = None,
     include_indels: bool = False,
     max_indel_len: int = 10,
+    biallelic_only: bool = True,
     insert_qual: int = 30,
     max_seqs: int = 64,
     threads: int = 1,
@@ -307,6 +310,7 @@ def run_make_remap_reads(
         samples=wasp_files.samples,
         include_indels=include_indels,
         max_indel_len=max_indel_len,
+        biallelic_only=biallelic_only,
     )
 
     process_bam(
