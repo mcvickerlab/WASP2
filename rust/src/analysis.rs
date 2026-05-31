@@ -334,7 +334,10 @@ fn optimize_prob(ref_counts: &[u32], n_array: &[u32], disp: f64) -> Result<(f64,
 /// * `ref_counts` - Reference allele counts for the region
 /// * `n_array` - Total counts for the region
 /// * `gt_array` - Genotype phase per variant (0 or 1)
-/// * `disp` - Dispersion parameter (scalar; per-region as in single/linear alt path)
+/// * `disp` - Per-SNP dispersion (rho) slice, aligned 1:1 with ref/n/gt. A
+///   length-1 slice broadcasts to all SNPs (matches the single/per-region scalar
+///   path); a multi-element slice supplies a distinct rho per SNP (linear model's
+///   per-row rho, mirroring Python's per-row `df["disp"]`).
 ///
 /// # Returns
 /// Tuple of (alt_ll, mu) - alternative-model log-likelihood and imbalance proportion
@@ -342,7 +345,7 @@ fn optimize_prob_phased(
     ref_counts: &[u32],
     n_array: &[u32],
     gt_array: &[u8],
-    disp: f64,
+    disp: &[f64],
 ) -> Result<(f64, f64)> {
     // Normalize phase so the first SNP is with respect to ref (matches Python).
     let flip = gt_array.first().is_some_and(|&g| g > 0);
@@ -351,12 +354,20 @@ fn optimize_prob_phased(
         .map(|&g| if flip { 1 - g } else { g })
         .collect();
 
-    // objective(prob) = Σ opt_prob(|prob - gt_i|, disp, ref_i, n_i)
+    // objective(prob) = Σ opt_prob(|prob - gt_i|, rho_i, ref_i, n_i)
+    // rho_i is the per-SNP dispersion (disp[i]) when a per-row slice is supplied,
+    // or disp[0] broadcast across all SNPs for the scalar/single case.
     let objective = |prob: f64| -> f64 {
         let mut sum = 0.0;
-        for ((&k, &n), &g) in ref_counts.iter().zip(n_array.iter()).zip(gt_norm.iter()) {
+        for (i, ((&k, &n), &g)) in ref_counts
+            .iter()
+            .zip(n_array.iter())
+            .zip(gt_norm.iter())
+            .enumerate()
+        {
+            let rho = if disp.len() > 1 { disp[i] } else { disp[0] };
             let phased_prob = (prob - g as f64).abs();
-            match opt_prob(phased_prob, disp, k, n) {
+            match opt_prob(phased_prob, rho, k, n) {
                 Ok(nll) => sum += nll,
                 Err(_) => return f64::INFINITY,
             }
@@ -412,10 +423,12 @@ pub fn optimize_prob_unphased_dp(
         return Ok(first_ll);
     }
 
-    // Compute likelihoods for subsequent positions under both phase hypotheses
-    // phase1_like: pmf with prob
-    // phase2_like: pmf with (1 - prob)
-    let mut prev_like: f64 = 1.0;
+    // Accumulate likelihoods for subsequent positions under both phase hypotheses
+    // in LOG-space (mathematically identical to the old linear product, but without
+    // underflow). For each position:
+    //   log(0.5 * p1 + 0.5 * p2) = ln(0.5) + logaddexp(ln(p1), ln(p2))
+    // where lp1 = ln-pmf with prob and lp2 = ln-pmf with (1 - prob).
+    let mut log_prev: f64 = 0.0;
 
     for (i, (&ref_count, &n)) in phase_ref.iter().zip(phase_n.iter()).enumerate() {
         // Get dispersion for this position
@@ -430,28 +443,40 @@ pub fn optimize_prob_unphased_dp(
         let beta1 = (1.0 - prob) * (1.0 - rho) / rho;
         let bb1 = BetaBinomial::new(n, alpha1, beta1)
             .context("Failed to create beta-binomial for phase1")?;
-        let p1 = bb1.f(&(ref_count as u64)); // pmf (not log)
+        let lp1 = bb1.ln_f(&(ref_count as u64)); // log-pmf
 
         // Phase 2: use (1 - prob)
         let alpha2 = (1.0 - prob) * (1.0 - rho) / rho;
         let beta2 = prob * (1.0 - rho) / rho;
         let bb2 = BetaBinomial::new(n, alpha2, beta2)
             .context("Failed to create beta-binomial for phase2")?;
-        let p2 = bb2.f(&(ref_count as u64)); // pmf (not log)
+        let lp2 = bb2.ln_f(&(ref_count as u64)); // log-pmf
 
-        // DP update: marginalize over both phases with equal weight
-        let p1_combined = prev_like * p1;
-        let p2_combined = prev_like * p2;
-        prev_like = 0.5 * p1_combined + 0.5 * p2_combined;
+        // DP update in log-space: marginalize over both phases with equal weight.
+        log_prev += (0.5_f64).ln() + logaddexp(lp1, lp2);
     }
 
-    // Return first_ll + (-ln(prev_like))
-    // Handle edge case where prev_like might be 0 or very small
-    if prev_like <= 0.0 || !prev_like.is_finite() {
+    // Return first_ll + (-log_prev)
+    if !log_prev.is_finite() {
         return Ok(f64::INFINITY);
     }
 
-    Ok(first_ll + (-prev_like.ln()))
+    Ok(first_ll + (-log_prev))
+}
+
+/// Numerically stable two-argument log-sum-exp: ln(exp(a) + exp(b)).
+///
+/// Equivalent to NumPy's `np.logaddexp`. Subtracting the max before exponentiating
+/// avoids overflow/underflow. If the max is non-finite (e.g. -inf when both
+/// inputs are -inf), the max is returned directly.
+#[inline]
+fn logaddexp(a: f64, b: f64) -> f64 {
+    let m = a.max(b);
+    if !m.is_finite() {
+        m
+    } else {
+        m + ((a - m).exp() + (b - m).exp()).ln()
+    }
 }
 
 /// Golden section search for 1D optimization
@@ -696,7 +721,9 @@ pub fn single_model(variants: Vec<VariantCounts>, phased: bool) -> Result<Vec<Im
                     .iter()
                     .map(|&i| variants[i].gt.expect("gt present (checked by all_gt)"))
                     .collect();
-                optimize_prob_phased(&region_ref, &region_n, &region_gt, disp)?
+                // single_model uses one global scalar dispersion; pass it as a
+                // 1-element slice so the broadcast fallback keeps results identical.
+                optimize_prob_phased(&region_ref, &region_n, &region_gt, &[disp])?
             } else if !phased && indices.len() > 1 {
                 // Unphased multi-SNP region: marginalize over phase via DP,
                 // minimizing opt_unphased_dp over prob in (0, 1)
@@ -835,11 +862,11 @@ pub fn linear_model(variants: Vec<VariantCounts>, phased: bool) -> Result<Vec<Im
                 null_ll += bb.ln_f(&(ref_count as u64));
             }
 
-            // Alternative model: optimize prob using per-variant rho
-            // For simplicity, use average rho for optimization (matches Python behavior)
-            let avg_rho = region_rho.iter().sum::<f64>() / region_rho.len() as f64;
-            // Phase-aware routing (disp = avg_rho scalar, matching the existing
-            // single/linear alt path).
+            // Alternative model: optimize prob using the per-SNP rho slice
+            // (region_rho), which is aligned 1:1 with region_ref/region_n in the
+            // region's index order ([0] = first SNP, [1..] = subsequent SNPs).
+            // This matches Python's per-row df["disp"] and intentionally differs
+            // from single_model's single global scalar dispersion.
             let all_gt = indices.iter().all(|&i| variants[i].gt.is_some());
             let (alt_ll, mu) = if phased && indices.len() > 1 && all_gt {
                 // Phased multi-SNP region: use known genotype phase.
@@ -847,13 +874,14 @@ pub fn linear_model(variants: Vec<VariantCounts>, phased: bool) -> Result<Vec<Im
                     .iter()
                     .map(|&i| variants[i].gt.expect("gt present (checked by all_gt)"))
                     .collect();
-                optimize_prob_phased(&region_ref, &region_n, &region_gt, avg_rho)?
+                optimize_prob_phased(&region_ref, &region_n, &region_gt, &region_rho)?
             } else if !phased && indices.len() > 1 {
                 // Unphased multi-SNP region: marginalize over phase via DP,
                 // minimizing opt_unphased_dp over prob in (0, 1)
                 // (first = index 0, phase = remaining), matching Python's
                 // parse_opt() unphased branch (minimize_scalar(opt_unphased_dp,...)).
-                let disp_slice = [avg_rho];
+                // region_rho is in the region's index order ([0] = first,
+                // [1..] = phase), matching opt_unphased_dp's internal split.
                 let first_ref = region_ref[0];
                 let first_n = region_n[0];
                 let phase_ref = &region_ref[1..];
@@ -861,7 +889,7 @@ pub fn linear_model(variants: Vec<VariantCounts>, phased: bool) -> Result<Vec<Im
                 let objective = |prob: f64| -> f64 {
                     match optimize_prob_unphased_dp(
                         prob,
-                        &disp_slice,
+                        &region_rho,
                         first_ref,
                         first_n,
                         phase_ref,
@@ -875,11 +903,12 @@ pub fn linear_model(variants: Vec<VariantCounts>, phased: bool) -> Result<Vec<Im
                 let alt_ll = -objective(mu);
                 (alt_ll, mu)
             } else {
-                optimize_prob(&region_ref, &region_n, avg_rho)?
+                optimize_prob(&region_ref, &region_n, region_rho[0])?
             };
 
-            // Likelihood ratio test
-            let lrt = -2.0 * (null_ll - alt_ll);
+            // Likelihood ratio test (clamped at 0 to avoid tiny negative LRT from
+            // optimizer noise; matches Python's chi2.sf behavior on near-zero LRT)
+            let lrt = (-2.0 * (null_ll - alt_ll)).max(0.0);
 
             // P-value from chi-squared distribution (df=1)
             let chi2 = ChiSquared::new(1.0).context("Failed to create chi-squared distribution")?;
@@ -963,7 +992,7 @@ fn compute_donor_rho(variants: &[VariantCounts]) -> Result<HashMap<String, f64>>
 /// Python equivalent: WASP2 `per_donor` extension — fit rho per `sample`, then
 /// run the standard per-region beta-binomial LRT using each observation's
 /// donor-specific rho (per-observation rho in BOTH null and alternative).
-pub fn per_donor_model(variants: Vec<VariantCounts>) -> Result<Vec<ImbalanceResult>> {
+pub fn per_donor_model(variants: Vec<VariantCounts>, phased: bool) -> Result<Vec<ImbalanceResult>> {
     if variants.is_empty() {
         return Ok(vec![]);
     }
@@ -1033,27 +1062,45 @@ pub fn per_donor_model(variants: Vec<VariantCounts>) -> Result<Vec<ImbalanceResu
                 null_ll += bb.ln_f(&(ref_count as u64));
             }
 
-            // Alternative model: optimize one pi, per-observation rho
-            // (matches Python _alt_ll: a=pi(1-rho)/rho, b=(1-pi)(1-rho)/rho)
-            let alt_obj = |pi: f64| -> f64 {
-                let pi = pi.clamp(1e-6, 1.0 - 1e-6);
-                let mut nll = 0.0;
-                for ((&ref_count, &n), &rho) in region_ref
+            // Alternative model: optimize one pi, per-observation rho.
+            // Phase-aware routing (mirrors single_model): for a phased multi-SNP
+            // region with known GT, use the haplotype-phased likelihood, feeding
+            // the per-observation (per-donor) rho slice into optimize_prob_phased's
+            // &[f64] disp argument. Otherwise (unphased, or single-SNP, or missing
+            // GT) use the unphased shared-pi product UNCHANGED — so phased=false is
+            // byte-identical to the pre-phasing per_donor model.
+            let all_gt = indices.iter().all(|&i| variants[i].gt.is_some());
+            let (alt_ll, mu) = if phased && indices.len() > 1 && all_gt {
+                let region_gt: Vec<u8> = indices
                     .iter()
-                    .zip(region_n.iter())
-                    .zip(region_rho.iter())
-                {
-                    let a = pi * (1.0 - rho) / rho;
-                    let b = (1.0 - pi) * (1.0 - rho) / rho;
-                    match rv::dist::BetaBinomial::new(n, a, b) {
-                        Ok(bb) => nll -= bb.ln_f(&(ref_count as u64)),
-                        Err(_) => return f64::INFINITY,
+                    .map(|&i| variants[i].gt.expect("gt present (checked by all_gt)"))
+                    .collect();
+                // Per-observation donor rho flows straight into the &[f64] slice.
+                optimize_prob_phased(&region_ref, &region_n, &region_gt, &region_rho)?
+            } else {
+                // Unphased: optimize one pi over the per-observation beta-binomial
+                // product (matches Python _alt_ll: a=pi(1-rho)/rho, b=(1-pi)(1-rho)/rho)
+                let alt_obj = |pi: f64| -> f64 {
+                    let pi = pi.clamp(1e-6, 1.0 - 1e-6);
+                    let mut nll = 0.0;
+                    for ((&ref_count, &n), &rho) in region_ref
+                        .iter()
+                        .zip(region_n.iter())
+                        .zip(region_rho.iter())
+                    {
+                        let a = pi * (1.0 - rho) / rho;
+                        let b = (1.0 - pi) * (1.0 - rho) / rho;
+                        match rv::dist::BetaBinomial::new(n, a, b) {
+                            Ok(bb) => nll -= bb.ln_f(&(ref_count as u64)),
+                            Err(_) => return f64::INFINITY,
+                        }
                     }
-                }
-                nll
+                    nll
+                };
+                let mu = golden_section_search(alt_obj, 1e-6, 1.0 - 1e-6, 1e-6)?;
+                let alt_ll = -alt_obj(mu);
+                (alt_ll, mu)
             };
-            let mu = golden_section_search(alt_obj, 1e-6, 1.0 - 1e-6, 1e-6)?;
-            let alt_ll = -alt_obj(mu);
 
             // Likelihood ratio test (clamped at 0 like Python)
             let lrt = (-2.0 * (null_ll - alt_ll)).max(0.0);
@@ -1141,7 +1188,7 @@ pub fn analyze_imbalance(
     let mut results = match config.method {
         AnalysisMethod::Single => single_model(deduped, config.phased)?,
         AnalysisMethod::Linear => linear_model(deduped, config.phased)?,
-        AnalysisMethod::PerDonor => per_donor_model(deduped)?,
+        AnalysisMethod::PerDonor => per_donor_model(deduped, config.phased)?,
     };
 
     // Remove pseudocounts from results
@@ -1293,5 +1340,71 @@ mod tests {
         // Both should be finite
         assert!(result_balanced.is_finite());
         assert!(result_imbalanced.is_finite());
+    }
+
+    // Helper: a per_donor VariantCounts for one donor "d1".
+    fn vc_d1(pos: u32, rc: u32, ac: u32, gt: u8) -> VariantCounts {
+        VariantCounts {
+            chrom: "chr1".to_string(),
+            pos,
+            ref_count: rc,
+            alt_count: ac,
+            region: "peak1".to_string(),
+            sample: Some("d1".to_string()),
+            gt: Some(gt),
+        }
+    }
+
+    #[test]
+    fn test_per_donor_phased_wiring() {
+        // Phased per_donor on a single-donor multi-SNP region must equal a DIRECT
+        // optimize_prob_phased call with that donor's fitted rho — proving
+        // region_rho / region_gt are wired into the phased likelihood correctly.
+        let variants = vec![
+            vc_d1(100, 18, 4, 0),
+            vc_d1(200, 5, 15, 1),
+            vc_d1(300, 12, 8, 0),
+        ];
+
+        let rho_map = compute_donor_rho(&variants).unwrap();
+        let rho = clamp_rho(rho_map["d1"]);
+        let region_ref = vec![18u32, 5, 12];
+        let region_n = vec![22u32, 20, 20];
+        let region_gt = vec![0u8, 1, 0];
+        let region_rho = vec![rho, rho, rho];
+        let (exp_alt, exp_mu) =
+            optimize_prob_phased(&region_ref, &region_n, &region_gt, &region_rho).unwrap();
+
+        let res = per_donor_model(variants, true).unwrap();
+        assert_eq!(res.len(), 1);
+        assert!(
+            (res[0].alt_ll - exp_alt).abs() < 1e-9,
+            "phased per_donor alt_ll {} != direct optimize_prob_phased {}",
+            res[0].alt_ll,
+            exp_alt
+        );
+        assert!(
+            (res[0].mu - exp_mu).abs() < 1e-9,
+            "mu {} != {}",
+            res[0].mu,
+            exp_mu
+        );
+        assert!(res[0].lrt >= 0.0, "LRT must be clamped >= 0");
+    }
+
+    #[test]
+    fn test_per_donor_unphased_ignores_gt() {
+        // phased=false uses the shared-pi product, which does NOT use GT —
+        // flipping GT must leave the unphased result unchanged.
+        let a = vec![vc_d1(100, 18, 4, 0), vc_d1(200, 5, 15, 1)];
+        let b = vec![vc_d1(100, 18, 4, 1), vc_d1(200, 5, 15, 0)]; // GT flipped
+        let ra = per_donor_model(a, false).unwrap();
+        let rb = per_donor_model(b, false).unwrap();
+        assert!(
+            (ra[0].lrt - rb[0].lrt).abs() < 1e-12,
+            "unphased per_donor must ignore GT: {} vs {}",
+            ra[0].lrt,
+            rb[0].lrt
+        );
     }
 }

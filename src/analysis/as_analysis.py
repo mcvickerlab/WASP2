@@ -173,20 +173,24 @@ def opt_unphased_dp(
     # Get likelihood of first pos
     first_ll = opt_prob(prob, first_disp, first_ref[0], first_n[0])
 
-    # Get likelihood with regard to phasing of first pos
-    phase1_like = opt_prob(prob, phase_disp, phase_ref, phase_n, log=False)
-    phase2_like = opt_prob(1 - prob, phase_disp, phase_ref, phase_n, log=False)
+    # Get LOG likelihood with regard to phasing of first pos.
+    # opt_prob(..., log=True) returns the NEGATIVE log-pmf, so negate to get the
+    # log-pmf itself for stable log-space accumulation.
+    lp1 = -opt_prob(prob, phase_disp, phase_ref, phase_n, log=True)
+    lp2 = -opt_prob(1 - prob, phase_disp, phase_ref, phase_n, log=True)
 
-    prev_like: float = 1.0
-    # phase1_like and phase2_like are arrays when phase_ref/phase_n are arrays
-    phase1_arr = cast(NDArray[np.float64], phase1_like)
-    phase2_arr = cast(NDArray[np.float64], phase2_like)
-    for p1, p2 in zip(phase1_arr, phase2_arr):
-        p1_combined_like = prev_like * p1
-        p2_combined_like = prev_like * p2
-        prev_like = float((0.5 * p1_combined_like) + (0.5 * p2_combined_like))
+    # Accumulate in LOG-space (mathematically identical to the old linear product,
+    # but without underflow). For each position:
+    #   log(0.5 * p1 + 0.5 * p2) = log(0.5) + logaddexp(log(p1), log(p2))
+    # np.logaddexp is the 2-arg logsumexp computed stably.
+    log_prev: float = 0.0
+    # lp1 and lp2 are arrays when phase_ref/phase_n are arrays
+    lp1_arr = cast(NDArray[np.float64], lp1)
+    lp2_arr = cast(NDArray[np.float64], lp2)
+    for lp1_i, lp2_i in zip(lp1_arr, lp2_arr):
+        log_prev += np.log(0.5) + np.logaddexp(lp1_i, lp2_i)
 
-    return float(first_ll + -np.log(prev_like))
+    return float(first_ll + (-log_prev))
 
 
 def parse_opt(
@@ -250,8 +254,8 @@ def parse_opt(
         )
 
     # Get res data
-    mu: float = res["x"]
-    alt_ll: float = -1 * res["fun"]
+    mu: float = float(np.asarray(res["x"]).reshape(-1)[0])
+    alt_ll: float = float(np.asarray(-1 * res["fun"]).reshape(-1)[0])
 
     return alt_ll, mu
 
@@ -383,7 +387,7 @@ def linear_model(df: pd.DataFrame, region_col: str, phased: bool = False) -> pd.
         )
 
         # Optimize Alt
-        alt_test = group_df.apply(lambda x: parse_opt(x), **apply_kwargs)
+        alt_test = group_df.apply(lambda x: parse_opt(x, phased=phased), **apply_kwargs)
         alt_df = pd.DataFrame(alt_test.tolist(), columns=["alt_ll", "mu"], index=alt_test.index)
 
     success(f"Optimized imbalance likelihood ({time.time() - ll_start:.2f}s)")
