@@ -67,6 +67,43 @@ class TestVariantsToBed:
 
         assert output.exists()
 
+    def test_multiallelic_dropped_by_default(self, multiallelic_vcf, tmp_output_dir):
+        """Default policy (biallelic_only=True): multi-allelic sites are dropped."""
+        output = tmp_output_dir / "ma_default.bed"
+
+        variants_to_bed(
+            variant_file=multiallelic_vcf,
+            out_bed=output,
+            samples=["sample1"],
+            include_gt=True,
+            het_only=True,
+        )
+
+        lines = [ln for ln in output.read_text().splitlines() if ln.strip()]
+        # Only pos 100 (biallelic het) survives; pos 200/300 are multi-allelic -> dropped.
+        assert len(lines) == 1
+        assert "\t99\t100\t" in lines[0]
+        assert not any("\t199\t200\t" in ln or "\t299\t300\t" in ln for ln in lines)
+
+    def test_multiallelic_included_when_opted_in(self, multiallelic_vcf, tmp_output_dir):
+        """--include-multiallelic equivalent (biallelic_only=False): multi-allelic het retained."""
+        output = tmp_output_dir / "ma_included.bed"
+
+        variants_to_bed(
+            variant_file=multiallelic_vcf,
+            out_bed=output,
+            samples=["sample1"],
+            include_gt=True,
+            het_only=True,
+            biallelic_only=False,
+        )
+
+        lines = [ln for ln in output.read_text().splitlines() if ln.strip()]
+        # All 3 het sites retained (ALT representation differs by backend -> assert by position).
+        assert len(lines) == 3
+        assert any("\t199\t200\t" in ln for ln in lines)
+        assert any("\t299\t300\t" in ln for ln in lines)
+
 
 class TestLegacyVcfToBed:
     """Tests for the legacy vcf_to_bed alias."""

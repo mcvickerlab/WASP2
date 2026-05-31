@@ -58,6 +58,28 @@ def sample_vcf(test_data_dir, sample_vcf_content) -> Path:
 
 
 @pytest.fixture(scope="session")
+def multiallelic_vcf_content() -> str:
+    """VCF with one biallelic het + two multi-allelic het sites (for biallelic-policy tests)."""
+    return """\
+##fileformat=VCFv4.2
+##contig=<ID=chr1,length=248956422>
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tsample1
+chr1\t100\trs1\tA\tG\t30\tPASS\t.\tGT\t0|1
+chr1\t200\trs2\tC\tA,T\t30\tPASS\t.\tGT\t0|1
+chr1\t300\trs3\tG\tA,C\t30\tPASS\t.\tGT\t0|2
+"""
+
+
+@pytest.fixture(scope="session")
+def multiallelic_vcf(test_data_dir, multiallelic_vcf_content) -> Path:
+    """Write the multi-allelic VCF for biallelic-policy tests."""
+    vcf_path = test_data_dir / "multiallelic.vcf"
+    vcf_path.write_text(multiallelic_vcf_content)
+    return vcf_path
+
+
+@pytest.fixture(scope="session")
 def sample_vcf_gz(test_data_dir, sample_vcf) -> Path:
     """Create a bgzipped and indexed VCF file for testing.
 
