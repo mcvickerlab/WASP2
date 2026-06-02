@@ -307,6 +307,8 @@ fn analyze_imbalance(
     let mut min_fields: usize = 7;
     // GT column index (only present in 9-col format)
     let mut gt_idx: Option<usize> = None;
+    // Ref allele column index (for deriving phase from GT alleles)
+    let mut ref_allele_idx: Option<usize> = None;
     // Region column index (use input region names instead of chrom_pos format)
     let mut region_idx: Option<usize> = None;
     // Optional donor/sample column (used by the per_donor model)
@@ -322,11 +324,13 @@ fn analyze_imbalance(
             let headers: Vec<&str> = line.split('\t').collect();
             if headers.len() >= 9 && headers.contains(&"GT") {
                 // 9-column format from wasp2-count CLI
+                // Layout: chrom(0), pos0(1), pos(2), ref(3), alt(4), GT(5), ref_count(6), alt_count(7), other(8)
                 pos_idx = 2;
                 ref_count_idx = 6;
                 alt_count_idx = 7;
                 min_fields = 9;
                 gt_idx = Some(5);
+                ref_allele_idx = Some(3);
             }
             // Detect an optional `sample` column by name (per_donor input)
             sample_idx = headers.iter().position(|h| *h == "sample");
@@ -380,10 +384,35 @@ fn analyze_imbalance(
         // Only fully-phased hets map to a value; everything else (unphased,
         // homozygous, missing) is None. Emits ONLY Some(0)/Some(1)/None so
         // downstream `1 - g` on u8 never underflows.
-        let gt: Option<u8> = gt_idx.and_then(|gi| match fields.get(gi) {
-            Some(&"0|1") => Some(0),
-            Some(&"1|0") => Some(1),
-            _ => None,
+        //
+        // Supports two GT formats:
+        //   1. Numeric: "0|1" or "1|0" (VCF standard)
+        //   2. Allele:  "A|G" or "G|A" (allele strings) - derives phase by comparing to ref
+        let gt: Option<u8> = gt_idx.and_then(|gi| {
+            let gt_str = fields.get(gi)?;
+            // Try numeric format first (VCF standard)
+            match *gt_str {
+                "0|1" => return Some(0),
+                "1|0" => return Some(1),
+                _ => {}
+            }
+            // Try allele format: "X|Y" where X,Y are allele strings
+            // Compare to ref allele to derive phase
+            if let Some(ref_idx) = ref_allele_idx {
+                if let Some(&ref_allele) = fields.get(ref_idx) {
+                    if let Some((allele1, allele2)) = gt_str.split_once('|') {
+                        if allele1 == ref_allele && allele2 != ref_allele {
+                            // ref on hap1 (e.g., GT="C|T" with ref="C")
+                            return Some(0);
+                        } else if allele2 == ref_allele && allele1 != ref_allele {
+                            // ref on hap2 (e.g., GT="T|C" with ref="C")
+                            return Some(1);
+                        }
+                        // Homozygous (both same) or neither matches ref -> None
+                    }
+                }
+            }
+            None
         });
 
         variants.push(analysis::VariantCounts {
