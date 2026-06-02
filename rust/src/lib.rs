@@ -7,6 +7,7 @@ use pyo3::types::PyModule;
 // Modules
 mod analysis;
 mod bam_counter;
+mod bam_counter_sc; // Per-cell (single-cell) allele counter, mirrors bam_counter
 mod bam_filter; // Fast BAM filtering by variant overlap (replaces samtools process_bam)
 mod bam_intersect;
 mod bam_remapper;
@@ -23,6 +24,7 @@ pub use unified_pipeline::{
 };
 
 use bam_counter::BamCounter;
+use bam_counter_sc::BamCounterSC;
 use mapping_filter::filter_bam_wasp;
 
 // ============================================================================
@@ -948,6 +950,9 @@ fn wasp2_rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Counting module (IMPLEMENTED)
     m.add_class::<BamCounter>()?;
+
+    // Single-cell per-barcode counting module (IMPLEMENTED)
+    m.add_class::<BamCounterSC>()?;
 
     // BAM-BED intersection using coitrees (41x faster than pybedtools)
     m.add_function(wrap_pyfunction!(intersect_bam_bed, m)?)?;

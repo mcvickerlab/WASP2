@@ -165,13 +165,18 @@ def run_count_variants_sc(
         biallelic_only=biallelic_only,
     )
 
-    assert count_files.feature_file is not None
-
-    intersect_vcf_region(
-        vcf_file=count_files.vcf_bed,
-        region_file=count_files.feature_file,
-        out_file=count_files.intersect_file,
-    )
+    # Optional feature/region file. When provided, intersect variants with the
+    # feature regions (bedtools intersect -a vcf_bed -b feature_file -wb), which
+    # adds a `region` column consumed downstream. When None, skip intersection
+    # entirely: WaspCountSC.__init__ already sets intersect_file = vcf_bed, so
+    # parse_intersect_region_new reads the full variant BED and we count over
+    # ALL variants (no `region` column, so make_count_matrix skips uns['feature']).
+    if count_files.feature_file is not None:
+        intersect_vcf_region(
+            vcf_file=count_files.vcf_bed,
+            region_file=count_files.feature_file,
+            out_file=count_files.intersect_file,
+        )
 
     df = parse_intersect_region_new(
         intersect_file=count_files.intersect_file,

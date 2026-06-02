@@ -400,25 +400,19 @@ fn get_genotype_indices(
     Ok((indices, is_phased))
 }
 
-/// Build genotype string from allele indices (e.g., [0, 1] -> "A|G")
+/// Build genotype string from allele indices (e.g., [0, 1] -> "0|1")
 fn build_genotype_string(
-    ref_allele: &str,
-    alt_alleles: &[String],
+    _ref_allele: &str,
+    _alt_alleles: &[String],
     gt_indices: &[usize],
     is_phased: bool,
 ) -> String {
-    let allele_strs: Vec<String> = gt_indices
-        .iter()
-        .map(|&idx| {
-            if idx == 0 {
-                ref_allele.to_string()
-            } else if idx <= alt_alleles.len() {
-                alt_alleles[idx - 1].clone()
-            } else {
-                idx.to_string() // Fallback
-            }
-        })
-        .collect();
+    // FIX #7 (scATAC phased-ASE): emit ALLELE-INDEX genotypes (e.g. "0|1" / "1|0" / "1|2") to
+    // match the analyzer's het-filter (run_analysis_sc expects 0|1 / 1|0) and the pre-v1.3.0
+    // format. Previously emitted nucleotide alleles (e.g. "A|G"), which made find-imbalance-sc
+    // detect zero het sites and crash. The ref/alt allele args are retained for call-site
+    // compatibility but no longer used.
+    let allele_strs: Vec<String> = gt_indices.iter().map(|&idx| idx.to_string()).collect();
 
     allele_strs.join(if is_phased { "|" } else { "/" })
 }

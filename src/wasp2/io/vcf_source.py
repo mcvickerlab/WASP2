@@ -460,7 +460,9 @@ class VCFSource(VariantSource):
 
             # Add genotype column if requested
             if include_genotypes:
-                query_cmd.append("%CHROM\t%POS0\t%END\t%REF\t%ALT[\t%TGT]\n")
+                # FIX #7: %GT (allele-index, e.g. 0|1) not %TGT (nucleotide, e.g. C|G), to match
+                # the analyzer het-filter and the Rust vcf_to_bed path.
+                query_cmd.append("%CHROM\t%POS0\t%END\t%REF\t%ALT[\t%GT]\n")
             else:
                 query_cmd.append("%CHROM\t%POS0\t%END\t%REF\t%ALT\n")
 

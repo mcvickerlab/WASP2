@@ -2,6 +2,13 @@
 
 Provides functions for analyzing allelic imbalance in single-cell data
 stored in AnnData format with SNP counts in layers.
+
+Orientation contract (scverse convention, see ISSUE2_ORIENTATION_DECISION §2b):
+    obs = cells (barcodes); var = SNPs (variants).
+SNP-level annotations (index, chrom, pos, ref, alt, genotype, ref_count,
+alt_count) live on ``adata.var``; cell-level annotations (group) live on
+``adata.obs``. The count layers (ref/alt/other) and X are ``(n_cells x n_SNP)``,
+so pseudobulk per-SNP sums reduce over cells with ``axis=0``.
 """
 
 from __future__ import annotations
@@ -22,6 +29,27 @@ from .as_analysis import clamp_rho, opt_phased_new, opt_prob, opt_unphased_dp
 logger = logging.getLogger(__name__)
 
 
+def _assert_obs_cells_var_snps(adata: AnnData) -> None:
+    """Enforce the obs=cells / var=SNPs orientation contract.
+
+    The flipped analyzer expects SNP-level annotations (``index`` plus the
+    per-SNP ``ref_count``/``alt_count`` summaries) on ``adata.var`` and the
+    per-SNP count layers oriented as ``(n_cells x n_SNP)``. This guards against
+    silently mis-processing the legacy obs=SNPs orientation.
+    """
+    if "index" not in adata.var.columns:
+        raise AssertionError(
+            "Orientation contract violated: expected SNP-level 'index' column on "
+            "adata.var (obs=cells/var=SNPs). Got var columns "
+            f"{list(adata.var.columns)} / obs columns {list(adata.obs.columns)}."
+        )
+    if "ref" in adata.layers and adata.layers["ref"].shape != (adata.n_obs, adata.n_vars):
+        raise AssertionError(
+            "Orientation contract violated: layers must be (n_cells x n_SNP) = "
+            f"({adata.n_obs} x {adata.n_vars}); got {adata.layers['ref'].shape}."
+        )
+
+
 def adata_count_qc(
     adata: AnnData, z_cutoff: float | None = None, gt_error: Any | None = None
 ) -> AnnData:
@@ -31,7 +59,9 @@ def adata_count_qc(
 
     # Filt outliers
     if z_cutoff is not None:
-        snp_outliers = adata.obs[["index", "ref_count", "alt_count"]].copy()
+        _assert_obs_cells_var_snps(adata)
+
+        snp_outliers = adata.var[["index", "ref_count", "alt_count"]].copy()
         snp_outliers["N"] = snp_outliers["ref_count"] + snp_outliers["alt_count"]
         snp_outliers = snp_outliers[np.abs(zscore(snp_outliers["N"])) > z_cutoff]  # At least 3
 
@@ -43,20 +73,20 @@ def adata_count_qc(
             adata.uns["feature"]["region"].isin(snp_outliers["region"].unique()), :
         ]
 
-        # Remove outlier regions from adata
-        adata = adata[~adata.obs["index"].isin(outlier_regions["index"]), :].copy()
-        adata.obs = adata.obs.reset_index(drop=True)  # update index
+        # Remove outlier regions from adata (SNPs are columns now)
+        adata = adata[:, ~adata.var["index"].isin(outlier_regions["index"])].copy()
+        adata.var = adata.var.reset_index(drop=True)  # update index
 
         # Update valid regions and snps
         adata.uns["feature"] = (
             adata.uns["feature"]
-            .merge(adata.obs[["index"]].reset_index(names="filt_index"), on="index")[
+            .merge(adata.var[["index"]].reset_index(names="filt_index"), on="index")[
                 ["region", "filt_index"]
             ]
             .rename(columns={"filt_index": "index"})
         )
 
-        adata.obs["index"] = adata.obs.index  # Replace index column
+        adata.var["index"] = adata.var.index  # Replace index column
 
     if gt_error is not None:
         pass
@@ -78,15 +108,19 @@ def get_imbalance_sc(
     if sample is None:
         phased = False
 
+    # Orientation contract: obs=cells/var=SNPs (groups on cells = obs).
+    _assert_obs_cells_var_snps(adata)
+
     if groups is None:
-        groups = list(adata.var["group"].dropna().unique())
+        groups = list(adata.obs["group"].dropna().unique())
 
     # Process initial minimums for whole data dispersion
     # region_cutoff = min_count + (2*pseudocount)
     snp_cutoff = 2 * pseudocount
 
-    ref_counts = adata.layers["ref"].sum(axis=1, dtype=np.uint16).T.A1 + pseudocount
-    alt_counts = adata.layers["alt"].sum(axis=1, dtype=np.uint16).T.A1 + pseudocount
+    # Pseudobulk per-SNP sums reduce over cells (axis=0) now that cells are rows.
+    ref_counts = adata.layers["ref"].sum(axis=0).T.A1 + pseudocount
+    alt_counts = adata.layers["alt"].sum(axis=0).T.A1 + pseudocount
     n_counts = ref_counts + alt_counts
 
     # Calculate dispersion across dataset
@@ -112,12 +146,12 @@ def get_imbalance_sc(
 
     # Loop through groups
     for group_name in groups:
-        # Subset by group
-        adata_sub = adata[:, adata.var["group"] == group_name]
+        # Subset by group (cells are rows now)
+        adata_sub = adata[adata.obs["group"] == group_name, :]
 
-        # Create count data per group
-        ref_counts_group = adata_sub.layers["ref"].sum(axis=1, dtype=np.uint16).T.A1 + pseudocount
-        alt_counts_group = adata_sub.layers["alt"].sum(axis=1, dtype=np.uint16).T.A1 + pseudocount
+        # Create count data per group (per-SNP sums reduce over cells, axis=0)
+        ref_counts_group = adata_sub.layers["ref"].sum(axis=0).T.A1 + pseudocount
+        alt_counts_group = adata_sub.layers["alt"].sum(axis=0).T.A1 + pseudocount
         n_counts_group = ref_counts_group + alt_counts_group
 
         nonzero_idx = np.where(n_counts_group > snp_cutoff)  # Get indices where counts were found
@@ -163,7 +197,8 @@ def get_imbalance_sc(
 
         gt_array_typed: NDArray[np.uint8] | None
         if phased:
-            gt_array_typed = adata.obs[sample].str.split("|", n=1).str[0].to_numpy(dtype=np.uint8)
+            # Per-SNP genotype lives on var now (obs=cells/var=SNPs).
+            gt_array_typed = adata.var[sample].str.split("|", n=1).str[0].to_numpy(dtype=np.uint8)
         else:
             gt_array_typed = None
 
