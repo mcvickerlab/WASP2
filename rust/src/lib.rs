@@ -27,6 +27,14 @@ use bam_counter::BamCounter;
 use bam_counter_sc::BamCounterSC;
 use mapping_filter::filter_bam_wasp;
 
+fn parse_numeric_phased_gt(gt: &str) -> Option<u8> {
+    match gt {
+        "0|1" => Some(0),
+        "1|0" => Some(1),
+        _ => None,
+    }
+}
+
 // ============================================================================
 // PyO3 Bindings for BAM Remapping
 // ============================================================================
@@ -307,8 +315,6 @@ fn analyze_imbalance(
     let mut min_fields: usize = 7;
     // GT column index (only present in 9-col format)
     let mut gt_idx: Option<usize> = None;
-    // Ref allele column index (for deriving phase from GT alleles)
-    let mut ref_allele_idx: Option<usize> = None;
     // Region column index (use input region names instead of chrom_pos format)
     let mut region_idx: Option<usize> = None;
     // Optional donor/sample column (used by the per_donor model)
@@ -330,7 +336,6 @@ fn analyze_imbalance(
                 alt_count_idx = 7;
                 min_fields = 9;
                 gt_idx = Some(5);
-                ref_allele_idx = Some(3);
             }
             // Detect an optional `sample` column by name (per_donor input)
             sample_idx = headers.iter().position(|h| *h == "sample");
@@ -385,34 +390,12 @@ fn analyze_imbalance(
         // homozygous, missing) is None. Emits ONLY Some(0)/Some(1)/None so
         // downstream `1 - g` on u8 never underflows.
         //
-        // Supports two GT formats:
-        //   1. Numeric: "0|1" or "1|0" (VCF standard)
-        //   2. Allele:  "A|G" or "G|A" (allele strings) - derives phase by comparing to ref
+        // AHO parity: only numeric VCF-style phased heterozygotes are trusted.
+        // Allele-string GT values such as "A|G" are not interpreted as
+        // cross-SNV haplotype phase by the archived Python implementation.
         let gt: Option<u8> = gt_idx.and_then(|gi| {
             let gt_str = fields.get(gi)?;
-            // Try numeric format first (VCF standard)
-            match *gt_str {
-                "0|1" => return Some(0),
-                "1|0" => return Some(1),
-                _ => {}
-            }
-            // Try allele format: "X|Y" where X,Y are allele strings
-            // Compare to ref allele to derive phase
-            if let Some(ref_idx) = ref_allele_idx {
-                if let Some(&ref_allele) = fields.get(ref_idx) {
-                    if let Some((allele1, allele2)) = gt_str.split_once('|') {
-                        if allele1 == ref_allele && allele2 != ref_allele {
-                            // ref on hap1 (e.g., GT="C|T" with ref="C")
-                            return Some(0);
-                        } else if allele2 == ref_allele && allele1 != ref_allele {
-                            // ref on hap2 (e.g., GT="T|C" with ref="C")
-                            return Some(1);
-                        }
-                        // Homozygous (both same) or neither matches ref -> None
-                    }
-                }
-            }
-            None
+            parse_numeric_phased_gt(gt_str)
         });
 
         variants.push(analysis::VariantCounts {
@@ -1042,4 +1025,24 @@ fn filter_bam_wasp_with_sidecar(
         same_locus_slop,
         expected_sidecar,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_numeric_phased_gt;
+
+    #[test]
+    fn test_parse_numeric_phased_gt_accepts_only_aho_numeric_hets() {
+        assert_eq!(parse_numeric_phased_gt("0|1"), Some(0));
+        assert_eq!(parse_numeric_phased_gt("1|0"), Some(1));
+
+        for gt in ["A|G", "G|A", "0/1", "0|0", "1|1", "./.", ".|."] {
+            assert_eq!(
+                parse_numeric_phased_gt(gt),
+                None,
+                "{} should not be treated as phased GT",
+                gt
+            );
+        }
+    }
 }
