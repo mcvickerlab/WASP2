@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import NamedTuple
+from typing import TYPE_CHECKING, NamedTuple
 
-import polars as pl
+if TYPE_CHECKING:
+    import polars as pl
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +97,8 @@ def parse_gene_file(
         "frame",
         "attribute",
     ]
+
+    import polars as pl
 
     # Cant use lazyframe in case of compressed
     df = pl.read_csv(
