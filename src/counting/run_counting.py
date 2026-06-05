@@ -7,10 +7,10 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import ParamSpec, TypeVar
 
-from .count_alleles import make_count_df
+from .count_alleles import make_count_df, make_count_df_no_polars
 
 # local imports
-from .filter_variant_data import intersect_vcf_region, parse_intersect_region_new, vcf_to_bed
+from .filter_variant_data import intersect_vcf_region, vcf_to_bed
 from .parse_gene_data import make_gene_data, parse_intersect_genes_new
 
 P = ParamSpec("P")
@@ -262,7 +262,6 @@ def run_count_variants(
             include_indels=include_indels,
         )
 
-    region_col_name = None  # Defaults to 'region' as region name
     intersect_genes = False
 
     # region_files is valid to perform intersects
@@ -278,11 +277,9 @@ def run_count_variants(
             )
 
             regions_to_intersect = count_files.gtf_bed
-            region_col_name = gene_data.feature
             intersect_genes = True
         else:
             regions_to_intersect = count_files.region_file
-            region_col_name = None  # Defaults to 'region' as region name
 
         if not count_files.skip_intersect:
             intersect_vcf_region(
@@ -298,23 +295,14 @@ def run_count_variants(
             attribute=gene_data.attribute,
             parent_attribute=gene_data.parent_attribute,
         )
-    elif with_gt:
-        df = parse_intersect_region_new(
-            intersect_file=count_files.intersect_file,
-            samples=["GT"],
-            use_region_names=count_files.use_region_names,
-            region_col=region_col_name,
-        )
+        # Count
+        count_df = make_count_df(bam_file=count_files.bam_file, df=df, use_rust=use_rust)
+        # Write counts
+        count_df.write_csv(count_files.out_file, include_header=True, separator="\t")
     else:
-        df = parse_intersect_region_new(
+        make_count_df_no_polars(
+            bam_file=count_files.bam_file,
             intersect_file=count_files.intersect_file,
-            samples=None,
-            use_region_names=count_files.use_region_names,
-            region_col=region_col_name,
+            out_file=count_files.out_file,
+            use_rust=use_rust,
         )
-
-    # Count
-    count_df = make_count_df(bam_file=count_files.bam_file, df=df, use_rust=use_rust)
-
-    # Write counts
-    count_df.write_csv(count_files.out_file, include_header=True, separator="\t")

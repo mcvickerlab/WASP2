@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
-
-import polars as pl
+from typing import TYPE_CHECKING
 
 # Import from new wasp2.io module for multi-format support
 from wasp2.io import variants_to_bed as _variants_to_bed
+
+if TYPE_CHECKING:
+    import polars as pl
 
 
 def vcf_to_bed(
@@ -89,6 +91,8 @@ def gtf_to_bed(
     ]
 
     # Cant use lazyframe in case of compressed
+    import polars as pl
+
     df = pl.read_csv(
         gtf_file, separator="\t", comment_prefix="#", has_header=False, new_columns=gtf_cols
     )

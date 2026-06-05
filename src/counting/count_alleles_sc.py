@@ -6,16 +6,19 @@ import logging
 import timeit
 from collections import defaultdict
 from collections.abc import Iterator
+from typing import TYPE_CHECKING
 
 import anndata as ad
 import numpy as np
 import pandas as pd
-import polars as pl
 from pysam.libcalignmentfile import AlignmentFile
 from scipy.sparse import csr_matrix
 
 # Local imports
 from .count_alleles import find_read_aln_pos
+
+if TYPE_CHECKING:
+    import polars as pl
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +95,7 @@ def make_count_matrix(
     Parameters
     ----------
     bam_file : str
+    import polars as pl
         Path to BAM file with cell barcodes.
     df : pl.DataFrame
         DataFrame with variant positions from intersection.

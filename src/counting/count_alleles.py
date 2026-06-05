@@ -7,11 +7,10 @@ import timeit
 from collections.abc import Iterator
 from typing import TYPE_CHECKING
 
-import polars as pl
-
 from wasp2.cli import create_progress, detail, error, rust_status, success
 
 if TYPE_CHECKING:
+    import polars as pl
     import pysam
 
 # Try to import Rust acceleration (required; no Python fallback)
@@ -88,6 +87,8 @@ def make_count_df(bam_file: str, df: pl.DataFrame, use_rust: bool = True) -> pl.
     RuntimeError
         If Rust BAM counter is not available.
     """
+    import polars as pl
+
     count_list = []
 
     chrom_list = df.get_column("chrom").unique(maintain_order=True)
@@ -160,6 +161,78 @@ def make_count_df(bam_file: str, df: pl.DataFrame, use_rust: bool = True) -> pl.
     )
 
     return df
+
+
+def _parse_intersect_tsv(intersect_file):
+    """Parse bedtools intersect TSV into {chrom: sorted([(pos, ref, alt), ...])}."""
+    import csv
+
+    snps = {}
+    chrom_order = []
+    with open(intersect_file) as f:
+        for row in csv.reader(f, delimiter="\t"):
+            if len(row) < 5:
+                continue
+            chrom, pos, ref, alt = row[0], int(row[2]), row[3], row[4]
+            if chrom not in snps:
+                snps[chrom] = set()
+                chrom_order.append(chrom)
+            snps[chrom].add((pos, ref, alt))
+    return {c: sorted(s, key=lambda x: x[0]) for c, s in snps.items()}, chrom_order
+
+
+def make_count_df_no_polars(bam_file, intersect_file, out_file, use_rust=True):
+    """Count alleles and write TSV without polars dependency."""
+    import csv
+
+    if not (use_rust and RUST_AVAILABLE):
+        raise RuntimeError("Rust BAM counter not available")
+
+    rust_threads_env = os.environ.get("WASP2_RUST_THREADS")
+    try:
+        rust_threads = int(rust_threads_env) if rust_threads_env else 1
+    except ValueError:
+        rust_threads = 1
+    rust_threads = max(1, rust_threads)
+    rust_status(f"Using Rust acceleration for BAM counting (threads={rust_threads})")
+
+    snps_by_chrom, chrom_order = _parse_intersect_tsv(intersect_file)
+
+    total_start = timeit.default_timer()
+    all_counts = []
+    total_processed = 0
+
+    with create_progress() as progress:
+        task = progress.add_task("Counting alleles", total=len(chrom_order))
+
+        for chrom in chrom_order:
+            snp_list = sorted(snps_by_chrom[chrom], key=lambda x: x[0])
+            start = timeit.default_timer()
+
+            try:
+                counts_list = count_snp_alleles_rust(
+                    bam_file, chrom, iter(snp_list), threads=rust_threads
+                )
+                for i, (c, pos, rc, ac, oc) in enumerate(counts_list):
+                    _, ref, alt = snp_list[i]
+                    all_counts.append((c, pos, ref, alt, rc, ac, oc))
+            except (RuntimeError, OSError) as e:
+                error(f"Skipping {chrom}: {e}")
+            else:
+                elapsed = timeit.default_timer() - start
+                total_processed += len(snp_list)
+                detail(f"{chrom}: Counted {len(snp_list)} SNPs in {elapsed:.2f}s")
+
+            progress.update(task, advance=1)
+
+    total_end = timeit.default_timer()
+    success(f"Counted {total_processed} SNPs in {total_end - total_start:.2f} seconds")
+
+    with open(out_file, "w") as f:
+        writer = csv.writer(f, delimiter="\t")
+        writer.writerow(["chrom", "pos", "ref", "alt", "ref_count", "alt_count", "other_count"])
+        for row in all_counts:
+            writer.writerow(row)
 
 
 # Legacy helper retained for imports in counting/count_alleles_sc.py
