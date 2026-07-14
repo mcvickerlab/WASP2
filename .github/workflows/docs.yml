@@ -2,25 +2,13 @@ name: Documentation
 
 on:
   push:
-    branches: [master]
-    paths:
-      - 'docs/**'
-      - 'src/**'
-      - 'pyproject.toml'
-      - '.github/workflows/docs.yml'
+    branches: [master, dev]
   pull_request:
-    branches: [master]
-    paths:
-      - 'docs/**'
-      - 'src/**'
-      - 'pyproject.toml'
-      - '.github/workflows/docs.yml'
+    branches: [master, dev]
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: "pages-${{ github.ref }}"
@@ -28,10 +16,13 @@ concurrency:
 
 jobs:
   build:
+    name: Required / Docs
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
@@ -62,7 +53,8 @@ jobs:
             "myst-parser>=2.0" \
             "sphinx-copybutton>=0.5" \
             "sphinx-design>=0.5" \
-            "ipython>=8.0"
+            "ipython>=8.0" \
+            "tomli>=2.0; python_version < '3.11'"
           # Install core Python deps needed by autodoc (Rust ext is mocked in conf.py)
           pip install \
             "numpy>=1.21" \
@@ -77,16 +69,20 @@ jobs:
         run: make html
 
       - name: Upload artifact
-        if: github.event_name != 'pull_request'
+        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b  # v4
         with:
           path: docs/build/html
 
   deploy:
-    if: github.event_name != 'pull_request'
+    name: Deploy documentation
+    if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      pages: write  # Deploy the validated documentation artifact.
+      id-token: write  # Authenticate the GitHub Pages deployment.
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

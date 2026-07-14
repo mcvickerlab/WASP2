@@ -4,8 +4,8 @@ process WASP2_MAKE_READS {
 
     conda "${moduleDir}/environment.yml"
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
-        'docker://ghcr.io/mcvickerlab/wasp2:1.4.0' :
-        'ghcr.io/mcvickerlab/wasp2:1.4.0' }"
+        'docker://ghcr.io/mcvickerlab/wasp2:1.5.0' :
+        'ghcr.io/mcvickerlab/wasp2:1.5.0' }"
 
     input:
     tuple val(meta), path(bam), path(bai)
@@ -91,7 +91,7 @@ process WASP2_MAKE_READS {
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        wasp2: 1.2.1
+        wasp2: 1.5.0
     END_VERSIONS
     """
 }

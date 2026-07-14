@@ -1,3 +1,4 @@
+from enum import Enum
 from typing import Annotated
 
 import typer
@@ -5,7 +6,13 @@ import typer
 from wasp2.cli import create_version_callback, verbosity_callback
 
 from .run_counting import run_count_variants
-from .run_counting_sc import run_count_variants_sc
+from .run_counting_cohort import run_count_cohort
+
+
+class AnalysisUnitChoice(str, Enum):
+    snv = "snv"
+    feature = "feature"
+    peak = "peak"
 
 
 def _get_counting_deps() -> dict[str, str]:
@@ -187,6 +194,17 @@ def count_variants(
             ),
         ),
     ] = False,
+    biallelic_only: Annotated[
+        bool,
+        typer.Option(
+            "--biallelic-only/--include-multiallelic",
+            help=(
+                "Keep only biallelic SNVs, dropping multi-allelic sites "
+                "(bcftools -m2 -M2 equivalent). Default. "
+                "Use --include-multiallelic to emit one row per ALT at multi-allelic sites."
+            ),
+        ),
+    ] = True,
 ) -> None:
     run_count_variants(
         bam_file=bam,
@@ -203,6 +221,50 @@ def count_variants(
         precomputed_vcf_bed=vcf_bed,
         precomputed_intersect=intersect_bed,
         include_indels=include_indels,
+        biallelic_only=biallelic_only,
+    )
+
+
+@app.command()
+def count_cohort(
+    donor_manifest: Annotated[
+        str,
+        typer.Argument(help="TSV with exactly three columns: donor_id, vcf_sample, bam"),
+    ],
+    variants: Annotated[str, typer.Argument(help="Indexed cohort VCF.GZ, VCF.BGZ, or BCF")],
+    output_dir: Annotated[str, typer.Argument(help="New directory for locked count outputs")],
+    unit: Annotated[
+        AnalysisUnitChoice,
+        typer.Option("--unit", help="Statistical unit: independent SNVs or features."),
+    ],
+    region_file: Annotated[
+        str | None,
+        typer.Option(
+            "--regions",
+            "--region",
+            "-r",
+            help=("Optional SNV inclusion mask; required feature definitions in feature mode."),
+        ),
+    ] = None,
+    use_region_names: Annotated[
+        bool,
+        typer.Option(
+            "--use-region-names/--use-region-coordinates",
+            help="Use the fourth region column as the feature identifier.",
+        ),
+    ] = True,
+) -> None:
+    result = run_count_cohort(
+        donor_manifest=donor_manifest,
+        variant_file=variants,
+        output_dir=output_dir,
+        unit=unit.value,
+        region_file=region_file,
+        use_region_names=use_region_names,
+    )
+    typer.echo(
+        f"Locked {result['donors']} donors and {result['rows']} count rows in "
+        f"{result['output_dir']}"
     )
 
 
@@ -269,7 +331,20 @@ def count_variants_sc(
             ),
         ),
     ] = None,
+    biallelic_only: Annotated[
+        bool,
+        typer.Option(
+            "--biallelic-only/--include-multiallelic",
+            help=(
+                "Keep only biallelic SNVs, dropping multi-allelic sites "
+                "(bcftools -m2 -M2 equivalent). Default. "
+                "Use --include-multiallelic to emit one row per ALT at multi-allelic sites."
+            ),
+        ),
+    ] = True,
 ) -> None:
+    from .run_counting_sc import run_count_variants_sc
+
     run_count_variants_sc(
         bam_file=bam,
         variant_file=variants,
@@ -278,4 +353,5 @@ def count_variants_sc(
         samples=samples,
         out_file=out_file,
         temp_loc=temp_loc,
+        biallelic_only=biallelic_only,
     )

@@ -18,6 +18,7 @@ def vcf_to_bed(
     include_gt: bool = True,
     include_indels: bool = False,
     max_indel_len: int = 10,
+    biallelic_only: bool = True,
 ) -> str:
     """Convert variant file to BED format.
 
@@ -47,6 +48,7 @@ def vcf_to_bed(
         het_only=bool(samples),
         include_indels=include_indels,
         max_indel_len=max_indel_len,
+        biallelic_only=biallelic_only,
     )
     return str(result)
 

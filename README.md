@@ -37,14 +37,14 @@ The PyPI package does not install external tools such as `samtools`,
 ### Docker
 
 ```bash
-docker pull ghcr.io/mcvickerlab/wasp2:1.4.1
-docker run --rm ghcr.io/mcvickerlab/wasp2:1.4.1 wasp2-count --help
+docker pull ghcr.io/mcvickerlab/wasp2:1.5.0
+docker run --rm ghcr.io/mcvickerlab/wasp2:1.5.0 wasp2-count --help
 ```
 
 ### Singularity/Apptainer
 
 ```bash
-singularity pull wasp2.sif docker://ghcr.io/mcvickerlab/wasp2:1.4.1
+singularity pull wasp2.sif docker://ghcr.io/mcvickerlab/wasp2:1.5.0
 singularity exec wasp2.sif wasp2-count --help
 ```
 
@@ -57,6 +57,18 @@ WASP2 installs three command-line entry points:
 - `wasp2-analyze`
 
 ## Quick Start
+
+> **Prerequisite — normalize your VCF first.** WASP2's allelic-imbalance model is biallelic.
+> Split multi-allelic records and left-align before running:
+>
+> ```bash
+> bcftools norm -m- -f reference.fa input.vcf.gz -Oz -o input.norm.vcf.gz
+> bcftools index -t input.norm.vcf.gz
+> ```
+>
+> By default WASP2 keeps **biallelic SNVs only** (multi-allelic sites are dropped, equivalent to
+> `bcftools view -m2 -M2`). Pass `--include-multiallelic` to `count-variants`, `count-variants-sc`,
+> or `make-reads` to instead emit one row per ALT at any remaining multi-allelic sites.
 
 ### 1. Correct mapping bias
 
@@ -76,6 +88,25 @@ wasp2-map filter-remapped remapped.bam \
 ```bash
 wasp2-count count-variants filtered.bam variants.vcf.gz -s sample1 -o counts.tsv
 ```
+
+For a bulk cohort, use one final indexed BAM per donor and map donor identifiers
+to VCF sample names explicitly:
+
+```text
+donor_id	vcf_sample	bam
+donor1	VCF_sample_1	/path/to/donor1.bam
+donor2	VCF_sample_2	/path/to/donor2.bam
+```
+
+```bash
+wasp2-count count-cohort donors.tsv variants.vcf.gz cohort_counts \
+  --unit snv --regions atac_peaks.bed
+```
+
+This creates a new locked directory containing `counts.tsv.gz`, normalized
+`donors.tsv`, and `count_manifest.json`. In SNV mode, regions restrict included
+sites but do not combine their tests. Use `--unit feature --regions peaks.bed`
+to retain peak identifiers for feature-level analysis.
 
 ### 3. Test for imbalance
 

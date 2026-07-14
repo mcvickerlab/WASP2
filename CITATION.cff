@@ -22,8 +22,8 @@ authors:
   - name: "McVicker Lab"
     affiliation: "Salk Institute for Biological Studies"
 
-version: "1.3.0"
-date-released: "2025-01-01"
+version: "1.5.0"
+date-released: "2026-07-14"
 license: MIT
 
 repository-code: "https://github.com/mcvickerlab/WASP2"

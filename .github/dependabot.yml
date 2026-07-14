@@ -1,11 +1,15 @@
 version: 2
 updates:
-  # GitHub Actions SHA pinning only — monthly grouped updates
-  # Python/Rust deps managed via conda-lock.yml and pixi.toml instead
+  # GitHub Actions SHA pinning — monthly grouped updates.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "monthly"
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+      semver-minor-days: 7
+      semver-patch-days: 3
     groups:
       github-actions:
         patterns:
@@ -15,3 +19,43 @@ updates:
       - "ci"
     commit-message:
       prefix: "ci"
+
+  # Python dependency declarations in pyproject.toml.
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+      semver-minor-days: 7
+      semver-patch-days: 3
+    groups:
+      python:
+        patterns:
+          - "*"
+    labels:
+      - "dependencies"
+      - "python"
+    commit-message:
+      prefix: "deps(python)"
+
+  # Rust dependencies and Cargo.lock.
+  - package-ecosystem: "cargo"
+    directory: "/rust"
+    schedule:
+      interval: "monthly"
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+      semver-minor-days: 7
+      semver-patch-days: 3
+    groups:
+      rust:
+        patterns:
+          - "*"
+    labels:
+      - "dependencies"
+      - "rust"
+    commit-message:
+      prefix: "deps(rust)"

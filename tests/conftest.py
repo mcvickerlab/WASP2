@@ -13,21 +13,15 @@ from pathlib import Path
 
 import pytest
 
-# Project root
-ROOT = Path(__file__).parent.parent
-TEST_DATA_DIR = ROOT / "tests" / "data"
-
-
 # ============================================================================
 # Session-scoped fixtures (created once per test session)
 # ============================================================================
 
 
 @pytest.fixture(scope="session")
-def test_data_dir() -> Path:
-    """Return path to test data directory, creating if needed."""
-    TEST_DATA_DIR.mkdir(parents=True, exist_ok=True)
-    return TEST_DATA_DIR
+def test_data_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Return an isolated directory for generated test data."""
+    return tmp_path_factory.mktemp("wasp2-test-data")
 
 
 @pytest.fixture(scope="session")
@@ -54,6 +48,28 @@ def sample_vcf(test_data_dir, sample_vcf_content) -> Path:
     """Create a sample VCF file for testing."""
     vcf_path = test_data_dir / "sample.vcf"
     vcf_path.write_text(sample_vcf_content)
+    return vcf_path
+
+
+@pytest.fixture(scope="session")
+def multiallelic_vcf_content() -> str:
+    """VCF with one biallelic het + two multi-allelic het sites (for biallelic-policy tests)."""
+    return """\
+##fileformat=VCFv4.2
+##contig=<ID=chr1,length=248956422>
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tsample1
+chr1\t100\trs1\tA\tG\t30\tPASS\t.\tGT\t0|1
+chr1\t200\trs2\tC\tA,T\t30\tPASS\t.\tGT\t0|1
+chr1\t300\trs3\tG\tA,C\t30\tPASS\t.\tGT\t0|2
+"""
+
+
+@pytest.fixture(scope="session")
+def multiallelic_vcf(test_data_dir, multiallelic_vcf_content) -> Path:
+    """Write the multi-allelic VCF for biallelic-policy tests."""
+    vcf_path = test_data_dir / "multiallelic.vcf"
+    vcf_path.write_text(multiallelic_vcf_content)
     return vcf_path
 
 
@@ -86,9 +102,8 @@ def sample_vcf_gz(test_data_dir, sample_vcf) -> Path:
     except (subprocess.CalledProcessError, FileNotFoundError):
         # Fall back to bgzip if bcftools fails
         try:
-            subprocess.run(
-                ["bgzip", "-c", str(sample_vcf)], stdout=open(vcf_gz_path, "wb"), check=True
-            )
+            with vcf_gz_path.open("wb") as compressed_vcf:
+                subprocess.run(["bgzip", "-c", str(sample_vcf)], stdout=compressed_vcf, check=True)
             subprocess.run(
                 ["tabix", "-p", "vcf", str(vcf_gz_path)], check=True, capture_output=True
             )

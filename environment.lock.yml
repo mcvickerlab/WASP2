@@ -3,8 +3,8 @@
 # Build deps (rust, libclang, clang, maturin) excluded — only needed to compile
 name: WASP2
 channels:
-  - bioconda
   - conda-forge
+  - bioconda
 
 # plink2 and all bioconda bio tools only support linux-64 and osx-64
 # (not osx-arm64, linux-aarch64, or win-64)
@@ -27,12 +27,16 @@ dependencies:
   - pybedtools>=0.9
   - bedtools>=2.30
   - bcftools>=1.10
+  # bcftools 1.24 is built against the GSL 2.7 ABI.
+  - gsl=2.7
   - samtools>=1.10
   - htslib>=1.10
   - bwa>=0.7
   - anndata>=0.8,<0.12
-  - scanpy>=1.9
+  - scanpy>=1.10
+  - numba>=0.59
   - plink2
+  - pgenlib>=0.90
 
   # CLI
   - typer>=0.12
@@ -44,8 +48,3 @@ dependencies:
   - pytest-cov>=4.0
   - mypy>=1.0
   - ruff>=0.9
-
-  # Pip-only runtime deps
-  - pip
-  - pip:
-    - Pgenlib>=0.90

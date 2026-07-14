@@ -2,7 +2,7 @@
     <!-- WASP2 Galaxy Tool Macros -->
     <!-- Shared definitions for all WASP2 tools -->
 
-    <token name="@TOOL_VERSION@">1.3.0</token>
+    <token name="@TOOL_VERSION@">1.5.0</token>
     <token name="@VERSION_SUFFIX@">+galaxy0</token>
     <token name="@PROFILE@">23.0</token>
 
@@ -13,12 +13,6 @@
             <requirement type="package" version="1.17">bcftools</requirement>
             <requirement type="package" version="2.31.0">bedtools</requirement>
         </requirements>
-    </xml>
-
-    <xml name="bio_tools">
-        <xrefs>
-            <xref type="bio.tools">wasp2</xref>
-        </xrefs>
     </xml>
 
     <xml name="creators">
@@ -58,6 +52,14 @@
         <param argument="--samples" type="text" value="" optional="true"
                label="Sample name(s)"
                help="One or more samples to use from variant file. Comma-separated or leave empty for all samples.">
+            <expand macro="sanitize_sample"/>
+        </param>
+    </xml>
+
+    <xml name="sample_param_required">
+        <param argument="--samples" type="text"
+               label="VCF sample name(s)"
+               help="One or more phased samples from the variant file, separated by commas.">
             <expand macro="sanitize_sample"/>
         </param>
     </xml>

@@ -93,6 +93,9 @@ if CYVCF2_AVAILABLE:
             # Cache samples from header
             self._samples = self.vcf.samples
 
+            # Biallelic policy: drop multi-allelic records on read by default (mirror VCFSource).
+            self.biallelic_only: bool = True
+
             # Lazy-computed variant count
             self._variant_count: int | None = None
 
@@ -208,7 +211,9 @@ if CYVCF2_AVAILABLE:
                 if het_only and genotype != Genotype.HET:
                     continue
 
-                # Create Variant object (use first ALT if multi-allelic)
+                # Biallelic policy: drop multi-allelic sites rather than keeping first ALT.
+                if self.biallelic_only and variant.ALT and len(variant.ALT) > 1:
+                    continue
                 alt = variant.ALT[0] if variant.ALT else variant.REF
                 var = Variant(
                     chrom=variant.CHROM,
@@ -339,7 +344,9 @@ if CYVCF2_AVAILABLE:
                 else:
                     genotype = Genotype.MISSING
 
-                # Create Variant (use first ALT)
+                # Biallelic policy: drop multi-allelic sites rather than keeping first ALT.
+                if self.biallelic_only and variant.ALT and len(variant.ALT) > 1:
+                    continue
                 alt = variant.ALT[0] if variant.ALT else variant.REF
                 var = Variant(
                     chrom=variant.CHROM,
@@ -372,6 +379,7 @@ if CYVCF2_AVAILABLE:
             samples: list[str] | None = None,
             het_only: bool = True,
             include_genotypes: bool = True,
+            biallelic_only: bool = True,
         ) -> Path:
             r"""Export variants to BED format file.
 
@@ -387,6 +395,7 @@ if CYVCF2_AVAILABLE:
                 samples: Optional list of sample IDs to include
                 het_only: If True, only export heterozygous variants
                 include_genotypes: If True, include genotype column(s)
+                biallelic_only: If True (default), restrict to biallelic SNVs (-m2 -M2)
 
             Returns:
                 Path to the created BED file
@@ -404,17 +413,19 @@ if CYVCF2_AVAILABLE:
             # Build bcftools commands based on parameters
             # This follows the pattern from VCFSource for consistency
 
-            # Base view command: filter to biallelic SNPs
+            # Base view command: SNPs only (biallelic restriction added below if requested)
             view_cmd = [
                 "bcftools",
                 "view",
                 str(self.path),
-                "-m2",
-                "-M2",  # min/max alleles
                 "-v",
                 "snps",  # SNPs only
                 "-Ou",  # uncompressed BCF output
             ]
+
+            # biallelic_only adds -m2 -M2 (restrict to biallelic SNVs); flag-driven, default True.
+            if biallelic_only:
+                view_cmd[3:3] = ["-m2", "-M2"]  # insert right after the input path
 
             # Build query command
             query_cmd = ["bcftools", "query", "-o", str(output), "-f"]

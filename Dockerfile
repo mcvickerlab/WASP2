@@ -7,7 +7,7 @@
 # Stage 1: Install cargo-chef
 # ============================================================================
 FROM rust:1.88-bookworm AS chef
-RUN cargo install cargo-chef
+RUN cargo install cargo-chef --version 0.1.77 --locked
 WORKDIR /build
 
 # ============================================================================
@@ -38,7 +38,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install maturin (before source copy so this layer is cached)
-RUN pip3 install --break-system-packages --no-cache-dir "maturin>=1.4"
+RUN pip3 install --break-system-packages --no-cache-dir "maturin==1.14.1"
 
 # Cook dependencies — this layer only rebuilds when Cargo.toml/lock changes
 WORKDIR /build/rust
@@ -69,7 +69,7 @@ FROM python:3.11-slim-bookworm
 
 # Version: keep in sync with rust/Cargo.toml (single source of truth)
 # Run scripts/check-version-consistency.sh to verify
-ARG VERSION=1.4.1
+ARG VERSION=1.5.0
 
 LABEL org.opencontainers.image.source="https://github.com/mcvickerlab/WASP2"
 LABEL org.opencontainers.image.description="WASP2: Allele-specific analysis of NGS data with Rust acceleration"

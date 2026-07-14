@@ -134,6 +134,16 @@ def make_reads(
             min=1,
         ),
     ] = 10,
+    biallelic_only: Annotated[
+        bool,
+        typer.Option(
+            "--biallelic-only/--include-multiallelic",
+            help=(
+                "Keep only biallelic SNVs, dropping multi-allelic sites "
+                "(bcftools -m2 -M2 equivalent). Default."
+            ),
+        ),
+    ] = True,
     insert_qual: Annotated[
         int,
         typer.Option(
@@ -167,6 +177,7 @@ def make_reads(
         is_phased=is_phased,
         include_indels=include_indels,
         max_indel_len=max_indel_len,
+        biallelic_only=biallelic_only,
         insert_qual=insert_qual,
         max_seqs=max_seqs,
         threads=threads,

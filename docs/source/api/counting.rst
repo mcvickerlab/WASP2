@@ -44,6 +44,14 @@ run_counting
    :show-inheritance:
    :exclude-members: bam_file, variant_file, region_file, samples, out_file, temp_loc, variant_prefix, vcf_bed, skip_vcf_to_bed, region_type, is_gene_file, use_region_names, intersect_file, skip_intersect, gtf_bed
 
+run_counting_cohort
+-------------------
+
+.. automodule:: counting.run_counting_cohort
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 run_counting_sc
 ---------------
 

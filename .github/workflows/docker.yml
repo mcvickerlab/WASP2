@@ -1,165 +1,58 @@
-# WASP2 Docker Build Workflow (Production Releases)
-# Builds and pushes container images to GitHub Container Registry
-# Uses self-hosted Mac runner with Docker support (wasp2-mac-runner)
-#
-# NOTE: For PR testing, see containers.yml (also uses self-hosted Mac runner)
-#       This workflow focuses on official releases and tag pushes only
-
-name: Docker
+name: Container CI
 
 on:
   push:
-    branches: [master]
-    tags:
-      - "v*"
-  # PR testing is handled by containers.yml using self-hosted Mac runner
-  # Keeping this commented to avoid duplicate builds
-  # pull_request:
-  #   branches: [master]
-  #   paths:
-  #     - "Dockerfile"
-  #     - "rust/**"
-  #     - "src/**"
-  #     - "pyproject.toml"
+    branches: [master, dev]
+    paths: ["Dockerfile", "rust/**", "src/**", "pyproject.toml", "scripts/container_smoke_test.sh", ".github/workflows/docker.yml"]
+  pull_request:
+    branches: [master, dev]
+    paths: ["Dockerfile", "rust/**", "src/**", "pyproject.toml", "scripts/container_smoke_test.sh", ".github/workflows/docker.yml"]
   workflow_dispatch:
 
-# Prevent parallel builds
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false  # Don't cancel production deployments
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# Deny-all default; each job declares its own least-privilege permissions
-permissions: {}
-
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+permissions:
+  contents: read
 
 jobs:
   build:
-    name: Build and Push
-    # Using self-hosted Mac runner with Docker support
-    runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
-    timeout-minutes: 45
-    permissions:
-      contents: read
-      packages: write
-
+    name: Container ${{ matrix.platform }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [linux/amd64, linux/arm64]
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-
-      # Disable macOS Keychain credential helper to avoid Keychain Error (-61)
-      # on self-hosted runners without GUI access. Docker Desktop on macOS sets
-      # credsStore=osxkeychain which requires GUI. We override the default config
-      # directly so all subsequent docker commands use file-based auth.
-      - name: Configure Docker credentials store
-        run: |
-          # Back up and patch the default Docker config
-          cp "$HOME/.docker/config.json" "$HOME/.docker/config.json.bak" 2>/dev/null || true
-          python3 -c "
-          import json, pathlib, os
-          p = pathlib.Path(os.path.expanduser('~/.docker/config.json'))
-          p.parent.mkdir(parents=True, exist_ok=True)
-          cfg = json.loads(p.read_text()) if p.exists() else {}
-          cfg.pop('credsStore', None)
-          cfg.pop('credStore', None)
-          p.write_text(json.dumps(cfg, indent=2))
-          "
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
-
-      - name: Log in to Container Registry
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata (tags, labels)
-        id: meta
-        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051  # v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=sha,prefix=sha-
-            type=ref,event=branch
-
-      - name: Build and push Docker image
-        id: build-push
+          persist-credentials: false
+      - uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392  # v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
+      - name: Build local test image
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
         with:
           context: .
-          file: ./Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          # Using local cache for self-hosted runner
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
-          platforms: linux/amd64
-          build-args: |
-            VERSION=${{ github.ref_name }}
-
-      - name: Rotate cache
-        run: rm -rf /tmp/.buildx-cache && mv /tmp/.buildx-cache-new /tmp/.buildx-cache 2>/dev/null || true
-
-      - name: Restore Docker config
-        if: always()
-        run: |
-          if [ -f "$HOME/.docker/config.json.bak" ]; then
-            mv "$HOME/.docker/config.json.bak" "$HOME/.docker/config.json"
-          fi
-
-      - name: Summary
+          load: true
+          platforms: ${{ matrix.platform }}
+          tags: wasp2:ci
+          build-args: VERSION=0+ci.${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Smoke-test image
         env:
-          META_TAGS: ${{ steps.meta.outputs.tags }}
-          IMAGE_DIGEST: ${{ steps.build-push.outputs.digest }}
-          REPO_NAME: ${{ github.repository }}
-        run: |
-          echo "## Docker Image Published" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Tags:** \`${META_TAGS//$'\n'/, }\`" >> $GITHUB_STEP_SUMMARY
-          [ -n "${IMAGE_DIGEST}" ] && echo "**Digest:** \`${IMAGE_DIGEST}\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Pull: \`docker pull ghcr.io/${REPO_NAME}:latest\`" >> $GITHUB_STEP_SUMMARY
+          PLATFORM: ${{ matrix.platform }}
+        run: docker run --rm --platform "$PLATFORM" wasp2:ci /opt/wasp2/scripts/container_smoke_test.sh
 
-  # ===========================================================================
-  # Build Singularity image from Docker (for HPC environments)
-  # ===========================================================================
-  singularity:
-    name: Build Singularity
+  required:
+    name: Required / Container
+    if: always()
     needs: build
-    # Using self-hosted Mac runner with Docker support
-    runs-on: [self-hosted, macOS, ARM64, docker, wasp2]
-    timeout-minutes: 30
-    if: startsWith(github.ref, 'refs/tags/v')
-    permissions:
-      contents: write
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-
-      - name: Set up Singularity
-        uses: eWaterCycle/setup-singularity@931d4e31109e875b13309ae1d07c70ca8fbc8537  # v7
-        with:
-          singularity-version: 3.11.4
-
-      - name: Get version
-        id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-
-      - name: Build Singularity image
+      - name: Verify container builds
         env:
-          VERSION: ${{ steps.version.outputs.VERSION }}
-        run: |
-          singularity build wasp2_${VERSION}.sif docker://${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}
-
-      - name: Upload Singularity image to release
-        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b  # v2
-        with:
-          files: wasp2_*.sif
+          BUILD_RESULT: ${{ needs.build.result }}
+        run: test "$BUILD_RESULT" = success

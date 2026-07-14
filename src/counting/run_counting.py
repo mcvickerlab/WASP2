@@ -209,6 +209,7 @@ def run_count_variants(
     precomputed_vcf_bed: str | None = None,
     precomputed_intersect: str | None = None,
     include_indels: bool = False,
+    biallelic_only: bool = True,
 ) -> None:
     """Run the WASP variant counting pipeline.
 
@@ -260,6 +261,7 @@ def run_count_variants(
             samples=count_files.samples,
             include_gt=with_gt,
             include_indels=include_indels,
+            biallelic_only=biallelic_only,
         )
 
     region_col_name = None  # Defaults to 'region' as region name

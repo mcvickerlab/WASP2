@@ -8,6 +8,8 @@ nextflow_pipeline {
 
     test("nf-scatac - stub run") {
 
+        tag "ci_stub"
+
         options "-stub -profile test_stub"
 
         when {

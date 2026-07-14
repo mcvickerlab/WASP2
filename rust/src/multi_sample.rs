@@ -183,10 +183,7 @@ pub fn parse_intersect_bed_multi<P: AsRef<Path>>(
             sample_alleles,
         };
 
-        variants
-            .entry(read_name)
-            .or_insert_with(Vec::new)
-            .push(span);
+        variants.entry(read_name).or_default().push(span);
     }
 
     eprintln!(
@@ -215,7 +212,7 @@ pub fn parse_intersect_bed_multi<P: AsRef<Path>>(
 /// 2 samples, 2 variants:
 /// - Sample1: pos100=A|G, pos200=C|T  → col0="AC", col1="GT"
 /// - Sample2: pos100=A|A, pos200=C|C  → col2="AC", col3="CC"
-/// Unique columns: ["AC", "GT", "CC"] → indices [0, 1, 3]
+///   Unique columns: ["AC", "GT", "CC"] → indices [0, 1, 3]
 ///
 /// # Arguments
 /// * `variants` - Slice of variant spans for a single read (must have same sample count)
@@ -383,7 +380,7 @@ pub fn apply_allele_substitutions_cigar_aware(
                     // Insertion: use original + fill extra with Q30
                     new_qual.extend_from_slice(qual_seg);
                     let extra_needed = allele_len.saturating_sub(orig_len);
-                    new_qual.extend(std::iter::repeat(30u8).take(extra_needed));
+                    new_qual.extend(std::iter::repeat_n(30u8, extra_needed));
                 }
             }
         }
@@ -440,19 +437,17 @@ pub fn apply_allele_substitutions(
                             new_qual.drain(remove_start..remove_end);
                         }
                     }
-                } else if alt_len > ref_len {
-                    if offset + ref_len <= new_seq.len() {
-                        for (i, b) in allele.bytes().take(ref_len).enumerate() {
-                            new_seq[offset + i] = b;
-                        }
-                        let insert_pos = offset + ref_len;
-                        let extra_bases: Vec<u8> = allele.bytes().skip(ref_len).collect();
-                        let extra_qual: Vec<u8> = vec![30; extra_bases.len()];
+                } else if alt_len > ref_len && offset + ref_len <= new_seq.len() {
+                    for (i, b) in allele.bytes().take(ref_len).enumerate() {
+                        new_seq[offset + i] = b;
+                    }
+                    let insert_pos = offset + ref_len;
+                    let extra_bases: Vec<u8> = allele.bytes().skip(ref_len).collect();
+                    let extra_qual: Vec<u8> = vec![30; extra_bases.len()];
 
-                        for (i, (b, q)) in extra_bases.iter().zip(extra_qual.iter()).enumerate() {
-                            new_seq.insert(insert_pos + i, *b);
-                            new_qual.insert(insert_pos + i, *q);
-                        }
+                    for (i, (b, q)) in extra_bases.iter().zip(extra_qual.iter()).enumerate() {
+                        new_seq.insert(insert_pos + i, *b);
+                        new_qual.insert(insert_pos + i, *q);
                     }
                 }
             }
@@ -892,6 +887,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_apply_snp_substitution() {
         let variant = make_test_variant(5, vec![("A", "G")]);
         let variants: Vec<&VariantSpanMulti> = vec![&variant];
@@ -921,9 +917,9 @@ mod tests {
         assert_eq!(results.len(), 3);
 
         let seqs: HashSet<Vec<u8>> = results.into_iter().map(|(s, _)| s).collect();
-        assert!(seqs.contains(&b"AAAAAAA".to_vec())); // A at pos 2
-        assert!(seqs.contains(&b"AAGAAAA".to_vec())); // G at pos 2
-        assert!(seqs.contains(&b"AATAAAA".to_vec())); // T at pos 2
+        assert!(seqs.iter().any(|seq| seq == b"AAAAAAA")); // A at pos 2
+        assert!(seqs.iter().any(|seq| seq == b"AAGAAAA")); // G at pos 2
+        assert!(seqs.iter().any(|seq| seq == b"AATAAAA")); // T at pos 2
     }
 
     // ========================================================================
@@ -1161,5 +1157,283 @@ mod tests {
         // Positions 2 and 6 changed
         assert_eq!(&new_seq, b"AAGAAATAA");
         assert_eq!(new_qual.len(), 9);
+    }
+
+    // ========================================================================
+    // Phased Output Comparison Tests
+    // ========================================================================
+    // These tests verify that CIGAR-aware allele substitution produces
+    // the correct phased output sequences for various variant types.
+
+    #[test]
+    fn test_phased_snp_ref_to_alt() {
+        // Given: A read with sequence "AAAAAAA" (7 bp)
+        // And: A SNP at position 3 where REF=A, ALT=G
+        // When: We apply the ALT allele
+        // Then: The output should be "AAAGAAA"
+
+        let seq = b"AAAAAAA".to_vec();
+        let qual = vec![30u8; 7];
+
+        let mut variant = make_test_variant(3, vec![("A", "G")]);
+        variant.ref_allele = "A".to_string();
+        variant.alt_allele = "G".to_string();
+        variant.vcf_stop = 4;
+        let variants: Vec<&VariantSpanMulti> = vec![&variant];
+        let alleles = vec!["G".to_string()];
+
+        let (ref2q_left, ref2q_right) =
+            make_position_maps(&[(0, 0), (1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6)]);
+
+        let (new_seq, new_qual) = apply_allele_substitutions_cigar_aware(
+            &seq,
+            &qual,
+            &variants,
+            &alleles,
+            &ref2q_left,
+            &ref2q_right,
+        )
+        .expect("Substitution should succeed");
+
+        assert_eq!(&new_seq, b"AAAGAAA", "SNP substitution at position 3: A->G");
+        assert_eq!(new_qual.len(), 7, "Quality length unchanged for SNP");
+    }
+
+    #[test]
+    fn test_phased_snp_keeps_ref() {
+        // Given: A read with sequence "AAAGAAA" (7 bp)
+        // And: A SNP at position 3 where REF=A, ALT=G
+        // When: We apply the REF allele
+        // Then: The output should be "AAAAAAA"
+
+        let seq = b"AAAGAAA".to_vec();
+        let qual = vec![30u8; 7];
+
+        let mut variant = make_test_variant(3, vec![("A", "G")]);
+        variant.ref_allele = "A".to_string();
+        variant.alt_allele = "G".to_string();
+        variant.vcf_stop = 4;
+        let variants: Vec<&VariantSpanMulti> = vec![&variant];
+        let alleles = vec!["A".to_string()]; // Keep REF
+
+        let (ref2q_left, ref2q_right) =
+            make_position_maps(&[(0, 0), (1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6)]);
+
+        let (new_seq, new_qual) = apply_allele_substitutions_cigar_aware(
+            &seq,
+            &qual,
+            &variants,
+            &alleles,
+            &ref2q_left,
+            &ref2q_right,
+        )
+        .expect("Substitution should succeed");
+
+        assert_eq!(
+            &new_seq, b"AAAAAAA",
+            "REF allele A replaces G at position 3"
+        );
+        assert_eq!(new_qual.len(), 7, "Quality length unchanged for SNP");
+    }
+
+    #[test]
+    fn test_phased_deletion_cgt_to_c() {
+        // Given: A read with sequence "AAACGTAAA" (9 bp)
+        // And: A deletion at positions 3-5 where REF=CGT, ALT=C
+        // When: We apply the ALT allele (deletion)
+        // Then: The output should be "AAACAAA" (7 bp)
+
+        let seq = b"AAACGTAAA".to_vec();
+        let qual = vec![30u8; 9];
+
+        let mut variant = make_test_variant(3, vec![("CGT", "C")]);
+        variant.ref_allele = "CGT".to_string();
+        variant.alt_allele = "C".to_string();
+        variant.vcf_stop = 6;
+        let variants: Vec<&VariantSpanMulti> = vec![&variant];
+        let alleles = vec!["C".to_string()];
+
+        let (ref2q_left, ref2q_right) = make_position_maps(&[
+            (0, 0),
+            (1, 1),
+            (2, 2),
+            (3, 3),
+            (4, 4),
+            (5, 5),
+            (6, 6),
+            (7, 7),
+            (8, 8),
+        ]);
+
+        let (new_seq, new_qual) = apply_allele_substitutions_cigar_aware(
+            &seq,
+            &qual,
+            &variants,
+            &alleles,
+            &ref2q_left,
+            &ref2q_right,
+        )
+        .expect("Substitution should succeed");
+
+        assert_eq!(&new_seq, b"AAACAAA", "Deletion CGT->C at position 3");
+        assert_eq!(
+            new_qual.len(),
+            7,
+            "Quality length reduced by 2 for deletion"
+        );
+    }
+
+    #[test]
+    fn test_phased_insertion_a_to_acgt() {
+        // Given: A read with sequence "AAAAAAA" (7 bp)
+        // And: An insertion at position 3 where REF=A, ALT=ACGT
+        // When: We apply the ALT allele (insertion)
+        // Then: The output should be "AAAACGTAAA" (10 bp)
+
+        let seq = b"AAAAAAA".to_vec();
+        let qual = vec![30u8; 7];
+
+        let mut variant = make_test_variant(3, vec![("A", "ACGT")]);
+        variant.ref_allele = "A".to_string();
+        variant.alt_allele = "ACGT".to_string();
+        variant.vcf_stop = 4;
+        let variants: Vec<&VariantSpanMulti> = vec![&variant];
+        let alleles = vec!["ACGT".to_string()];
+
+        let (ref2q_left, ref2q_right) =
+            make_position_maps(&[(0, 0), (1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6)]);
+
+        let (new_seq, new_qual) = apply_allele_substitutions_cigar_aware(
+            &seq,
+            &qual,
+            &variants,
+            &alleles,
+            &ref2q_left,
+            &ref2q_right,
+        )
+        .expect("Substitution should succeed");
+
+        assert_eq!(&new_seq, b"AAAACGTAAA", "Insertion A->ACGT at position 3");
+        assert_eq!(
+            new_qual.len(),
+            10,
+            "Quality length increased by 3 for insertion"
+        );
+    }
+
+    #[test]
+    fn test_expected_phased_haplotypes() {
+        // Integration test: Given a heterozygous variant with phased genotype 0|1,
+        // verify that haplotype 1 (REF) and haplotype 2 (ALT) are generated correctly.
+
+        // Scenario: Read covers variant C>T at position 5
+        // Input read: "AAAAACAAAA" (has REF allele C at position 5)
+        // Expected hap1 (REF): "AAAAACAAAA"
+        // Expected hap2 (ALT): "AAAAATAAAA"
+
+        let seq = b"AAAAACAAAA".to_vec();
+        let qual = vec![30u8; 10];
+
+        let mut variant = make_test_variant(5, vec![("C", "T")]);
+        variant.ref_allele = "C".to_string();
+        variant.alt_allele = "T".to_string();
+        variant.vcf_stop = 6;
+        let variants: Vec<&VariantSpanMulti> = vec![&variant];
+
+        let (ref2q_left, ref2q_right) = make_position_maps(&[
+            (0, 0),
+            (1, 1),
+            (2, 2),
+            (3, 3),
+            (4, 4),
+            (5, 5),
+            (6, 6),
+            (7, 7),
+            (8, 8),
+            (9, 9),
+        ]);
+
+        // Haplotype 1: REF allele
+        let hap1_alleles = vec!["C".to_string()];
+        let (hap1_seq, _) = apply_allele_substitutions_cigar_aware(
+            &seq,
+            &qual,
+            &variants,
+            &hap1_alleles,
+            &ref2q_left,
+            &ref2q_right,
+        )
+        .expect("Haplotype 1 substitution should succeed");
+
+        // Haplotype 2: ALT allele
+        let hap2_alleles = vec!["T".to_string()];
+        let (hap2_seq, _) = apply_allele_substitutions_cigar_aware(
+            &seq,
+            &qual,
+            &variants,
+            &hap2_alleles,
+            &ref2q_left,
+            &ref2q_right,
+        )
+        .expect("Haplotype 2 substitution should succeed");
+
+        assert_eq!(
+            &hap1_seq, b"AAAAACAAAA",
+            "Haplotype 1 (REF) has C at position 5"
+        );
+        assert_eq!(
+            &hap2_seq, b"AAAAATAAAA",
+            "Haplotype 2 (ALT) has T at position 5"
+        );
+    }
+
+    #[test]
+    fn test_indel_coordinate_shift_with_deletion() {
+        // Test that variants downstream of a deletion are correctly placed
+        // even when query coordinates differ from reference coordinates.
+
+        // Scenario: Read with deletion in CIGAR (5M2D5M)
+        // Read sequence: "AAAAABBBBB" (10 bp aligned to 12 ref bp due to deletion)
+        // Variant at ref position 7 should map to query position 5.
+
+        let seq = b"AAAAABBBBB".to_vec();
+        let qual = vec![30u8; 10];
+
+        let mut variant = make_test_variant(7, vec![("B", "X")]);
+        variant.ref_allele = "B".to_string();
+        variant.alt_allele = "X".to_string();
+        variant.vcf_stop = 8;
+        let variants: Vec<&VariantSpanMulti> = vec![&variant];
+        let alleles = vec!["X".to_string()];
+
+        // Position mapping with deletion at ref 5-6
+        let (ref2q_left, ref2q_right) = make_position_maps(&[
+            (0, 0),
+            (1, 1),
+            (2, 2),
+            (3, 3),
+            (4, 4),
+            (7, 5),
+            (8, 6),
+            (9, 7),
+            (10, 8),
+            (11, 9),
+        ]);
+
+        let (new_seq, new_qual) = apply_allele_substitutions_cigar_aware(
+            &seq,
+            &qual,
+            &variants,
+            &alleles,
+            &ref2q_left,
+            &ref2q_right,
+        )
+        .expect("Substitution should succeed");
+
+        assert_eq!(
+            &new_seq, b"AAAAAXBBBB",
+            "Variant at ref 7 substitutes at query 5"
+        );
+        assert_eq!(new_qual.len(), 10, "Quality length unchanged");
     }
 }

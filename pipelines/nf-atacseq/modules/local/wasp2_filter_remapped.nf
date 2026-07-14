@@ -4,8 +4,8 @@ process WASP2_FILTER_REMAPPED {
 
     conda "${moduleDir}/environment.yml"
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
-        'docker://ghcr.io/mcvickerlab/wasp2:1.4.0' :
-        'ghcr.io/mcvickerlab/wasp2:1.4.0' }"
+        'docker://ghcr.io/mcvickerlab/wasp2:1.5.0' :
+        'ghcr.io/mcvickerlab/wasp2:1.5.0' }"
 
     input:
     tuple val(meta), path(remapped_bam), path(remapped_bai), path(to_remap_bam), path(keep_bam), path(wasp_json)
@@ -52,7 +52,7 @@ process WASP2_FILTER_REMAPPED {
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        wasp2: 1.2.1
+        wasp2: 1.5.0
         samtools: 1.17
     END_VERSIONS
     """

@@ -34,6 +34,7 @@ def vcf_to_bed(
     samples: list[str] | None = None,
     include_indels: bool = False,
     max_indel_len: int = 10,
+    biallelic_only: bool = True,
 ) -> str:
     """Convert variant file to BED format.
 
@@ -62,6 +63,7 @@ def vcf_to_bed(
         het_only=bool(samples),
         include_indels=include_indels,
         max_indel_len=max_indel_len,
+        biallelic_only=biallelic_only,
         use_legacy=False,  # Use Rust VCF parser (5-6x faster than bcftools)
     )
     return str(result)

@@ -1,18 +1,21 @@
 # CodeQL Analysis workflow for WASP2
 # Provides advanced static analysis security testing (SAST) for Python code
-# NOTE: Requires GitHub-hosted runners which need billing enabled for private repos
-# This workflow is optional (continue-on-error) to not block PRs when runners unavailable
+# Runs on GitHub-hosted runners and reports results to code scanning.
 
 name: CodeQL
 
 on:
   push:
-    branches: [master]
+    branches: [master, dev]
   pull_request:
-    branches: [master]
+    branches: [master, dev]
   schedule:
     # Run weekly on Monday at 6am UTC
     - cron: '0 6 * * 1'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Restrict default permissions; jobs declare their own
 permissions: {}
@@ -22,16 +25,16 @@ jobs:
     name: Analyze Python
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # Don't block PRs if GitHub-hosted runners aren't available
-    continue-on-error: true
     permissions:
-      actions: read
+      actions: read  # CodeQL reads workflow metadata for analysis status.
       contents: read
-      security-events: write
+      security-events: write  # Upload CodeQL results to code scanning.
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@5049b573e2cbf31c2dbde702a60c24fe476f0766  # v4
