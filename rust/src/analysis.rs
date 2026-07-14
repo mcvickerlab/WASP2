@@ -296,9 +296,9 @@ fn optimize_dispersion_linear(ref_counts: &[u32], n_array: &[u32]) -> Result<(f6
     ];
     let mut best: Option<(f64, (f64, f64))> = None;
     for s in starts {
-        if let Ok((d1, d2)) = nelder_mead_2d(&objective, s, 1e-6, 1000) {
+        if let Ok((d1, d2)) = nelder_mead_2d(objective, s, 1e-6, 1000) {
             let val = objective([d1, d2]);
-            if val.is_finite() && best.map_or(true, |(bv, _)| val < bv) {
+            if val.is_finite() && best.is_none_or(|(bv, _)| val < bv) {
                 best = Some((val, (d1, d2)));
             }
         }
@@ -530,14 +530,14 @@ where
             b = d;
             d = c;
             fd = fc;
-            h = inv_phi * h;
+            h *= inv_phi;
             c = a + inv_phi2 * h;
             fc = f(c);
         } else {
             a = c;
             c = d;
             fc = fd;
-            h = inv_phi * h;
+            h *= inv_phi;
             d = a + inv_phi * h;
             fd = f(d);
         }
@@ -639,13 +639,13 @@ where
         }
 
         // Shrink toward best point
-        for i in 1..3 {
-            let (x_i, _) = simplex[i];
+        for point in simplex.iter_mut().skip(1) {
+            let (x_i, _) = *point;
             let x_new = [
                 x_best[0] + sigma * (x_i[0] - x_best[0]),
                 x_best[1] + sigma * (x_i[1] - x_best[1]),
             ];
-            simplex[i] = (x_new, f(x_new));
+            *point = (x_new, f(x_new));
         }
     }
 

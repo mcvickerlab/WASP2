@@ -183,10 +183,7 @@ pub fn parse_intersect_bed_multi<P: AsRef<Path>>(
             sample_alleles,
         };
 
-        variants
-            .entry(read_name)
-            .or_insert_with(Vec::new)
-            .push(span);
+        variants.entry(read_name).or_default().push(span);
     }
 
     eprintln!(
@@ -215,7 +212,7 @@ pub fn parse_intersect_bed_multi<P: AsRef<Path>>(
 /// 2 samples, 2 variants:
 /// - Sample1: pos100=A|G, pos200=C|T  → col0="AC", col1="GT"
 /// - Sample2: pos100=A|A, pos200=C|C  → col2="AC", col3="CC"
-/// Unique columns: ["AC", "GT", "CC"] → indices [0, 1, 3]
+///   Unique columns: ["AC", "GT", "CC"] → indices [0, 1, 3]
 ///
 /// # Arguments
 /// * `variants` - Slice of variant spans for a single read (must have same sample count)
@@ -383,7 +380,7 @@ pub fn apply_allele_substitutions_cigar_aware(
                     // Insertion: use original + fill extra with Q30
                     new_qual.extend_from_slice(qual_seg);
                     let extra_needed = allele_len.saturating_sub(orig_len);
-                    new_qual.extend(std::iter::repeat(30u8).take(extra_needed));
+                    new_qual.extend(std::iter::repeat_n(30u8, extra_needed));
                 }
             }
         }
@@ -440,19 +437,17 @@ pub fn apply_allele_substitutions(
                             new_qual.drain(remove_start..remove_end);
                         }
                     }
-                } else if alt_len > ref_len {
-                    if offset + ref_len <= new_seq.len() {
-                        for (i, b) in allele.bytes().take(ref_len).enumerate() {
-                            new_seq[offset + i] = b;
-                        }
-                        let insert_pos = offset + ref_len;
-                        let extra_bases: Vec<u8> = allele.bytes().skip(ref_len).collect();
-                        let extra_qual: Vec<u8> = vec![30; extra_bases.len()];
+                } else if alt_len > ref_len && offset + ref_len <= new_seq.len() {
+                    for (i, b) in allele.bytes().take(ref_len).enumerate() {
+                        new_seq[offset + i] = b;
+                    }
+                    let insert_pos = offset + ref_len;
+                    let extra_bases: Vec<u8> = allele.bytes().skip(ref_len).collect();
+                    let extra_qual: Vec<u8> = vec![30; extra_bases.len()];
 
-                        for (i, (b, q)) in extra_bases.iter().zip(extra_qual.iter()).enumerate() {
-                            new_seq.insert(insert_pos + i, *b);
-                            new_qual.insert(insert_pos + i, *q);
-                        }
+                    for (i, (b, q)) in extra_bases.iter().zip(extra_qual.iter()).enumerate() {
+                        new_seq.insert(insert_pos + i, *b);
+                        new_qual.insert(insert_pos + i, *q);
                     }
                 }
             }
@@ -892,6 +887,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_apply_snp_substitution() {
         let variant = make_test_variant(5, vec![("A", "G")]);
         let variants: Vec<&VariantSpanMulti> = vec![&variant];
@@ -921,9 +917,9 @@ mod tests {
         assert_eq!(results.len(), 3);
 
         let seqs: HashSet<Vec<u8>> = results.into_iter().map(|(s, _)| s).collect();
-        assert!(seqs.contains(&b"AAAAAAA".to_vec())); // A at pos 2
-        assert!(seqs.contains(&b"AAGAAAA".to_vec())); // G at pos 2
-        assert!(seqs.contains(&b"AATAAAA".to_vec())); // T at pos 2
+        assert!(seqs.iter().any(|seq| seq == b"AAAAAAA")); // A at pos 2
+        assert!(seqs.iter().any(|seq| seq == b"AAGAAAA")); // G at pos 2
+        assert!(seqs.iter().any(|seq| seq == b"AATAAAA")); // T at pos 2
     }
 
     // ========================================================================

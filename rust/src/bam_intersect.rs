@@ -132,10 +132,7 @@ pub fn build_variant_store(bed_path: &str) -> Result<VariantStore> {
         // Store the INDEX as metadata (not the full VariantInfo)
         let node = IntervalNode::new(start as i32, (stop - 1) as i32, idx);
 
-        chrom_intervals
-            .entry(chrom)
-            .or_insert_with(Vec::new)
-            .push(node);
+        chrom_intervals.entry(chrom).or_default().push(node);
     }
 
     eprintln!("  Parsed {} variants from BED file", variants.len());
@@ -257,7 +254,7 @@ pub fn intersect_bam_with_store(
         // coitrees uses inclusive intervals, so query [start, end-1]
         querent.query(read_start as i32, read_end as i32 - 1, |node| {
             // Lookup full variant data by index (only on matches!)
-            let idx: usize = u32::from(node.metadata.clone()) as usize;
+            let idx: usize = node.metadata as usize;
             let info = &store.variants[idx];
             has_overlap = true;
 
@@ -407,10 +404,7 @@ pub fn build_variant_store_multi(bed_path: &str, num_samples: usize) -> Result<V
         });
 
         let node = IntervalNode::new(start as i32, (stop - 1) as i32, idx);
-        chrom_intervals
-            .entry(chrom)
-            .or_insert_with(Vec::new)
-            .push(node);
+        chrom_intervals.entry(chrom).or_default().push(node);
     }
 
     eprintln!(
@@ -507,7 +501,7 @@ pub fn intersect_bam_with_store_multi(
         let read_name = String::from_utf8_lossy(read.qname());
 
         querent.query(read_start as i32, read_end as i32 - 1, |node| {
-            let idx: usize = u32::from(node.metadata.clone()) as usize;
+            let idx: usize = node.metadata as usize;
             let info = &store.variants[idx];
 
             // Write base columns
@@ -605,7 +599,7 @@ mod tests {
         let mut bed = NamedTempFile::new().unwrap();
         writeln!(bed, "# This is a comment").unwrap();
         writeln!(bed, "chr1\t100\t101\tA\tG\tA|G").unwrap();
-        writeln!(bed, "").unwrap(); // Empty line
+        writeln!(bed).unwrap(); // Empty line
         writeln!(bed, "chr1\t200\t201\tC\tT\tC|T").unwrap();
         bed.flush().unwrap();
 
@@ -619,7 +613,7 @@ mod tests {
     #[test]
     fn test_index_based_tree_query() {
         // Build a simple tree with indices
-        let variants = vec![
+        let variants = [
             VariantInfo {
                 chrom: "chr1".to_string(),
                 start: 100,
@@ -648,7 +642,7 @@ mod tests {
         // Query that should hit first variant
         let mut found_indices: Vec<u32> = Vec::new();
         tree.query(50, 150, |node| {
-            found_indices.push(u32::from(node.metadata.clone()));
+            found_indices.push(node.metadata);
         });
         assert_eq!(found_indices.len(), 1);
         assert_eq!(found_indices[0], 0);
@@ -657,14 +651,14 @@ mod tests {
         // Query that should hit both variants
         found_indices.clear();
         tree.query(50, 250, |node| {
-            found_indices.push(u32::from(node.metadata.clone()));
+            found_indices.push(node.metadata);
         });
         assert_eq!(found_indices.len(), 2);
 
         // Query that should hit nothing
         found_indices.clear();
         tree.query(300, 400, |node| {
-            found_indices.push(u32::from(node.metadata.clone()));
+            found_indices.push(node.metadata);
         });
         assert_eq!(found_indices.len(), 0);
     }

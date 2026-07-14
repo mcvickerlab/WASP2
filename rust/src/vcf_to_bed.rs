@@ -262,7 +262,8 @@ fn process_vcf_record<W: Write>(
 
             // Check indel length
             if !is_snp {
-                let len_diff = (ref_allele.len() as i32 - alt_allele.len() as i32).abs() as usize;
+                let len_diff =
+                    (ref_allele.len() as i32 - alt_allele.len() as i32).unsigned_abs() as usize;
                 if len_diff > config.max_indel_len {
                     continue;
                 }
@@ -299,8 +300,8 @@ fn process_vcf_record<W: Write>(
 
             // Check if this sample is heterozygous for this specific ALT
             // Het means one allele is REF (0) and one is this ALT
-            let has_ref = gt_indices.iter().any(|&i| i == 0);
-            let has_this_alt = gt_indices.iter().any(|&i| i == alt_index);
+            let has_ref = gt_indices.contains(&0);
+            let has_this_alt = gt_indices.contains(&alt_index);
             let is_het_for_this_alt = has_ref && has_this_alt;
 
             // Also handle het between two different ALTs (e.g., 1/2)
@@ -326,7 +327,8 @@ fn process_vcf_record<W: Write>(
 
             // Check indel length
             if !is_snp {
-                let len_diff = (ref_allele.len() as i32 - alt_allele.len() as i32).abs() as usize;
+                let len_diff =
+                    (ref_allele.len() as i32 - alt_allele.len() as i32).unsigned_abs() as usize;
                 if len_diff > config.max_indel_len {
                     continue;
                 }
@@ -392,10 +394,7 @@ fn get_genotype_indices(
     // Parse genotype - format is "0|1", "0/1", etc.
     let is_phased = gt_clean.contains('|');
 
-    let indices: Vec<Option<usize>> = gt_clean
-        .split(|c| c == '|' || c == '/')
-        .map(|s| s.parse().ok())
-        .collect();
+    let indices: Vec<Option<usize>> = gt_clean.split(['|', '/']).map(|s| s.parse().ok()).collect();
 
     Ok((indices, is_phased))
 }

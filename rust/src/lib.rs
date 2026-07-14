@@ -1,4 +1,8 @@
-#![allow(non_local_definitions)]
+#![allow(
+    clippy::too_many_arguments,
+    clippy::type_complexity,
+    non_local_definitions
+)]
 
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
@@ -860,7 +864,7 @@ fn parse_intersect_bed_multi(
             // Convert sample_alleles to list of tuples
             let alleles_list = PyList::empty(py);
             for (h1, h2) in &span.sample_alleles {
-                let tuple = pyo3::types::PyTuple::new(py, &[h1.as_str(), h2.as_str()])?;
+                let tuple = pyo3::types::PyTuple::new(py, [h1.as_str(), h2.as_str()])?;
                 alleles_list.append(&tuple)?;
             }
             span_dict.set_item("sample_alleles", alleles_list)?;
