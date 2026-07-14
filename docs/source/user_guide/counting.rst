@@ -7,9 +7,10 @@ Overview
 ``wasp2-count`` counts reads supporting reference and alternate alleles at
 variant positions in BAM files.
 
-It provides two commands:
+It provides three commands:
 
 * ``count-variants`` for bulk data
+* ``count-cohort`` for a locked bulk cohort with one final BAM per donor
 * ``count-variants-sc`` for single-cell data with ``CB``-tagged barcodes
 
 Bulk Counting
@@ -64,6 +65,45 @@ Output columns always include:
 
 When sample filtering is active, genotype columns are included. When region
 annotation is active, region or gene columns are included as well.
+
+Locked Cohort Counting
+----------------------
+
+``count-cohort`` makes the donor-to-VCF-to-BAM relationship explicit. Its
+manifest must contain exactly three tab-separated columns:
+
+.. code-block:: text
+
+   donor_id	vcf_sample	bam
+   donor1	VCF_sample_1	/path/to/donor1.bam
+   donor2	VCF_sample_2	/path/to/donor2.bam
+
+Each row must identify one final merged, WASP-filtered, deduplicated, indexed
+BAM. The cohort VCF must also be indexed and contain every ``vcf_sample``.
+The locked cohort path applies WASP2's standard biallelic-SNV selection:
+multi-allelic records and indels are excluded and that policy is recorded in
+``count_manifest.json``.
+
+Independent SNV counts restricted to ATAC peaks:
+
+.. code-block:: bash
+
+   wasp2-count count-cohort \
+     donors.tsv variants.vcf.gz cohort_snv_counts \
+     --unit snv --regions peaks.bed
+
+Peak-feature counts:
+
+.. code-block:: bash
+
+   wasp2-count count-cohort \
+     donors.tsv variants.vcf.gz cohort_feature_counts \
+     --unit feature --regions peaks.bed
+
+The command refuses to overwrite an existing output directory. It claims the
+directory atomically and publishes ``count_manifest.json`` last as the commit
+marker after hashing and rechecking every input. The count manifest is the
+authoritative entry point for downstream donor-aware analysis.
 
 Single-Cell ATAC Counting
 -------------------------

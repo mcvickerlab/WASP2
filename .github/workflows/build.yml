@@ -9,12 +9,14 @@ on:
     branches: [master, dev]
     paths:
       - "rust/**"
+      - "src/**"
       - "pyproject.toml"
       - ".github/workflows/build.yml"
   pull_request:
     branches: [master, dev]
     paths:
       - "rust/**"
+      - "src/**"
       - "pyproject.toml"
       - ".github/workflows/build.yml"
 
@@ -82,6 +84,14 @@ jobs:
 
       - name: Build wheel with maturin
         run: maturin build --release -o dist/
+
+      - name: Install and smoke-test built wheel
+        run: |
+          uv venv /tmp/wasp2-wheel
+          uv pip install --python /tmp/wasp2-wheel/bin/python dist/*.whl
+          cd /tmp
+          /tmp/wasp2-wheel/bin/python -c "import wasp2_rust; print(wasp2_rust.__file__)"
+          /tmp/wasp2-wheel/bin/wasp2-count count-cohort --help
 
       - name: Upload wheel artifact
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6

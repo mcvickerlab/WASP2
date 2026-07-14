@@ -2,14 +2,14 @@ name: Documentation
 
 on:
   push:
-    branches: [master]
+    branches: [master, dev]
     paths:
       - 'docs/**'
       - 'src/**'
       - 'pyproject.toml'
       - '.github/workflows/docs.yml'
   pull_request:
-    branches: [master]
+    branches: [master, dev]
     paths:
       - 'docs/**'
       - 'src/**'
