@@ -4,21 +4,50 @@ All notable changes to WASP2 will be documented in this file.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-07-14
+
 ### Added
 - `wasp2-count count-cohort` for one-final-BAM-per-donor bulk counting with explicit
-  `donor_id`/`vcf_sample` mapping, atomic locked outputs, and SHA-256 provenance.
-- `--per-variant` / `--snv-solo` flag for `wasp2 analysis find_imbalance` to test each SNV
-  independently instead of grouping by a region column (forces per-variant even when a region
-  column is present; mutually exclusive with `--region_col`).
+  `donor_id`/`vcf_sample` mapping, atomic locked outputs, and SHA-256 provenance manifests.
+- Linear-dispersion and donor-specific-dispersion beta-binomial implementations in the Rust
+  analysis API, including phased feature-level inference.
+- `--per-variant` / `--snv-solo` for independent SNV tests and explicit `--region_col` support
+  for feature- or peak-level aggregation.
+- A Rust single-cell ATAC allele counter with chromosome-parallel execution and Python fallback.
 
 ### Changed
-- Bulk counting now fails closed on chromosome-level Rust errors and stores allele counts as
-  `UInt32` to avoid truncating depths above 65,535.
-- `--phased` and `--region_col` are now forwarded to the Rust analysis backend (previously parsed
-  but dropped, so the Rust path always ran unphased / feature-grouped).
-- `--groupby` now raises a clear error on the Rust analysis backend instead of being silently
-  ignored — it only re-keys the grouping column, so use `--region_col <parent_column>` for
-  parent-level grouping (identical result).
+- VCF conversion now selects biallelic SNVs by default; multi-allelic records require the
+  explicit `--include-multiallelic` option.
+- Phased inference accepts only numeric VCF heterozygote orientation (`0|1` and `1|0`) for parity
+  with the archived Python implementation; allele-string genotypes do not imply cross-SNV phase.
+- `--phased` and `--region_col` are forwarded to the Rust backend; unsupported `--groupby`
+  requests fail closed and direct users to `--region_col <parent_column>`.
+- Single-cell AnnData output now follows the scverse `obs=cells`, `var=variants` orientation.
+- Packaging derives the Python version from installed metadata and synchronizes Cargo, pixi,
+  containers, Galaxy, Nextflow, documentation, and citation metadata from one release command.
+- The release workflow now builds and tests 16 wheels, a source distribution, multi-architecture
+  containers, and a Singularity image before publishing, with checksums, SBOMs, and provenance.
+
+### Fixed
+- Unphased multi-SNV likelihoods now use log-space dynamic programming to prevent underflow.
+- Linear inference uses per-SNV dispersion throughout the alternative optimization, phased
+  donor-specific inference uses each observation's donor dispersion, and LRTs are non-negative.
+- Bulk counts use `UInt32`, and single-cell pseudobulk/observation sums widen safely instead of
+  overflowing at 65,535; single-cell counting also works without an optional feature file.
+- Count-analysis TSV parsing is header-driven, so `pos0`, `GT`, sample, and donor metadata cannot
+  be mistaken for feature grouping columns.
+- Galaxy wrappers now match current CLI inputs and outputs, use datasets instead of job-local JSON
+  paths between jobs, and run all four functional tests successfully.
+- BAM merging uses portable `samtools merge` positional output syntax supported by older samtools.
+
+### Security
+- GitHub Actions are commit-pinned with read-only default tokens, dependency review, CodeQL,
+  Gitleaks, Bandit, pip-audit, cargo-audit, and strict aggregate release gates.
+- Release tags must be signed, annotated, version-matched, and point to an ancestor of `master`.
+
+### Removed
+- Stale duplicate in-repository Bioconda recipe files, internal automation templates, hardcoded lab
+  paths, and redundant documentation that conflicted with the maintained user guides.
 
 ## [1.4.1] - 2026-04-18
 
