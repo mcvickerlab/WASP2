@@ -89,6 +89,25 @@ wasp2-map filter-remapped remapped.bam \
 wasp2-count count-variants filtered.bam variants.vcf.gz -s sample1 -o counts.tsv
 ```
 
+For a bulk cohort, use one final indexed BAM per donor and map donor identifiers
+to VCF sample names explicitly:
+
+```text
+donor_id	vcf_sample	bam
+donor1	VCF_sample_1	/path/to/donor1.bam
+donor2	VCF_sample_2	/path/to/donor2.bam
+```
+
+```bash
+wasp2-count count-cohort donors.tsv variants.vcf.gz cohort_counts \
+  --unit snv --regions atac_peaks.bed
+```
+
+This creates a new locked directory containing `counts.tsv.gz`, normalized
+`donors.tsv`, and `count_manifest.json`. In SNV mode, regions restrict included
+sites but do not combine their tests. Use `--unit feature --regions peaks.bed`
+to retain peak identifiers for feature-level analysis.
+
 ### 3. Test for imbalance
 
 ```bash

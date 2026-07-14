@@ -5,11 +5,15 @@ All notable changes to WASP2 will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- `wasp2-count count-cohort` for one-final-BAM-per-donor bulk counting with explicit
+  `donor_id`/`vcf_sample` mapping, atomic locked outputs, and SHA-256 provenance.
 - `--per-variant` / `--snv-solo` flag for `wasp2 analysis find_imbalance` to test each SNV
   independently instead of grouping by a region column (forces per-variant even when a region
   column is present; mutually exclusive with `--region_col`).
 
 ### Changed
+- Bulk counting now fails closed on chromosome-level Rust errors and stores allele counts as
+  `UInt32` to avoid truncating depths above 65,535.
 - `--phased` and `--region_col` are now forwarded to the Rust analysis backend (previously parsed
   but dropped, so the Rust path always ran unphased / feature-grouped).
 - `--groupby` now raises a clear error on the Rust analysis backend instead of being silently

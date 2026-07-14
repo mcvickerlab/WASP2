@@ -1,3 +1,4 @@
+from enum import Enum
 from typing import Annotated
 
 import typer
@@ -5,7 +6,13 @@ import typer
 from wasp2.cli import create_version_callback, verbosity_callback
 
 from .run_counting import run_count_variants
-from .run_counting_sc import run_count_variants_sc
+from .run_counting_cohort import run_count_cohort
+
+
+class AnalysisUnitChoice(str, Enum):
+    snv = "snv"
+    feature = "feature"
+    peak = "peak"
 
 
 def _get_counting_deps() -> dict[str, str]:
@@ -219,6 +226,49 @@ def count_variants(
 
 
 @app.command()
+def count_cohort(
+    donor_manifest: Annotated[
+        str,
+        typer.Argument(help="TSV with exactly three columns: donor_id, vcf_sample, bam"),
+    ],
+    variants: Annotated[str, typer.Argument(help="Indexed cohort VCF.GZ, VCF.BGZ, or BCF")],
+    output_dir: Annotated[str, typer.Argument(help="New directory for locked count outputs")],
+    unit: Annotated[
+        AnalysisUnitChoice,
+        typer.Option("--unit", help="Statistical unit: independent SNVs or features."),
+    ],
+    region_file: Annotated[
+        str | None,
+        typer.Option(
+            "--regions",
+            "--region",
+            "-r",
+            help=("Optional SNV inclusion mask; required feature definitions in feature mode."),
+        ),
+    ] = None,
+    use_region_names: Annotated[
+        bool,
+        typer.Option(
+            "--use-region-names/--use-region-coordinates",
+            help="Use the fourth region column as the feature identifier.",
+        ),
+    ] = True,
+) -> None:
+    result = run_count_cohort(
+        donor_manifest=donor_manifest,
+        variant_file=variants,
+        output_dir=output_dir,
+        unit=unit.value,
+        region_file=region_file,
+        use_region_names=use_region_names,
+    )
+    typer.echo(
+        f"Locked {result['donors']} donors and {result['rows']} count rows in "
+        f"{result['output_dir']}"
+    )
+
+
+@app.command()
 def count_variants_sc(
     bam: Annotated[str, typer.Argument(help="BAM file")],
     variants: Annotated[str, typer.Argument(help="Variant file (VCF, VCF.GZ, BCF, or PGEN)")],
@@ -293,6 +343,8 @@ def count_variants_sc(
         ),
     ] = True,
 ) -> None:
+    from .run_counting_sc import run_count_variants_sc
+
     run_count_variants_sc(
         bam_file=bam,
         variant_file=variants,

@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from wasp2.cli import create_progress, detail, error, rust_status, success
+from wasp2.cli import create_progress, detail, rust_status, success
 
 if TYPE_CHECKING:
     import pysam
@@ -124,16 +124,11 @@ def make_count_df(bam_file: str, df: pl.DataFrame, use_rust: bool = True) -> pl.
 
             start = timeit.default_timer()
 
-            try:
-                count_list.extend(
-                    count_snp_alleles_rust(bam_file, chrom, snp_list, threads=rust_threads)
-                )
-            except (RuntimeError, OSError) as e:
-                # Use error() not warning() - errors always shown even in quiet mode
-                error(f"Skipping {chrom}: {e}")
-            else:
-                elapsed = timeit.default_timer() - start
-                detail(f"{chrom}: Counted {chrom_df.height} SNPs in {elapsed:.2f}s")
+            count_list.extend(
+                count_snp_alleles_rust(bam_file, chrom, snp_list, threads=rust_threads)
+            )
+            elapsed = timeit.default_timer() - start
+            detail(f"{chrom}: Counted {chrom_df.height} SNPs in {elapsed:.2f}s")
 
             progress.update(task, advance=1)
 
@@ -148,9 +143,9 @@ def make_count_df(bam_file: str, df: pl.DataFrame, use_rust: bool = True) -> pl.
         schema={
             "chrom": chrom_enum,
             "pos": pl.UInt32,
-            "ref_count": pl.UInt16,
-            "alt_count": pl.UInt16,
-            "other_count": pl.UInt16,
+            "ref_count": pl.UInt32,
+            "alt_count": pl.UInt32,
+            "other_count": pl.UInt32,
         },
         orient="row",
     )
