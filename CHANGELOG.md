@@ -39,6 +39,8 @@ All notable changes to WASP2 will be documented in this file.
 - Galaxy wrappers now match current CLI inputs and outputs, use datasets instead of job-local JSON
   paths between jobs, and run all four functional tests successfully.
 - BAM merging uses portable `samtools merge` positional output syntax supported by older samtools.
+- macOS Intel installs constrain Numba to the final release line with prebuilt Intel llvmlite
+  wheels, avoiding an unsupported LLVM source build during installation.
 
 ### Security
 - GitHub Actions are commit-pinned with read-only default tokens, dependency review, CodeQL,
