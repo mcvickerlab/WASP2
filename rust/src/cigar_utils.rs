@@ -311,7 +311,7 @@ pub fn apply_cigar_aware_substitution(
             new_qual.extend_from_slice(&qual[query_start..query_start + orig_qual_len]);
         }
         let extra_needed = alt_len.saturating_sub(orig_qual_len);
-        new_qual.extend(std::iter::repeat(30u8).take(extra_needed));
+        new_qual.extend(std::iter::repeat_n(30u8, extra_needed));
     }
 
     // Part after variant
@@ -404,7 +404,7 @@ mod tests {
 
     #[test]
     fn test_has_indels_snp_only() {
-        let variants = vec![(100, 101, "A", "G"), (200, 201, "C", "T")];
+        let variants = [(100, 101, "A", "G"), (200, 201, "C", "T")];
         let variants_ref: Vec<(i64, i64, &str, &str)> = variants
             .iter()
             .map(|(s, e, r, a)| (*s as i64, *e as i64, *r, *a))
@@ -414,7 +414,7 @@ mod tests {
 
     #[test]
     fn test_has_indels_with_deletion() {
-        let variants = vec![
+        let variants = [
             (100, 101, "A", "G"),   // SNP
             (200, 203, "ACG", "A"), // Deletion
         ];
@@ -427,7 +427,7 @@ mod tests {
 
     #[test]
     fn test_has_indels_with_insertion() {
-        let variants = vec![
+        let variants = [
             (100, 101, "A", "ACGT"), // Insertion
         ];
         let variants_ref: Vec<(i64, i64, &str, &str)> = variants

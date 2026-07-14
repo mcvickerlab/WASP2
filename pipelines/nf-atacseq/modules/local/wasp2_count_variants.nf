@@ -4,8 +4,8 @@ process WASP2_COUNT_VARIANTS {
 
     conda "${moduleDir}/environment.yml"
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
-        'docker://ghcr.io/mcvickerlab/wasp2:1.4.0' :
-        'ghcr.io/mcvickerlab/wasp2:1.4.0' }"
+        'docker://ghcr.io/mcvickerlab/wasp2:1.4.1' :
+        'ghcr.io/mcvickerlab/wasp2:1.4.1' }"
 
     input:
     tuple val(meta), path(bam), path(bai)
@@ -46,7 +46,7 @@ process WASP2_COUNT_VARIANTS {
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        wasp2: 1.2.1
+        wasp2: 1.4.1
     END_VERSIONS
     """
 }

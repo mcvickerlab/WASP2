@@ -21,6 +21,27 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+_COUNT_METADATA_COLUMNS = {
+    "chrom",
+    "pos0",
+    "start",
+    "pos",
+    "end",
+    "stop",
+    "ref",
+    "alt",
+    "GT",
+    "genotype",
+    "ref_count",
+    "alt_count",
+    "other_count",
+    "total_count",
+    "N",
+    "sample",
+    "donor_id",
+    "vcf_sample",
+}
+
 
 class WaspAnalysisData:
     """Container for allelic imbalance analysis configuration.
@@ -88,24 +109,14 @@ class WaspAnalysisData:
         with open(self.count_file) as f:
             count_cols = next(reader(f, delimiter="\t"))
 
-        # 7 columns at minimum, 10 at maximum
-        # 3required : chr, pos, ref, alt
-        # 3 optional: <GT>, <region>, <parent>
-        # 3 required: ref_count, alt_count, other_count
-        # [chr, pos, ref, alt, <GT>, <region>, <parent>, ref_c, alt_c, other_c]
+        # Feature columns are the fields not owned by the variant/count schema. Identifying
+        # them by name keeps pos0, sample, and donor metadata from becoming grouping keys.
+        feature_cols = [col for col in count_cols if col not in _COUNT_METADATA_COLUMNS]
 
-        if "GT" in count_cols:
-            min_cols = 8
-            region_idx = 5
-        else:
-            min_cols = 7
-            region_idx = 4
-
-        # Check regions. Skip auto-detect in per-variant mode so region_col stays None
-        # (which the Rust backend interprets as per-variant chrom_pos grouping).
+        # Skip auto-detection in per-variant mode so the Rust backend groups by chrom/pos.
         if self.region_col is None and not self.per_variant:
-            if len(count_cols) > min_cols:
-                self.region_col = count_cols[region_idx]
+            if feature_cols:
+                self.region_col = feature_cols[0]
 
         # By default group by feature rather than parent?
         if self.groupby is not None:
@@ -113,13 +124,7 @@ class WaspAnalysisData:
             if (self.region_col is None) or (self.groupby == self.region_col):
                 self.groupby = None
 
-            elif (len(count_cols) > (min_cols + 1)) and self.groupby in {
-                count_cols[region_idx + 1],
-                "Parent",
-                "parent",
-            }:
-                self.groupby = count_cols[region_idx + 1]
-            else:
+            elif self.groupby not in feature_cols:
                 logger.warning("%s not found in columns %s", self.groupby, count_cols)
                 self.groupby = None
 

@@ -15,7 +15,6 @@
 //! properly handling reads with insertions/deletions in their alignment.
 
 use anyhow::{Context, Result};
-use rust_htslib::bam::ext::BamRecordExtensions;
 use rust_htslib::{bam, bam::Read as BamRead};
 use rustc_hash::FxHashMap;
 use std::fs::File;
@@ -318,10 +317,7 @@ pub fn parse_intersect_bed<P: AsRef<Path>>(
     // Group by read name
     let mut variants: FxHashMap<Vec<u8>, Vec<VariantSpan>> = FxHashMap::default();
     for (read_name, span) in deduped_spans {
-        variants
-            .entry(read_name)
-            .or_insert_with(Vec::new)
-            .push(span);
+        variants.entry(read_name).or_default().push(span);
     }
 
     Ok(variants)
@@ -432,9 +428,9 @@ pub fn parse_intersect_bed_by_chrom<P: AsRef<Path>>(
     for (chrom, read_name, span) in deduped_spans {
         variants_by_chrom
             .entry(chrom)
-            .or_insert_with(FxHashMap::default)
+            .or_default()
             .entry(read_name)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(span);
     }
 
@@ -1272,10 +1268,8 @@ pub fn generate_haplotype_seqs_with_trims(
         let max_allele_len = variant.hap1.len().max(variant.hap2.len());
         let indel_size = (max_allele_len as i32 - ref_len as i32).unsigned_abs() as usize;
 
-        if indel_size > indel_config.max_indel_size {
-            if indel_config.skip_large_indels {
-                return Ok(None); // Skip this read
-            }
+        if indel_size > indel_config.max_indel_size && indel_config.skip_large_indels {
+            return Ok(None); // Skip this read
         }
     }
 
@@ -2376,7 +2370,7 @@ mod tests {
     #[test]
     fn test_generate_haplotype_seqs_view_matches_owned_snp() {
         let rec = create_test_record(100, "50M");
-        let owned = vec![VariantSpan {
+        let owned = [VariantSpan {
             chrom: "chr1".to_string(),
             start: 100,
             stop: 150,
@@ -2404,7 +2398,7 @@ mod tests {
     #[test]
     fn test_generate_haplotype_seqs_view_matches_owned_insertion() {
         let rec = create_test_record(100, "50M");
-        let owned = vec![VariantSpan {
+        let owned = [VariantSpan {
             chrom: "chr1".to_string(),
             start: 100,
             stop: 150,

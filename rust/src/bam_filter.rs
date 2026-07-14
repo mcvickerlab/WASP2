@@ -329,18 +329,6 @@ pub fn filter_bam_by_variants(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write as IoWrite;
-    use tempfile::{tempdir, NamedTempFile};
-
-    /// Create a minimal BED file for testing
-    fn create_test_bed() -> NamedTempFile {
-        let mut bed = NamedTempFile::new().unwrap();
-        writeln!(bed, "chr1\t100\t101\tA\tG\tA|G").unwrap();
-        writeln!(bed, "chr1\t200\t201\tC\tT\tC|T").unwrap();
-        writeln!(bed, "chr1\t300\t301\tG\tA\tG|A").unwrap();
-        bed.flush().unwrap();
-        bed
-    }
 
     #[test]
     fn test_build_tid_lookup() {

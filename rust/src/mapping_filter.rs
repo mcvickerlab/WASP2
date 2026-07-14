@@ -47,7 +47,7 @@ fn parse_i64_ascii(bytes: &[u8]) -> Option<i64> {
     let mut val: i64 = 0;
     let mut seen_digit = false;
     for &b in &bytes[idx..] {
-        if !(b'0'..=b'9').contains(&b) {
+        if !b.is_ascii_digit() {
             break;
         }
         seen_digit = true;

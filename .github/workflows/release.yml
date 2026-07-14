@@ -1,9 +1,3 @@
-# WASP2 Release Workflow
-# Builds multi-platform wheels and publishes to PyPI on tag push
-#
-# Based on maturin generate-ci patterns with adaptations for rust-htslib
-# Note: Windows builds excluded due to rust-htslib C dependency (htslib)
-
 name: Release
 
 on:
@@ -11,228 +5,392 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
-    inputs:
-      dry_run:
-        description: "Dry run (build but don't publish)"
-        required: false
-        default: "false"
-        type: boolean
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
 
+env:
+  IMAGE_NAME: ghcr.io/mcvickerlab/wasp2
+
 jobs:
-  # ===========================================================================
-  # Build Linux wheels (manylinux_2_28) - uses Docker via maturin-action
-  # ===========================================================================
-  linux:
-    name: Linux (${{ matrix.target }})
+  validate:
+    name: Validate release source
     runs-on: ubuntu-latest
-    timeout-minutes: 90  # aarch64 QEMU builds need ~60 min for 3 Python versions
-    strategy:
-      fail-fast: true  # All builds must succeed for release
-      matrix:
-        target: [x86_64, aarch64]
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: "3.12"
+      - name: Validate synchronized metadata
+        run: python scripts/release_version.py --check
+      - name: Read version
+        id: version
+        run: |
+          VERSION=$(sed -n 's/^version = "\([^"]*\)"/\1/p' rust/Cargo.toml | head -1)
+          test -n "$VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      - name: Validate manual dry-run source
+        if: github.event_name == 'workflow_dispatch'
+        run: test "$GITHUB_REF" = refs/heads/master
+      - name: Validate signed release tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          EXPECTED_VERSION: ${{ steps.version.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$GITHUB_REF_NAME" = "v${EXPECTED_VERSION}"
+          test "$(git cat-file -t "$GITHUB_REF_NAME")" = tag
+          git fetch origin master
+          TAG_COMMIT=$(git rev-list -n 1 "$GITHUB_REF_NAME")
+          git merge-base --is-ancestor "$TAG_COMMIT" origin/master
+          TAG_OBJECT=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${GITHUB_REF_NAME}" --jq .object.sha)
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${TAG_OBJECT}" --jq .verification.verified)" = true
 
-      - name: Set up QEMU
-        if: matrix.target == 'aarch64'
-        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392  # v3
-
-      - name: Build wheels
+  linux-wheel:
+    name: Linux ${{ matrix.arch }} / Python ${{ matrix.python }}
+    needs: validate
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {runner: ubuntu-24.04, arch: x86_64, python: "3.10"}
+          - {runner: ubuntu-24.04, arch: x86_64, python: "3.11"}
+          - {runner: ubuntu-24.04, arch: x86_64, python: "3.12"}
+          - {runner: ubuntu-24.04, arch: x86_64, python: "3.13"}
+          - {runner: ubuntu-24.04-arm, arch: aarch64, python: "3.10"}
+          - {runner: ubuntu-24.04-arm, arch: aarch64, python: "3.11"}
+          - {runner: ubuntu-24.04-arm, arch: aarch64, python: "3.12"}
+          - {runner: ubuntu-24.04-arm, arch: aarch64, python: "3.13"}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: astral-sh/setup-uv@7eb50e6e20e1e2009087999ba91242e80253875f  # v7
+        with:
+          enable-cache: false
+      - name: Build wheel
         uses: PyO3/maturin-action@3b5f400f9576c9934eaeed862ce6281fef121b67  # v1
         with:
-          target: ${{ matrix.target }}
-          args: --release --locked --out dist -m rust/Cargo.toml -i python3.10 python3.11 python3.12 python3.13
-          sccache: ${{ matrix.target == 'x86_64' }}
+          target: ${{ matrix.arch }}
+          args: --release --locked --out dist -m rust/Cargo.toml -i python${{ matrix.python }}
           manylinux: manylinux_2_28
-          docker-options: ${{ matrix.target == 'aarch64' && '--platform linux/arm64' || '' }}
+          sccache: false
           before-script-linux: |
-            # Install htslib build dependencies
-            # Native containers (AlmaLinux 8) use dnf; cross containers (Ubuntu) use apt-get
-            if command -v dnf &>/dev/null; then
-              dnf install -y bzip2-devel xz-devel zlib-devel libcurl-devel openssl-devel clang-devel
-            elif command -v apt-get &>/dev/null; then
-              apt-get update && apt-get install -y libbz2-dev liblzma-dev zlib1g-dev libcurl4-openssl-dev libssl-dev libclang-dev
-            fi
-
-      - name: Upload wheels
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
+            dnf install -y bzip2-devel xz-devel zlib-devel libcurl-devel openssl-devel clang-devel
+      - name: Install and test exact wheel
+        env:
+          PYTHON_VERSION: ${{ matrix.python }}
+        run: |
+          uv venv .wheel-test --python "$PYTHON_VERSION"
+          uv pip install --python .wheel-test/bin/python dist/*.whl
+          cd /tmp
+          "$GITHUB_WORKSPACE/.wheel-test/bin/python" -c "import wasp2, wasp2_rust; print(wasp2.__version__, wasp2_rust.__file__)"
+          "$GITHUB_WORKSPACE/.wheel-test/bin/wasp2-count" count-cohort --help
+          "$GITHUB_WORKSPACE/.wheel-test/bin/wasp2-map" --help
+          "$GITHUB_WORKSPACE/.wheel-test/bin/wasp2-analyze" --help
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
         with:
-          name: wheels-linux-${{ matrix.target }}
+          name: wheel-linux-${{ matrix.arch }}-py${{ matrix.python }}
           path: dist/*.whl
-          if-no-files-found: error  # Fail if no wheels built
+          if-no-files-found: error
 
-  # ===========================================================================
-  # Build macOS wheels (x86_64 and arm64) on Apple Silicon runners
-  # ===========================================================================
-  macos:
-    name: macOS (${{ matrix.target }})
-    runs-on: macos-14  # Apple Silicon - native for aarch64, cross-compile for x86_64
-    timeout-minutes: 30
+  macos-wheel:
+    name: macOS ${{ matrix.arch }} / Python ${{ matrix.python }}
+    needs: validate
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
     strategy:
-      fail-fast: true  # All builds must succeed for release
+      fail-fast: false
       matrix:
-        target: [x86_64-apple-darwin, aarch64-apple-darwin]
+        include:
+          - {runner: macos-15-intel, arch: x86_64, target: x86_64-apple-darwin, deployment: "13.0", python: "3.10"}
+          - {runner: macos-15-intel, arch: x86_64, target: x86_64-apple-darwin, deployment: "13.0", python: "3.11"}
+          - {runner: macos-15-intel, arch: x86_64, target: x86_64-apple-darwin, deployment: "13.0", python: "3.12"}
+          - {runner: macos-15-intel, arch: x86_64, target: x86_64-apple-darwin, deployment: "13.0", python: "3.13"}
+          - {runner: macos-15, arch: arm64, target: aarch64-apple-darwin, deployment: "11.0", python: "3.10"}
+          - {runner: macos-15, arch: arm64, target: aarch64-apple-darwin, deployment: "11.0", python: "3.11"}
+          - {runner: macos-15, arch: arm64, target: aarch64-apple-darwin, deployment: "11.0", python: "3.12"}
+          - {runner: macos-15, arch: arm64, target: aarch64-apple-darwin, deployment: "11.0", python: "3.13"}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: astral-sh/setup-uv@7eb50e6e20e1e2009087999ba91242e80253875f  # v7
+        with:
+          enable-cache: false
       - name: Install htslib
+        env:
+          DEPLOYMENT_TARGET: ${{ matrix.deployment }}
         run: |
-          brew install htslib
-          # For x86_64 cross-compilation, also install x86_64 htslib
-          if [[ "${{ matrix.target }}" == "x86_64-apple-darwin" ]]; then
-            brew fetch --force --bottle-tag=ventura htslib 2>/dev/null || true
-          fi
-
-      - name: Set x86_64 library paths
-        if: matrix.target == 'x86_64-apple-darwin'
-        run: |
-          echo "MACOSX_DEPLOYMENT_TARGET=13.0" >> $GITHUB_ENV
-
-      - name: Build wheels
+          brew install htslib xz bzip2 openssl@3 pkg-config llvm@19
+          echo "MACOSX_DEPLOYMENT_TARGET=$DEPLOYMENT_TARGET" >> "$GITHUB_ENV"
+          echo "PKG_CONFIG_PATH=$(brew --prefix htslib)/lib/pkgconfig:$(brew --prefix openssl@3)/lib/pkgconfig" >> "$GITHUB_ENV"
+          echo "LIBRARY_PATH=$(brew --prefix htslib)/lib:$(brew --prefix openssl@3)/lib" >> "$GITHUB_ENV"
+          echo "CPATH=$(brew --prefix htslib)/include" >> "$GITHUB_ENV"
+          echo "LIBCLANG_PATH=$(brew --prefix llvm@19)/lib" >> "$GITHUB_ENV"
+      - name: Build wheel
         uses: PyO3/maturin-action@3b5f400f9576c9934eaeed862ce6281fef121b67  # v1
         with:
           target: ${{ matrix.target }}
-          args: --release --locked --out dist -m rust/Cargo.toml -i python3.10 python3.11 python3.12 python3.13
-          sccache: true
-
-      - name: Upload wheels
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
+          args: --release --locked --out dist -m rust/Cargo.toml -i python${{ matrix.python }}
+          sccache: false
+      - name: Install and test exact wheel
+        env:
+          PYTHON_VERSION: ${{ matrix.python }}
+        run: |
+          uv venv .wheel-test --python "$PYTHON_VERSION"
+          uv pip install --python .wheel-test/bin/python dist/*.whl
+          cd /tmp
+          "$GITHUB_WORKSPACE/.wheel-test/bin/python" -c "import wasp2, wasp2_rust; print(wasp2.__version__, wasp2_rust.__file__)"
+          "$GITHUB_WORKSPACE/.wheel-test/bin/wasp2-count" count-cohort --help
+          "$GITHUB_WORKSPACE/.wheel-test/bin/wasp2-map" --help
+          "$GITHUB_WORKSPACE/.wheel-test/bin/wasp2-analyze" --help
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
         with:
-          name: wheels-macos-${{ matrix.target }}
+          name: wheel-macos-${{ matrix.arch }}-py${{ matrix.python }}
           path: dist/*.whl
-          if-no-files-found: error  # Fail if no wheels built
+          if-no-files-found: error
 
-  # ===========================================================================
-  # Build source distribution (sdist)
-  # ===========================================================================
   sdist:
-    name: Source Distribution
+    name: Source distribution
+    needs: validate
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-
-      - name: Build sdist
-        uses: PyO3/maturin-action@3b5f400f9576c9934eaeed862ce6281fef121b67  # v1
         with:
-          command: sdist
-          args: --out dist -m rust/Cargo.toml
-
-      - name: Upload sdist
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
         with:
-          name: wheels-sdist
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7  # stable
+      - uses: astral-sh/setup-uv@7eb50e6e20e1e2009087999ba91242e80253875f  # v7
+        with:
+          enable-cache: false
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libhts-dev libbz2-dev liblzma-dev zlib1g-dev libssl-dev pkg-config libclang-dev
+      - name: Build and validate sdist
+        run: |
+          uv pip install --system maturin twine
+          maturin sdist --out dist -m rust/Cargo.toml
+          python -m twine check dist/*
+          uv venv .sdist-test
+          uv pip install --python .sdist-test/bin/python dist/*.tar.gz
+          .sdist-test/bin/python -c "import wasp2, wasp2_rust; print(wasp2.__version__)"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
+        with:
+          name: source-distribution
           path: dist/*.tar.gz
-          if-no-files-found: error  # Fail if sdist not built
+          if-no-files-found: error
 
-  # ===========================================================================
-  # Publish to PyPI (trusted publishing via OIDC)
-  # ===========================================================================
-  publish:
-    name: Publish to PyPI
-    needs: [linux, macos, sdist]
-    runs-on: ubuntu-latest  # PyPI publish action only works on Linux
-    timeout-minutes: 10
+  package:
+    name: Verify release bundle
+    needs: [linux-wheel, macos-wheel, sdist]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write  # Authenticate package provenance attestations.
+      attestations: write  # Publish package provenance attestations.
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
+        with:
+          path: packages
+          pattern: "wheel-*"
+          merge-multiple: true
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
+        with:
+          name: source-distribution
+          path: packages
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: "3.12"
+      - name: Validate complete package set
+        run: |
+          test "$(find packages -name '*.whl' -type f | wc -l)" -eq 16
+          test "$(find packages -name '*.tar.gz' -type f | wc -l)" -eq 1
+          pip install twine
+          python -m twine check packages/*
+          sha256sum packages/* > SHA256SUMS.packages
+      - name: Generate package SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610  # v0
+        with:
+          path: ./packages
+          format: cyclonedx-json
+          output-file: ./wasp2-packages.cdx.json
+          upload-artifact: false
+      - name: Attest package provenance
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45  # v2
+        with:
+          subject-path: "packages/*"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
+        with:
+          name: release-packages
+          path: packages/*
+          if-no-files-found: error
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
+        with:
+          name: release-metadata
+          path: |
+            wasp2-packages.cdx.json
+            SHA256SUMS.packages
+          if-no-files-found: error
+
+  publish-pypi:
+    name: Publish PyPI
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [package, singularity]
+    runs-on: ubuntu-latest
     environment:
       name: pypi
       url: https://pypi.org/project/wasp2/
-    # Only publish on tag push, not workflow_dispatch dry runs
-    if: startsWith(github.ref, 'refs/tags/v') && github.event.inputs.dry_run != 'true'
     permissions:
-      contents: write
-      id-token: write  # Required for trusted publishing (OIDC)
+      id-token: write  # Authenticate to PyPI using trusted publishing.
     steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
         with:
-          path: dist
-          pattern: wheels-*
-          merge-multiple: true
-
-      - name: Validate artifacts
-        run: |
-          set -euo pipefail
-
-          echo "=== Built artifacts ==="
-          ls -la dist/
-
-          WHEEL_COUNT=$(find dist -name "*.whl" -type f | wc -l)
-          SDIST_COUNT=$(find dist -name "*.tar.gz" -type f | wc -l)
-
-          echo "Wheel count: $WHEEL_COUNT"
-          echo "Sdist count: $SDIST_COUNT"
-
-          # Expected: 8 Linux + 8 macOS (4 interpreters x 2 targets each) = 16 wheels minimum
-          MIN_WHEELS=16
-
-          if [ "$WHEEL_COUNT" -lt "$MIN_WHEELS" ]; then
-            echo "::error::Expected at least $MIN_WHEELS wheels, found $WHEEL_COUNT"
-            exit 1
-          fi
-
-          if [ "$SDIST_COUNT" -lt 1 ]; then
-            echo "::error::Missing source distribution (sdist)"
-            exit 1
-          fi
-
-          echo "Artifact validation passed"
-
-      # Note: Attestation disabled for private repos (enable when public)
-      # - name: Generate artifact attestation
-      #   uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45  # v2
-      #   with:
-      #     subject-path: "dist/*"
-
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e  # release/v1
+          name: release-packages
+          path: packages
+      - uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e  # release/v1
         with:
-          packages-dir: dist/
-          attestations: false
+          packages-dir: packages/
+          attestations: true
 
-  # ===========================================================================
-  # Create GitHub Release
-  # ===========================================================================
-  release:
-    name: Create GitHub Release
-    needs: [publish]
-    runs-on: ubuntu-latest  # No macOS-specific tools needed
-    timeout-minutes: 15
+  container:
+    name: Publish multi-architecture container
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [validate, package]
+    runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
+      packages: write  # Publish the release image to GHCR.
+      id-token: write  # Authenticate container provenance attestations.
+      attestations: write  # Publish container provenance attestations.
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
         with:
-          path: dist
-          pattern: wheels-*
-          merge-multiple: true
-
-      - name: Download sanity test data (if available)
-        continue-on-error: true
+          persist-credentials: false
+      - uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392  # v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and publish image
+        id: image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ needs.validate.outputs.version }}
+            ${{ env.IMAGE_NAME }}:latest
+          build-args: VERSION=${{ needs.validate.outputs.version }}
+          provenance: mode=max
+          sbom: true
+      - name: Smoke-test published architectures
+        env:
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
         run: |
-          SANITY_TARBALL="wasp2-sanity-chr21-v1.tar.xz"
-          wget -q -O "dist/${SANITY_TARBALL}" \
-            "https://github.com/mcvickerlab/WASP2/releases/download/v1.3.0/${SANITY_TARBALL}" \
-            || true
-          # Remove empty/failed downloads to prevent release upload errors
-          if [ -f "dist/${SANITY_TARBALL}" ] && [ ! -s "dist/${SANITY_TARBALL}" ]; then
-            rm "dist/${SANITY_TARBALL}"
-            echo "Sanity tarball download failed (empty file removed)"
-          elif [ -f "dist/${SANITY_TARBALL}" ]; then
-            echo "Sanity tarball downloaded successfully"
-            ls -lh "dist/${SANITY_TARBALL}"
-          fi
-
-      - name: Create Release
-        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b  # v2
+          docker run --rm --platform linux/amd64 "${IMAGE_NAME}:${RELEASE_VERSION}" wasp2-count count-cohort --help
+          docker run --rm --platform linux/arm64 "${IMAGE_NAME}:${RELEASE_VERSION}" wasp2-count count-cohort --help
+      - name: Attest container provenance
+        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45  # v2
         with:
-          files: dist/*
+          subject-name: ${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.image.outputs.digest }}
+          push-to-registry: true
+      - name: Record container digest
+        env:
+          CONTAINER_DIGEST: ${{ steps.image.outputs.digest }}
+        run: printf '%s\n' "$CONTAINER_DIGEST" > container-digest.txt
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
+        with:
+          name: container-metadata
+          path: container-digest.txt
+
+  singularity:
+    name: Build Singularity artifact
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [validate, container]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write  # Authenticate Singularity provenance attestations.
+      attestations: write  # Publish Singularity provenance attestations.
+    steps:
+      - uses: eWaterCycle/setup-singularity@931d4e31109e875b13309ae1d07c70ca8fbc8537  # v7
+        with:
+          singularity-version: 3.11.4
+      - name: Build from released image
+        env:
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+        run: singularity build "wasp2_${RELEASE_VERSION}.sif" "docker://${IMAGE_NAME}:${RELEASE_VERSION}"
+      - name: Test Singularity artifact
+        env:
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+        run: singularity exec "wasp2_${RELEASE_VERSION}.sif" wasp2-count count-cohort --help
+      - uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45  # v2
+        with:
+          subject-path: "wasp2_${{ needs.validate.outputs.version }}.sif"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
+        with:
+          name: singularity-artifact
+          path: "wasp2_${{ needs.validate.outputs.version }}.sif"
+          if-no-files-found: error
+
+  github-release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [publish-pypi, container, singularity]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Create the GitHub release and upload its assets.
+    steps:
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
+        with:
+          name: release-packages
+          path: release-assets
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
+        with:
+          name: release-metadata
+          path: release-assets
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
+        with:
+          name: container-metadata
+          path: release-assets
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
+        with:
+          name: singularity-artifact
+          path: release-assets
+      - name: Generate release checksums
+        run: sha256sum release-assets/* > release-assets/SHA256SUMS
+      - uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b  # v2
+        with:
+          files: release-assets/*
           generate_release_notes: true
           draft: false
           prerelease: false
-          fail_on_unmatched_files: true  # Fail if no files to attach
+          fail_on_unmatched_files: true

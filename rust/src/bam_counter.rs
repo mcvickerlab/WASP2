@@ -192,7 +192,7 @@ impl BamCounter {
         for (idx, region) in regions.iter() {
             pos_map
                 .entry(region.pos)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push((*idx, region.clone()));
             if region.pos < min_pos {
                 min_pos = region.pos;
@@ -226,8 +226,8 @@ impl BamCounter {
         }
 
         // For each read, assign to the earliest SNP in encounter order that it overlaps
-        let mut read_iter = bam.records();
-        while let Some(res) = read_iter.next() {
+        let read_iter = bam.records();
+        for res in read_iter {
             let record = match res {
                 Ok(r) => r,
                 Err(e) => {
@@ -269,25 +269,21 @@ impl BamCounter {
 
             if let Some((enc_idx, region, qpos, pos1)) = best {
                 let quals = record.qual();
-                if min_qual > 0 {
-                    if qpos >= quals.len() || quals[qpos] < min_qual {
-                        continue;
-                    }
+                if min_qual > 0 && (qpos >= quals.len() || quals[qpos] < min_qual) {
+                    continue;
                 }
 
                 let entry_counts = counts.entry(enc_idx).or_insert((0, 0, 0));
-                let read_allele: String;
-
-                if region.is_snp() {
+                let read_allele = if region.is_snp() {
                     // Fast path for SNPs: single base comparison
-                    read_allele = match record.seq()[qpos] {
+                    match record.seq()[qpos] {
                         b'A' => "A".to_string(),
                         b'C' => "C".to_string(),
                         b'G' => "G".to_string(),
                         b'T' => "T".to_string(),
                         b'N' => "N".to_string(),
                         _ => continue,
-                    };
+                    }
                 } else {
                     // INDEL path: extract sequence span from read
                     // For INDELs, we need to determine which allele the read supports
@@ -316,8 +312,8 @@ impl BamCounter {
                         };
                         seq_string.push(base);
                     }
-                    read_allele = seq_string;
-                }
+                    seq_string
+                };
 
                 // Compare read allele to ref/alt
                 if read_allele == region.ref_allele {

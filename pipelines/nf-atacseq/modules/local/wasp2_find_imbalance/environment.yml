@@ -4,4 +4,4 @@ channels:
   - conda-forge
   - bioconda
 dependencies:
-  - bioconda::wasp2=1.2.1
+  - bioconda::wasp2=1.4.1

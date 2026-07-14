@@ -3,6 +3,12 @@
 
 import os
 import sys
+from pathlib import Path
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10
+    import tomli as tomllib
 
 sys.path.insert(0, os.path.abspath("../../src"))
 
@@ -20,10 +26,9 @@ project = "WASP2"
 copyright = "2025, Aaron Ho, Jeff Jaureguy, McVicker Lab"
 author = "Aaron Ho, Jeff Jaureguy, McVicker Lab"
 
-# The short X.Y version
-version = "1.4"
-# The full version, including alpha/beta/rc tags
-release = "1.4.0"
+with (Path(__file__).parents[2] / "rust" / "Cargo.toml").open("rb") as cargo_file:
+    release = tomllib.load(cargo_file)["package"]["version"]
+version = ".".join(release.split(".")[:2])
 
 # -- General configuration ---------------------------------------------------
 
@@ -87,7 +92,7 @@ html_theme_options = {
         },
     ],
     "use_edit_page_button": True,
-    "announcement": "WASP2 v1.3.0 with Nextflow pipelines is now available!",
+    "announcement": f"WASP2 v{release} documentation",
 }
 
 html_context = {

@@ -3,18 +3,8 @@ name: Documentation
 on:
   push:
     branches: [master, dev]
-    paths:
-      - 'docs/**'
-      - 'src/**'
-      - 'pyproject.toml'
-      - '.github/workflows/docs.yml'
   pull_request:
     branches: [master, dev]
-    paths:
-      - 'docs/**'
-      - 'src/**'
-      - 'pyproject.toml'
-      - '.github/workflows/docs.yml'
   workflow_dispatch:
 
 permissions:
@@ -26,10 +16,13 @@ concurrency:
 
 jobs:
   build:
+    name: Required / Docs
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
@@ -60,7 +53,8 @@ jobs:
             "myst-parser>=2.0" \
             "sphinx-copybutton>=0.5" \
             "sphinx-design>=0.5" \
-            "ipython>=8.0"
+            "ipython>=8.0" \
+            "tomli>=2.0; python_version < '3.11'"
           # Install core Python deps needed by autodoc (Rust ext is mocked in conf.py)
           pip install \
             "numpy>=1.21" \
@@ -81,13 +75,14 @@ jobs:
           path: docs/build/html
 
   deploy:
+    name: Deploy documentation
     if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      pages: write
-      id-token: write
+      pages: write  # Deploy the validated documentation artifact.
+      id-token: write  # Authenticate the GitHub Pages deployment.
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

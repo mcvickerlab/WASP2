@@ -4,7 +4,9 @@ Provides functions for analyzing allelic imbalance in single-cell data
 stored in AnnData format with SNP counts in layers.
 
 Orientation contract (scverse convention, see ISSUE2_ORIENTATION_DECISION §2b):
+
     obs = cells (barcodes); var = SNPs (variants).
+
 SNP-level annotations (index, chrom, pos, ref, alt, genotype, ref_count,
 alt_count) live on ``adata.var``; cell-level annotations (group) live on
 ``adata.obs``. The count layers (ref/alt/other) and X are ``(n_cells x n_SNP)``,

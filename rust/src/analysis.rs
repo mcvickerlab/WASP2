@@ -296,9 +296,9 @@ fn optimize_dispersion_linear(ref_counts: &[u32], n_array: &[u32]) -> Result<(f6
     ];
     let mut best: Option<(f64, (f64, f64))> = None;
     for s in starts {
-        if let Ok((d1, d2)) = nelder_mead_2d(&objective, s, 1e-6, 1000) {
+        if let Ok((d1, d2)) = nelder_mead_2d(objective, s, 1e-6, 1000) {
             let val = objective([d1, d2]);
-            if val.is_finite() && best.map_or(true, |(bv, _)| val < bv) {
+            if val.is_finite() && best.is_none_or(|(bv, _)| val < bv) {
                 best = Some((val, (d1, d2)));
             }
         }
@@ -314,10 +314,7 @@ fn optimize_prob(ref_counts: &[u32], n_array: &[u32], disp: f64) -> Result<(f64,
     // For single SNP, optimize directly
     if ref_counts.len() == 1 {
         let objective = |prob: f64| -> f64 {
-            match opt_prob(prob, disp, ref_counts[0], n_array[0]) {
-                Ok(nll) => nll,
-                Err(_) => f64::INFINITY,
-            }
+            opt_prob(prob, disp, ref_counts[0], n_array[0]).unwrap_or(f64::INFINITY)
         };
 
         let mu = golden_section_search(objective, 0.0, 1.0, 1e-6)?;
@@ -530,14 +527,14 @@ where
             b = d;
             d = c;
             fd = fc;
-            h = inv_phi * h;
+            h *= inv_phi;
             c = a + inv_phi2 * h;
             fc = f(c);
         } else {
             a = c;
             c = d;
             fc = fd;
-            h = inv_phi * h;
+            h *= inv_phi;
             d = a + inv_phi * h;
             fd = f(d);
         }
@@ -639,13 +636,13 @@ where
         }
 
         // Shrink toward best point
-        for i in 1..3 {
-            let (x_i, _) = simplex[i];
+        for point in simplex.iter_mut().skip(1) {
+            let (x_i, _) = *point;
             let x_new = [
                 x_best[0] + sigma * (x_i[0] - x_best[0]),
                 x_best[1] + sigma * (x_i[1] - x_best[1]),
             ];
-            simplex[i] = (x_new, f(x_new));
+            *point = (x_new, f(x_new));
         }
     }
 
@@ -758,17 +755,15 @@ pub fn single_model(variants: Vec<VariantCounts>, phased: bool) -> Result<Vec<Im
                 let phase_ref = &region_ref[1..];
                 let phase_n = &region_n[1..];
                 let objective = |prob: f64| -> f64 {
-                    match optimize_prob_unphased_dp(
+                    optimize_prob_unphased_dp(
                         prob,
                         &disp_slice,
                         first_ref,
                         first_n,
                         phase_ref,
                         phase_n,
-                    ) {
-                        Ok(nll) => nll,
-                        Err(_) => f64::INFINITY,
-                    }
+                    )
+                    .unwrap_or(f64::INFINITY)
                 };
                 let mu = golden_section_search(objective, 0.0, 1.0, 1e-6)?;
                 let alt_ll = -objective(mu);
@@ -910,17 +905,15 @@ pub fn linear_model(variants: Vec<VariantCounts>, phased: bool) -> Result<Vec<Im
                 let phase_ref = &region_ref[1..];
                 let phase_n = &region_n[1..];
                 let objective = |prob: f64| -> f64 {
-                    match optimize_prob_unphased_dp(
+                    optimize_prob_unphased_dp(
                         prob,
                         &region_rho,
                         first_ref,
                         first_n,
                         phase_ref,
                         phase_n,
-                    ) {
-                        Ok(nll) => nll,
-                        Err(_) => f64::INFINITY,
-                    }
+                    )
+                    .unwrap_or(f64::INFINITY)
                 };
                 let mu = golden_section_search(objective, 0.0, 1.0, 1e-6)?;
                 let alt_ll = -objective(mu);

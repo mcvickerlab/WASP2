@@ -39,6 +39,7 @@ struct ScRegion {
 
 impl ScRegion {
     /// Returns true if this variant is a simple SNP (single base change)
+    #[cfg(test)]
     fn is_snp(&self) -> bool {
         self.ref_allele.len() == 1 && self.alt_allele.len() == 1
     }

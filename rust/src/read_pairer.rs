@@ -224,8 +224,6 @@ pub fn pair_reads_from_chromosome(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     #[ignore] // Remove when implemented
     fn test_read_pairer_basic() {

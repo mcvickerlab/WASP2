@@ -14,7 +14,7 @@
 //! - Total: ~1.3GB
 
 use anyhow::{Context, Result};
-use coitrees::{COITreeSortedQuerent, SortedQuerent};
+use coitrees::{COITreeSortedQuerent, GenericInterval, SortedQuerent};
 use crossbeam_channel::{bounded, Receiver, Sender};
 use flate2::Compression;
 use gzp::{deflate::Gzip, ZBuilder};
@@ -30,6 +30,11 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::Instant;
+
+#[inline]
+fn interval_index(interval: &impl GenericInterval<u32>) -> u32 {
+    *interval.metadata()
+}
 
 use crate::bam_intersect::{build_variant_store, VariantStore};
 use crate::bam_remapper::{
@@ -265,7 +270,7 @@ fn expected_start_upstream_only(
     store: &VariantStore,
     hap_idx: usize,
 ) -> u32 {
-    let read_start = read.pos() as i64;
+    let read_start = read.pos();
     let mut shift: i64 = 0;
 
     for (idx, _s, _e) in overlaps {
@@ -390,7 +395,7 @@ fn check_overlaps(
 
     let mut overlapping: Overlaps = SmallVec::new();
     querent.query(read_start, read_end, |node| {
-        let variant_idx: u32 = u32::from(node.metadata.clone());
+        let variant_idx = interval_index(node);
         let variant = &store.variants[variant_idx as usize];
         overlapping.push((variant_idx, variant.start, variant.stop));
     });
@@ -585,7 +590,7 @@ fn process_pair(
     // First pass: filter to only pairs where at least one sequence changed.
     // We keep ownership of the sequences to avoid re-cloning when building outputs.
     let mut changed_pairs: Vec<(Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>)> = Vec::new();
-    for (r1_hap, r2_hap) in r1_haps.into_iter().zip(r2_haps.into_iter()) {
+    for (r1_hap, r2_hap) in r1_haps.into_iter().zip(r2_haps) {
         // Keep if at least one read is changed (matches baseline bam_remapper.rs line 476-479)
         if r1_hap.0 != r1_original || r2_hap.0 != r2_original {
             changed_pairs.push((r1_hap.0, r1_hap.1, r2_hap.0, r2_hap.1));
@@ -754,12 +759,11 @@ fn process_pair_with_trims(
         let exp_pos2 = expected_start_upstream_only(read2, r2_overlaps, store, hap_idx);
 
         // Skip pairs with indels larger than threshold
-        if (r1_delta.abs() as usize) > indel_config.max_indel_size
-            || (r2_delta.abs() as usize) > indel_config.max_indel_size
+        if ((r1_delta.unsigned_abs() as usize) > indel_config.max_indel_size
+            || (r2_delta.unsigned_abs() as usize) > indel_config.max_indel_size)
+            && indel_config.skip_large_indels
         {
-            if indel_config.skip_large_indels {
-                continue;
-            }
+            continue;
         }
         any_non_skipped_hap = true;
 
@@ -914,9 +918,8 @@ fn write_fastq_record<W: Write>(
     if hap.is_reverse {
         seq_buf.clear();
         seq_buf.resize(hap.sequence.len(), 0);
-        let len = hap.sequence.len();
-        for i in 0..len {
-            seq_buf[i] = complement_base(hap.sequence[len - 1 - i]);
+        for (dst, &base) in seq_buf.iter_mut().zip(hap.sequence.iter().rev()) {
+            *dst = complement_base(base);
         }
         writer.write_all(seq_buf)?;
     } else {
@@ -928,9 +931,8 @@ fn write_fastq_record<W: Write>(
     qual_buf.clear();
     qual_buf.resize(hap.quals.len(), 0);
     if hap.is_reverse {
-        let len = hap.quals.len();
-        for i in 0..len {
-            qual_buf[i] = hap.quals[len - 1 - i] + 33;
+        for (dst, &quality) in qual_buf.iter_mut().zip(hap.quals.iter().rev()) {
+            *dst = quality + 33;
         }
     } else {
         for (dst, &q) in qual_buf.iter_mut().zip(&hap.quals) {
@@ -1771,8 +1773,10 @@ pub fn unified_make_reads_parallel(
         .map_err(|_| anyhow::anyhow!("Writer thread panicked"))??;
 
     // Phase 5: Aggregate stats from all chromosomes
-    let mut final_stats = UnifiedStats::default();
-    final_stats.tree_build_ms = tree_build_ms;
+    let mut final_stats = UnifiedStats {
+        tree_build_ms,
+        ..UnifiedStats::default()
+    };
 
     for result in results {
         match result {
