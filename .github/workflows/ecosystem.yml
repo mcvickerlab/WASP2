@@ -74,7 +74,7 @@ jobs:
         with:
           version: "0.9.2"
       - name: Run pipeline compatibility test
-        run: nf-test test tests/main.nf.test --tag ci_stub --profile=test_stub,docker --ci --tap=ci-stub.tap --verbose
+        run: nf-test test tests/main.nf.test --tag ci_stub --profile=test_stub --ci --tap=ci-stub.tap --verbose
       - name: Upload nf-test result
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
