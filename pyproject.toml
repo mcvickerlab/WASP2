@@ -89,6 +89,7 @@ docs = [
     "sphinx-copybutton>=0.5",
     "sphinx-design>=0.5",
     "ipython>=8.0",
+    "tomli>=2.0; python_version < '3.11'",
 ]
 rust = [
     "maturin>=1.0",

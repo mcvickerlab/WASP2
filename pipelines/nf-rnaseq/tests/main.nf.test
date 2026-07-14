@@ -9,6 +9,8 @@ nextflow_pipeline {
 
     test("RNASEQ_ASE - stub run - validates output structure and format") {
 
+        tag "ci_stub"
+
         options "-stub"
 
         when {

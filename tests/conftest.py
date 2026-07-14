@@ -13,21 +13,15 @@ from pathlib import Path
 
 import pytest
 
-# Project root
-ROOT = Path(__file__).parent.parent
-TEST_DATA_DIR = ROOT / "tests" / "data"
-
-
 # ============================================================================
 # Session-scoped fixtures (created once per test session)
 # ============================================================================
 
 
 @pytest.fixture(scope="session")
-def test_data_dir() -> Path:
-    """Return path to test data directory, creating if needed."""
-    TEST_DATA_DIR.mkdir(parents=True, exist_ok=True)
-    return TEST_DATA_DIR
+def test_data_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Return an isolated directory for generated test data."""
+    return tmp_path_factory.mktemp("wasp2-test-data")
 
 
 @pytest.fixture(scope="session")
@@ -108,9 +102,8 @@ def sample_vcf_gz(test_data_dir, sample_vcf) -> Path:
     except (subprocess.CalledProcessError, FileNotFoundError):
         # Fall back to bgzip if bcftools fails
         try:
-            subprocess.run(
-                ["bgzip", "-c", str(sample_vcf)], stdout=open(vcf_gz_path, "wb"), check=True
-            )
+            with vcf_gz_path.open("wb") as compressed_vcf:
+                subprocess.run(["bgzip", "-c", str(sample_vcf)], stdout=compressed_vcf, check=True)
             subprocess.run(
                 ["tabix", "-p", "vcf", str(vcf_gz_path)], check=True, capture_output=True
             )

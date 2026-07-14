@@ -8,6 +8,8 @@ nextflow_pipeline {
 
     test("Should run with minimal test data - stub") {
 
+        tag "ci_stub"
+
         options "-stub"
 
         when {

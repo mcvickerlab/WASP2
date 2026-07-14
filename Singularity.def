@@ -5,10 +5,10 @@
 # Run scripts/check-version-consistency.sh to verify
 #
 # Build: singularity build wasp2.sif Singularity.def
-# Or pull directly: singularity pull docker://mcvickerlab/wasp2:latest
+# Or pull directly: singularity pull docker://ghcr.io/mcvickerlab/wasp2:latest
 
 Bootstrap: docker
-From: mcvickerlab/wasp2:1.4.1
+From: ghcr.io/mcvickerlab/wasp2:1.4.1
 
 %labels
     Author Jeff Jaureguy <jeffpjaureguy@gmail.com>
