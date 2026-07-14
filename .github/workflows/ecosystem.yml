@@ -1,0 +1,98 @@
+name: Ecosystem
+
+on:
+  push:
+    branches: [master, dev]
+  pull_request:
+    branches: [master, dev]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  galaxy:
+    name: Galaxy wrappers
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7  # stable
+      - uses: astral-sh/setup-uv@7eb50e6e20e1e2009087999ba91242e80253875f  # v7
+      - name: Install build and Galaxy dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libhts-dev libbz2-dev liblzma-dev zlib1g-dev libssl-dev pkg-config libclang-dev samtools bcftools bedtools
+          uv venv .venv
+          source .venv/bin/activate
+          uv pip install maturin planemo
+          maturin develop --release
+      - name: Lint Galaxy wrappers
+        run: |
+          source .venv/bin/activate
+          planemo lint galaxy/tools/wasp2
+      - name: Test Galaxy wrappers
+        run: |
+          source .venv/bin/activate
+          planemo test galaxy/tools/wasp2 --no_dependency_resolution --test_output_json galaxy-test-results.json
+      - name: Upload Galaxy results
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
+        with:
+          name: galaxy-test-results
+          path: galaxy-test-results.json
+          if-no-files-found: warn
+
+  nextflow:
+    name: Nextflow stub (${{ matrix.pipeline }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        pipeline: [nf-atacseq, nf-rnaseq, nf-scatac, nf-outrider]
+    defaults:
+      run:
+        working-directory: pipelines/${{ matrix.pipeline }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: nf-core/setup-nextflow@6c2e22b4d901f0c42ca66c5069f8026df026d165  # v2
+        with:
+          version: "24.10.4"
+      - uses: nf-core/setup-nf-test@f2db585128ae681918440f6c074dededeceadce1  # v1
+        with:
+          version: "0.9.2"
+      - name: Run pipeline compatibility test
+        run: nf-test test tests/main.nf.test --tag ci_stub --profile=test_stub,docker --ci --tap=ci-stub.tap --verbose
+      - name: Upload nf-test result
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
+        with:
+          name: nf-test-${{ matrix.pipeline }}
+          path: pipelines/${{ matrix.pipeline }}/ci-stub.tap
+          if-no-files-found: warn
+
+  required:
+    name: Required / Ecosystem
+    if: always()
+    needs: [galaxy, nextflow]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify ecosystem jobs
+        env:
+          GALAXY_RESULT: ${{ needs.galaxy.result }}
+          NEXTFLOW_RESULT: ${{ needs.nextflow.result }}
+        run: |
+          test "$GALAXY_RESULT" = success
+          test "$NEXTFLOW_RESULT" = success

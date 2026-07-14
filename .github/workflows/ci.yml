@@ -9,6 +9,11 @@ on:
     branches: [master, dev]
   pull_request:
     branches: [master, dev]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -23,6 +28,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
@@ -41,8 +48,11 @@ jobs:
       - name: Ruff format check
         run: ruff format --check src/ tests/
 
+      - name: Check release metadata
+        run: python scripts/release_version.py --check
+
   # ===========================================================================
-  # Python tests with Rust extension (matrix: Python 3.10-3.12)
+  # Python tests with Rust extension (matrix: Python 3.10-3.13)
   # ===========================================================================
   test:
     name: Test (Python ${{ matrix.python-version }})
@@ -51,9 +61,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Install system dependencies
         run: |
@@ -119,6 +131,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Install system dependencies
         run: |
@@ -151,4 +165,24 @@ jobs:
 
       - name: Run clippy
         working-directory: rust
-        run: PYO3_PYTHON=$(command -v python3) cargo clippy -- -W warnings
+        run: PYO3_PYTHON=$(command -v python3) cargo clippy --all-targets -- -D warnings
+
+      - name: Check Rust formatting
+        working-directory: rust
+        run: cargo fmt --check
+
+  required:
+    name: Required / Core
+    if: always()
+    needs: [lint, test, rust-test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify required jobs
+        env:
+          LINT_RESULT: ${{ needs.lint.result }}
+          TEST_RESULT: ${{ needs.test.result }}
+          RUST_RESULT: ${{ needs.rust-test.result }}
+        run: |
+          test "$LINT_RESULT" = success
+          test "$TEST_RESULT" = success
+          test "$RUST_RESULT" = success
