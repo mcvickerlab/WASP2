@@ -62,7 +62,7 @@ def merge_filt_bam(keep_bam: str, remapped_filt_bam: str, out_bam: str, threads:
 
     # Merge using samtools (faster than pysam, inputs are already sorted)
     subprocess.run(
-        ["samtools", "merge", "-@", str(threads), "-f", "-o", out_bam, keep_bam, remapped_filt_bam],
+        ["samtools", "merge", "-@", str(threads), "-f", out_bam, keep_bam, remapped_filt_bam],
         check=True,
     )
     logger.info("Merged BAM in %.2f seconds", timeit.default_timer() - start_time)

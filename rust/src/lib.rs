@@ -310,14 +310,12 @@ fn analyze_imbalance(
 
     let mut variants = Vec::new();
 
-    // Detect column layout from header:
-    //   7-col: chrom, pos, ref, alt, ref_count, alt_count, other_count
-    //   9-col: chrom, pos0, pos, ref, alt, GT, ref_count, alt_count, other_count
+    // Resolve columns from the header. Count tables can carry pos0, GT, feature,
+    // parent, sample, or donor metadata, so fixed offsets are not reliable.
+    let mut chrom_idx: usize = 0;
     let mut pos_idx: usize = 1;
     let mut ref_count_idx: usize = 4;
     let mut alt_count_idx: usize = 5;
-    let mut min_fields: usize = 7;
-    // GT column index (only present in 9-col format)
     let mut gt_idx: Option<usize> = None;
     // Region column index (use input region names instead of chrom_pos format)
     let mut region_idx: Option<usize> = None;
@@ -325,22 +323,29 @@ fn analyze_imbalance(
     let mut sample_idx: Option<usize> = None;
     let mut header_seen = false;
 
-    for line in reader.lines() {
+    for (line_idx, line) in reader.lines().enumerate() {
         let line =
             line.map_err(|e| PyRuntimeError::new_err(format!("Failed to read line: {}", e)))?;
 
         if !header_seen {
             header_seen = true;
             let headers: Vec<&str> = line.split('\t').collect();
-            if headers.len() >= 9 && headers.contains(&"GT") {
-                // 9-column format from wasp2-count CLI
-                // Layout: chrom(0), pos0(1), pos(2), ref(3), alt(4), GT(5), ref_count(6), alt_count(7), other(8)
-                pos_idx = 2;
-                ref_count_idx = 6;
-                alt_count_idx = 7;
-                min_fields = 9;
-                gt_idx = Some(5);
-            }
+            let required_column = |name: &str| {
+                headers
+                    .iter()
+                    .position(|header| *header == name)
+                    .ok_or_else(|| {
+                        PyRuntimeError::new_err(format!(
+                            "Required column '{}' not found in header columns: {:?}",
+                            name, headers
+                        ))
+                    })
+            };
+            chrom_idx = required_column("chrom")?;
+            pos_idx = required_column("pos")?;
+            ref_count_idx = required_column("ref_count")?;
+            alt_count_idx = required_column("alt_count")?;
+            gt_idx = headers.iter().position(|header| *header == "GT");
             // Detect an optional `sample` column by name (per_donor input)
             sample_idx = headers.iter().position(|h| *h == "sample");
             // Resolve grouping column from the region_col argument (mirror Python get_imbalance):
@@ -361,29 +366,35 @@ fn analyze_imbalance(
             continue;
         }
 
-        let fields: Vec<&str> = line.split('\t').collect();
-        if fields.len() < min_fields {
+        if line.trim().is_empty() {
             continue;
         }
+        let fields: Vec<&str> = line.split('\t').collect();
+        let field = |index: usize, name: &str| {
+            fields.get(index).copied().ok_or_else(|| {
+                PyRuntimeError::new_err(format!(
+                    "Missing '{}' value on TSV line {}",
+                    name,
+                    line_idx + 1
+                ))
+            })
+        };
 
-        let chrom = fields[0].to_string();
-        let pos = fields[pos_idx]
+        let chrom = field(chrom_idx, "chrom")?.to_string();
+        let pos = field(pos_idx, "pos")?
             .parse::<u32>()
             .map_err(|e| PyRuntimeError::new_err(format!("Invalid pos: {}", e)))?;
-        let ref_count = fields[ref_count_idx]
+        let ref_count = field(ref_count_idx, "ref_count")?
             .parse::<u32>()
             .map_err(|e| PyRuntimeError::new_err(format!("Invalid ref_count: {}", e)))?;
-        let alt_count = fields[alt_count_idx]
+        let alt_count = field(alt_count_idx, "alt_count")?
             .parse::<u32>()
             .map_err(|e| PyRuntimeError::new_err(format!("Invalid alt_count: {}", e)))?;
 
         // region_col=Some => use that column verbatim; region_col=None => per-variant chrom_pos.
         // The chrom_pos label matches Python's df["chrom"] + "_" + df["pos"] for SNV-solo parity.
         let region = match region_idx {
-            Some(ri) => fields
-                .get(ri)
-                .map(|s| s.to_string())
-                .unwrap_or_else(|| format!("{}_{}", chrom, pos)),
+            Some(ri) => field(ri, "region")?.to_string(),
             None => format!("{}_{}", chrom, pos),
         };
 

@@ -8,22 +8,15 @@
         ## Link input files
         ln -s '$remapped_bam' remapped.bam &&
         ln -s '${remapped_bam.metadata.bam_index}' remapped.bam.bai &&
+        ln -s '$to_remap_bam' to_remap.bam &&
+        ln -s '${to_remap_bam.metadata.bam_index}' to_remap.bam.bai &&
+        ln -s '$keep_bam' keep.bam &&
+        ln -s '${keep_bam.metadata.bam_index}' keep.bam.bai &&
 
-        #if $input_mode.mode == "json"
-            ln -s '$input_mode.wasp_json' wasp_data.json &&
-            wasp2-map filter-remapped
-                remapped.bam
-                --json wasp_data.json
-        #else
-            ln -s '$input_mode.to_remap_bam' to_remap.bam &&
-            ln -s '${input_mode.to_remap_bam.metadata.bam_index}' to_remap.bam.bai &&
-            ln -s '$input_mode.keep_bam' keep.bam &&
-            ln -s '${input_mode.keep_bam.metadata.bam_index}' keep.bam.bai &&
-            wasp2-map filter-remapped
-                remapped.bam
-                to_remap.bam
-                keep.bam
-        #end if
+        wasp2-map filter-remapped
+            remapped.bam
+            to_remap.bam
+            keep.bam
             --out_bam filtered.bam
             $use_rust
             --threads \${GALAXY_SLOTS:-1}
@@ -41,25 +34,12 @@
                label="Remapped BAM file"
                help="BAM file from remapping the to_remap FASTQ files"/>
 
-        <conditional name="input_mode">
-            <param name="mode" type="select" label="Input mode">
-                <option value="json" selected="true">Use WASP data JSON (recommended)</option>
-                <option value="manual">Specify BAM files manually</option>
-            </param>
-            <when value="json">
-                <param name="wasp_json" type="data" format="json"
-                       label="WASP data JSON"
-                       help="JSON file from 'WASP2 Make Reads' containing file paths"/>
-            </when>
-            <when value="manual">
-                <param name="to_remap_bam" type="data" format="bam"
-                       label="to_remap BAM"
-                       help="Original reads before allele swapping (from Make Reads)"/>
-                <param name="keep_bam" type="data" format="bam"
-                       label="keep BAM"
-                       help="Reads that don't overlap variants (from Make Reads)"/>
-            </when>
-        </conditional>
+        <param name="to_remap_bam" type="data" format="bam"
+               label="to_remap BAM"
+               help="Original reads before allele swapping (from Make Reads)"/>
+        <param name="keep_bam" type="data" format="bam"
+               label="keep BAM"
+               help="Reads that did not overlap variants (from Make Reads)"/>
 
         <expand macro="use_rust_param"/>
 
@@ -89,10 +69,8 @@
     <tests>
         <test expect_num_outputs="1">
             <param name="remapped_bam" value="remapped.bam"/>
-            <conditional name="input_mode">
-                <param name="mode" value="json"/>
-                <param name="wasp_json" value="wasp_data.json"/>
-            </conditional>
+            <param name="to_remap_bam" value="test.bam"/>
+            <param name="keep_bam" value="test.bam"/>
             <output name="filtered_bam" ftype="bam">
                 <assert_contents>
                     <has_size min="100"/>
@@ -120,8 +98,8 @@ This removes reference mapping bias.
 **Inputs**
 
 - **Remapped BAM**: The output from remapping the to_remap FASTQ files
-- **WASP data JSON**: Metadata file from "WASP2 Make Reads"
-  (Or manually specify the to_remap and keep BAM files)
+- **to_remap BAM**: Original reads before allele swapping
+- **keep BAM**: Reads from Make Reads that did not overlap variants
 
 **Outputs**
 

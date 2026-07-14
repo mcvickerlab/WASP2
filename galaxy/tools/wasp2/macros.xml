@@ -56,6 +56,14 @@
         </param>
     </xml>
 
+    <xml name="sample_param_required">
+        <param argument="--samples" type="text"
+               label="VCF sample name(s)"
+               help="One or more phased samples from the variant file, separated by commas.">
+            <expand macro="sanitize_sample"/>
+        </param>
+    </xml>
+
     <xml name="region_param">
         <param argument="--region" type="data" format="bed,interval" optional="true"
                label="Region file (optional)"

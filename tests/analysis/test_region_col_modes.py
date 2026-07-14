@@ -23,15 +23,18 @@ import pytest
 def _write_counts(path, *, with_region: bool = True):
     """Write a tiny phased count TSV (two het SNVs in one peak).
 
-    ``with_region=True`` emits the 9-column layout that carries a ``region`` column;
+    ``with_region=True`` emits the current 10-column layout carrying a ``region`` column;
     ``with_region=False`` omits it. Only the header is consulted by ``WaspAnalysisData``.
     """
     if with_region:
-        header = "chrom\tstart\tpos\tref\tregion\tGT\tref_count\talt_count\tN\n"
-        rows = "chr1\t100\t101\tA\tpeakX\t0|1\t10\t8\t18\nchr1\t200\t201\tC\tpeakX\t1|0\t7\t9\t16\n"
+        header = "chrom\tpos0\tpos\tref\talt\tGT\tregion\tref_count\talt_count\tother_count\n"
+        rows = (
+            "chr1\t100\t101\tA\tG\t0|1\tpeakX\t10\t8\t0\n"
+            "chr1\t200\t201\tC\tT\t1|0\tpeakX\t7\t9\t0\n"
+        )
     else:
-        header = "chrom\tstart\tpos\tref\tGT\tref_count\talt_count\tN\n"
-        rows = "chr1\t100\t101\tA\t0|1\t10\t8\t18\nchr1\t200\t201\tC\t1|0\t7\t9\t16\n"
+        header = "chrom\tpos0\tpos\tref\talt\tGT\tref_count\talt_count\tother_count\n"
+        rows = "chr1\t100\t101\tA\tG\t0|1\t10\t8\t0\nchr1\t200\t201\tC\tT\t1|0\t7\t9\t0\n"
     path.write_text(header + rows)
     return path
 
@@ -131,6 +134,31 @@ def test_cli_forwards_phased_and_region_col(tmp_path, spy_rust):
     )
     assert spy_rust["kwargs"].get("phased") is True
     assert spy_rust["kwargs"].get("region_col") == "region"
+
+
+@pytest.mark.unit
+def test_cli_auto_detects_feature_column(tmp_path, spy_rust):
+    from analysis.run_analysis import run_ai_analysis
+
+    tsv = _write_counts(tmp_path / "counts.tsv", with_region=True)
+    run_ai_analysis(str(tsv), out_file=str(tmp_path / "out.tsv"))
+
+    assert spy_rust["kwargs"].get("region_col") == "region"
+
+
+@pytest.mark.unit
+def test_cli_does_not_group_bare_counts_by_gt_or_sample(tmp_path, spy_rust):
+    from analysis.run_analysis import run_ai_analysis
+
+    tsv = _write_counts(tmp_path / "counts.tsv", with_region=False)
+    lines = tsv.read_text().splitlines()
+    lines[0] += "\tsample"
+    lines[1:] = [f"{line}\tSAMPLE1" for line in lines[1:]]
+    tsv.write_text("\n".join(lines) + "\n")
+
+    run_ai_analysis(str(tsv), out_file=str(tmp_path / "out.tsv"))
+
+    assert spy_rust["kwargs"].get("region_col") is None
 
 
 @pytest.mark.unit

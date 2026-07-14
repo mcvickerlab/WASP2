@@ -112,9 +112,8 @@ planemo serve wasp2/
 
 Test data files should be placed in `test-data/`:
 - `test.bam` + `test.bam.bai`: Small aligned BAM
-- `test.vcf`: Matching VCF with heterozygous variants
+- `test.vcf`: Matching VCF with phased heterozygous variants
 - `counts.tsv`: Example count output
-- `wasp_data.json`: Example WASP metadata
 
 ## Support
 

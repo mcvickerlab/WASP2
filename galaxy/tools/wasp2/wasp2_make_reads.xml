@@ -13,13 +13,9 @@
         wasp2-map make-reads
             input.bam
             $variant_file
-            #if str($samples).strip()
-                --samples '$samples'
-            #end if
+            --samples '$samples'
             --out_dir output_dir
             --out_json wasp_data.json
-            $is_paired
-            $is_phased
             $indels
             --threads \${GALAXY_SLOTS:-1}
             --max-indel-len $advanced.max_indel_len
@@ -30,17 +26,7 @@
     <inputs>
         <expand macro="bam_input"/>
         <expand macro="variant_input"/>
-        <expand macro="sample_param"/>
-
-        <param argument="--paired" name="is_paired" type="boolean"
-               truevalue="--paired" falsevalue="--single"
-               checked="true" label="Paired-end reads"
-               help="Input reads are paired-end (recommended)"/>
-
-        <param argument="--phased" name="is_phased" type="boolean"
-               truevalue="--phased" falsevalue="--unphased"
-               checked="true" label="Phased genotypes"
-               help="Variant file contains phased genotypes (strongly recommended)"/>
+        <expand macro="sample_param_required"/>
 
         <param argument="--indels" type="boolean" truevalue="--indels" falsevalue="--snps-only"
                checked="false" label="Include indels"
@@ -60,12 +46,10 @@
     </inputs>
 
     <outputs>
-        <data name="to_remap_fq1" format="fastqsanger.gz" from_work_dir="output_dir/*_to_remap_R1.fq.gz"
+        <data name="to_remap_fq1" format="fastqsanger" from_work_dir="output_dir/*_swapped_alleles_r1.fq"
               label="${tool.name} on ${on_string}: to_remap R1"/>
-        <data name="to_remap_fq2" format="fastqsanger.gz" from_work_dir="output_dir/*_to_remap_R2.fq.gz"
-              label="${tool.name} on ${on_string}: to_remap R2">
-            <filter>is_paired</filter>
-        </data>
+        <data name="to_remap_fq2" format="fastqsanger" from_work_dir="output_dir/*_swapped_alleles_r2.fq"
+              label="${tool.name} on ${on_string}: to_remap R2"/>
         <data name="keep_bam" format="bam" from_work_dir="output_dir/*_keep.bam"
               label="${tool.name} on ${on_string}: keep BAM"/>
         <data name="to_remap_bam" format="bam" from_work_dir="output_dir/*_to_remap.bam"
@@ -78,8 +62,7 @@
         <test expect_num_outputs="5">
             <param name="bam" value="test.bam"/>
             <param name="variants" value="test.vcf"/>
-            <param name="is_paired" value="true"/>
-            <param name="is_phased" value="true"/>
+            <param name="samples" value="SAMPLE1"/>
             <output name="wasp_json" ftype="json">
                 <assert_contents>
                     <has_text text="keep_bam"/>
@@ -102,22 +85,23 @@ This is step 1 of the WASP bias-correction workflow.
 
 **Inputs**
 
-- **BAM file**: Original aligned reads
-- **Variant file**: VCF with heterozygous variants (phased recommended)
+- **BAM file**: Original paired-end aligned reads
+- **Variant file**: VCF with phased heterozygous variants
+- **VCF sample**: Sample name used to select heterozygous genotypes
 
 **Outputs**
 
 - **to_remap FASTQ**: Reads with swapped alleles to be remapped
 - **keep BAM**: Reads that don't overlap variants (passed through)
 - **to_remap BAM**: Original reads before allele swapping (needed for filter step)
-- **WASP data JSON**: Metadata file linking outputs (used by filter step)
+- **WASP data JSON**: Provenance metadata describing the generated outputs
 
 **Workflow**
 
 After running this tool:
 
 1. Remap the to_remap FASTQ files with your aligner
-2. Run "WASP2 Filter Remapped" with the remapped BAM and JSON file
+2. Run "WASP2 Filter Remapped" with the remapped, to-remap, and keep BAM files
 3. The filtered BAM can be used for unbiased allele-specific analysis
 
     ]]></help>

@@ -69,7 +69,7 @@
             <param name="min_count" value="10"/>
             <output name="output_results" ftype="tabular">
                 <assert_contents>
-                    <has_text text="p_value"/>
+                    <has_text text="pval"/>
                 </assert_contents>
             </output>
         </test>
