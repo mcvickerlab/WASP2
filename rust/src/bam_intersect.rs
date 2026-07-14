@@ -12,13 +12,20 @@
 //! - 20M reads: 152s (pybedtools) -> ~2-3s (coitrees+AVX2) = 50-75x faster
 
 use anyhow::{Context, Result};
-use coitrees::{COITree, COITreeSortedQuerent, IntervalNode, IntervalTree, SortedQuerent};
+use coitrees::{
+    COITree, COITreeSortedQuerent, GenericInterval, IntervalNode, IntervalTree, SortedQuerent,
+};
 use rayon::prelude::*;
 use rust_htslib::bam::ext::BamRecordExtensions;
 use rust_htslib::{bam, bam::Read as BamRead};
 use rustc_hash::FxHashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
+
+#[inline]
+fn interval_index(interval: &impl GenericInterval<u32>) -> u32 {
+    *interval.metadata()
+}
 
 // ============================================================================
 // Data Structures
@@ -254,7 +261,7 @@ pub fn intersect_bam_with_store(
         // coitrees uses inclusive intervals, so query [start, end-1]
         querent.query(read_start as i32, read_end as i32 - 1, |node| {
             // Lookup full variant data by index (only on matches!)
-            let idx: usize = node.metadata as usize;
+            let idx = interval_index(node) as usize;
             let info = &store.variants[idx];
             has_overlap = true;
 
@@ -501,7 +508,7 @@ pub fn intersect_bam_with_store_multi(
         let read_name = String::from_utf8_lossy(read.qname());
 
         querent.query(read_start as i32, read_end as i32 - 1, |node| {
-            let idx: usize = node.metadata as usize;
+            let idx = interval_index(node) as usize;
             let info = &store.variants[idx];
 
             // Write base columns
@@ -642,7 +649,7 @@ mod tests {
         // Query that should hit first variant
         let mut found_indices: Vec<u32> = Vec::new();
         tree.query(50, 150, |node| {
-            found_indices.push(node.metadata);
+            found_indices.push(interval_index(node));
         });
         assert_eq!(found_indices.len(), 1);
         assert_eq!(found_indices[0], 0);
@@ -651,14 +658,14 @@ mod tests {
         // Query that should hit both variants
         found_indices.clear();
         tree.query(50, 250, |node| {
-            found_indices.push(node.metadata);
+            found_indices.push(interval_index(node));
         });
         assert_eq!(found_indices.len(), 2);
 
         // Query that should hit nothing
         found_indices.clear();
         tree.query(300, 400, |node| {
-            found_indices.push(node.metadata);
+            found_indices.push(interval_index(node));
         });
         assert_eq!(found_indices.len(), 0);
     }

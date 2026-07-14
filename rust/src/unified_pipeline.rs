@@ -14,7 +14,7 @@
 //! - Total: ~1.3GB
 
 use anyhow::{Context, Result};
-use coitrees::{COITreeSortedQuerent, SortedQuerent};
+use coitrees::{COITreeSortedQuerent, GenericInterval, SortedQuerent};
 use crossbeam_channel::{bounded, Receiver, Sender};
 use flate2::Compression;
 use gzp::{deflate::Gzip, ZBuilder};
@@ -30,6 +30,11 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::Instant;
+
+#[inline]
+fn interval_index(interval: &impl GenericInterval<u32>) -> u32 {
+    *interval.metadata()
+}
 
 use crate::bam_intersect::{build_variant_store, VariantStore};
 use crate::bam_remapper::{
@@ -390,7 +395,7 @@ fn check_overlaps(
 
     let mut overlapping: Overlaps = SmallVec::new();
     querent.query(read_start, read_end, |node| {
-        let variant_idx: u32 = node.metadata;
+        let variant_idx = interval_index(node);
         let variant = &store.variants[variant_idx as usize];
         overlapping.push((variant_idx, variant.start, variant.stop));
     });
@@ -585,7 +590,7 @@ fn process_pair(
     // First pass: filter to only pairs where at least one sequence changed.
     // We keep ownership of the sequences to avoid re-cloning when building outputs.
     let mut changed_pairs: Vec<(Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>)> = Vec::new();
-    for (r1_hap, r2_hap) in r1_haps.into_iter().zip(r2_haps.into_iter()) {
+    for (r1_hap, r2_hap) in r1_haps.into_iter().zip(r2_haps) {
         // Keep if at least one read is changed (matches baseline bam_remapper.rs line 476-479)
         if r1_hap.0 != r1_original || r2_hap.0 != r2_original {
             changed_pairs.push((r1_hap.0, r1_hap.1, r2_hap.0, r2_hap.1));

@@ -314,10 +314,7 @@ fn optimize_prob(ref_counts: &[u32], n_array: &[u32], disp: f64) -> Result<(f64,
     // For single SNP, optimize directly
     if ref_counts.len() == 1 {
         let objective = |prob: f64| -> f64 {
-            match opt_prob(prob, disp, ref_counts[0], n_array[0]) {
-                Ok(nll) => nll,
-                Err(_) => f64::INFINITY,
-            }
+            opt_prob(prob, disp, ref_counts[0], n_array[0]).unwrap_or(f64::INFINITY)
         };
 
         let mu = golden_section_search(objective, 0.0, 1.0, 1e-6)?;
@@ -758,17 +755,15 @@ pub fn single_model(variants: Vec<VariantCounts>, phased: bool) -> Result<Vec<Im
                 let phase_ref = &region_ref[1..];
                 let phase_n = &region_n[1..];
                 let objective = |prob: f64| -> f64 {
-                    match optimize_prob_unphased_dp(
+                    optimize_prob_unphased_dp(
                         prob,
                         &disp_slice,
                         first_ref,
                         first_n,
                         phase_ref,
                         phase_n,
-                    ) {
-                        Ok(nll) => nll,
-                        Err(_) => f64::INFINITY,
-                    }
+                    )
+                    .unwrap_or(f64::INFINITY)
                 };
                 let mu = golden_section_search(objective, 0.0, 1.0, 1e-6)?;
                 let alt_ll = -objective(mu);
@@ -910,17 +905,15 @@ pub fn linear_model(variants: Vec<VariantCounts>, phased: bool) -> Result<Vec<Im
                 let phase_ref = &region_ref[1..];
                 let phase_n = &region_n[1..];
                 let objective = |prob: f64| -> f64 {
-                    match optimize_prob_unphased_dp(
+                    optimize_prob_unphased_dp(
                         prob,
                         &region_rho,
                         first_ref,
                         first_n,
                         phase_ref,
                         phase_n,
-                    ) {
-                        Ok(nll) => nll,
-                        Err(_) => f64::INFINITY,
-                    }
+                    )
+                    .unwrap_or(f64::INFINITY)
                 };
                 let mu = golden_section_search(objective, 0.0, 1.0, 1e-6)?;
                 let alt_ll = -objective(mu);

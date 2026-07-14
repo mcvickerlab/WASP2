@@ -15,12 +15,6 @@
         </requirements>
     </xml>
 
-    <xml name="bio_tools">
-        <xrefs>
-            <xref type="bio.tools">wasp2</xref>
-        </xrefs>
-    </xml>
-
     <xml name="creators">
         <creator>
             <person givenName="Jeff" familyName="Jaureguy" email="jeffpjaureguy@gmail.com"/>
