@@ -256,6 +256,73 @@ jobs:
             SHA256SUMS.packages
           if-no-files-found: error
 
+  container-smoke:
+    name: Container smoke (${{ matrix.platform }})
+    needs: [validate, package]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {platform: linux/amd64, tag: amd64}
+          - {platform: linux/arm64, tag: arm64}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392  # v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
+      - name: Build local release image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
+        with:
+          context: .
+          load: true
+          platforms: ${{ matrix.platform }}
+          tags: wasp2:release-smoke-${{ matrix.tag }}
+          build-args: VERSION=${{ needs.validate.outputs.version }}
+          cache-from: type=gha,scope=release-${{ matrix.tag }}
+          cache-to: type=gha,mode=max,scope=release-${{ matrix.tag }}
+      - name: Smoke-test local release image
+        env:
+          IMAGE: wasp2:release-smoke-${{ matrix.tag }}
+          PLATFORM: ${{ matrix.platform }}
+        run: docker run --rm --platform "$PLATFORM" "$IMAGE" /opt/wasp2/scripts/container_smoke_test.sh
+
+  singularity-smoke:
+    name: Singularity smoke
+    needs: [validate, package, container-smoke]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
+      - uses: eWaterCycle/setup-singularity@931d4e31109e875b13309ae1d07c70ca8fbc8537  # v7
+        with:
+          singularity-version: 3.11.4
+      - name: Build local Docker archive
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
+        with:
+          context: .
+          platforms: linux/amd64
+          tags: wasp2:release-singularity
+          build-args: VERSION=${{ needs.validate.outputs.version }}
+          outputs: type=docker,dest=${{ runner.temp }}/wasp2-docker.tar
+          cache-from: type=gha,scope=release-amd64
+          cache-to: type=gha,mode=max,scope=release-amd64
+      - name: Build and test local Singularity artifact
+        env:
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          singularity build "wasp2_${RELEASE_VERSION}.sif" "docker-archive://${RUNNER_TEMP}/wasp2-docker.tar"
+          singularity exec "wasp2_${RELEASE_VERSION}.sif" /opt/wasp2/scripts/container_smoke_test.sh
+
   publish-pypi:
     name: Publish PyPI
     if: startsWith(github.ref, 'refs/tags/v')
@@ -279,7 +346,7 @@ jobs:
   container:
     name: Publish multi-architecture container
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [validate, package]
+    needs: [validate, package, container-smoke, singularity-smoke]
     runs-on: ubuntu-latest
     permissions:
       contents: read

@@ -27,6 +27,8 @@ All notable changes to WASP2 will be documented in this file.
   containers, Galaxy, Nextflow, documentation, and citation metadata from one release command.
 - The release workflow now builds and tests 16 wheels, a source distribution, multi-architecture
   containers, and a Singularity image before publishing, with checksums, SBOMs, and provenance.
+- Manual release runs execute the same non-publishing AMD64/ARM64 container and Singularity
+  preflights while registry, PyPI, and GitHub publication remain restricted to signed tags.
 
 ### Fixed
 - Unphased multi-SNV likelihoods now use log-space dynamic programming to prevent underflow.
