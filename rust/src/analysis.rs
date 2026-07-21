@@ -64,6 +64,8 @@ pub struct AnalysisOutput {
     pub results: Vec<ImbalanceResult>,
     pub rho: Option<f64>,
     pub linear_params: Option<(f64, f64)>,
+    pub linear_depth_center: Option<f64>,
+    pub linear_depth_scale: Option<f64>,
     pub n_observations: usize,
     pub effective_phased: bool,
 }
@@ -80,14 +82,21 @@ pub struct AnalysisConfig {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AnalysisMethod {
     Single, // Single global dispersion parameter
-    Linear, // Linear dispersion model: rho = expit(d1 + N*d2)
+    Linear, // Linear dispersion model: rho = expit(d1 + d2*((N-center)/scale))
 }
 
 /// Nuisance parameters fitted under the balanced beta-binomial null.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum DispersionParameters {
-    Single { rho: f64 },
-    Linear { d1: f64, d2: f64 },
+    Single {
+        rho: f64,
+    },
+    Linear {
+        d1: f64,
+        d2: f64,
+        depth_center: f64,
+        depth_scale: f64,
+    },
 }
 
 impl DispersionParameters {
@@ -98,16 +107,33 @@ impl DispersionParameters {
                     anyhow::bail!("fixed scalar rho must be finite and in [0, 1]");
                 }
             }
-            (AnalysisMethod::Linear, Self::Linear { d1, d2 }) => {
+            (
+                AnalysisMethod::Linear,
+                Self::Linear {
+                    d1,
+                    d2,
+                    depth_center,
+                    depth_scale,
+                },
+            ) => {
                 if !d1.is_finite() || !d2.is_finite() {
                     anyhow::bail!("fixed linear dispersion parameters must be finite");
+                }
+                if !depth_center.is_finite() {
+                    anyhow::bail!("fixed linear depth center must be finite");
+                }
+                if !depth_scale.is_finite() || depth_scale <= 0.0 {
+                    anyhow::bail!("fixed linear depth scale must be finite and positive");
                 }
             }
             (AnalysisMethod::Single, Self::Linear { .. }) => {
                 anyhow::bail!("method 'single' requires a fixed scalar rho");
             }
             (AnalysisMethod::Linear, Self::Single { .. }) => {
-                anyhow::bail!("method 'linear' requires fixed linear_d1 and linear_d2");
+                anyhow::bail!(
+                    "method 'linear' requires fixed linear_d1, linear_d2, \
+                     linear_depth_center, and linear_depth_scale"
+                );
             }
         }
         Ok(self)
@@ -117,9 +143,14 @@ impl DispersionParameters {
     fn rho_at_depth(self, n: u32) -> f64 {
         match self {
             Self::Single { rho } => clamp_rho(rho),
-            Self::Linear { d1, d2 } => {
-                let exp_in = (d1 + n as f64 * d2).clamp(-10.0, 10.0);
-                clamp_rho(expit(exp_in))
+            Self::Linear {
+                d1,
+                d2,
+                depth_center,
+                depth_scale,
+            } => {
+                let standardized_depth = (n as f64 - depth_center) / depth_scale;
+                clamp_rho(expit(d1 + standardized_depth * d2))
             }
         }
     }
@@ -134,7 +165,18 @@ impl DispersionParameters {
     pub fn linear_params(self) -> Option<(f64, f64)> {
         match self {
             Self::Single { .. } => None,
-            Self::Linear { d1, d2 } => Some((d1, d2)),
+            Self::Linear { d1, d2, .. } => Some((d1, d2)),
+        }
+    }
+
+    pub fn linear_depth_standardization(self) -> Option<(f64, f64)> {
+        match self {
+            Self::Single { .. } => None,
+            Self::Linear {
+                depth_center,
+                depth_scale,
+                ..
+            } => Some((depth_center, depth_scale)),
         }
     }
 }
@@ -322,19 +364,66 @@ fn optimize_dispersion(ref_counts: &[u32], n_array: &[u32]) -> Result<f64> {
     scipy_bounded_minimize(objective, 0.0, 1.0, 1e-5, 500)
 }
 
-/// Optimize linear dispersion parameters using Nelder-Mead
+fn depth_standardization(raw_depths: &[u32]) -> Result<(f64, f64)> {
+    if raw_depths.is_empty() {
+        anyhow::bail!("cannot standardize linear depth without observations");
+    }
+
+    // Welford's algorithm avoids cancellation when depths are large and tightly clustered.
+    let mut center = 0.0;
+    let mut squared_deviations = 0.0;
+    for (index, &depth) in raw_depths.iter().enumerate() {
+        let depth = depth as f64;
+        let count = (index + 1) as f64;
+        let delta = depth - center;
+        center += delta / count;
+        squared_deviations += delta * (depth - center);
+    }
+
+    if !center.is_finite() {
+        anyhow::bail!("linear depth center is non-finite");
+    }
+    let variance = squared_deviations / raw_depths.len() as f64;
+    let scale = variance.sqrt();
+    if !scale.is_finite() {
+        anyhow::bail!("linear depth scale is non-finite");
+    }
+    if scale <= 0.0 {
+        anyhow::bail!("linear dispersion requires non-zero raw depth variance");
+    }
+    Ok((center, scale))
+}
+
+/// Optimize standardized linear dispersion parameters using Nelder-Mead.
 ///
-/// Python equivalent: `minimize(opt_linear, x0=(0, 0), method="Nelder-Mead")`
-/// Fits ρ = expit(d1 + N × d2) to the data.
-fn optimize_dispersion_linear(ref_counts: &[u32], n_array: &[u32]) -> Result<(f64, f64)> {
+/// Fits rho = expit(d1 + d2 * ((N - center) / scale)) using raw read depth for
+/// the predictor and pseudocounted observations for the beta-binomial likelihood.
+fn optimize_dispersion_linear(
+    ref_counts: &[u32],
+    n_array: &[u32],
+    raw_depths: &[u32],
+) -> Result<(f64, f64, f64, f64)> {
+    if ref_counts.len() != n_array.len() || ref_counts.len() != raw_depths.len() {
+        anyhow::bail!("linear dispersion inputs have inconsistent lengths");
+    }
+    let (depth_center, depth_scale) = depth_standardization(raw_depths)?;
+
     let objective = |params: [f64; 2]| -> f64 {
         let (d1, d2) = (params[0], params[1]);
+        if !d1.is_finite() || !d2.is_finite() {
+            return f64::INFINITY;
+        }
         let mut neg_ll = 0.0;
 
-        for (&ref_count, &n) in ref_counts.iter().zip(n_array.iter()) {
-            // Clamp to prevent overflow in expit
-            let exp_in = (d1 + n as f64 * d2).clamp(-10.0, 10.0);
-            let rho = clamp_rho(expit(exp_in));
+        for ((&ref_count, &n), &raw_depth) in
+            ref_counts.iter().zip(n_array.iter()).zip(raw_depths.iter())
+        {
+            let standardized_depth = (raw_depth as f64 - depth_center) / depth_scale;
+            let predictor = d1 + standardized_depth * d2;
+            if predictor.is_nan() {
+                return f64::INFINITY;
+            }
+            let rho = clamp_rho(expit(predictor));
             let alpha = 0.5 * (1.0 - rho) / rho;
 
             // Beta-binomial log-pmf with α = β (null: p=0.5)
@@ -349,21 +438,20 @@ fn optimize_dispersion_linear(ref_counts: &[u32], n_array: &[u32]) -> Result<(f6
         neg_ll
     };
 
-    // Multi-start Nelder-Mead. A single start at (0,0) can stall on the flat plateau
-    // created by the exp_in clamp (when |d1 + N*d2| > 10 for all N, rho is constant, so
-    // the surface has no descent direction and the simplex collapses at an unconverged,
-    // worse point). Run NM from a neutral grid of starts spanning the plausible (d1,d2)
-    // range and keep the best (lowest neg-LL). Deterministic; starts are NOT seeded near
-    // any expected answer. Fixes the case where the simple simplex returned e.g. (1.5,-2.0).
-    let starts: [[f64; 2]; 8] = [
-        [0.0, 0.0],
-        [-3.0, 0.0],
-        [-6.0, 0.0],
-        [3.0, 0.0],
-        [0.0, -0.2],
-        [-3.0, -0.2],
-        [-6.0, -0.2],
-        [3.0, -0.2],
+    // A constant-rho fit provides a data-driven intercept. Standardization makes
+    // fixed slope starts meaningful across donors with different depth ranges.
+    let scalar_rho = clamp_rho(optimize_dispersion(ref_counts, n_array)?);
+    let scalar_intercept = (scalar_rho / (1.0 - scalar_rho)).ln();
+    let starts: [[f64; 2]; 9] = [
+        [scalar_intercept, 0.0],
+        [scalar_intercept, -0.25],
+        [scalar_intercept, 0.25],
+        [scalar_intercept, -1.0],
+        [scalar_intercept, 1.0],
+        [scalar_intercept - 2.0, 0.0],
+        [scalar_intercept + 2.0, 0.0],
+        [0.0, -0.5],
+        [0.0, 0.5],
     ];
     let mut best: Option<(f64, (f64, f64))> = None;
     for s in starts {
@@ -374,8 +462,10 @@ fn optimize_dispersion_linear(ref_counts: &[u32], n_array: &[u32]) -> Result<(f6
             }
         }
     }
-    best.map(|(_, p)| p)
-        .ok_or_else(|| anyhow::anyhow!("linear dispersion optimization failed from all starts"))
+    let (d1, d2) = best
+        .map(|(_, parameters)| parameters)
+        .ok_or_else(|| anyhow::anyhow!("linear dispersion optimization failed from all starts"))?;
+    Ok((d1, d2, depth_center, depth_scale))
 }
 
 /// Optimize probability parameter for alternative model
@@ -887,7 +977,7 @@ fn single_model_with_dispersion(
     }
 
     eprintln!("Optimizing dispersion parameter...");
-    let parameters = fit_dispersion_parameters(&variants, AnalysisMethod::Single)?;
+    let parameters = fit_dispersion_parameters(&variants, AnalysisMethod::Single, 0)?;
     let DispersionParameters::Single { rho: disp } = parameters else {
         unreachable!("single fit returned linear parameters")
     };
@@ -903,7 +993,7 @@ pub fn single_model(variants: Vec<VariantCounts>, phased: bool) -> Result<Vec<Im
 /// Linear dispersion model analysis
 ///
 /// Python equivalent: `linear_model()` in as_analysis.py
-/// Uses ρ = expit(d1 + N × d2) where d1, d2 are globally optimized parameters.
+/// Uses standardized raw depth for the globally optimized linear predictor.
 pub fn linear_model_with_dispersion(
     variants: Vec<VariantCounts>,
     phased: bool,
@@ -913,8 +1003,8 @@ pub fn linear_model_with_dispersion(
     }
 
     eprintln!("Optimizing linear dispersion parameters...");
-    let parameters = fit_dispersion_parameters(&variants, AnalysisMethod::Linear)?;
-    let DispersionParameters::Linear { d1, d2 } = parameters else {
+    let parameters = fit_dispersion_parameters(&variants, AnalysisMethod::Linear, 0)?;
+    let DispersionParameters::Linear { d1, d2, .. } = parameters else {
         unreachable!("linear fit returned scalar parameters")
     };
     eprintln!("  d1 = {:.6}, d2 = {:.6}", d1, d2);
@@ -929,6 +1019,7 @@ pub fn linear_model(variants: Vec<VariantCounts>, phased: bool) -> Result<Vec<Im
 fn fit_dispersion_parameters(
     variants: &[VariantCounts],
     method: AnalysisMethod,
+    pseudocount: u32,
 ) -> Result<DispersionParameters> {
     if variants.is_empty() {
         anyhow::bail!("cannot fit dispersion without observations");
@@ -944,10 +1035,32 @@ fn fit_dispersion_parameters(
             rho: optimize_dispersion(&ref_counts, &n_array)?,
         }),
         AnalysisMethod::Linear => {
-            let (d1, d2) = optimize_dispersion_linear(&ref_counts, &n_array)?;
-            Ok(DispersionParameters::Linear { d1, d2 })
+            let raw_depths: Vec<u32> = variants
+                .iter()
+                .map(|variant| raw_depth(variant, pseudocount))
+                .collect::<Result<_>>()?;
+            let (d1, d2, depth_center, depth_scale) =
+                optimize_dispersion_linear(&ref_counts, &n_array, &raw_depths)?;
+            Ok(DispersionParameters::Linear {
+                d1,
+                d2,
+                depth_center,
+                depth_scale,
+            })
         }
     }
+}
+
+fn raw_depth(variant: &VariantCounts, pseudocount: u32) -> Result<u32> {
+    let raw_ref = variant.ref_count.checked_sub(pseudocount).ok_or_else(|| {
+        anyhow::anyhow!("reference count is smaller than the configured pseudocount")
+    })?;
+    let raw_alt = variant.alt_count.checked_sub(pseudocount).ok_or_else(|| {
+        anyhow::anyhow!("alternate count is smaller than the configured pseudocount")
+    })?;
+    raw_ref
+        .checked_add(raw_alt)
+        .ok_or_else(|| anyhow::anyhow!("raw read depth exceeds the supported range"))
 }
 
 fn canonicalize_region_indices(
@@ -984,9 +1097,13 @@ fn test_fixed_dispersion(
         .iter()
         .map(|variant| variant.ref_count + variant.alt_count)
         .collect();
-    let rho_array: Vec<f64> = n_array
+    let raw_depths: Vec<u32> = variants
         .iter()
-        .map(|&n| parameters.rho_at_depth(n))
+        .map(|variant| raw_depth(variant, pseudocount))
+        .collect::<Result<_>>()?;
+    let rho_array: Vec<f64> = raw_depths
+        .iter()
+        .map(|&depth| parameters.rho_at_depth(depth))
         .collect();
 
     let mut region_map: HashMap<String, Vec<usize>> = HashMap::new();
@@ -1061,10 +1178,7 @@ fn test_fixed_dispersion(
                 let raw_ref = variant.ref_count.checked_sub(pseudocount).ok_or_else(|| {
                     anyhow::anyhow!("reference count is smaller than the pseudocount")
                 })?;
-                let raw_alt = variant.alt_count.checked_sub(pseudocount).ok_or_else(|| {
-                    anyhow::anyhow!("alternate count is smaller than the pseudocount")
-                })?;
-                let raw_n = raw_ref + raw_alt;
+                let raw_n = raw_depth(variant, pseudocount)?;
                 exact_beta_binomial_pvalue(raw_ref, raw_n, parameters.rho_at_depth(raw_n))?
             } else {
                 let chi2 =
@@ -1184,6 +1298,12 @@ fn analyze_prepared(
         results,
         rho: parameters.rho(),
         linear_params: parameters.linear_params(),
+        linear_depth_center: parameters
+            .linear_depth_standardization()
+            .map(|standardization| standardization.0),
+        linear_depth_scale: parameters
+            .linear_depth_standardization()
+            .map(|standardization| standardization.1),
         n_observations,
         effective_phased: prepared.effective_phased,
     })
@@ -1203,11 +1323,20 @@ pub fn fit_imbalance_dispersion(
         AnalysisMethod::Single => eprintln!("Optimizing dispersion parameter..."),
         AnalysisMethod::Linear => eprintln!("Optimizing linear dispersion parameters..."),
     }
-    let parameters = fit_dispersion_parameters(&prepared.variants, config.method)?;
+    let parameters =
+        fit_dispersion_parameters(&prepared.variants, config.method, config.pseudocount)?;
     match parameters {
         DispersionParameters::Single { rho } => eprintln!("  Dispersion: {:.6}", rho),
-        DispersionParameters::Linear { d1, d2 } => {
-            eprintln!("  d1 = {:.6}, d2 = {:.6}", d1, d2)
+        DispersionParameters::Linear {
+            d1,
+            d2,
+            depth_center,
+            depth_scale,
+        } => {
+            eprintln!(
+                "  d1 = {:.6}, d2 = {:.6}, depth center = {:.6}, depth scale = {:.6}",
+                d1, d2, depth_center, depth_scale
+            )
         }
     }
     Ok(DispersionFit {
@@ -1239,6 +1368,8 @@ pub fn analyze_imbalance_detailed(
             results: vec![],
             rho: None,
             linear_params: None,
+            linear_depth_center: None,
+            linear_depth_scale: None,
             n_observations,
             effective_phased: prepared.effective_phased,
         });
@@ -1248,11 +1379,20 @@ pub fn analyze_imbalance_detailed(
         AnalysisMethod::Single => eprintln!("Optimizing dispersion parameter..."),
         AnalysisMethod::Linear => eprintln!("Optimizing linear dispersion parameters..."),
     }
-    let parameters = fit_dispersion_parameters(&prepared.variants, config.method)?;
+    let parameters =
+        fit_dispersion_parameters(&prepared.variants, config.method, config.pseudocount)?;
     match parameters {
         DispersionParameters::Single { rho } => eprintln!("  Dispersion: {:.6}", rho),
-        DispersionParameters::Linear { d1, d2 } => {
-            eprintln!("  d1 = {:.6}, d2 = {:.6}", d1, d2)
+        DispersionParameters::Linear {
+            d1,
+            d2,
+            depth_center,
+            depth_scale,
+        } => {
+            eprintln!(
+                "  d1 = {:.6}, d2 = {:.6}, depth center = {:.6}, depth scale = {:.6}",
+                d1, d2, depth_center, depth_scale
+            )
         }
     }
     analyze_prepared(prepared, config, parameters, false)
@@ -1320,6 +1460,42 @@ mod tests {
         assert!((clamp_rho(0.5) - 0.5).abs() < 1e-15);
         assert!((clamp_rho(-1.0) - RHO_EPSILON).abs() < 1e-15);
         assert!((clamp_rho(2.0) - (1.0 - RHO_EPSILON)).abs() < 1e-15);
+    }
+
+    #[test]
+    fn test_standardized_linear_predictor_is_algebraically_equivalent() {
+        let raw_intercept = -4.0;
+        let raw_slope = 0.02;
+        let depth_center = 20.0;
+        let depth_scale = 5.0;
+        let parameters = DispersionParameters::Linear {
+            d1: raw_intercept + raw_slope * depth_center,
+            d2: raw_slope * depth_scale,
+            depth_center,
+            depth_scale,
+        };
+
+        for depth in [0, 10, 20, 40, 100] {
+            let expected = clamp_rho(expit(raw_intercept + raw_slope * depth as f64));
+            assert!((parameters.rho_at_depth(depth) - expected).abs() < 1e-15);
+        }
+    }
+
+    #[test]
+    fn test_linear_predictor_is_not_clipped() {
+        let parameters = DispersionParameters::Linear {
+            d1: 0.0,
+            d2: 100.0,
+            depth_center: 0.0,
+            depth_scale: 1.0,
+        };
+        assert!(parameters.rho_at_depth(1) > 0.999999);
+    }
+
+    #[test]
+    fn test_depth_standardization_rejects_zero_variance() {
+        let error = depth_standardization(&[20, 20, 20]).unwrap_err();
+        assert!(error.to_string().contains("non-zero raw depth variance"));
     }
 
     #[test]
@@ -1524,6 +1700,8 @@ mod tests {
         let nuisance = DispersionParameters::Linear {
             d1: -3.0,
             d2: 0.025,
+            depth_center: 20.0,
+            depth_scale: 5.0,
         };
 
         let forward =
@@ -1581,6 +1759,8 @@ mod tests {
         let nuisance = DispersionParameters::Linear {
             d1: -4.25,
             d2: 0.031,
+            depth_center: 10.0,
+            depth_scale: 2.0,
         };
         let output = analyze_imbalance_with_fixed_dispersion(
             vec![vc_peak(100, 7, 5, None)],
@@ -1590,7 +1770,66 @@ mod tests {
         )
         .unwrap();
         assert_eq!(output.linear_params, Some((-4.25, 0.031)));
+        assert_eq!(output.linear_depth_center, Some(10.0));
+        assert_eq!(output.linear_depth_scale, Some(2.0));
         assert_eq!(output.rho, None);
         assert_eq!(output.n_observations, 1);
+    }
+
+    #[test]
+    fn test_fixed_linear_nuisance_rejects_invalid_scale() {
+        let config = AnalysisConfig {
+            min_count: 0,
+            pseudocount: 0,
+            method: AnalysisMethod::Linear,
+            phased: false,
+        };
+        for depth_scale in [0.0, -1.0, f64::NAN, f64::INFINITY] {
+            let error = analyze_imbalance_with_fixed_dispersion(
+                vec![vc_peak(100, 7, 5, None)],
+                &config,
+                DispersionParameters::Linear {
+                    d1: -4.0,
+                    d2: 0.1,
+                    depth_center: 12.0,
+                    depth_scale,
+                },
+                false,
+            )
+            .unwrap_err();
+            assert!(error.to_string().contains("finite and positive"));
+        }
+    }
+
+    #[test]
+    fn test_linear_fit_reports_raw_depth_standardization() {
+        let variants = vec![
+            vc_peak(100, 8, 2, None),
+            vc_peak(200, 10, 10, None),
+            vc_peak(300, 18, 12, None),
+        ];
+        let config = AnalysisConfig {
+            min_count: 0,
+            pseudocount: 3,
+            method: AnalysisMethod::Linear,
+            phased: false,
+        };
+        let fit = fit_imbalance_dispersion(variants, &config).unwrap();
+        let (center, scale) = fit.parameters.linear_depth_standardization().unwrap();
+        assert!((center - 20.0).abs() < 1e-12);
+        assert!((scale - (200.0_f64 / 3.0).sqrt()).abs() < 1e-12);
+    }
+
+    #[test]
+    fn test_linear_fit_rejects_zero_raw_depth_variance() {
+        let variants = vec![vc_peak(100, 8, 2, None), vc_peak(200, 6, 4, None)];
+        let config = AnalysisConfig {
+            min_count: 0,
+            pseudocount: 2,
+            method: AnalysisMethod::Linear,
+            phased: false,
+        };
+        let error = fit_imbalance_dispersion(variants, &config).unwrap_err();
+        assert!(error.to_string().contains("non-zero raw depth variance"));
     }
 }

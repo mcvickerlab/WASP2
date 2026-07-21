@@ -282,12 +282,18 @@ fn fixed_dispersion_parameters(
     rho: Option<f64>,
     linear_d1: Option<f64>,
     linear_d2: Option<f64>,
+    linear_depth_center: Option<f64>,
+    linear_depth_scale: Option<f64>,
 ) -> PyResult<Option<analysis::DispersionParameters>> {
     match method {
         analysis::AnalysisMethod::Single => {
-            if linear_d1.is_some() || linear_d2.is_some() {
+            if linear_d1.is_some()
+                || linear_d2.is_some()
+                || linear_depth_center.is_some()
+                || linear_depth_scale.is_some()
+            {
                 return Err(PyRuntimeError::new_err(
-                    "method='single' accepts rho, not linear_d1/linear_d2",
+                    "method='single' accepts rho, not linear dispersion parameters",
                 ));
             }
             Ok(rho.map(|rho| analysis::DispersionParameters::Single { rho }))
@@ -298,11 +304,24 @@ fn fixed_dispersion_parameters(
                     "method='linear' accepts linear_d1/linear_d2, not rho",
                 ));
             }
-            match (linear_d1, linear_d2) {
-                (None, None) => Ok(None),
-                (Some(d1), Some(d2)) => Ok(Some(analysis::DispersionParameters::Linear { d1, d2 })),
+            match (
+                linear_d1,
+                linear_d2,
+                linear_depth_center,
+                linear_depth_scale,
+            ) {
+                (None, None, None, None) => Ok(None),
+                (Some(d1), Some(d2), Some(depth_center), Some(depth_scale)) => {
+                    Ok(Some(analysis::DispersionParameters::Linear {
+                        d1,
+                        d2,
+                        depth_center,
+                        depth_scale,
+                    }))
+                }
                 _ => Err(PyRuntimeError::new_err(
-                    "method='linear' requires both linear_d1 and linear_d2",
+                    "fixed method='linear' requires linear_d1, linear_d2, \
+                     linear_depth_center, and linear_depth_scale",
                 )),
             }
         }
@@ -530,16 +549,28 @@ fn fit_imbalance_dispersion(
         "linear_d2",
         fit.parameters.linear_params().map(|params| params.1),
     )?;
+    result.set_item(
+        "linear_depth_center",
+        fit.parameters
+            .linear_depth_standardization()
+            .map(|standardization| standardization.0),
+    )?;
+    result.set_item(
+        "linear_depth_scale",
+        fit.parameters
+            .linear_depth_standardization()
+            .map(|standardization| standardization.1),
+    )?;
     result.set_item("n_observations", fit.n_observations)?;
     Ok(result.unbind().into_any())
 }
 
 /// Analyze one independent count table and return dispersion metadata.
 ///
-/// Supplying `rho` (single) or `linear_d1`/`linear_d2` (linear) runs a
-/// fixed-nuisance test. Omitting them retains the legacy fit-and-test behavior.
+/// Supplying `rho` (single) or all four linear parameters runs a fixed-nuisance
+/// test. Omitting them retains the legacy fit-and-test behavior.
 #[pyfunction]
-#[pyo3(signature = (tsv_path, min_count=10, pseudocount=1, phased=false, region_col=None, method="single", rho=None, linear_d1=None, linear_d2=None, exact_snv=None))]
+#[pyo3(signature = (tsv_path, min_count=10, pseudocount=1, phased=false, region_col=None, method="single", rho=None, linear_d1=None, linear_d2=None, linear_depth_center=None, linear_depth_scale=None, exact_snv=None))]
 #[allow(clippy::too_many_arguments)]
 fn analyze_imbalance_run(
     py: Python,
@@ -552,12 +583,21 @@ fn analyze_imbalance_run(
     rho: Option<f64>,
     linear_d1: Option<f64>,
     linear_d2: Option<f64>,
+    linear_depth_center: Option<f64>,
+    linear_depth_scale: Option<f64>,
     exact_snv: Option<bool>,
 ) -> PyResult<Py<PyAny>> {
     use pyo3::types::PyDict;
 
     let analysis_method = parse_analysis_method(method)?;
-    let fixed_parameters = fixed_dispersion_parameters(analysis_method, rho, linear_d1, linear_d2)?;
+    let fixed_parameters = fixed_dispersion_parameters(
+        analysis_method,
+        rho,
+        linear_d1,
+        linear_d2,
+        linear_depth_center,
+        linear_depth_scale,
+    )?;
     let fixed_nuisance = fixed_parameters.is_some();
     let exact_snv = exact_snv.unwrap_or(fixed_nuisance && region_col.is_none());
     if exact_snv && !fixed_nuisance {
@@ -591,6 +631,8 @@ fn analyze_imbalance_run(
     result.set_item("rho", output.rho)?;
     result.set_item("linear_d1", output.linear_params.map(|params| params.0))?;
     result.set_item("linear_d2", output.linear_params.map(|params| params.1))?;
+    result.set_item("linear_depth_center", output.linear_depth_center)?;
+    result.set_item("linear_depth_scale", output.linear_depth_scale)?;
     result.set_item("n_observations", output.n_observations)?;
     result.set_item("requested_phased", phased)?;
     result.set_item("effective_phased", output.effective_phased)?;
