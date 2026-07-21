@@ -968,6 +968,7 @@ pub fn fdr_correction(pvals: &[f64]) -> Vec<f64> {
 /// Single dispersion model analysis
 ///
 /// Python equivalent: `single_model()` in as_analysis.py
+#[allow(dead_code)]
 fn single_model_with_dispersion(
     variants: Vec<VariantCounts>,
     phased: bool,
@@ -986,6 +987,7 @@ fn single_model_with_dispersion(
     Ok((results, disp))
 }
 
+#[allow(dead_code)]
 pub fn single_model(variants: Vec<VariantCounts>, phased: bool) -> Result<Vec<ImbalanceResult>> {
     Ok(single_model_with_dispersion(variants, phased)?.0)
 }
@@ -994,6 +996,7 @@ pub fn single_model(variants: Vec<VariantCounts>, phased: bool) -> Result<Vec<Im
 ///
 /// Python equivalent: `linear_model()` in as_analysis.py
 /// Uses standardized raw depth for the globally optimized linear predictor.
+#[allow(dead_code)]
 pub fn linear_model_with_dispersion(
     variants: Vec<VariantCounts>,
     phased: bool,
@@ -1012,6 +1015,7 @@ pub fn linear_model_with_dispersion(
     Ok((results, d1, d2))
 }
 
+#[allow(dead_code)]
 pub fn linear_model(variants: Vec<VariantCounts>, phased: bool) -> Result<Vec<ImbalanceResult>> {
     Ok(linear_model_with_dispersion(variants, phased)?.0)
 }
@@ -1398,6 +1402,7 @@ pub fn analyze_imbalance_detailed(
     analyze_prepared(prepared, config, parameters, false)
 }
 
+#[allow(dead_code)]
 pub fn analyze_imbalance(
     variants: Vec<VariantCounts>,
     config: &AnalysisConfig,
