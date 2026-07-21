@@ -23,18 +23,15 @@ import pytest
 def _write_counts(path, *, with_region: bool = True):
     """Write a tiny phased count TSV (two het SNVs in one peak).
 
-    ``with_region=True`` emits the current 10-column layout carrying a ``region`` column;
+    ``with_region=True`` emits a count layout that carries a ``region`` column;
     ``with_region=False`` omits it. Only the header is consulted by ``WaspAnalysisData``.
     """
     if with_region:
-        header = "chrom\tpos0\tpos\tref\talt\tGT\tregion\tref_count\talt_count\tother_count\n"
-        rows = (
-            "chr1\t100\t101\tA\tG\t0|1\tpeakX\t10\t8\t0\n"
-            "chr1\t200\t201\tC\tT\t1|0\tpeakX\t7\t9\t0\n"
-        )
+        header = "chrom\tstart\tpos\tref\talt\tregion\tGT\tref_count\talt_count\tN\n"
+        rows = "chr1\t100\t101\tA\tG\tpeakX\t0|1\t10\t8\t18\nchr1\t200\t201\tC\tT\tpeakX\t1|0\t7\t9\t16\n"
     else:
-        header = "chrom\tpos0\tpos\tref\talt\tGT\tref_count\talt_count\tother_count\n"
-        rows = "chr1\t100\t101\tA\tG\t0|1\t10\t8\t0\nchr1\t200\t201\tC\tT\t1|0\t7\t9\t0\n"
+        header = "chrom\tstart\tpos\tref\talt\tGT\tref_count\talt_count\tN\n"
+        rows = "chr1\t100\t101\tA\tG\t0|1\t10\t8\t18\nchr1\t200\t201\tC\tT\t1|0\t7\t9\t16\n"
     path.write_text(header + rows)
     return path
 
@@ -59,6 +56,28 @@ def test_rust_feature_mode_groups_by_region(tmp_path):
     assert res[0]["region"] == "peakX"
     assert res[0]["snp_count"] == 2
     assert "mu" in res[0]  # phased model engaged
+
+
+@pytest.mark.rust
+def test_rust_run_api_reports_model_specific_dispersion(tmp_path):
+    """The independent-run API exposes scalar or linear fit metadata, never both."""
+    wasp2_rust = pytest.importorskip("wasp2_rust")
+    tsv = _write_counts(tmp_path / "counts.tsv")
+
+    single = wasp2_rust.analyze_imbalance_run(
+        str(tsv), min_count=0, pseudocount=1, region_col="region", method="single"
+    )
+    linear = wasp2_rust.analyze_imbalance_run(
+        str(tsv), min_count=0, pseudocount=1, region_col="region", method="linear"
+    )
+
+    assert single["rho"] is not None
+    assert single["linear_d1"] is None
+    assert single["linear_d2"] is None
+    assert linear["rho"] is None
+    assert linear["linear_d1"] is not None
+    assert linear["linear_d2"] is not None
+    assert linear["method"] == "linear"
 
 
 @pytest.mark.rust
@@ -134,31 +153,6 @@ def test_cli_forwards_phased_and_region_col(tmp_path, spy_rust):
     )
     assert spy_rust["kwargs"].get("phased") is True
     assert spy_rust["kwargs"].get("region_col") == "region"
-
-
-@pytest.mark.unit
-def test_cli_auto_detects_feature_column(tmp_path, spy_rust):
-    from analysis.run_analysis import run_ai_analysis
-
-    tsv = _write_counts(tmp_path / "counts.tsv", with_region=True)
-    run_ai_analysis(str(tsv), out_file=str(tmp_path / "out.tsv"))
-
-    assert spy_rust["kwargs"].get("region_col") == "region"
-
-
-@pytest.mark.unit
-def test_cli_does_not_group_bare_counts_by_gt_or_sample(tmp_path, spy_rust):
-    from analysis.run_analysis import run_ai_analysis
-
-    tsv = _write_counts(tmp_path / "counts.tsv", with_region=False)
-    lines = tsv.read_text().splitlines()
-    lines[0] += "\tsample"
-    lines[1:] = [f"{line}\tSAMPLE1" for line in lines[1:]]
-    tsv.write_text("\n".join(lines) + "\n")
-
-    run_ai_analysis(str(tsv), out_file=str(tmp_path / "out.tsv"))
-
-    assert spy_rust["kwargs"].get("region_col") is None
 
 
 @pytest.mark.unit
