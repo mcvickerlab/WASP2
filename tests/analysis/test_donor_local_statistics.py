@@ -62,8 +62,15 @@ def _rho_at_depth(dispersion: pd.Series, total: int) -> float:
     if dispersion["model"] == "single":
         rho = float(dispersion["rho"])
     else:
-        linear = float(dispersion["linear_d1"]) + total * float(dispersion["linear_d2"])
-        rho = float(expit(np.clip(linear, -10.0, 10.0)))
+        center = float(dispersion["linear_depth_center"])
+        scale = float(dispersion["linear_depth_scale"])
+        assert np.isfinite(center)
+        assert np.isfinite(scale) and scale > 0
+        standardized_depth = (total - center) / scale
+        linear = float(dispersion["linear_d1"]) + standardized_depth * float(
+            dispersion["linear_d2"]
+        )
+        rho = float(expit(linear))
     return float(np.clip(rho, RHO_EPSILON, 1.0 - RHO_EPSILON))
 
 
@@ -229,7 +236,16 @@ def test_model_scope_unit_matrix_matches_independent_scipy_oracle(
     assert observed["alt_count"].sum() == counts["alt_count"].sum()
     if dispersion_scope == "global":
         assert dispersion["fit_id"].nunique() == 1
-        parameters = ["rho"] if model == "single" else ["linear_d1", "linear_d2"]
+        parameters = (
+            ["rho"]
+            if model == "single"
+            else [
+                "linear_d1",
+                "linear_d2",
+                "linear_depth_center",
+                "linear_depth_scale",
+            ]
+        )
         assert all(dispersion[column].nunique() == 1 for column in parameters)
     else:
         assert dispersion["fit_id"].nunique() == 2
