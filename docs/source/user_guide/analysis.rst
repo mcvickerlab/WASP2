@@ -61,12 +61,24 @@ fits unique eligible donor-SNV rows once and reuses the returned fit ID and
 parameters unchanged in each donor run. In both modes, effect inference and
 Benjamini-Hochberg correction are independent within each donor.
 
+The ``linear`` model carries four inseparable nuisance values:
+``linear_d1``, ``linear_d2``, ``linear_depth_center``, and
+``linear_depth_scale``. The fit ID includes all four, and fixed-nuisance donor
+runs must echo all four exactly. The dispersion TSV and provenance JSON retain
+these values. They retain optimizer or fit status fields when Rust supplies
+them; otherwise ``fit_status=parameters_returned`` records only that a usable
+parameter payload was returned and does not claim optimizer convergence.
+
 The donor-local route defaults to pseudocount 0 and creates result,
 ``.dispersion.tsv``, ``.qc.tsv``, and ``.provenance.json`` artifacts without
 overwriting existing files. ``--expected-manifest-sha256`` can pin the locked
 bundle manifest to an external digest. Standalone legacy tables may use
 ``sample`` instead of ``donor_id``; a locked bundle may not, and a table with
-both columns is rejected.
+both columns is rejected. If the count table has ``snv_id``, its exact text is
+retained after enforcing a one-to-one mapping with donor, chromosome, position,
+reference, and alternate allele. Only tables without the column receive a
+synthesized ``chrom:pos:ref:alt`` identifier, so canonical zero-based input IDs
+are not rewritten.
 
 Single-Cell Analysis
 --------------------
@@ -124,9 +136,10 @@ Defaults and contracts
 - Beta-binomial LRT: :math:`\rho` is held at its **null-model MLE** while
   maximizing the alternative likelihood over :math:`\mu` (profile likelihood,
   df = 1). :math:`\rho` is not jointly re-estimated under :math:`H_1`.
-- Dispersion optimizer bounds :math:`\rho \in (10^{-6},\, 1-10^{-6})`; the
-  linear-dispersion model clips the logit at :math:`\pm 10` for numerical
-  stability on extreme :math:`N`.
+- Dispersion optimizer bounds :math:`\rho \in (10^{-6},\, 1-10^{-6})`. The
+  linear model uses raw-depth standardization,
+  :math:`\rho(N)=\operatorname{expit}(d_1 + d_2(N-c)/s)`, and persists the fitted
+  center :math:`c` and positive scale :math:`s` with :math:`d_1` and :math:`d_2`.
 - FDR correction uses :func:`scipy.stats.false_discovery_control` with
   ``method='bh'`` (Benjamini–Hochberg). ``scipy`` raises on NaN p-values,
   but a hand-written BH loop using ``np.minimum.accumulate`` silently

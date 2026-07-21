@@ -45,13 +45,26 @@ class ImbalanceResult(TypedDict):
     pval: float
     fdr_pval: float
 
-class DispersionFit(TypedDict):
+class _DispersionFitDiagnostics(TypedDict, total=False):
+    """Optional optimizer diagnostics supplied by the Rust backend."""
+
+    fit_status: str
+    optimizer: str
+    optimizer_status: str | int
+    optimizer_converged: bool
+    optimizer_iterations: int
+    optimizer_evaluations: int
+    optimizer_objective: float
+
+class DispersionFit(_DispersionFitDiagnostics):
     """Dispersion parameters fitted from independent observations."""
 
     method: str
     rho: float | None
     linear_d1: float | None
     linear_d2: float | None
+    linear_depth_center: float | None
+    linear_depth_scale: float | None
     n_observations: int
 
 class ImbalanceRun(TypedDict):
@@ -62,6 +75,8 @@ class ImbalanceRun(TypedDict):
     rho: float | None
     linear_d1: float | None
     linear_d2: float | None
+    linear_depth_center: float | None
+    linear_depth_scale: float | None
     n_observations: int
     requested_phased: bool
     effective_phased: bool
@@ -620,6 +635,8 @@ def analyze_imbalance_run(
     rho: float | None = None,
     linear_d1: float | None = None,
     linear_d2: float | None = None,
+    linear_depth_center: float | None = None,
+    linear_depth_scale: float | None = None,
     exact_snv: bool | None = None,
 ) -> ImbalanceRun:
     """Analyze one table with optional fixed nuisance parameters."""

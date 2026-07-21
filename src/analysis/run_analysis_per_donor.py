@@ -31,9 +31,10 @@ AnalysisUnit = Literal["snv", "feature"]
 AnalysisUnitInput = Literal["snv", "feature", "peak"]
 DispersionScope = Literal["global", "per-donor"]
 Model = Literal["single", "linear"]
+FitMetadataValue = str | int | float | bool | None
 
 UTC = timezone.utc
-SCHEMA_VERSION = "wasp2.donor-local-analysis.v1"
+SCHEMA_VERSION = "wasp2.donor-local-analysis.v2"
 COMMON_COLUMNS = {
     "donor_id",
     "chrom",
@@ -98,7 +99,11 @@ class DispersionFit:
     rho: float | None
     linear_d1: float | None
     linear_d2: float | None
+    linear_depth_center: float | None
+    linear_depth_scale: float | None
     n_observations: int
+    metadata: Mapping[str, FitMetadataValue]
+    extended_contract: bool
 
 
 def _sha256(path: Path) -> str:
@@ -319,6 +324,7 @@ def _load_counts(
     header = _read_header(count_input.counts)
     has_donor_id = "donor_id" in header
     has_sample = "sample" in header
+    has_snv_id = "snv_id" in header
     if has_donor_id and has_sample:
         raise ValueError("Count table cannot contain both donor_id and legacy sample columns")
     if count_input.bundled and not has_donor_id:
@@ -339,7 +345,7 @@ def _load_counts(
             raise ValueError(
                 "Standalone feature analysis requires --region-col; locked feature bundles use region"
             )
-        if selected_region in COMMON_COLUMNS or selected_region == "sample":
+        if selected_region in COMMON_COLUMNS or selected_region in {"sample", "snv_id"}:
             raise ValueError(
                 f"Feature region column conflicts with a reserved column: {selected_region}"
             )
@@ -368,6 +374,8 @@ def _load_counts(
         frame = frame.rename(columns={"sample": "donor_id"})
 
     text_columns = ["donor_id", "chrom", "ref", "alt"]
+    if has_snv_id:
+        text_columns.append("snv_id")
     if selected_region is not None:
         text_columns.append(selected_region)
     for column in text_columns:
@@ -390,6 +398,32 @@ def _load_counts(
     if allele_conflict is not None:
         donor_id, chrom, pos = allele_conflict
         raise ValueError(f"Conflicting alleles for donor/SNV {donor_id} {chrom}:{pos}")
+
+    if has_snv_id:
+        snv_id_conflict = _first_conflicting_group(
+            frame,
+            ["donor_id", "snv_id"],
+            ["chrom", "pos", "ref", "alt"],
+        )
+        if snv_id_conflict is not None:
+            donor_id, snv_id = snv_id_conflict
+            raise ValueError(f"snv_id {snv_id!r} maps to conflicting variants for donor {donor_id}")
+        identity_conflict = _first_conflicting_group(frame, SNV_COLUMNS, ["snv_id"])
+        if identity_conflict is not None:
+            donor_id, chrom, pos, ref, alt = identity_conflict
+            raise ValueError(
+                f"Multiple snv_id values map to donor/SNV {donor_id} {chrom}:{pos}:{ref}>{alt}"
+            )
+    else:
+        frame["snv_id"] = (
+            frame["chrom"]
+            + ":"
+            + frame["pos"].astype(str)
+            + ":"
+            + frame["ref"]
+            + ":"
+            + frame["alt"]
+        )
 
     gt_qc = _normalize_genotypes(frame) if phased else None
     repeated_values = ["ref_count", "alt_count"]
@@ -422,6 +456,7 @@ def _load_counts(
             "unique_donor_snv_rows": int(frame.drop_duplicates(SNV_COLUMNS).shape[0]),
             "phase": gt_qc,
             "legacy_sample_normalized": has_sample,
+            "snv_id_source": "input" if has_snv_id else "synthesized",
         },
     )
 
@@ -454,7 +489,41 @@ def _finite_float(value: Any, label: str) -> float:
     return result
 
 
-def _validate_fit(raw_fit: Mapping[str, Any], *, model: Model, expected_rows: int) -> DispersionFit:
+def _fit_metadata(
+    raw_fit: Mapping[str, Any], *, add_parameters_returned_status: bool
+) -> dict[str, FitMetadataValue]:
+    metadata: dict[str, FitMetadataValue] = {}
+    for name, value in raw_fit.items():
+        if name != "fit_status" and name != "optimizer" and not name.startswith("optimizer_"):
+            continue
+        if value is None:
+            continue
+        if isinstance(value, str):
+            if not value or any(character in value for character in "\t\r\n"):
+                raise RuntimeError(f"Rust returned an invalid {name}")
+            metadata[name] = value
+        elif isinstance(value, (bool, int)):
+            metadata[name] = value
+        elif isinstance(value, float):
+            if not math.isfinite(value):
+                raise RuntimeError(f"Rust returned a non-finite {name}")
+            metadata[name] = value
+        else:
+            raise RuntimeError(f"Rust returned a non-scalar {name}")
+    if add_parameters_returned_status and "fit_status" not in metadata:
+        # The API currently proves that parameters were returned, but does not
+        # expose optimizer convergence diagnostics.
+        metadata["fit_status"] = "parameters_returned"
+    return metadata
+
+
+def _validate_fit(
+    raw_fit: Mapping[str, Any],
+    *,
+    model: Model,
+    expected_rows: int,
+    allow_legacy_linear_mock: bool = False,
+) -> DispersionFit:
     fit_id = raw_fit.get("fit_id")
     if not isinstance(fit_id, str) or not fit_id:
         raise RuntimeError("Rust dispersion fit did not return a non-empty fit_id")
@@ -476,14 +545,47 @@ def _validate_fit(raw_fit: Mapping[str, Any], *, model: Model, expected_rows: in
         rho = _finite_float(raw_fit.get("rho"), "rho")
         linear_d1 = None
         linear_d2 = None
-        if raw_fit.get("linear_d1") is not None or raw_fit.get("linear_d2") is not None:
+        linear_depth_center = None
+        linear_depth_scale = None
+        linear_values = (
+            raw_fit.get("linear_d1"),
+            raw_fit.get("linear_d2"),
+            raw_fit.get("linear_depth_center"),
+            raw_fit.get("linear_depth_scale"),
+        )
+        if any(value is not None for value in linear_values):
             raise RuntimeError("Rust single-dispersion fit returned linear parameters")
+        extended_contract = True
     else:
         rho = None
         linear_d1 = _finite_float(raw_fit.get("linear_d1"), "linear_d1")
         linear_d2 = _finite_float(raw_fit.get("linear_d2"), "linear_d2")
         if raw_fit.get("rho") is not None:
             raise RuntimeError("Rust linear-dispersion fit returned scalar rho")
+        raw_center = raw_fit.get("linear_depth_center")
+        raw_scale = raw_fit.get("linear_depth_scale")
+        if (raw_center is None) != (raw_scale is None):
+            raise RuntimeError(
+                "Rust linear-dispersion fit returned incomplete depth standardization"
+            )
+        if raw_center is None:
+            if not allow_legacy_linear_mock:
+                raise RuntimeError(
+                    "Rust linear-dispersion fit omitted linear_depth_center and linear_depth_scale"
+                )
+            linear_depth_center = None
+            linear_depth_scale = None
+            extended_contract = False
+        else:
+            linear_depth_center = _finite_float(raw_center, "linear_depth_center")
+            linear_depth_scale = _finite_float(raw_scale, "linear_depth_scale")
+            if linear_depth_scale <= 0:
+                raise RuntimeError("Rust returned a non-positive linear_depth_scale")
+            extended_contract = True
+    metadata = _fit_metadata(
+        raw_fit,
+        add_parameters_returned_status=extended_contract,
+    )
     return DispersionFit(
         payload=dict(raw_fit),
         fit_id=fit_id,
@@ -491,7 +593,11 @@ def _validate_fit(raw_fit: Mapping[str, Any], *, model: Model, expected_rows: in
         rho=rho,
         linear_d1=linear_d1,
         linear_d2=linear_d2,
+        linear_depth_center=linear_depth_center,
+        linear_depth_scale=linear_depth_scale,
         n_observations=n_observations,
+        metadata=metadata,
+        extended_contract=extended_contract,
     )
 
 
@@ -514,6 +620,8 @@ def _generated_fit_id(
         "rho": float_identity(fit.get("rho")),
         "linear_d1": float_identity(fit.get("linear_d1")),
         "linear_d2": float_identity(fit.get("linear_d2")),
+        "linear_depth_center": float_identity(fit.get("linear_depth_center")),
+        "linear_depth_scale": float_identity(fit.get("linear_depth_scale")),
         "n_observations": fit.get("n_observations"),
     }
     encoded = json.dumps(identity, sort_keys=True, separators=(",", ":")).encode()
@@ -533,22 +641,24 @@ def _fit_dispersion(
         raise RuntimeError("Rust dispersion-fitting API is not available")
     fit_columns = [*SNV_COLUMNS, "ref_count", "alt_count"]
     _write_tsv(frame, path, fit_columns)
-    kwargs: dict[str, Any] = {
+    base_kwargs: dict[str, Any] = {
         "min_count": min_count,
         "pseudocount": pseudocount,
         "method": model,
     }
-    try:
+    full_kwargs = {**base_kwargs, "phased": False, "region_col": "donor_id"}
+    is_pyo3 = _is_known_pyo3_api(fitter)
+    if is_pyo3:
+        # donor_id is part of the fit identity. This is essential for a global
+        # fit because the same genomic site in two donors is two observations.
+        raw_fit = fitter(str(path), **full_kwargs)
+    else:
         parameters = inspect.signature(fitter).parameters
-    except (TypeError, ValueError):
-        parameters = {}
-    if "phased" in parameters:
-        kwargs["phased"] = False
-    if "region_col" in parameters:
-        # Rust deduplicates on region. Including donor_id preserves repeated
-        # cohort SNVs as distinct donor-SNV observations in a global fit.
-        kwargs["region_col"] = "donor_id"
-    raw_fit = fitter(str(path), **kwargs)
+        accepts_keywords = any(
+            parameter.kind is inspect.Parameter.VAR_KEYWORD for parameter in parameters.values()
+        )
+        supports_full_call = accepts_keywords or {"phased", "region_col"}.issubset(parameters)
+        raw_fit = fitter(str(path), **(full_kwargs if supports_full_call else base_kwargs))
     if not isinstance(raw_fit, Mapping):
         raise RuntimeError("Rust dispersion-fitting API returned an invalid payload")
     payload = dict(raw_fit)
@@ -562,7 +672,34 @@ def _fit_dispersion(
             pseudocount=pseudocount,
         ),
     )
-    return _validate_fit(payload, model=model, expected_rows=len(frame))
+    return _validate_fit(
+        payload,
+        model=model,
+        expected_rows=len(frame),
+        allow_legacy_linear_mock=not is_pyo3,
+    )
+
+
+def _is_known_pyo3_api(callback: Any) -> bool:
+    module = getattr(callback, "__module__", "")
+    return module == "wasp2_rust" or module.startswith("wasp2_rust.")
+
+
+def _parameter_values(source: Mapping[str, Any]) -> tuple[Any, Any, Any, Any, Any]:
+    return (
+        source.get("rho"),
+        source.get("linear_d1"),
+        source.get("linear_d2"),
+        source.get("linear_depth_center"),
+        source.get("linear_depth_scale"),
+    )
+
+
+def _parameter_identity(values: Sequence[Any]) -> tuple[str | None, ...]:
+    return tuple(
+        None if value is None else _finite_float(value, "dispersion parameter").hex()
+        for value in values
+    )
 
 
 def _call_analyzer_with_fit(
@@ -578,67 +715,71 @@ def _call_analyzer_with_fit(
     analyzer = rust_analyze_imbalance_run
     if analyzer is None:
         raise RuntimeError("Rust donor-analysis API is not available")
-    kwargs: dict[str, Any] = {
+    base_kwargs: dict[str, Any] = {
         "min_count": min_count,
         "pseudocount": pseudocount,
         "phased": phased,
         "region_col": region_col,
         "method": model,
     }
-    try:
-        parameters = inspect.signature(analyzer).parameters
-    except (TypeError, ValueError):
-        parameters = {}
-    accepts_keywords = any(
-        parameter.kind is inspect.Parameter.VAR_KEYWORD for parameter in parameters.values()
-    )
-    explicit_fixed_parameters = {"rho", "linear_d1", "linear_d2"}.issubset(parameters)
-    if "dispersion_fit" in parameters or (accepts_keywords and not explicit_fixed_parameters):
-        kwargs["dispersion_fit"] = fit.payload
-        run = analyzer(str(path), **kwargs)
-    elif explicit_fixed_parameters:
-        kwargs.update(
-            {
-                "rho": fit.rho,
-                "linear_d1": fit.linear_d1,
-                "linear_d2": fit.linear_d2,
-            }
-        )
-        if "exact_snv" in parameters:
-            kwargs["exact_snv"] = region_col is None
-        raw_run = analyzer(str(path), **kwargs)
-        if not isinstance(raw_run, Mapping):
-            raise RuntimeError("Rust donor-analysis API returned an invalid payload")
-        returned_parameters = (
-            raw_run.get("rho"),
-            raw_run.get("linear_d1"),
-            raw_run.get("linear_d2"),
-        )
-        if returned_parameters != (fit.rho, fit.linear_d1, fit.linear_d2):
-            raise RuntimeError("Rust donor-analysis API changed the fixed dispersion parameters")
-        if raw_run.get("nuisance_source") not in {None, "fixed"}:
-            raise RuntimeError(
-                "Rust donor-analysis API refitted the supplied dispersion parameters"
-            )
-        run = {**raw_run, "dispersion_fit": fit.payload}
+    explicit_kwargs = {
+        **base_kwargs,
+        "rho": fit.rho,
+        "linear_d1": fit.linear_d1,
+        "linear_d2": fit.linear_d2,
+        "linear_depth_center": fit.linear_depth_center,
+        "linear_depth_scale": fit.linear_depth_scale,
+        "exact_snv": region_col is None,
+    }
+    if _is_known_pyo3_api(analyzer):
+        raw_run = analyzer(str(path), **explicit_kwargs)
     else:
-        raise RuntimeError("Rust donor-analysis API cannot accept a reusable dispersion fit")
+        parameters = inspect.signature(analyzer).parameters
+        if "dispersion_fit" in parameters or not {
+            "rho",
+            "linear_d1",
+            "linear_d2",
+        }.intersection(parameters):
+            run = analyzer(str(path), **base_kwargs, dispersion_fit=fit.payload)
+            if not isinstance(run, Mapping):
+                raise RuntimeError("Rust donor-analysis API returned an invalid payload")
+            return run
+        raw_run = analyzer(str(path), **explicit_kwargs)
+
+    if not isinstance(raw_run, Mapping):
+        raise RuntimeError("Rust donor-analysis API returned an invalid payload")
+    if _parameter_identity(_parameter_values(raw_run)) != _parameter_identity(
+        _parameter_values(fit.payload)
+    ):
+        raise RuntimeError("Rust donor-analysis API changed the fixed dispersion parameters")
+    if raw_run.get("nuisance_source") not in {None, "fixed"}:
+        raise RuntimeError("Rust donor-analysis API refitted the supplied dispersion parameters")
+    run = {**raw_run, "dispersion_fit": fit.payload}
     if not isinstance(run, Mapping):
         raise RuntimeError("Rust donor-analysis API returned an invalid payload")
     return run
 
 
-def _run_fit_values(run: Mapping[str, Any]) -> tuple[Any, Any, Any, Any]:
+def _run_fit_values(run: Mapping[str, Any]) -> tuple[Any, Any, Any, Any, Any, Any]:
     nested = run.get("dispersion_fit")
     source = nested if isinstance(nested, Mapping) else run
     fit_id = source.get("fit_id", source.get("dispersion_fit_id"))
-    return fit_id, source.get("rho"), source.get("linear_d1"), source.get("linear_d2")
+    return fit_id, *_parameter_values(source)
 
 
 def _require_exact_fit_echo(run: Mapping[str, Any], fit: DispersionFit, donor_id: str) -> None:
     observed = _run_fit_values(run)
-    expected = (fit.fit_id, fit.rho, fit.linear_d1, fit.linear_d2)
-    if observed != expected:
+    expected = (
+        fit.fit_id,
+        fit.rho,
+        fit.linear_d1,
+        fit.linear_d2,
+        fit.linear_depth_center,
+        fit.linear_depth_scale,
+    )
+    if observed[0] != expected[0] or _parameter_identity(observed[1:]) != _parameter_identity(
+        expected[1:]
+    ):
         raise RuntimeError(
             f"Rust donor run for {donor_id} did not reuse the requested dispersion fit exactly: "
             f"expected {expected!r}, observed {observed!r}"
@@ -700,7 +841,7 @@ def _format_donor_results(
 
     if unit == "snv":
         annotations = donor_frame.loc[
-            :, ["chrom", "pos", "ref", "alt", "ref_count", "alt_count"]
+            :, ["snv_id", "chrom", "pos", "ref", "alt", "ref_count", "alt_count"]
         ].rename(
             columns={
                 "ref_count": "expected_ref_count",
@@ -708,15 +849,6 @@ def _format_donor_results(
             }
         )
         annotations["region"] = annotations["chrom"] + "_" + annotations["pos"].astype(str)
-        annotations["snv_id"] = (
-            annotations["chrom"]
-            + ":"
-            + annotations["pos"].astype(str)
-            + ":"
-            + annotations["ref"]
-            + ":"
-            + annotations["alt"]
-        )
         results = annotations.merge(results, on="region", how="inner", validate="one_to_one")
         if len(results) != len(annotations):
             raise RuntimeError(f"Rust omitted eligible SNV results for donor {donor_id}")
@@ -933,6 +1065,7 @@ def run_per_donor_analysis(
 
         result_frames: list[pd.DataFrame] = []
         dispersion_rows: list[dict[str, Any]] = []
+        provenance_fits: dict[str, dict[str, Any]] = {}
         for donor_id in included_donors:
             donor_id = str(donor_id)
             donor_rows = eligible_rows.loc[eligible_rows["donor_id"] == donor_id].copy()
@@ -973,20 +1106,59 @@ def run_per_donor_analysis(
                 region_col=normalized_region_col,
             )
             result_frames.append(donor_results)
-            dispersion_rows.append(
+            dispersion_row = {
+                "donor_id": donor_id,
+                "dispersion_scope": dispersion_scope,
+                "fit_id": fit.fit_id,
+                "model": model,
+                "rho": fit.rho,
+                "linear_d1": fit.linear_d1,
+                "linear_d2": fit.linear_d2,
+            }
+            if fit.extended_contract:
+                dispersion_row.update(
+                    {
+                        "linear_depth_center": fit.linear_depth_center,
+                        "linear_depth_scale": fit.linear_depth_scale,
+                    }
+                )
+            dispersion_row.update(fit.metadata)
+            dispersion_row.update(
                 {
-                    "donor_id": donor_id,
-                    "dispersion_scope": dispersion_scope,
-                    "fit_id": fit.fit_id,
-                    "model": model,
-                    "rho": fit.rho,
-                    "linear_d1": fit.linear_d1,
-                    "linear_d2": fit.linear_d2,
                     "fit_observations": fit.n_observations,
                     "donor_eligible_snv_observations": len(donor_fit_rows),
                     "result_rows": len(donor_results),
                 }
             )
+            dispersion_rows.append(dispersion_row)
+
+            if fit.extended_contract or fit.metadata:
+                fit_record = {
+                    "fit_id": fit.fit_id,
+                    "model": model,
+                    "rho": fit.rho,
+                    "linear_d1": fit.linear_d1,
+                    "linear_d2": fit.linear_d2,
+                }
+                if fit.extended_contract:
+                    fit_record.update(
+                        {
+                            "linear_depth_center": fit.linear_depth_center,
+                            "linear_depth_scale": fit.linear_depth_scale,
+                        }
+                    )
+                fit_record.update(fit.metadata)
+                fit_record["fit_observations"] = fit.n_observations
+                existing_fit = provenance_fits.get(fit.fit_id)
+                if existing_fit is None:
+                    provenance_fits[fit.fit_id] = {**fit_record, "donor_ids": [donor_id]}
+                else:
+                    comparable = {
+                        key: value for key, value in existing_fit.items() if key != "donor_ids"
+                    }
+                    if comparable != fit_record:
+                        raise RuntimeError(f"Fit ID {fit.fit_id} mapped to inconsistent metadata")
+                    existing_fit["donor_ids"].append(donor_id)
 
         _require_unchanged(count_input)
         sort_columns = (
@@ -1049,6 +1221,8 @@ def run_per_donor_analysis(
             },
             "outputs": output_records,
         }
+        if provenance_fits:
+            provenance["dispersion_fits"] = list(provenance_fits.values())
         staged_paths["provenance"].write_text(
             json.dumps(provenance, indent=2, sort_keys=True) + "\n"
         )
