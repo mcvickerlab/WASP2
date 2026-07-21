@@ -33,6 +33,41 @@ Useful options:
 * ``--region_col``: explicit region column name if auto-detection is not desired
 * ``--groupby``: group on an alternate annotation column, such as a parent gene column
 
+Donor-Local Bulk Analysis
+-------------------------
+
+Locked cohort count bundles use ``donor_id`` as the donor identity. Analyze the
+bundle directory, its ``count_manifest.json``, or its locked ``counts.tsv.gz``:
+
+.. code-block:: bash
+
+   wasp2-analyze find-imbalance cohort_counts \
+     --scope per-donor \
+     --unit snv \
+     --model single \
+     --dispersion-scope per-donor \
+     --min-donor-observations 50 \
+     --output donor_snv.tsv
+
+The supported units are ``snv`` and ``feature``; ``peak`` is an alias for
+``feature``. SNV analysis is unphased. Feature analysis may use ``--phased`` and
+uses the locked ``region`` column, or an explicit ``--region-col`` for a
+standalone count table. Overlapping feature memberships are retained for feature
+tests but contribute only one donor-SNV row to dispersion fitting.
+
+``--dispersion-scope per-donor`` fits ``single`` or ``linear`` nuisance
+parameters independently for each included donor. ``--dispersion-scope global``
+fits unique eligible donor-SNV rows once and reuses the returned fit ID and
+parameters unchanged in each donor run. In both modes, effect inference and
+Benjamini-Hochberg correction are independent within each donor.
+
+The donor-local route defaults to pseudocount 0 and creates result,
+``.dispersion.tsv``, ``.qc.tsv``, and ``.provenance.json`` artifacts without
+overwriting existing files. ``--expected-manifest-sha256`` can pin the locked
+bundle manifest to an external digest. Standalone legacy tables may use
+``sample`` instead of ``donor_id``; a locked bundle may not, and a table with
+both columns is rejected.
+
 Single-Cell Analysis
 --------------------
 
@@ -81,7 +116,8 @@ Notes
 Defaults and contracts
 ----------------------
 
-- ``pseudocount`` defaults to **1** (added to both ``ref_count`` and
+- ``pseudocount`` defaults to **1** on the legacy route and **0** with
+  ``--scope per-donor``. On the legacy route it is added to both ``ref_count`` and
   ``alt_count`` — Laplace-style shrinkage toward :math:`\mu = 0.5`,
   conservative under :math:`H_0`).
 - ``min_count`` defaults to **10**; regions with :math:`N < 10` are dropped.

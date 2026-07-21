@@ -13,6 +13,8 @@ from typing import Literal
 
 import pandas as pd
 
+from .run_analysis_per_donor import run_per_donor_analysis
+
 # Rust analysis (required; no Python fallback)
 try:
     from wasp2_rust import analyze_imbalance as rust_analyze_imbalance
@@ -143,7 +145,12 @@ def run_ai_analysis(
     region_col: str | None = None,
     groupby: str | None = None,
     per_variant: bool = False,
-) -> None:
+    scope: str | None = None,
+    unit: str | None = None,
+    dispersion_scope: str = "per-donor",
+    min_donor_observations: int = 50,
+    expected_manifest_sha256: str | None = None,
+) -> dict[str, Path] | None:
     """Run allelic imbalance analysis pipeline.
 
     Parameters
@@ -153,7 +160,8 @@ def run_ai_analysis(
     min_count : int | None, optional
         Minimum total count threshold, by default 10.
     pseudocount : int | None, optional
-        Pseudocount to add, by default 1.
+        Pseudocount to add. Defaults to 0 for donor-local analysis and 1 for
+        the legacy route.
     phased : bool | None, optional
         Use phased genotype information, by default False.
     model : str | None, optional
@@ -167,12 +175,57 @@ def run_ai_analysis(
     per_variant : bool, optional
         Test each SNV independently (per-variant) instead of grouping by a region column.
         Forces per-variant even when a region column is present. Default False.
+    scope : str | None, optional
+        Set to ``"per-donor"`` to use donor-local orchestration.
+    unit : str | None, optional
+        Donor-local analysis unit: ``"snv"`` or ``"feature"``; ``"peak"`` is an alias.
+    dispersion_scope : str, optional
+        Fit dispersion globally or independently per donor, by default ``"per-donor"``.
+    min_donor_observations : int, optional
+        Minimum eligible unique donor-SNV rows required for inference, by default 50.
+    expected_manifest_sha256 : str | None, optional
+        External trust anchor for a locked count bundle manifest.
 
     Raises
     ------
     RuntimeError
         If Rust analysis extension is not available.
     """
+    if model not in {None, "single", "linear"}:
+        raise ValueError("model must be 'single' or 'linear'")
+    if scope is not None:
+        if scope != "per-donor":
+            raise ValueError("scope must be 'per-donor'")
+        if unit not in {"snv", "feature", "peak"}:
+            raise ValueError(
+                "Per-donor analysis requires --unit snv or --unit feature (--unit peak is an alias)"
+            )
+        if groupby is not None or per_variant:
+            raise ValueError("Per-donor analysis cannot use --groupby or --per-variant")
+        if dispersion_scope not in {"global", "per-donor"}:
+            raise ValueError("dispersion_scope must be 'global' or 'per-donor'")
+        output = out_file if out_file is not None else str(Path.cwd() / "ai_results.tsv")
+        return run_per_donor_analysis(
+            count_file,
+            output,
+            unit=unit,
+            model="single" if model is None else model,
+            dispersion_scope=dispersion_scope,
+            region_col=region_col,
+            phased=bool(phased),
+            min_count=10 if min_count is None else min_count,
+            pseudocount=0 if pseudocount is None else pseudocount,
+            min_donor_observations=min_donor_observations,
+            expected_manifest_sha256=expected_manifest_sha256,
+        )
+
+    if unit is not None:
+        raise ValueError("--unit requires --scope per-donor in the bulk analysis command")
+    if dispersion_scope != "per-donor":
+        raise ValueError("--dispersion-scope requires --scope per-donor")
+    if expected_manifest_sha256 is not None:
+        raise ValueError("--expected-manifest-sha256 requires --scope per-donor")
+
     # Fail closed: --groupby is not supported by the Rust backend. It only re-keys the grouping
     # column (region_col = groupby), so the identical result is obtained with --region_col <parent>.
     # Erroring prevents silently returning feature-level results when parent-level was requested.
@@ -218,3 +271,4 @@ def run_ai_analysis(
 
     # Write results
     ai_df.to_csv(ai_files.out_file, sep="\t", header=True, index=False)
+    return None
