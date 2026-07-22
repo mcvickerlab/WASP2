@@ -4,6 +4,8 @@ This module provides high-performance implementations of bottleneck functions
 for allele-specific analysis in WASP2.
 """
 
+__version__: str
+
 from typing import TypedDict
 
 class UnifiedStats(TypedDict):
@@ -42,6 +44,45 @@ class ImbalanceResult(TypedDict):
     lrt: float
     pval: float
     fdr_pval: float
+
+class _DispersionFitDiagnostics(TypedDict, total=False):
+    """Optional optimizer diagnostics supplied by the Rust backend."""
+
+    fit_status: str
+    optimizer: str
+    optimizer_status: str | int
+    optimizer_converged: bool
+    optimizer_iterations: int
+    optimizer_evaluations: int
+    optimizer_objective: float
+
+class DispersionFit(_DispersionFitDiagnostics):
+    """Dispersion parameters fitted from independent observations."""
+
+    method: str
+    rho: float | None
+    linear_d1: float | None
+    linear_d2: float | None
+    linear_depth_center: float | None
+    linear_depth_scale: float | None
+    n_observations: int
+
+class ImbalanceRun(TypedDict):
+    """One independent analysis run with fitted or fixed nuisance parameters."""
+
+    results: list[ImbalanceResult]
+    method: str
+    rho: float | None
+    linear_d1: float | None
+    linear_d2: float | None
+    linear_depth_center: float | None
+    linear_depth_scale: float | None
+    n_observations: int
+    requested_phased: bool
+    effective_phased: bool
+    nuisance_source: str
+    exact_snv: bool
+    pvalue_method: str
 
 class VariantSpan(TypedDict):
     """Variant span information from intersection parsing."""
@@ -561,6 +602,8 @@ def analyze_imbalance(
     min_count: int = 10,
     pseudocount: int = 1,
     method: str = "single",
+    phased: bool = False,
+    region_col: str | None = None,
 ) -> list[ImbalanceResult]:
     """Analyze allelic imbalance using beta-binomial model.
 
@@ -580,4 +623,32 @@ def analyze_imbalance(
     list[ImbalanceResult]
         List of imbalance results per region.
     """
+    ...
+
+def analyze_imbalance_run(
+    tsv_path: str,
+    min_count: int = 10,
+    pseudocount: int = 1,
+    phased: bool = False,
+    region_col: str | None = None,
+    method: str = "single",
+    rho: float | None = None,
+    linear_d1: float | None = None,
+    linear_d2: float | None = None,
+    linear_depth_center: float | None = None,
+    linear_depth_scale: float | None = None,
+    exact_snv: bool | None = None,
+) -> ImbalanceRun:
+    """Analyze one table with optional fixed nuisance parameters."""
+    ...
+
+def fit_imbalance_dispersion(
+    tsv_path: str,
+    min_count: int = 10,
+    pseudocount: int = 1,
+    method: str = "single",
+    phased: bool = False,
+    region_col: str | None = None,
+) -> DispersionFit:
+    """Fit reusable nuisance parameters from independent SNV observations."""
     ...

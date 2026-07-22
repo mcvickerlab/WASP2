@@ -1,3 +1,4 @@
+from enum import Enum
 from typing import Annotated
 
 import typer
@@ -5,8 +6,26 @@ import typer
 from wasp2.cli import create_version_callback, verbosity_callback
 
 from .run_analysis import run_ai_analysis
-from .run_analysis_sc import run_ai_analysis_sc
-from .run_compare_ai import run_ai_comparison
+
+
+class AnalysisScopeChoice(str, Enum):
+    per_donor = "per-donor"
+
+
+class AnalysisUnitChoice(str, Enum):
+    snv = "snv"
+    feature = "feature"
+    peak = "peak"
+
+
+class AnalysisModelChoice(str, Enum):
+    single = "single"
+    linear = "linear"
+
+
+class DispersionScopeChoice(str, Enum):
+    per_donor = "per-donor"
+    global_ = "global"
 
 
 def _get_analysis_deps() -> dict[str, str]:
@@ -55,7 +74,10 @@ def main(
 
 @app.command()
 def find_imbalance(
-    counts: Annotated[str, typer.Argument(help="Count File")],
+    counts: Annotated[
+        str,
+        typer.Argument(help="Count table, locked count bundle, or count_manifest.json."),
+    ],
     min: Annotated[
         int | None,
         typer.Option(
@@ -71,7 +93,10 @@ def find_imbalance(
             "--ps",
             "--pseudo",
             "--pseudocount",
-            help="Pseudocount added when measuring allelic imbalance. (Default: 1)",
+            help=(
+                "Pseudocount added when measuring allelic imbalance. Defaults to 0 for "
+                "--scope per-donor and 1 for the legacy route."
+            ),
         ),
     ] = None,
     out_file: Annotated[
@@ -97,22 +122,22 @@ def find_imbalance(
         ),
     ] = False,
     model: Annotated[
-        str | None,
+        AnalysisModelChoice | None,
         typer.Option(
             "-m",
             "--model",
-            help=(
-                "Model used for measuring optimization parameter when finding imbalance. "
-                "HIGHLY RECOMMENDED TO LEAVE AS DEFAULT FOR SINGLE DISPERSION MODEL. "
-                "Choice of 'single' or 'linear'. (Default: 'single')"
-            ),
+            help=("Dispersion model used for imbalance inference. Defaults to 'single'."),
         ),
     ] = None,
     region_col: Annotated[
         str | None,
         typer.Option(
+            "--region-col",
             "--region_col",
-            help="Name of region column for current data. 'region' for ATAC-seq. Attribute name for RNA-seq. (Default: Auto-parses if none provided)",
+            help=(
+                "Feature identifier column. Locked feature bundles use 'region'; standalone "
+                "feature tables require this option."
+            ),
         ),
     ] = None,
     groupby: Annotated[
@@ -142,17 +167,61 @@ def find_imbalance(
             ),
         ),
     ] = False,
+    scope: Annotated[
+        AnalysisScopeChoice | None,
+        typer.Option(
+            "--scope",
+            help=(
+                "Analyze each donor independently. Requires --unit and canonical donor_id; "
+                "standalone legacy tables may use sample instead."
+            ),
+        ),
+    ] = None,
+    unit: Annotated[
+        AnalysisUnitChoice | None,
+        typer.Option(
+            "--unit",
+            help="Statistical unit: snv or feature. peak is an alias for feature.",
+        ),
+    ] = None,
+    dispersion_scope: Annotated[
+        DispersionScopeChoice,
+        typer.Option(
+            "--dispersion-scope",
+            help="Fit dispersion globally across eligible donor-SNV rows or per donor.",
+        ),
+    ] = DispersionScopeChoice.per_donor,
+    min_donor_observations: Annotated[
+        int,
+        typer.Option(
+            "--min-donor-observations",
+            min=1,
+            help="Exclude donors with fewer eligible unique SNV observations.",
+        ),
+    ] = 50,
+    expected_manifest_sha256: Annotated[
+        str | None,
+        typer.Option(
+            "--expected-manifest-sha256",
+            help="Require a locked bundle manifest with this SHA-256 digest.",
+        ),
+    ] = None,
 ) -> None:
     run_ai_analysis(
         count_file=counts,
         min_count=min,
-        model=model,
+        model=model.value if model is not None else None,
         pseudocount=pseudocount,
         phased=phased,
         out_file=out_file,
         region_col=region_col,
         groupby=groupby,
         per_variant=per_variant,
+        scope=scope.value if scope is not None else None,
+        unit=unit.value if unit is not None else None,
+        dispersion_scope=dispersion_scope.value,
+        min_donor_observations=min_donor_observations,
+        expected_manifest_sha256=expected_manifest_sha256,
     )
 
 
@@ -234,6 +303,13 @@ def find_imbalance_sc(
         ),
     ] = None,
 ) -> None:
+    try:
+        from .run_analysis_sc import run_ai_analysis_sc
+    except (ImportError, ModuleNotFoundError) as error:
+        raise typer.BadParameter(
+            "Single-cell analysis requires: pip install 'wasp2[single-cell]'"
+        ) from error
+
     run_ai_analysis_sc(
         count_file=counts,
         bc_map=bc_map,
@@ -325,6 +401,13 @@ def compare_imbalance(
         ),
     ] = None,
 ) -> None:
+    try:
+        from .run_compare_ai import run_ai_comparison
+    except (ImportError, ModuleNotFoundError) as error:
+        raise typer.BadParameter(
+            "Single-cell comparison requires: pip install 'wasp2[single-cell]'"
+        ) from error
+
     run_ai_comparison(
         count_file=counts,
         bc_map=bc_map,

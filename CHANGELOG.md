@@ -4,13 +4,16 @@ All notable changes to WASP2 will be documented in this file.
 
 ## [Unreleased]
 
-## [1.5.0] - 2026-07-14
+## [1.5.0] - 2026-07-21
 
 ### Added
 - `wasp2-count count-cohort` for one-final-BAM-per-donor bulk counting with explicit
   `donor_id`/`vcf_sample` mapping, atomic locked outputs, and SHA-256 provenance manifests.
 - Linear-dispersion and donor-specific-dispersion beta-binomial implementations in the Rust
   analysis API, including phased feature-level inference.
+- Donor-local bulk imbalance orchestration through `wasp2-analyze find-imbalance` with explicit
+  SNV or feature units, global or per-donor nuisance fitting, donor-local inference and BH
+  correction, manifest pinning, and non-overwriting result, dispersion, QC, and provenance files.
 - `--per-variant` / `--snv-solo` for independent SNV tests and explicit `--region_col` support
   for feature- or peak-level aggregation.
 - A Rust single-cell ATAC allele counter with chromosome-parallel execution and Python fallback.
@@ -22,6 +25,8 @@ All notable changes to WASP2 will be documented in this file.
   with the archived Python implementation; allele-string genotypes do not imply cross-SNV phase.
 - `--phased` and `--region_col` are forwarded to the Rust backend; unsupported `--groupby`
   requests fail closed and direct users to `--region_col <parent_column>`.
+- SNV analysis is unphased by contract, while feature analysis supports phased and unphased
+  likelihoods without pooling effect inference across donors.
 - Single-cell AnnData output now follows the scverse `obs=cells`, `var=variants` orientation.
 - Packaging derives the Python version from installed metadata and synchronizes Cargo, pixi,
   containers, Galaxy, Nextflow, documentation, and citation metadata from one release command.
@@ -34,6 +39,10 @@ All notable changes to WASP2 will be documented in this file.
 - Unphased multi-SNV likelihoods now use log-space dynamic programming to prevent underflow.
 - Linear inference uses per-SNV dispersion throughout the alternative optimization, phased
   donor-specific inference uses each observation's donor dispersion, and LRTs are non-negative.
+- Linear nuisance fits now standardize raw depth and persist the fitted center and scale with both
+  coefficients so fixed global fits are reused exactly in every donor-local run.
+- Ambiguous multi-allelic count rows are rejected instead of being silently coerced into
+  biallelic SNV identities.
 - Bulk counts use `UInt32`, and single-cell pseudobulk/observation sums widen safely instead of
   overflowing at 65,535; single-cell counting also works without an optional feature file.
 - Count-analysis TSV parsing is header-driven, so `pos0`, `GT`, sample, and donor metadata cannot

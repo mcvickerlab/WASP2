@@ -268,169 +268,214 @@ fn remap_all_chromosomes(
 /// for r in results:
 ///     print(f"{r['region']}: pval={r['pval']:.4f}")
 /// ```
-#[pyfunction]
-#[pyo3(signature = (tsv_path, min_count=10, pseudocount=1, method="single", phased=false, region_col=None))]
-fn analyze_imbalance(
-    py: Python,
+fn parse_analysis_method(method: &str) -> PyResult<analysis::AnalysisMethod> {
+    match method {
+        "single" => Ok(analysis::AnalysisMethod::Single),
+        "linear" => Ok(analysis::AnalysisMethod::Linear),
+        "per_donor" => Err(PyRuntimeError::new_err(
+            "method='per_donor' has been removed because it pooled effect likelihoods across donors; split the count table by donor, fit each donor with fit_imbalance_dispersion(), and pass those fixed nuisance parameters to analyze_imbalance_run()",
+        )),
+        _ => Err(PyRuntimeError::new_err(format!(
+            "Unknown method '{method}'; expected 'single' or 'linear'"
+        ))),
+    }
+}
+
+fn fixed_dispersion_parameters(
+    method: analysis::AnalysisMethod,
+    rho: Option<f64>,
+    linear_d1: Option<f64>,
+    linear_d2: Option<f64>,
+    linear_depth_center: Option<f64>,
+    linear_depth_scale: Option<f64>,
+) -> PyResult<Option<analysis::DispersionParameters>> {
+    match method {
+        analysis::AnalysisMethod::Single => {
+            if linear_d1.is_some()
+                || linear_d2.is_some()
+                || linear_depth_center.is_some()
+                || linear_depth_scale.is_some()
+            {
+                return Err(PyRuntimeError::new_err(
+                    "method='single' accepts rho, not linear dispersion parameters",
+                ));
+            }
+            Ok(rho.map(|rho| analysis::DispersionParameters::Single { rho }))
+        }
+        analysis::AnalysisMethod::Linear => {
+            if rho.is_some() {
+                return Err(PyRuntimeError::new_err(
+                    "method='linear' accepts linear_d1/linear_d2, not rho",
+                ));
+            }
+            match (
+                linear_d1,
+                linear_d2,
+                linear_depth_center,
+                linear_depth_scale,
+            ) {
+                (None, None, None, None) => Ok(None),
+                (Some(d1), Some(d2), Some(depth_center), Some(depth_scale)) => {
+                    Ok(Some(analysis::DispersionParameters::Linear {
+                        d1,
+                        d2,
+                        depth_center,
+                        depth_scale,
+                    }))
+                }
+                _ => Err(PyRuntimeError::new_err(
+                    "fixed method='linear' requires linear_d1, linear_d2, \
+                     linear_depth_center, and linear_depth_scale",
+                )),
+            }
+        }
+    }
+}
+
+fn read_analysis_variants(
     tsv_path: &str,
-    min_count: u32,
-    pseudocount: u32,
-    method: &str,
-    phased: bool,
-    region_col: Option<String>,
-) -> PyResult<Py<PyAny>> {
-    use pyo3::types::{PyDict, PyList};
+    region_col: Option<&str>,
+) -> PyResult<Vec<analysis::VariantCounts>> {
+    use flate2::read::MultiGzDecoder;
+    use std::collections::HashSet;
     use std::fs::File;
     use std::io::{BufRead, BufReader};
 
-    // Parse method
-    let analysis_method = match method {
-        "single" => analysis::AnalysisMethod::Single,
-        "linear" => analysis::AnalysisMethod::Linear,
-        "per_donor" => analysis::AnalysisMethod::PerDonor,
-        _ => {
-            return Err(PyRuntimeError::new_err(format!(
-                "Unknown method: {}",
-                method
-            )))
-        }
-    };
-
-    let config = analysis::AnalysisConfig {
-        min_count,
-        pseudocount,
-        method: analysis_method,
-        phased,
-    };
-
-    // Read TSV file
     let file = File::open(tsv_path)
-        .map_err(|e| PyRuntimeError::new_err(format!("Failed to open TSV: {}", e)))?;
-    let reader = BufReader::new(file);
+        .map_err(|e| PyRuntimeError::new_err(format!("Failed to open TSV: {e}")))?;
+    let mut reader: Box<dyn BufRead> = if tsv_path.ends_with(".gz") {
+        Box::new(BufReader::new(MultiGzDecoder::new(file)))
+    } else {
+        Box::new(BufReader::new(file))
+    };
+
+    let mut header_line = String::new();
+    if reader
+        .read_line(&mut header_line)
+        .map_err(|e| PyRuntimeError::new_err(format!("Failed to read TSV header: {e}")))?
+        == 0
+    {
+        return Err(PyRuntimeError::new_err("Count TSV is empty"));
+    }
+    let headers: Vec<&str> = header_line
+        .trim_end_matches(['\r', '\n'])
+        .split('\t')
+        .collect();
+    let unique: HashSet<&str> = headers.iter().copied().collect();
+    if unique.len() != headers.len() {
+        return Err(PyRuntimeError::new_err(
+            "Count TSV contains duplicate column names",
+        ));
+    }
+    for name in ["chrom", "pos", "ref", "alt", "ref_count", "alt_count"] {
+        if !unique.contains(name) {
+            return Err(PyRuntimeError::new_err(format!(
+                "Required column '{name}' is missing from count TSV"
+            )));
+        }
+    }
+    let index = |name: &str| {
+        headers
+            .iter()
+            .position(|header| *header == name)
+            .expect("required header checked")
+    };
+    let chrom_idx = index("chrom");
+    let pos_idx = index("pos");
+    let ref_idx = index("ref");
+    let alt_idx = index("alt");
+    let ref_count_idx = index("ref_count");
+    let alt_count_idx = index("alt_count");
+    let gt_idx = headers.iter().position(|header| *header == "GT");
+    let region_idx = match region_col {
+        Some(name) => Some(
+            headers
+                .iter()
+                .position(|header| *header == name)
+                .ok_or_else(|| {
+                    PyRuntimeError::new_err(format!(
+                        "region_col '{name}' not found in header columns: {headers:?}"
+                    ))
+                })?,
+        ),
+        None => None,
+    };
 
     let mut variants = Vec::new();
-
-    // Resolve columns from the header. Count tables can carry pos0, GT, feature,
-    // parent, sample, or donor metadata, so fixed offsets are not reliable.
-    let mut chrom_idx: usize = 0;
-    let mut pos_idx: usize = 1;
-    let mut ref_count_idx: usize = 4;
-    let mut alt_count_idx: usize = 5;
-    let mut gt_idx: Option<usize> = None;
-    // Region column index (use input region names instead of chrom_pos format)
-    let mut region_idx: Option<usize> = None;
-    // Optional donor/sample column (used by the per_donor model)
-    let mut sample_idx: Option<usize> = None;
-    let mut header_seen = false;
-
-    for (line_idx, line) in reader.lines().enumerate() {
-        let line =
-            line.map_err(|e| PyRuntimeError::new_err(format!("Failed to read line: {}", e)))?;
-
-        if !header_seen {
-            header_seen = true;
-            let headers: Vec<&str> = line.split('\t').collect();
-            let required_column = |name: &str| {
-                headers
-                    .iter()
-                    .position(|header| *header == name)
-                    .ok_or_else(|| {
-                        PyRuntimeError::new_err(format!(
-                            "Required column '{}' not found in header columns: {:?}",
-                            name, headers
-                        ))
-                    })
-            };
-            chrom_idx = required_column("chrom")?;
-            pos_idx = required_column("pos")?;
-            ref_count_idx = required_column("ref_count")?;
-            alt_count_idx = required_column("alt_count")?;
-            gt_idx = headers.iter().position(|header| *header == "GT");
-            // Detect an optional `sample` column by name (per_donor input)
-            sample_idx = headers.iter().position(|h| *h == "sample");
-            // Resolve grouping column from the region_col argument (mirror Python get_imbalance):
-            //   Some(name) => group by that column (error if the column is absent)
-            //   None       => per-variant grouping (chrom_pos), ignoring any "region" column
-            region_idx = match &region_col {
-                Some(name) => match headers.iter().position(|h| *h == name.as_str()) {
-                    Some(ix) => Some(ix),
-                    None => {
-                        return Err(PyRuntimeError::new_err(format!(
-                            "region_col '{}' not found in header columns: {:?}",
-                            name, headers
-                        )))
-                    }
-                },
-                None => None,
-            };
-            continue;
-        }
-
-        if line.trim().is_empty() {
-            continue;
+    for (offset, line) in reader.lines().enumerate() {
+        let line_number = offset + 2;
+        let line = line.map_err(|e| {
+            PyRuntimeError::new_err(format!("Failed to read line {line_number}: {e}"))
+        })?;
+        if line.is_empty() {
+            return Err(PyRuntimeError::new_err(format!(
+                "Blank row at line {line_number}"
+            )));
         }
         let fields: Vec<&str> = line.split('\t').collect();
-        let field = |index: usize, name: &str| {
-            fields.get(index).copied().ok_or_else(|| {
-                PyRuntimeError::new_err(format!(
-                    "Missing '{}' value on TSV line {}",
-                    name,
-                    line_idx + 1
-                ))
-            })
-        };
+        if fields.len() != headers.len() {
+            return Err(PyRuntimeError::new_err(format!(
+                "Line {line_number} has {} fields; expected {}",
+                fields.len(),
+                headers.len()
+            )));
+        }
 
-        let chrom = field(chrom_idx, "chrom")?.to_string();
-        let pos = field(pos_idx, "pos")?
-            .parse::<u32>()
-            .map_err(|e| PyRuntimeError::new_err(format!("Invalid pos: {}", e)))?;
-        let ref_count = field(ref_count_idx, "ref_count")?
-            .parse::<u32>()
-            .map_err(|e| PyRuntimeError::new_err(format!("Invalid ref_count: {}", e)))?;
-        let alt_count = field(alt_count_idx, "alt_count")?
-            .parse::<u32>()
-            .map_err(|e| PyRuntimeError::new_err(format!("Invalid alt_count: {}", e)))?;
-
-        // region_col=Some => use that column verbatim; region_col=None => per-variant chrom_pos.
-        // The chrom_pos label matches Python's df["chrom"] + "_" + df["pos"] for SNV-solo parity.
-        let region = match region_idx {
-            Some(ri) => field(ri, "region")?.to_string(),
-            None => format!("{}_{}", chrom, pos),
-        };
-
-        let sample = sample_idx.and_then(|si| fields.get(si).map(|s| s.to_string()));
-
-        // Parse the phased genotype (GT) column when present.
-        // Only fully-phased hets map to a value; everything else (unphased,
-        // homozygous, missing) is None. Emits ONLY Some(0)/Some(1)/None so
-        // downstream `1 - g` on u8 never underflows.
-        //
-        // AHO parity: only numeric VCF-style phased heterozygotes are trusted.
-        // Allele-string GT values such as "A|G" are not interpreted as
-        // cross-SNV haplotype phase by the archived Python implementation.
-        let gt: Option<u8> = gt_idx.and_then(|gi| {
-            let gt_str = fields.get(gi)?;
-            parse_numeric_phased_gt(gt_str)
-        });
-
+        let chrom = fields[chrom_idx].to_string();
+        let ref_allele = fields[ref_idx];
+        let alt_allele = fields[alt_idx];
+        if chrom.is_empty() || ref_allele.is_empty() || alt_allele.is_empty() {
+            return Err(PyRuntimeError::new_err(format!(
+                "Empty chromosome, REF, or ALT value at line {line_number}"
+            )));
+        }
+        if ref_allele == alt_allele || alt_allele.contains(',') {
+            return Err(PyRuntimeError::new_err(format!(
+                "Line {line_number} is not a biallelic REF/ALT observation"
+            )));
+        }
+        let pos = fields[pos_idx].parse::<u32>().map_err(|e| {
+            PyRuntimeError::new_err(format!("Invalid pos at line {line_number}: {e}"))
+        })?;
+        if pos == 0 {
+            return Err(PyRuntimeError::new_err(format!(
+                "Position must be one-based at line {line_number}"
+            )));
+        }
+        let ref_count = fields[ref_count_idx].parse::<u32>().map_err(|e| {
+            PyRuntimeError::new_err(format!("Invalid ref_count at line {line_number}: {e}"))
+        })?;
+        let alt_count = fields[alt_count_idx].parse::<u32>().map_err(|e| {
+            PyRuntimeError::new_err(format!("Invalid alt_count at line {line_number}: {e}"))
+        })?;
+        let region = region_idx
+            .map(|idx| fields[idx].to_string())
+            .unwrap_or_else(|| format!("{chrom}_{pos}"));
+        if region.is_empty() {
+            return Err(PyRuntimeError::new_err(format!(
+                "Empty region at line {line_number}"
+            )));
+        }
+        let gt = gt_idx.and_then(|idx| parse_numeric_phased_gt(fields[idx]));
         variants.push(analysis::VariantCounts {
             chrom,
             pos,
             ref_count,
             alt_count,
             region,
-            sample,
             gt,
         });
     }
+    Ok(variants)
+}
 
-    // Run analysis
-    let results = analysis::analyze_imbalance(variants, &config)
-        .map_err(|e| PyRuntimeError::new_err(format!("Analysis failed: {}", e)))?;
+fn results_to_py<'py>(
+    py: Python<'py>,
+    results: Vec<analysis::ImbalanceResult>,
+) -> PyResult<Bound<'py, pyo3::types::PyList>> {
+    use pyo3::types::{PyDict, PyList};
 
-    // Convert to Python list of dicts
     let py_list = PyList::empty(py);
-
     for result in results {
         let py_dict = PyDict::new(py);
         py_dict.set_item("region", result.region)?;
@@ -446,8 +491,169 @@ fn analyze_imbalance(
         py_dict.set_item("fdr_pval", result.fdr_pval)?;
         py_list.append(py_dict)?;
     }
+    Ok(py_list)
+}
 
-    Ok(py_list.unbind().into_any())
+#[pyfunction]
+#[pyo3(signature = (tsv_path, min_count=10, pseudocount=1, method="single", phased=false, region_col=None))]
+fn analyze_imbalance(
+    py: Python,
+    tsv_path: &str,
+    min_count: u32,
+    pseudocount: u32,
+    method: &str,
+    phased: bool,
+    region_col: Option<String>,
+) -> PyResult<Py<PyAny>> {
+    let config = analysis::AnalysisConfig {
+        min_count,
+        pseudocount,
+        method: parse_analysis_method(method)?,
+        phased,
+    };
+    let variants = read_analysis_variants(tsv_path, region_col.as_deref())?;
+    let output = analysis::analyze_imbalance_detailed(variants, &config)
+        .map_err(|e| PyRuntimeError::new_err(format!("Analysis failed: {e}")))?;
+    Ok(results_to_py(py, output.results)?.unbind().into_any())
+}
+
+/// Fit balanced-null dispersion without testing allelic effects.
+#[pyfunction]
+#[pyo3(signature = (tsv_path, min_count=10, pseudocount=1, method="single", phased=false, region_col=None))]
+fn fit_imbalance_dispersion(
+    py: Python,
+    tsv_path: &str,
+    min_count: u32,
+    pseudocount: u32,
+    method: &str,
+    phased: bool,
+    region_col: Option<String>,
+) -> PyResult<Py<PyAny>> {
+    use pyo3::types::PyDict;
+
+    let analysis_method = parse_analysis_method(method)?;
+    let config = analysis::AnalysisConfig {
+        min_count,
+        pseudocount,
+        method: analysis_method,
+        phased,
+    };
+    let variants = read_analysis_variants(tsv_path, region_col.as_deref())?;
+    let fit = analysis::fit_imbalance_dispersion(variants, &config)
+        .map_err(|e| PyRuntimeError::new_err(format!("Dispersion fitting failed: {e}")))?;
+
+    let result = PyDict::new(py);
+    result.set_item("method", method)?;
+    result.set_item("rho", fit.parameters.rho())?;
+    result.set_item(
+        "linear_d1",
+        fit.parameters.linear_params().map(|params| params.0),
+    )?;
+    result.set_item(
+        "linear_d2",
+        fit.parameters.linear_params().map(|params| params.1),
+    )?;
+    result.set_item(
+        "linear_depth_center",
+        fit.parameters
+            .linear_depth_standardization()
+            .map(|standardization| standardization.0),
+    )?;
+    result.set_item(
+        "linear_depth_scale",
+        fit.parameters
+            .linear_depth_standardization()
+            .map(|standardization| standardization.1),
+    )?;
+    result.set_item("n_observations", fit.n_observations)?;
+    Ok(result.unbind().into_any())
+}
+
+/// Analyze one independent count table and return dispersion metadata.
+///
+/// Supplying `rho` (single) or all four linear parameters runs a fixed-nuisance
+/// test. Omitting them retains the legacy fit-and-test behavior.
+#[pyfunction]
+#[pyo3(signature = (tsv_path, min_count=10, pseudocount=1, phased=false, region_col=None, method="single", rho=None, linear_d1=None, linear_d2=None, linear_depth_center=None, linear_depth_scale=None, exact_snv=None))]
+#[allow(clippy::too_many_arguments)]
+fn analyze_imbalance_run(
+    py: Python,
+    tsv_path: &str,
+    min_count: u32,
+    pseudocount: u32,
+    phased: bool,
+    region_col: Option<String>,
+    method: &str,
+    rho: Option<f64>,
+    linear_d1: Option<f64>,
+    linear_d2: Option<f64>,
+    linear_depth_center: Option<f64>,
+    linear_depth_scale: Option<f64>,
+    exact_snv: Option<bool>,
+) -> PyResult<Py<PyAny>> {
+    use pyo3::types::PyDict;
+
+    let analysis_method = parse_analysis_method(method)?;
+    let fixed_parameters = fixed_dispersion_parameters(
+        analysis_method,
+        rho,
+        linear_d1,
+        linear_d2,
+        linear_depth_center,
+        linear_depth_scale,
+    )?;
+    let fixed_nuisance = fixed_parameters.is_some();
+    let exact_snv = exact_snv.unwrap_or(fixed_nuisance && region_col.is_none());
+    if exact_snv && !fixed_nuisance {
+        return Err(PyRuntimeError::new_err(
+            "exact_snv=True requires nuisance parameters from fit_imbalance_dispersion()",
+        ));
+    }
+    let config = analysis::AnalysisConfig {
+        min_count,
+        pseudocount,
+        method: analysis_method,
+        phased,
+    };
+    let variants = read_analysis_variants(tsv_path, region_col.as_deref())?;
+    let output = match fixed_parameters {
+        Some(parameters) => analysis::analyze_imbalance_with_fixed_dispersion(
+            variants, &config, parameters, exact_snv,
+        ),
+        None => analysis::analyze_imbalance_detailed(variants, &config),
+    }
+    .map_err(|e| PyRuntimeError::new_err(format!("Analysis failed: {e}")))?;
+    if output.results.is_empty() {
+        return Err(PyRuntimeError::new_err(
+            "No variants passed the count threshold; no results were produced",
+        ));
+    }
+
+    let result = PyDict::new(py);
+    result.set_item("results", results_to_py(py, output.results)?)?;
+    result.set_item("method", method)?;
+    result.set_item("rho", output.rho)?;
+    result.set_item("linear_d1", output.linear_params.map(|params| params.0))?;
+    result.set_item("linear_d2", output.linear_params.map(|params| params.1))?;
+    result.set_item("linear_depth_center", output.linear_depth_center)?;
+    result.set_item("linear_depth_scale", output.linear_depth_scale)?;
+    result.set_item("n_observations", output.n_observations)?;
+    result.set_item("requested_phased", phased)?;
+    result.set_item("effective_phased", output.effective_phased)?;
+    result.set_item(
+        "nuisance_source",
+        if fixed_nuisance { "fixed" } else { "fitted" },
+    )?;
+    result.set_item("exact_snv", exact_snv)?;
+    result.set_item(
+        "pvalue_method",
+        if exact_snv {
+            "beta_binomial_exact_two_sided"
+        } else {
+            "chi_square_lrt"
+        },
+    )?;
+    Ok(result.unbind().into_any())
 }
 
 // ============================================================================
@@ -972,6 +1178,8 @@ fn sum_as_string(a: usize, b: usize) -> PyResult<String> {
 /// - analyze_imbalance: Fast beta-binomial analysis for AI detection (IMPLEMENTED)
 #[pymodule]
 fn wasp2_rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add("__version__", env!("CARGO_PKG_VERSION"))?;
+
     // Legacy test function
     m.add_function(wrap_pyfunction!(sum_as_string, m)?)?;
 
@@ -1015,6 +1223,8 @@ fn wasp2_rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Analysis module (beta-binomial allelic imbalance detection)
     m.add_function(wrap_pyfunction!(analyze_imbalance, m)?)?;
+    m.add_function(wrap_pyfunction!(fit_imbalance_dispersion, m)?)?;
+    m.add_function(wrap_pyfunction!(analyze_imbalance_run, m)?)?;
 
     Ok(())
 }

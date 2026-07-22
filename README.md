@@ -114,6 +114,48 @@ to retain peak identifiers for feature-level analysis.
 wasp2-analyze find-imbalance counts.tsv -o ai_results.tsv
 ```
 
+### Donor-local cohort analysis
+
+Analyze the locked count directory (or its `count_manifest.json` or
+`counts.tsv.gz`) with an explicit unit. SNV analysis rejects `--phased` and tests
+each variant independently within each donor:
+
+```bash
+wasp2-analyze find-imbalance cohort_counts \
+  --scope per-donor --unit snv --min-donor-observations 50 \
+  -o atac_snv_results.tsv
+```
+
+`--dispersion-scope per-donor` is the default. `--dispersion-scope global`
+fits one nuisance model over unique eligible donor-SNV rows and reuses that exact
+fit for every included donor; testing and BH correction remain donor-local. Both
+`single` and `linear` dispersion models are supported. Linear fits record and
+reuse `linear_d1`, `linear_d2`, `linear_depth_center`, and
+`linear_depth_scale` together.
+
+Feature analysis preserves one SNV in every overlapping feature. `peak` remains
+an alias for `feature`:
+
+```bash
+wasp2-count count-cohort donors.tsv variants.vcf.gz feature_counts \
+  --unit feature --regions peaks.bed
+
+wasp2-analyze find-imbalance feature_counts \
+  --scope per-donor --unit feature --model linear --phased \
+  -o atac_feature_results.tsv
+```
+
+The donor-local route defaults to pseudocount 0. It writes
+`atac_feature_results.tsv`, `atac_feature_results.dispersion.tsv`,
+`atac_feature_results.qc.tsv`, and `atac_feature_results.provenance.json` and
+refuses to overwrite any of them. For standalone legacy count tables only,
+`sample` is accepted and normalized to `donor_id`; providing both columns is an
+error. Use `--expected-manifest-sha256` to require an externally trusted locked
+bundle manifest. An input `snv_id` is preserved exactly after validating its
+donor and allele identity; coordinate-based IDs are synthesized only when the
+column is absent. Dispersion and provenance metadata report optimizer status
+only when Rust provides it; `parameters_returned` does not assert convergence.
+
 ## Single-Cell Example
 
 ```bash

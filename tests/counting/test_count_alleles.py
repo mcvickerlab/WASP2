@@ -44,3 +44,19 @@ def test_bulk_counting_preserves_counts_above_uint16(monkeypatch):
     assert result.schema["ref_count"] == pl.UInt32
     assert result.schema["alt_count"] == pl.UInt32
     assert result.schema["other_count"] == pl.UInt32
+
+
+@pytest.mark.unit
+def test_bulk_counting_rejects_multiple_alleles_at_one_position(monkeypatch):
+    monkeypatch.setattr(count_alleles, "RUST_AVAILABLE", True)
+    variants = pl.DataFrame(
+        {
+            "chrom": ["chr1", "chr1"],
+            "pos": [10, 10],
+            "ref": ["A", "A"],
+            "alt": ["G", "T"],
+        }
+    ).with_columns(pl.col("chrom").cast(pl.Categorical))
+
+    with pytest.raises(ValueError, match="biallelic positions only"):
+        count_alleles.make_count_df("sample.bam", variants)
