@@ -53,13 +53,20 @@ The supported units are ``snv`` and ``feature``; ``peak`` is an alias for
 ``feature``. SNV analysis is unphased. Feature analysis may use ``--phased`` and
 uses the locked ``region`` column, or an explicit ``--region-col`` for a
 standalone count table. Overlapping feature memberships are retained for feature
-tests but contribute only one donor-SNV row to dispersion fitting.
+tests and dispersion fitting, matching archived Python's retained SNP-feature
+observations. Exact duplicate memberships are removed.
 
 ``--dispersion-scope per-donor`` fits ``single`` or ``linear`` nuisance
 parameters independently for each included donor. ``--dispersion-scope global``
-fits unique eligible donor-SNV rows once and reuses the returned fit ID and
+fits the combined eligible donor-SNP-feature observations and reuses the returned fit ID and
 parameters unchanged in each donor run. In both modes, effect inference and
 Benjamini-Hochberg correction are independent within each donor.
+
+QC ``eligible_snv_observations`` and dispersion-sidecar
+``donor_eligible_snv_observations`` count unique eligible SNPs per donor, so
+multiple memberships do not inflate the donor eligibility threshold.
+``fit_observations`` counts actual retained fitting rows: all included donors
+for a global fit, or the individual donor for a per-donor fit.
 
 The ``linear`` model carries four inseparable nuisance values:
 ``linear_d1``, ``linear_d2``, ``linear_depth_center``, and

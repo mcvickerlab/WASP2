@@ -342,7 +342,7 @@ def test_both_donor_columns_fail_closed(tmp_path: Path, monkeypatch: pytest.Monk
 
 
 @pytest.mark.unit
-def test_overlapping_feature_membership_is_preserved_but_fit_once_per_snv(
+def test_overlapping_feature_membership_is_preserved_in_dispersion_fit(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -363,7 +363,7 @@ def test_overlapping_feature_membership_is_preserved_but_fit_once_per_snv(
     )
 
     assert len(calls["fit"]) == 1
-    assert len(calls["fit"][0]["frame"]) == 8
+    assert len(calls["fit"][0]["frame"]) == 10
     assert [len(call["frame"]) for call in calls["analyze"]] == [5, 5]
     results = pd.read_csv(paths["results"], sep="\t")
     assert results.groupby("donor_id")["feature_id"].apply(set).to_dict() == {
@@ -683,3 +683,21 @@ def test_sidecar_and_provenance_schema(
         assert record["sha256"] == hashlib.sha256(paths[name].read_bytes()).hexdigest()
         assert record["size_bytes"] == paths[name].stat().st_size
         datetime.fromisoformat(record["mtime_utc"])
+
+
+@pytest.mark.unit
+def test_overlapping_features_do_not_inflate_donor_eligibility(tmp_path, monkeypatch):
+    counts = tmp_path / "counts.tsv"
+    _write_counts(counts, overlap=True)
+    calls = _install_backend(monkeypatch)
+    # Each donor has five SNP-feature rows but only four unique SNPs.
+    with pytest.raises(RuntimeError, match="No donors met"):
+        donor_analysis.run_per_donor_analysis(
+            counts,
+            tmp_path / "results.tsv",
+            unit="feature",
+            region_col="region",
+            min_count=0,
+            min_donor_observations=5,
+        )
+    assert calls["fit"] == []

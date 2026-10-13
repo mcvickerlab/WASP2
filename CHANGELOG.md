@@ -5,6 +5,9 @@ All notable changes to WASP2 will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- Donor dispersion fits retain overlapping SNP-feature observations as archived
+  Python does, with separate donor-feature identities in global fits. Unique-SNP
+  QC and donor eligibility counts retain their existing meanings.
 - Bulk SNP counting preserves archived Python input-order priority across paired
   mates, with read names consumed before checking aligned bases at each SNP.
 - Restore archived chi-square LRT p-values and first-SNP-anchored unphased

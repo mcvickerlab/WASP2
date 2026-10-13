@@ -635,22 +635,31 @@ def _fit_dispersion(
     model: Model,
     min_count: int,
     pseudocount: int,
+    region_col: str | None = None,
 ) -> DispersionFit:
     fitter = rust_fit_imbalance_dispersion
     if fitter is None:
         raise RuntimeError("Rust dispersion-fitting API is not available")
     fit_columns = [*SNV_COLUMNS, "ref_count", "alt_count"]
-    _write_tsv(frame, path, fit_columns)
+    fit_frame = frame.loc[:, fit_columns].copy()
+    # Rust deduplicates within its region key. Preserve Python's SNP-feature
+    # observations and keep identical sites in separate donors distinct.
+    memberships = frame[region_col] if region_col is not None else [None] * len(frame)
+    fit_frame["_fit_identity"] = [
+        json.dumps([donor, region], ensure_ascii=True, separators=(",", ":"))
+        for donor, region in zip(frame["donor_id"], memberships, strict=True)
+    ]
+    _write_tsv(fit_frame, path, [*fit_columns, "_fit_identity"])
     base_kwargs: dict[str, Any] = {
         "min_count": min_count,
         "pseudocount": pseudocount,
         "method": model,
     }
-    full_kwargs = {**base_kwargs, "phased": False, "region_col": "donor_id"}
+    full_kwargs = {**base_kwargs, "phased": False, "region_col": "_fit_identity"}
     is_pyo3 = _is_known_pyo3_api(fitter)
     if is_pyo3:
-        # donor_id is part of the fit identity. This is essential for a global
-        # fit because the same genomic site in two donors is two observations.
+        # The donor-feature key retains the same observation multiplicity in
+        # global and per-donor fits; only the fitting scope changes.
         raw_fit = fitter(str(path), **full_kwargs)
     else:
         parameters = inspect.signature(fitter).parameters
@@ -1008,11 +1017,7 @@ def run_per_donor_analysis(
         )
 
     eligible_rows = frame.loc[frame["_total_count"] >= min_count].copy()
-    fit_rows = (
-        eligible_rows.drop_duplicates(SNV_COLUMNS, keep="first")
-        .sort_values(SNV_COLUMNS, kind="mergesort")
-        .copy()
-    )
+    fit_rows = eligible_rows.copy()
     donor_qc = (
         frame.groupby("donor_id", sort=True)
         .agg(
@@ -1028,7 +1033,10 @@ def run_per_donor_analysis(
         .rename("unique_snv_rows")
     )
     eligible_counts = (
-        fit_rows.groupby("donor_id", sort=True).size().rename("eligible_snv_observations")
+        eligible_rows.drop_duplicates(SNV_COLUMNS)
+        .groupby("donor_id", sort=True)
+        .size()
+        .rename("eligible_snv_observations")
     )
     eligible_test_rows = (
         eligible_rows.groupby("donor_id", sort=True).size().rename("eligible_test_rows")
@@ -1060,6 +1068,7 @@ def run_per_donor_analysis(
                 model=model,
                 min_count=min_count,
                 pseudocount=pseudocount,
+                region_col=normalized_region_col,
             )
 
         result_frames: list[pd.DataFrame] = []
@@ -1075,6 +1084,7 @@ def run_per_donor_analysis(
                 model=model,
                 min_count=min_count,
                 pseudocount=pseudocount,
+                region_col=normalized_region_col,
             )
             rust_region_col, donor_rows = _prepare_analysis_table(
                 donor_rows,
@@ -1125,7 +1135,9 @@ def run_per_donor_analysis(
             dispersion_row.update(
                 {
                     "fit_observations": fit.n_observations,
-                    "donor_eligible_snv_observations": len(donor_fit_rows),
+                    "donor_eligible_snv_observations": len(
+                        donor_fit_rows.drop_duplicates(SNV_COLUMNS)
+                    ),
                     "result_rows": len(donor_results),
                 }
             )

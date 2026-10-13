@@ -71,3 +71,85 @@ def test_donor_default_pseudocount_matches_python(tmp_path):
     actual = pd.read_csv(paths["results"], sep="\t").rename(columns={"feature_id": "region"})
     comparison = compare_frames(pd.DataFrame(REFERENCE["bulk"]["atac/False/1"]), actual)
     assert comparison["status"] == "PASS", comparison
+
+
+@pytest.mark.rust
+@pytest.mark.parametrize("dispersion_scope", ["global", "per-donor"])
+@pytest.mark.parametrize("phased", [False, True])
+@pytest.mark.parametrize("pc", [0, 1])
+def test_overlapping_donor_features_match_python(tmp_path, dispersion_scope, phased, pc):
+    """Preserve Python observation weights with heterogeneous donors and overlaps."""
+    import contextlib
+    import io
+
+    import numpy as np
+    from scipy.optimize import OptimizeResult, minimize_scalar
+    from scipy.stats import betabinom
+    from scripts.compare_archive_analysis import load_archive
+
+    first = bulk_counts().drop(columns="gene")
+    second = first.copy()
+    second["ref_count"] = [11, 12, 21, 20, 17, 22, 8, 11, 19, 21, 9, 12]
+    second["alt_count"] = [9, 8, 19, 20, 23, 18, 12, 9, 21, 19, 11, 8]
+    # An identical observation in both donors must survive the global fit.
+    second.loc[2, ["ref_count", "alt_count"]] = first.loc[2, ["ref_count", "alt_count"]]
+    donors = {}
+    for donor, base in [("donorA", first), ("donorB", second)]:
+        extra = base.iloc[:2].copy()
+        extra["region"] = "overlap"
+        # Reverse order to exercise the original first-SNP anchor as well.
+        donors[donor] = pd.concat([base, extra], ignore_index=True).iloc[::-1].copy()
+    retained = pd.concat([base.assign(donor_id=donor) for donor, base in donors.items()])
+    counts = pd.concat([retained, retained.iloc[:1]], ignore_index=True)
+    count_file = tmp_path / "counts.tsv"
+    counts.to_csv(count_file, sep="\t", index=False)
+    paths = run_per_donor_analysis(
+        count_file,
+        tmp_path / "results.tsv",
+        unit="feature",
+        region_col="region",
+        dispersion_scope=dispersion_scope,
+        phased=phased,
+        pseudocount=pc,
+        min_donor_observations=4,
+    )
+    actual = pd.read_csv(paths["results"], sep="\t").rename(columns={"feature_id": "region"})
+    fits = pd.read_csv(paths["dispersion"], sep="\t").set_index("donor_id")
+    qc = pd.read_csv(paths["qc"], sep="\t").set_index("donor_id")
+    archive = load_archive()["as_analysis"]
+    original_optimizer = archive.minimize_scalar
+    global_rho = None
+    if dispersion_scope == "global":
+        ref = retained["ref_count"].to_numpy() + pc
+        depth = retained["ref_count"].to_numpy() + retained["alt_count"].to_numpy() + 2 * pc
+
+        def balanced_null(rho):
+            shape = 0.5 * (1 - rho) / rho
+            return -np.sum(betabinom.logpmf(ref, depth, shape, shape))
+
+        global_rho = minimize_scalar(balanced_null, method="bounded", bounds=(0, 1)).x
+
+        def shared_null_optimizer(fun, *args, **kwargs):
+            # Only replace the balanced-null dispersion fit. Effect optimizers
+            # still execute the archived Python functions separately per donor.
+            if len(kwargs.get("args", ())) == 2:
+                return OptimizeResult(x=global_rho)
+            return original_optimizer(fun, *args, **kwargs)
+
+        archive.minimize_scalar = shared_null_optimizer
+    for donor, base in donors.items():
+        with contextlib.redirect_stdout(io.StringIO()):
+            expected = archive.get_imbalance(
+                base.copy(),
+                region_col="region",
+                phased=phased,
+                pseudocount=pc,
+            )
+        comparison = compare_frames(expected, actual.loc[actual["donor_id"] == donor])
+        assert comparison["status"] == "PASS", comparison
+        assert fits.loc[donor, "fit_observations"] == (28 if dispersion_scope == "global" else 14)
+        assert fits.loc[donor, "donor_eligible_snv_observations"] == 12
+        assert qc.loc[donor, "eligible_snv_observations"] == 12
+        assert qc.loc[donor, "eligible_test_rows"] == 14
+        if global_rho is not None:
+            np.testing.assert_allclose(fits.loc[donor, "rho"], global_rho, rtol=5e-5, atol=5e-5)
