@@ -508,9 +508,9 @@ fn golden_section_search<F>(f: F, a: f64, mut b: f64, tol: f64) -> Result<f64>
 where
     F: Fn(f64) -> f64,
 {
-    const PHI: f64 = 1.618033988749895; // Golden ratio
-    let inv_phi = 1.0 / PHI;
-    let inv_phi2 = 1.0 / (PHI * PHI);
+    let phi = (1.0 + 5.0_f64.sqrt()) / 2.0;
+    let inv_phi = 1.0 / phi;
+    let inv_phi2 = 1.0 / (phi * phi);
 
     let mut a = a;
     let mut h = b - a;
