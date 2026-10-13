@@ -15,6 +15,7 @@ from scipy.stats import betabinom, chi2, false_discovery_control
 
 # Local imports
 from .as_analysis import clamp_rho, opt_phased_new, opt_prob, opt_unphased_dp
+from .as_analysis_sc import _assert_obs_cells_var_snps
 
 logger = logging.getLogger(__name__)
 
@@ -100,12 +101,14 @@ def get_compared_imbalance(
     :param groups: List of groups to compare (if None, compare all)
     :return: Dict mapping (group1, group2) tuples to comparison DataFrames
     """
+    _assert_obs_cells_var_snps(adata)
+
     # Failsafe in case preparse somehow misses these
     if sample is None:
         phased = False
 
     if groups is None:
-        groups = list(adata.var["group"].dropna().unique())
+        groups = list(adata.obs["group"].dropna().unique())
         logger.info("Comparing all combinations of available groups")
     elif len(groups) == 1:
         raise ValueError("Please provide 2 or more groups to compare.")
@@ -113,16 +116,16 @@ def get_compared_imbalance(
     # Process initial minimums for whole data dispersion
     snp_cutoff: int = min_count + (2 * pseudocount)
 
-    ref_counts: NDArray[np.uint16] = (
-        adata.layers["ref"].sum(axis=1, dtype=np.uint16).T.A1 + pseudocount
+    ref_counts: NDArray[np.uint64] = (
+        adata.layers["ref"].sum(axis=0, dtype=np.uint64).T.A1 + pseudocount
     )
-    alt_counts: NDArray[np.uint16] = (
-        adata.layers["alt"].sum(axis=1, dtype=np.uint16).T.A1 + pseudocount
+    alt_counts: NDArray[np.uint64] = (
+        adata.layers["alt"].sum(axis=0, dtype=np.uint64).T.A1 + pseudocount
     )
-    n_counts: NDArray[np.uint16] = ref_counts + alt_counts
+    n_counts: NDArray[np.uint64] = ref_counts + alt_counts
 
     # Calculate dispersion across dataset
-    def opt_disp(rho: float, ref_data: NDArray[np.uint16], n_data: NDArray[np.uint16]) -> float:
+    def opt_disp(rho: float, ref_data: NDArray[np.uint64], n_data: NDArray[np.uint64]) -> float:
         rho_safe = float(clamp_rho(rho))  # Prevent division by zero (Issue #228)
         return float(
             -np.sum(
@@ -145,7 +148,7 @@ def get_compared_imbalance(
 
     if phased:
         gt_array: NDArray[np.uint8] | None = (
-            adata.obs[sample].str.split("|", n=1).str[0].to_numpy(dtype=np.uint8)
+            adata.var[sample].str.split("|", n=1).str[0].to_numpy(dtype=np.uint8)
         )
     else:
         gt_array = None
@@ -156,10 +159,10 @@ def get_compared_imbalance(
 
     for group_name in groups:
         # Subset by group
-        adata_sub = adata[:, adata.var["group"] == group_name]
+        adata_sub = adata[adata.obs["group"] == group_name, :]
 
-        ref_counts_group = adata_sub.layers["ref"].sum(axis=1, dtype=np.uint16).T.A1 + pseudocount
-        alt_counts_group = adata_sub.layers["alt"].sum(axis=1, dtype=np.uint16).T.A1 + pseudocount
+        ref_counts_group = adata_sub.layers["ref"].sum(axis=0, dtype=np.uint64).T.A1 + pseudocount
+        alt_counts_group = adata_sub.layers["alt"].sum(axis=0, dtype=np.uint64).T.A1 + pseudocount
         n_counts_group = ref_counts_group + alt_counts_group
 
         nonzero_idx = np.where(
@@ -247,10 +250,10 @@ def get_compared_imbalance(
 
 def compare_imbalance_between_groups(
     disp: float,
-    ref_counts1: NDArray[np.uint16],
-    n_counts1: NDArray[np.uint16],
-    ref_counts2: NDArray[np.uint16],
-    n_counts2: NDArray[np.uint16],
+    ref_counts1: NDArray[np.uint64],
+    n_counts1: NDArray[np.uint64],
+    ref_counts2: NDArray[np.uint64],
+    n_counts2: NDArray[np.uint64],
     region_snp_dict: dict[str, tuple[int, ...]],
     gt_array: NDArray[np.uint8] | None = None,
 ) -> pd.DataFrame:
@@ -402,12 +405,14 @@ def get_compared_imbalance_diff_snps(
     :param groups: List of groups to compare (if None, compare all)
     :return: Dict mapping (group1, group2) tuples to comparison DataFrames
     """
+    _assert_obs_cells_var_snps(adata)
+
     # Failsafe in case preparse somehow misses these
     if sample is None:
         phased = False
 
     if groups is None:
-        groups = list(adata.var["group"].dropna().unique())
+        groups = list(adata.obs["group"].dropna().unique())
         logger.info("Comparing all combinations of available groups")
     elif len(groups) == 1:
         raise ValueError("Please provide 2 or more groups to compare.")
@@ -415,25 +420,25 @@ def get_compared_imbalance_diff_snps(
     # Process initial minimums for whole data dispersion
     cutoff: int = min_count + (2 * pseudocount)
 
-    ref_counts: NDArray[np.uint16] = (
-        adata.layers["ref"].sum(axis=1, dtype=np.uint16).T.A1 + pseudocount
+    ref_counts: NDArray[np.uint64] = (
+        adata.layers["ref"].sum(axis=0, dtype=np.uint64).T.A1 + pseudocount
     )
-    alt_counts: NDArray[np.uint16] = (
-        adata.layers["alt"].sum(axis=1, dtype=np.uint16).T.A1 + pseudocount
+    alt_counts: NDArray[np.uint64] = (
+        adata.layers["alt"].sum(axis=0, dtype=np.uint64).T.A1 + pseudocount
     )
 
-    n_counts: NDArray[np.uint16] = ref_counts + alt_counts
+    n_counts: NDArray[np.uint64] = ref_counts + alt_counts
     min_idx: tuple[NDArray[np.intp], ...] = np.where(
         n_counts >= cutoff
     )  # Get indices for min_count
 
-    ref_counts_filt: NDArray[np.uint16]
-    n_counts_filt: NDArray[np.uint16]
+    ref_counts_filt: NDArray[np.uint64]
+    n_counts_filt: NDArray[np.uint64]
     ref_counts_filt, n_counts_filt = ref_counts[min_idx], n_counts[min_idx]
 
     # Calculate dispersion across dataset
     def opt_disp_filt(
-        rho: float, ref_data: NDArray[np.uint16], n_data: NDArray[np.uint16]
+        rho: float, ref_data: NDArray[np.uint64], n_data: NDArray[np.uint64]
     ) -> float:
         rho_safe = float(clamp_rho(rho))  # Prevent division by zero (Issue #228)
         return float(
@@ -466,10 +471,10 @@ def get_compared_imbalance_diff_snps(
 
     for group_name in groups:
         # Subset by group
-        adata_sub = adata[:, adata.var["group"] == group_name]
+        adata_sub = adata[adata.obs["group"] == group_name, :]
 
-        ref_counts_group = adata_sub.layers["ref"].sum(axis=1, dtype=np.uint16).T.A1 + pseudocount
-        alt_counts_group = adata_sub.layers["alt"].sum(axis=1, dtype=np.uint16).T.A1 + pseudocount
+        ref_counts_group = adata_sub.layers["ref"].sum(axis=0, dtype=np.uint64).T.A1 + pseudocount
+        alt_counts_group = adata_sub.layers["alt"].sum(axis=0, dtype=np.uint64).T.A1 + pseudocount
         n_counts_group = ref_counts_group + alt_counts_group
 
         min_idx_group = np.where(n_counts_group >= cutoff)  # Get indices for min_count
@@ -481,7 +486,7 @@ def get_compared_imbalance_diff_snps(
 
         if phased:
             phase_array = (
-                adata.obs.iloc[min_idx_group][sample]
+                adata.var.iloc[min_idx_group][sample]
                 .str.split("|", n=1)
                 .str[0]
                 .to_numpy(dtype=np.uint8)
@@ -526,12 +531,12 @@ def get_compared_imbalance_diff_snps(
 
 def compare_imbalance_between_groups_diff_snps(
     disp: float,
-    ref_counts1: NDArray[np.uint16],
-    n_counts1: NDArray[np.uint16],
+    ref_counts1: NDArray[np.uint64],
+    n_counts1: NDArray[np.uint64],
     phase_array1: NDArray[np.uint8] | None,
     region_snp_dict1: dict[str, tuple[int, ...]],
-    ref_counts2: NDArray[np.uint16],
-    n_counts2: NDArray[np.uint16],
+    ref_counts2: NDArray[np.uint64],
+    n_counts2: NDArray[np.uint64],
     phase_array2: NDArray[np.uint8] | None,
     region_snp_dict2: dict[str, tuple[int, ...]],
 ) -> pd.DataFrame:

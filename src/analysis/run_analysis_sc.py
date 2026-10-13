@@ -8,7 +8,7 @@ import pandas as pd
 from anndata import AnnData
 
 # local imports
-from .as_analysis_sc import adata_count_qc, get_imbalance_sc
+from .as_analysis_sc import _assert_obs_cells_var_snps, adata_count_qc, get_imbalance_sc
 
 
 # Class that stores relevant data
@@ -82,7 +82,7 @@ class WaspAnalysisSC:
 # Define namedtuple for adata inputs
 class AdataInputs(NamedTuple):
     adata: AnnData
-    sample: str
+    sample: str | None
     groups: list[str]
     phased: bool
 
@@ -102,6 +102,8 @@ def process_adata_inputs(
         # ai_files.groups is already converted to List[str] in __init__ if it was a string
         groups = ai_files.groups if isinstance(ai_files.groups, list) else None
         phased = ai_files.phased
+
+    _assert_obs_cells_var_snps(adata)
 
     # Check genotype and phasing input
     if "samples" not in adata.uns_keys():
@@ -130,39 +132,33 @@ def process_adata_inputs(
                 f"Please input a sample from list: {sample_list}"
             )
         else:
-            if not any(i in ["1|0", "0|1", "1/0", "0/1"] for i in adata.obs[sample].unique()):
+            if not any(i in ["1|0", "0|1", "1/0", "0/1"] for i in adata.var[sample].unique()):
                 raise ValueError(f"Heterozygous genotypes not found for sample: {sample}.")
 
             # Copy (not view) avoids implicit-modification warning downstream.
-            adata = adata[adata.obs[sample].isin(["1|0", "0|1", "1/0", "0/1"])].copy()
-            adata.obs = adata.obs.reset_index(
-                drop=True
-            )  # Have to reset index every time i subset adata
+            adata = adata[:, adata.var[sample].isin(["1|0", "0|1", "1/0", "0/1"])].copy()
+            adata.var = adata.var.reset_index(drop=True)
 
             # Have to reindex the regions after filtering GT's
             if "feature" in adata.uns_keys():
-                # idx_df = adata.obs[["index"]].reset_index(
-                #     drop=True).copy().reset_index(names="filt_index")
-
                 adata.uns["feature"] = (
                     adata.uns["feature"]
-                    .merge(adata.obs[["index"]].reset_index(names="filt_index"), on="index")[
+                    .merge(adata.var[["index"]].reset_index(names="filt_index"), on="index")[
                         ["region", "filt_index"]
                     ]
                     .rename(columns={"filt_index": "index"})
                 )
 
-                # Need to update adata.obs index col as well
-                adata.obs["index"] = adata.obs.index
+                adata.var["index"] = adata.var.index
 
     # Check phasing if True or None
     if phased is not False:
-        if {"0|1", "1|0"}.issubset(set(adata.obs[sample].unique())):
+        if {"0|1", "1|0"}.issubset(set(adata.var[sample].unique())):
             phased = True
         else:
             phased = False
             warning_msg = (
-                f"Phased model selected for unphased genotypes ({adata.obs[sample].unique()}). "
+                f"Phased model selected for unphased genotypes ({adata.var[sample].unique()}). "
                 "Switching to unphased model"
             )
             warnings.warn(warning_msg, stacklevel=2)
@@ -172,13 +168,13 @@ def process_adata_inputs(
         map_df = pd.read_csv(
             bc_map, sep="\t", header=None, names=["group"], index_col=0, dtype="category"
         )
-        adata.var = adata.var.join(map_df, how="left")
+        adata.obs = adata.obs.drop(columns="group", errors="ignore").join(map_df, how="left")
 
     # No existing groups or mapping provided
-    if "group" not in adata.var_keys():
+    if "group" not in adata.obs_keys():
         raise KeyError("groups not found in dataset, please provide a barcode mapping")
     elif groups is not None:
-        valid_groups = list(adata.var["group"].dropna().unique())
+        valid_groups = list(adata.obs["group"].dropna().unique())
         new_groups = [i for i in groups if i in valid_groups]
 
         if len(new_groups) == 0:
@@ -190,10 +186,9 @@ def process_adata_inputs(
         else:
             groups = new_groups
     else:
-        groups = list(adata.var["group"].dropna().unique())
+        groups = list(adata.obs["group"].dropna().unique())
 
     # Ensure all required values are set (type narrowing for mypy)
-    assert sample is not None, "sample must be set by this point"
     assert groups is not None, "groups must be set by this point"
     assert phased is not None, "phased must be set by this point"
 

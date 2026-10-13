@@ -121,8 +121,8 @@ def get_imbalance_sc(
     snp_cutoff = 2 * pseudocount
 
     # Pseudobulk per-SNP sums reduce over cells (axis=0) now that cells are rows.
-    ref_counts = adata.layers["ref"].sum(axis=0).T.A1 + pseudocount
-    alt_counts = adata.layers["alt"].sum(axis=0).T.A1 + pseudocount
+    ref_counts = adata.layers["ref"].sum(axis=0, dtype=np.uint64).T.A1 + pseudocount
+    alt_counts = adata.layers["alt"].sum(axis=0, dtype=np.uint64).T.A1 + pseudocount
     n_counts = ref_counts + alt_counts
 
     # Calculate dispersion across dataset
@@ -152,8 +152,8 @@ def get_imbalance_sc(
         adata_sub = adata[adata.obs["group"] == group_name, :]
 
         # Create count data per group (per-SNP sums reduce over cells, axis=0)
-        ref_counts_group = adata_sub.layers["ref"].sum(axis=0).T.A1 + pseudocount
-        alt_counts_group = adata_sub.layers["alt"].sum(axis=0).T.A1 + pseudocount
+        ref_counts_group = adata_sub.layers["ref"].sum(axis=0, dtype=np.uint64).T.A1 + pseudocount
+        alt_counts_group = adata_sub.layers["alt"].sum(axis=0, dtype=np.uint64).T.A1 + pseudocount
         n_counts_group = ref_counts_group + alt_counts_group
 
         nonzero_idx = np.where(n_counts_group > snp_cutoff)  # Get indices where counts were found
