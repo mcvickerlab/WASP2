@@ -5,6 +5,8 @@ All notable changes to WASP2 will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- Bulk SNP counting preserves archived Python input-order priority across paired
+  mates, with read names consumed before checking aligned bases at each SNP.
 - Restore archived chi-square LRT p-values and first-SNP-anchored unphased
   feature likelihoods in donor-local and legacy bulk analysis.
 - Default donor-local pseudocounts to 1, matching archived Python. Per-donor
