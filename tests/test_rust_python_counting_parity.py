@@ -1,21 +1,11 @@
-"""
-Rust vs Python parity test for allele counting.
+"""Bulk SNP counting parity against archived Python commit
+41354fc087404ba1fa99542803ee9cb9b7e0e6bf.
 
-Reimplements the Rust BamCounter algorithm in pure Python + pysam and
-compares allele counts at every variant position. The Python reference
-matches the Rust semantics exactly:
-
-- Single BAM fetch per chromosome spanning all variant positions
-- Each read assigned to the earliest-encounter-index SNP it overlaps
-- Seen-reads set accumulates across positions (each read counted once)
-- BAM flag filtering: only unmapped skipped (canonical WASP contract —
-  caller is responsible for BAM pre-filtering)
-
-This catches any numerical differences between the Rust and Python
-implementations that golden-file tests (which compare Rust output to
-Rust-generated baselines) would miss.
+The fixture is the verbatim archived src/counting/count_alleles.py. Only its
+count_snp_alleles function is loaded, avoiding unrelated legacy imports.
 """
 
+import ast
 from pathlib import Path
 
 import pysam
@@ -27,84 +17,23 @@ SANITY_DATA = ROOT / "tests" / "sanity" / "data"
 
 
 # ---------------------------------------------------------------------------
-# Python counting algorithm matching Rust BamCounter semantics
+# Unmodified archived Python counting reference
 # ---------------------------------------------------------------------------
 def python_count_snp_alleles(bam_path: str, chrom: str, snp_list: list[tuple]):
-    """Count ref/alt/other alleles using pure Python + pysam.
-
-    Reimplements the Rust BamCounter algorithm (bam_counter.rs:228-370) in
-    Python to enable exact parity comparison. Key semantics matched:
-
-    1. Single fetch for the entire chromosome span (min_pos to max_pos).
-    2. Each read is assigned to the earliest-encounter-index SNP it has an
-       aligned base at. A read is counted at exactly one position.
-    3. Seen-reads set accumulates across all positions (paired-end mates
-       and multi-overlap reads are counted only once per chromosome).
-    4. BAM flag filtering: skip only unmapped (canonical WASP contract).
-
-    Args:
-        bam_path: Path to BAM file.
-        chrom: Chromosome name.
-        snp_list: List of (pos_1based, ref, alt) tuples, in encounter order.
-
-    Returns:
-        List of (chrom, pos_1based, ref_count, alt_count, other_count) tuples.
-    """
-    if not snp_list:
-        return []
-
-    # Build position -> list of (encounter_index, ref, alt)
-    pos_map: dict[int, list[tuple]] = {}
-    for enc_idx, (pos, ref, alt) in enumerate(snp_list):
-        pos_map.setdefault(pos, []).append((enc_idx, ref, alt))
-
-    # Initialize counts per encounter index
-    counts: dict[int, list[int]] = {i: [0, 0, 0] for i in range(len(snp_list))}
-
-    min_pos = min(pos for pos, _, _ in snp_list)
-    max_pos = max(pos for pos, _, _ in snp_list)
-
-    seen_reads: set[str] = set()
-
+    """Run the unmodified archived function, not a translation of Rust."""
+    source = (ROOT / "tests/counting/fixtures/archive_count_alleles.py.txt").read_text()
+    tree = ast.parse(source)
+    function = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "count_snp_alleles"
+    )
+    namespace = {}
+    exec(
+        compile(ast.Module(body=[function], type_ignores=[]), "archived_python", "exec"), namespace
+    )
     with pysam.AlignmentFile(bam_path, "rb") as bam:
-        for read in bam.fetch(chrom, max(0, min_pos - 1), max_pos + 1):
-            if read.is_unmapped:
-                continue
-
-            qname = read.query_name
-            if qname in seen_reads:
-                continue
-
-            seq = read.query_sequence
-            if seq is None:
-                continue
-
-            # Find earliest-encounter-index SNP this read has an aligned base at
-            best = None  # (encounter_idx, ref, alt, qpos)
-            for qpos, refpos in read.get_aligned_pairs(True):
-                if qpos is None or refpos is None:
-                    continue
-                pos1 = refpos + 1
-                if pos1 in pos_map:
-                    for enc_idx, ref, alt in pos_map[pos1]:
-                        if best is None or enc_idx < best[0]:
-                            best = (enc_idx, ref, alt, qpos)
-
-            if best is not None:
-                enc_idx, ref, alt, qpos = best
-                base = seq[qpos]
-                if base == ref:
-                    counts[enc_idx][0] += 1
-                elif base == alt:
-                    counts[enc_idx][1] += 1
-                else:
-                    counts[enc_idx][2] += 1
-                seen_reads.add(qname)
-
-    return [
-        (chrom, snp_list[i][0], counts[i][0], counts[i][1], counts[i][2])
-        for i in range(len(snp_list))
-    ]
+        return namespace["count_snp_alleles"](bam, chrom, snp_list)
 
 
 def parse_het_variants_from_vcf(vcf_path: str, sample: str | None = None):
@@ -217,8 +146,7 @@ class TestCountingParitySanity:
     def test_counting_parity_chr21(self, sanity_data):
         """Rust and Python must produce identical counts on real chr21 data.
 
-        This is the definitive parity test — 33k+ variants, real sequencing
-        data from HG00731. Any systematic bias would surface here.
+        Compare the available HG00731 data to the archived algorithm.
         """
         import wasp2_rust
 
@@ -270,3 +198,89 @@ class TestCountingParitySanity:
             + "\n".join(mismatches[:20])
             + (f"\n... and {len(mismatches) - 20} more" if len(mismatches) > 20 else "")
         )
+
+
+def _write_counting_bam(tmp_path, scenario):
+    bam_path = tmp_path / "archive_priority.bam"
+    # Records are coordinate sorted. The same name on chr2 must remain eligible.
+    records = [("chr1", 100, "shared", "A" * 20, [(0, 20)], 65)]
+    if scenario == "mates":
+        records.append(("chr1", 200, "shared", "G" * 20, [(0, 20)], 129))
+    elif scenario == "spanning":
+        records = [("chr1", 100, "shared", "A" * 120, [(0, 120)], 0)]
+    elif scenario in {"deletion", "skip"}:
+        gap = 2 if scenario == "deletion" else 3
+        records = [("chr1", 99, "shared", "A" * 10, [(0, 1), (gap, 100), (0, 9)], 0)]
+    elif scenario == "repeated":
+        records.append(("chr1", 100, "shared", "G" * 20, [(0, 20)], 0))
+        records.append(("chr1", 200, "shared", "G" * 20, [(0, 20)], 0))
+    elif scenario == "other":
+        records = [("chr1", 100, "shared", "N" + "A" * 19, [(0, 20)], 0)]
+    records.append(("chr2", 100, "shared", "G" * 20, [(0, 20)], 0))
+    with pysam.AlignmentFile(
+        str(bam_path),
+        "wb",
+        header={
+            "HD": {"VN": "1.6", "SO": "coordinate"},
+            "SQ": [{"SN": "chr1", "LN": 1000}, {"SN": "chr2", "LN": 1000}],
+        },
+    ) as bam:
+        for chrom, start, name, sequence, cigar, flag in records:
+            read = pysam.AlignedSegment()
+            read.query_name = name
+            read.query_sequence = sequence
+            read.flag = flag
+            read.reference_id = 0 if chrom == "chr1" else 1
+            read.reference_start = start
+            read.mapping_quality = 60
+            read.cigar = cigar
+            read.query_qualities = pysam.qualitystring_to_array("I" * len(sequence))
+            if flag & 1:
+                read.next_reference_id = 0
+                read.next_reference_start = 200 if flag == 65 else 100
+            bam.write(read)
+    pysam.index(str(bam_path))
+    return str(bam_path)
+
+
+@pytest.mark.parametrize("scenario", ["mates", "spanning", "deletion", "skip", "repeated", "other"])
+@pytest.mark.parametrize("positions", [[101, 201], [201, 101]])
+@pytest.mark.parametrize("threads", [1, 2])
+def test_archived_snp_priority(tmp_path, scenario, positions, threads):
+    import wasp2_rust
+
+    bam_path = _write_counting_bam(tmp_path, scenario)
+    snps = [(pos, "A", "G") for pos in positions]
+    expected = [row[2:] for row in python_count_snp_alleles(bam_path, "chr1", snps)]
+    expected += [row[2:] for row in python_count_snp_alleles(bam_path, "chr2", [(101, "A", "G")])]
+    regions = [("chr1", *snp) for snp in snps] + [("chr2", 101, "A", "G")]
+    observed = wasp2_rust.BamCounter(bam_path).count_alleles(regions, min_qual=0, threads=threads)
+    assert observed == expected
+    assert observed[-1] == (0, 1, 0), "Read-name deduplication must reset per chromosome"
+    if scenario in {"deletion", "skip"} and positions == [101, 201]:
+        assert observed[:2] == [(0, 0, 0), (0, 0, 0)]
+
+
+def test_archived_counts_are_reused_for_overlapping_regions(tmp_path):
+    import polars as pl
+
+    from counting.count_alleles import make_count_df
+
+    bam_path = _write_counting_bam(tmp_path, "spanning")
+    variants = pl.DataFrame(
+        {
+            "chrom": ["chr1"] * 4,
+            "pos": [201, 101, 201, 101],
+            "ref": ["A"] * 4,
+            "alt": ["G"] * 4,
+            "region": ["peak_a", "peak_a", "peak_b", "peak_b"],
+        }
+    ).with_columns(pl.col("chrom").cast(pl.Categorical))
+    expected = {
+        row[1]: row[2:]
+        for row in python_count_snp_alleles(bam_path, "chr1", [(201, "A", "G"), (101, "A", "G")])
+    }
+    observed = make_count_df(bam_path, variants)
+    assert observed.height == 4
+    for row in observed.iter_rows(named=True):
+        assert (row["ref_count"], row["alt_count"], row["other_count"]) == expected[row["pos"]]

@@ -5,7 +5,7 @@ use rust_htslib::{bam, bam::ext::BamRecordExtensions, bam::Read as BamRead};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::path::Path;
 
-/// BAM allele counter using rust-htslib with batched fetching
+/// BAM allele counter preserving archived Python SNP encounter order.
 #[pyclass]
 pub struct BamCounter {
     bam_path: String,
@@ -43,7 +43,7 @@ impl BamCounter {
         Ok(BamCounter { bam_path })
     }
 
-    /// Count alleles at variant positions (SNPs and INDELs) using batched fetching
+    /// Count alleles at variant positions (SNPs and INDELs).
     ///
     /// Args:
     ///     regions: List of (chrom, pos, ref, alt) tuples - supports both SNPs and INDELs
@@ -172,6 +172,9 @@ impl BamCounter {
         min_qual: u8,
         debug_sites: &FxHashMap<(String, u32), usize>,
     ) -> PyResult<FxHashMap<usize, (u32, u32, u32)>> {
+        if regions.iter().all(|(_, region)| region.is_snp()) {
+            return self.process_chromosome_snps(chrom, regions, min_qual, debug_sites);
+        }
         let mut bam = bam::IndexedReader::from_path(&self.bam_path).map_err(|e| {
             PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("Failed to open BAM: {}", e))
         })?;
@@ -374,6 +377,65 @@ impl BamCounter {
         Ok(counts)
     }
 
+    /// Match archive count_snp_alleles: SNP order takes priority over BAM order.
+    /// The seen-name set includes mates and persists across all SNPs on a chromosome.
+    fn process_chromosome_snps(
+        &self,
+        chrom: &str,
+        regions: &[(usize, Region)],
+        min_qual: u8,
+        debug_sites: &FxHashMap<(String, u32), usize>,
+    ) -> PyResult<FxHashMap<usize, (u32, u32, u32)>> {
+        let mut bam = bam::IndexedReader::from_path(&self.bam_path).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("Failed to open BAM: {e}"))
+        })?;
+        let mut seen_reads: FxHashSet<Vec<u8>> = FxHashSet::default();
+        let mut counts = FxHashMap::default();
+        for (idx, region) in regions {
+            let target = region.pos.checked_sub(1).ok_or_else(|| {
+                PyErr::new::<pyo3::exceptions::PyValueError, _>("SNP positions must be one-based")
+            })?;
+            if let Err(e) = bam.fetch((chrom, i64::from(target), i64::from(region.pos))) {
+                eprintln!(
+                    "[WARN] Failed to fetch {chrom}:{}: {e}. Skipping remaining SNPs.",
+                    region.pos
+                );
+                break;
+            }
+            let mut site_counts = (0u32, 0u32, 0u32);
+            for record in bam.records() {
+                let record = record.map_err(|e| {
+                    PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("Failed to read BAM: {e}"))
+                })?;
+                // Python consumes the name before looking for an aligned base,
+                // even when the fetched record has a deletion or reference skip here.
+                if !seen_reads.insert(record.qname().to_vec()) {
+                    continue;
+                }
+                if let Some(base) = get_base_at_position(&record, target, min_qual) {
+                    if base as u8 == region.ref_allele.as_bytes()[0] {
+                        site_counts.0 += 1;
+                    } else if base as u8 == region.alt_allele.as_bytes()[0] {
+                        site_counts.1 += 1;
+                    } else {
+                        site_counts.2 += 1;
+                    }
+                    if let Some(limit) = debug_sites.get(&(chrom.to_string(), region.pos)) {
+                        if site_counts.0 + site_counts.1 + site_counts.2 <= *limit as u32 {
+                            eprintln!(
+                                "[DEBUG VARIANT] {chrom}:{} read={} -> idx={idx} base={base}",
+                                region.pos,
+                                String::from_utf8_lossy(record.qname())
+                            );
+                        }
+                    }
+                }
+            }
+            counts.insert(*idx, site_counts);
+        }
+        Ok(counts)
+    }
+
     /// Group regions by chromosome while preserving encounter order
     fn group_regions_by_chrom(&self, regions: &[Region]) -> Vec<(String, Vec<(usize, Region)>)> {
         let mut grouped: Vec<Vec<(usize, Region)>> = Vec::new();
@@ -397,7 +459,6 @@ impl BamCounter {
 
 /// Get base at genomic position, accounting for CIGAR operations
 /// Matches WASP2 behavior: NO quality filtering by default
-#[allow(dead_code)]
 fn get_base_at_position(
     record: &bam::Record,
     target_pos: u32, // 0-based genomic position
@@ -423,14 +484,7 @@ fn get_base_at_position(
             }
 
             // Get the base (using array indexing)
-            let base = match seq[qpos as usize] {
-                b'A' => 'A',
-                b'C' => 'C',
-                b'G' => 'G',
-                b'T' => 'T',
-                b'N' => 'N',
-                _ => return None,
-            };
+            let base = char::from(seq[qpos as usize]);
             return Some(base);
         }
     }
