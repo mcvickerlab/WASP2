@@ -639,7 +639,10 @@ def analyze_imbalance_run(
     linear_depth_scale: float | None = None,
     exact_snv: bool | None = None,
 ) -> ImbalanceRun:
-    """Analyze one table with optional fixed nuisance parameters."""
+    """Analyze with optional fixed dispersion and archived chi-square LRT p-values.
+
+    exact_snv=True is rejected; None/False preserve the archived method.
+    """
     ...
 
 def fit_imbalance_dispersion(

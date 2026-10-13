@@ -145,7 +145,7 @@ wasp2-analyze find-imbalance feature_counts \
   -o atac_feature_results.tsv
 ```
 
-The donor-local route defaults to pseudocount 0. It writes
+The donor-local route defaults to pseudocount 1. It writes
 `atac_feature_results.tsv`, `atac_feature_results.dispersion.tsv`,
 `atac_feature_results.qc.tsv`, and `atac_feature_results.provenance.json` and
 refuses to overwrite any of them. For standalone legacy count tables only,

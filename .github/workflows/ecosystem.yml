@@ -34,7 +34,7 @@ jobs:
           sudo apt-get install -y libhts-dev libbz2-dev liblzma-dev zlib1g-dev libssl-dev pkg-config libclang-dev samtools bcftools bedtools
           uv venv .venv
           source .venv/bin/activate
-          uv pip install "maturin==1.14.1" "planemo==0.75.44"
+          uv pip install "maturin==1.14.1" "planemo==0.75.44" "galaxy-tool-util==26.0.1" "galaxy-tool-util-models==26.0.1"
           maturin develop --release
       - name: Lint Galaxy wrappers
         run: |

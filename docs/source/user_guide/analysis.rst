@@ -69,7 +69,7 @@ these values. They retain optimizer or fit status fields when Rust supplies
 them; otherwise ``fit_status=parameters_returned`` records only that a usable
 parameter payload was returned and does not claim optimizer convergence.
 
-The donor-local route defaults to pseudocount 0 and creates result,
+The donor-local route defaults to pseudocount 1 and creates result,
 ``.dispersion.tsv``, ``.qc.tsv``, and ``.provenance.json`` artifacts without
 overwriting existing files. ``--expected-manifest-sha256`` can pin the locked
 bundle manifest to an external digest. Standalone legacy tables may use
@@ -128,15 +128,21 @@ Notes
 Defaults and contracts
 ----------------------
 
-- ``pseudocount`` defaults to **1** on the legacy route and **0** with
-  ``--scope per-donor``. On the legacy route it is added to both ``ref_count`` and
+Both routes retain the archived chi-square LRT p-values (one degree of freedom).
+Unphased feature likelihoods anchor the first SNP to its reference allele and
+average the two orientations only for subsequent SNPs. Input order therefore
+sets the reference orientation; the first SNP is not symmetrized.
+
+- ``pseudocount`` defaults to **1** on both the legacy route and with
+  ``--scope per-donor``. It is added to both ``ref_count`` and
   ``alt_count`` — Laplace-style shrinkage toward :math:`\mu = 0.5`,
-  conservative under :math:`H_0`).
+  before likelihood fitting; raw output counts exclude these pseudocounts.
 - ``min_count`` defaults to **10**; regions with :math:`N < 10` are dropped.
 - Beta-binomial LRT: :math:`\rho` is held at its **null-model MLE** while
   maximizing the alternative likelihood over :math:`\mu` (profile likelihood,
   df = 1). :math:`\rho` is not jointly re-estimated under :math:`H_1`.
-- Dispersion optimizer bounds :math:`\rho \in (10^{-6},\, 1-10^{-6})`. The
+- Scalar dispersion is fit on :math:`(0,1)` with boundary values clamped for
+  numerical stability. The linear predictor retains the :math:`\pm 10` guard. The
   linear model uses raw-depth standardization,
   :math:`\rho(N)=\operatorname{expit}(d_1 + d_2(N-c)/s)`, and persists the fitted
   center :math:`c` and positive scale :math:`s` with :math:`d_1` and :math:`d_2`.

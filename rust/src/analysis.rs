@@ -150,7 +150,7 @@ impl DispersionParameters {
                 depth_scale,
             } => {
                 let standardized_depth = (n as f64 - depth_center) / depth_scale;
-                clamp_rho(expit(d1 + standardized_depth * d2))
+                clamp_rho(expit((d1 + standardized_depth * d2).clamp(-10.0, 10.0)))
             }
         }
     }
@@ -423,7 +423,7 @@ fn optimize_dispersion_linear(
             if predictor.is_nan() {
                 return f64::INFINITY;
             }
-            let rho = clamp_rho(expit(predictor));
+            let rho = clamp_rho(expit(predictor.clamp(-10.0, 10.0)));
             let alpha = 0.5 * (1.0 - rho) / rho;
 
             // Beta-binomial log-pmf with α = β (null: p=0.5)
@@ -565,9 +565,8 @@ fn optimize_prob_phased(
 ///
 /// Python equivalent: `opt_unphased_dp()` in as_analysis.py
 ///
-/// This marginalizes over unknown phase independently at every position. Both
-/// orientations receive equal prior weight, including the first SNP, so the
-/// feature likelihood does not depend on input row order.
+/// Preserve archived Python: anchor the first SNP to its reference allele,
+/// then marginalize both orientations for each subsequent SNP.
 ///
 /// # Arguments
 /// * `prob` - Probability parameter (0 to 1)
@@ -600,7 +599,7 @@ pub fn optimize_prob_unphased_dp(
         (disp[0], disp)
     };
 
-    // Accumulate every position under both orientation hypotheses in log-space.
+    // Average orientations only after the first SNP, as in archived Python.
     // For each SNP:
     //   log(0.5 * p1 + 0.5 * p2) = ln(0.5) + logaddexp(ln(p1), ln(p2))
     let orientation_log_likelihood = |ref_count: u32, n: u32, rho: f64| -> Result<f64> {
@@ -617,7 +616,7 @@ pub fn optimize_prob_unphased_dp(
         Ok((0.5_f64).ln() + logaddexp(lp1, lp2))
     };
 
-    let mut log_likelihood = orientation_log_likelihood(first_ref, first_n, first_disp)?;
+    let mut log_likelihood = -opt_prob(prob, first_disp, first_ref, first_n)?;
 
     for (i, (&ref_count, &n)) in phase_ref.iter().zip(phase_n.iter()).enumerate() {
         let rho = if phase_disp.len() > 1 {
@@ -647,39 +646,6 @@ fn logaddexp(a: f64, b: f64) -> f64 {
     } else {
         m + ((a - m).exp() + (b - m).exp()).ln()
     }
-}
-
-/// Exact two-sided beta-binomial p-value under the balanced null.
-///
-/// Outcomes at least as far from `n / 2` as the observed reference count are
-/// included. Summation and normalization are performed in log-space so fitted
-/// rho values close to the binomial boundary remain usable.
-pub fn exact_beta_binomial_pvalue(k: u32, n: u32, rho: f64) -> Result<f64> {
-    if k > n {
-        anyhow::bail!("reference count cannot exceed total count");
-    }
-
-    let rho = clamp_rho(rho);
-    let alpha = 0.5 * (1.0 - rho) / rho;
-    let distribution = BetaBinomial::new(n, alpha, alpha)
-        .context("Failed to create beta-binomial for exact SNV test")?;
-    let observed_deviation = (2_i64 * k as i64 - n as i64).abs();
-    let mut log_total = f64::NEG_INFINITY;
-    let mut log_tail = f64::NEG_INFINITY;
-
-    for outcome in 0..=n {
-        let log_pmf = distribution.ln_f(&(outcome as u64));
-        log_total = logaddexp(log_total, log_pmf);
-        let deviation = (2_i64 * outcome as i64 - n as i64).abs();
-        if deviation >= observed_deviation {
-            log_tail = logaddexp(log_tail, log_pmf);
-        }
-    }
-
-    if !log_total.is_finite() || !log_tail.is_finite() {
-        anyhow::bail!("exact beta-binomial p-value was non-finite");
-    }
-    Ok((log_tail - log_total).exp().clamp(0.0, 1.0))
 }
 
 /// Bounded Brent minimizer matching SciPy's default scalar-bounded routine.
@@ -786,9 +752,9 @@ fn golden_section_search<F>(f: F, a: f64, mut b: f64, tol: f64) -> Result<f64>
 where
     F: Fn(f64) -> f64,
 {
-    const PHI: f64 = 1.618033988749895; // Golden ratio
-    let inv_phi = 1.0 / PHI;
-    let inv_phi2 = 1.0 / (PHI * PHI);
+    let phi = (1.0 + 5.0_f64.sqrt()) / 2.0;
+    let inv_phi = 1.0 / phi;
+    let inv_phi2 = 1.0 / (phi * phi);
 
     let mut a = a;
     let mut h = b - a;
@@ -1067,24 +1033,6 @@ fn raw_depth(variant: &VariantCounts, pseudocount: u32) -> Result<u32> {
         .ok_or_else(|| anyhow::anyhow!("raw read depth exceeds the supported range"))
 }
 
-fn canonicalize_region_indices(
-    region_map: &mut HashMap<String, Vec<usize>>,
-    variants: &[VariantCounts],
-) {
-    for indices in region_map.values_mut() {
-        indices.sort_unstable_by(|left, right| {
-            let left = &variants[*left];
-            let right = &variants[*right];
-            left.chrom
-                .cmp(&right.chrom)
-                .then_with(|| left.pos.cmp(&right.pos))
-                .then_with(|| left.ref_count.cmp(&right.ref_count))
-                .then_with(|| left.alt_count.cmp(&right.alt_count))
-                .then_with(|| left.gt.cmp(&right.gt))
-        });
-    }
-}
-
 fn test_fixed_dispersion(
     variants: Vec<VariantCounts>,
     phased: bool,
@@ -1092,6 +1040,9 @@ fn test_fixed_dispersion(
     exact_snv_pvalues: bool,
     pseudocount: u32,
 ) -> Result<Vec<ImbalanceResult>> {
+    if exact_snv_pvalues {
+        anyhow::bail!("Exact SNV p-values are not supported; use the archived chi-square LRT");
+    }
     if variants.is_empty() {
         return Ok(vec![]);
     }
@@ -1117,7 +1068,6 @@ fn test_fixed_dispersion(
             .or_default()
             .push(i);
     }
-    canonicalize_region_indices(&mut region_map, &variants);
 
     eprintln!(
         "Optimizing imbalance likelihood for {} regions...",
@@ -1167,9 +1117,8 @@ fn test_fixed_dispersion(
                     )
                     .unwrap_or(f64::INFINITY)
                 };
-                // The orientation-marginal likelihood is symmetric around 0.5.
-                // Restrict to one half to make the reported magnitude identifiable.
-                let mu = golden_section_search(objective, 0.5, 1.0, 1e-6)?;
+                // Preserve the archived first-SNP reference orientation and domain.
+                let mu = golden_section_search(objective, 0.0, 1.0, 1e-6)?;
                 let alt_ll = -objective(mu);
                 (alt_ll, mu)
             } else {
@@ -1177,18 +1126,8 @@ fn test_fixed_dispersion(
             };
 
             let lrt = (-2.0 * (null_ll - alt_ll)).max(0.0);
-            let pval = if exact_snv_pvalues && indices.len() == 1 {
-                let variant = &variants[indices[0]];
-                let raw_ref = variant.ref_count.checked_sub(pseudocount).ok_or_else(|| {
-                    anyhow::anyhow!("reference count is smaller than the pseudocount")
-                })?;
-                let raw_n = raw_depth(variant, pseudocount)?;
-                exact_beta_binomial_pvalue(raw_ref, raw_n, parameters.rho_at_depth(raw_n))?
-            } else {
-                let chi2 =
-                    ChiSquared::new(1.0).context("Failed to create chi-squared distribution")?;
-                1.0 - chi2.cdf(lrt)
-            };
+            let chi2 = ChiSquared::new(1.0).context("Failed to create chi-squared distribution")?;
+            let pval = chi2.sf(lrt);
 
             let total_ref: u32 = region_ref.iter().sum();
             let total_alt: u32 = indices.iter().map(|&i| variants[i].alt_count).sum();
@@ -1487,14 +1426,14 @@ mod tests {
     }
 
     #[test]
-    fn test_linear_predictor_is_not_clipped() {
+    fn test_linear_predictor_keeps_archived_fit_guard() {
         let parameters = DispersionParameters::Linear {
             d1: 0.0,
             d2: 100.0,
             depth_center: 0.0,
             depth_scale: 1.0,
         };
-        assert!(parameters.rho_at_depth(1) > 0.999999);
+        assert!((parameters.rho_at_depth(1) - expit(10.0)).abs() < 1e-12);
     }
 
     #[test]
@@ -1586,19 +1525,6 @@ mod tests {
         assert!(result_imbalanced.is_finite());
     }
 
-    #[test]
-    fn test_exact_beta_binomial_pvalue_is_symmetric_and_handles_low_rho() {
-        let left = exact_beta_binomial_pvalue(2, 10, 0.08).unwrap();
-        let right = exact_beta_binomial_pvalue(8, 10, 0.08).unwrap();
-        assert!((left - right).abs() < 1e-12);
-        assert!((exact_beta_binomial_pvalue(5, 10, 0.08).unwrap() - 1.0).abs() < 1e-12);
-
-        // At the clamp boundary this converges to the ordinary two-sided
-        // binomial probability for observing 0 or 10 successes.
-        let near_binomial = exact_beta_binomial_pvalue(0, 10, 0.0).unwrap();
-        assert!((near_binomial - 2.0 / 1024.0).abs() < 1e-7);
-    }
-
     fn vc_peak(pos: u32, rc: u32, ac: u32, gt: Option<u8>) -> VariantCounts {
         VariantCounts {
             chrom: "chr1".to_string(),
@@ -1688,69 +1614,33 @@ mod tests {
     }
 
     #[test]
-    fn test_unphased_feature_is_permutation_invariant_with_linear_nuisance() {
-        let variants = vec![
-            vc_peak(300, 17, 3, None),
-            vc_peak(100, 4, 16, None),
-            vc_peak(200, 13, 12, None),
-        ];
-        let mut reversed = variants.clone();
-        reversed.reverse();
+    fn test_fixed_nuisance_keeps_archived_chi_square_pvalues() {
         let config = AnalysisConfig {
             min_count: 0,
-            pseudocount: 0,
-            method: AnalysisMethod::Linear,
-            phased: false,
-        };
-        let nuisance = DispersionParameters::Linear {
-            d1: -3.0,
-            d2: 0.025,
-            depth_center: 20.0,
-            depth_scale: 5.0,
-        };
-
-        let forward =
-            analyze_imbalance_with_fixed_dispersion(variants, &config, nuisance, false).unwrap();
-        let backward =
-            analyze_imbalance_with_fixed_dispersion(reversed, &config, nuisance, false).unwrap();
-        assert_eq!(forward.results.len(), 1);
-        assert_eq!(backward.results.len(), 1);
-        assert_result_close(&forward.results[0], &backward.results[0]);
-        assert_eq!(forward.results[0].fdr_pval, backward.results[0].fdr_pval);
-    }
-
-    #[test]
-    fn test_fixed_nuisance_exact_snv_uses_raw_counts() {
-        let variants = vec![vc_peak(100, 8, 2, None)];
-        let no_pseudocount = AnalysisConfig {
-            min_count: 0,
-            pseudocount: 0,
+            pseudocount: 1,
             method: AnalysisMethod::Single,
             phased: false,
         };
-        let with_pseudocount = AnalysisConfig {
-            pseudocount: 3,
-            ..no_pseudocount.clone()
-        };
         let nuisance = DispersionParameters::Single { rho: 0.04 };
-
-        let raw = analyze_imbalance_with_fixed_dispersion(
-            variants.clone(),
-            &no_pseudocount,
+        let output = analyze_imbalance_with_fixed_dispersion(
+            vec![vc_peak(100, 8, 2, None)],
+            &config,
             nuisance,
-            true,
+            false,
         )
         .unwrap();
-        let padded =
-            analyze_imbalance_with_fixed_dispersion(variants, &with_pseudocount, nuisance, true)
-                .unwrap();
-        assert_eq!(raw.results[0].ref_count, 8);
-        assert_eq!(padded.results[0].ref_count, 8);
-        assert_eq!(raw.results[0].alt_count, 2);
-        assert_eq!(padded.results[0].alt_count, 2);
-        assert!((raw.results[0].pval - padded.results[0].pval).abs() < 1e-12);
-        assert_eq!(raw.rho, Some(0.04));
-        assert_eq!(padded.rho, Some(0.04));
+        let result = &output.results[0];
+        let expected = ChiSquared::new(1.0).unwrap().sf(result.lrt);
+        assert!((result.pval - expected).abs() < 1e-12);
+        assert_eq!(result.ref_count, 8);
+        assert_eq!(result.alt_count, 2);
+        assert!(analyze_imbalance_with_fixed_dispersion(
+            vec![vc_peak(100, 8, 2, None)],
+            &config,
+            nuisance,
+            true
+        )
+        .is_err());
     }
 
     #[test]

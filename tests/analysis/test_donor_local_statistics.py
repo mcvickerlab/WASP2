@@ -70,7 +70,7 @@ def _rho_at_depth(dispersion: pd.Series, total: int) -> float:
         linear = float(dispersion["linear_d1"]) + standardized_depth * float(
             dispersion["linear_d2"]
         )
-        rho = float(expit(linear))
+        rho = float(expit(np.clip(linear, -10.0, 10.0)))
     return float(np.clip(rho, RHO_EPSILON, 1.0 - RHO_EPSILON))
 
 
@@ -80,15 +80,6 @@ def _logpmf(probability: float, rho: float, ref_count: int, total: int) -> float
     alpha = probability * (1.0 - rho) / rho
     beta = (1.0 - probability) * (1.0 - rho) / rho
     return float(betabinom.logpmf(ref_count, total, alpha, beta))
-
-
-def _exact_two_sided_pvalue(ref_count: int, total: int, rho: float) -> float:
-    outcomes = np.arange(total + 1)
-    alpha = 0.5 * (1.0 - rho) / rho
-    log_probabilities = betabinom.logpmf(outcomes, total, alpha, alpha)
-    observed_deviation = abs(2 * ref_count - total)
-    tail = np.abs(2 * outcomes - total) >= observed_deviation
-    return float(np.exp(logsumexp(log_probabilities[tail]) - logsumexp(log_probabilities)))
 
 
 def _single_snv_oracle(row: pd.Series, dispersion: pd.Series) -> dict[str, float]:
@@ -111,20 +102,21 @@ def _single_snv_oracle(row: pd.Series, dispersion: pd.Series) -> dict[str, float
         "alt_ll": alt_ll,
         "mu": float(fit.x),
         "lrt": lrt,
-        "pval": _exact_two_sided_pvalue(ref_count, total, rho),
+        "pval": float(chi2.sf(lrt, 1)),
     }
 
 
 def _unphased_feature_oracle(frame: pd.DataFrame, dispersion: pd.Series) -> dict[str, float]:
     observations = []
-    for row in frame.sort_values(["chrom", "pos", "ref_count", "alt_count"]).itertuples():
+    for row in frame.itertuples():
         total = int(row.ref_count + row.alt_count)
         observations.append((int(row.ref_count), total, _rho_at_depth(dispersion, total)))
     null_ll = sum(_logpmf(0.5, rho, ref_count, total) for ref_count, total, rho in observations)
 
     def negative_log_likelihood(probability: float) -> float:
-        log_likelihood = 0.0
-        for ref_count, total, rho in observations:
+        first_ref, first_total, first_rho = observations[0]
+        log_likelihood = _logpmf(probability, first_rho, first_ref, first_total)
+        for ref_count, total, rho in observations[1:]:
             orientations = [
                 _logpmf(probability, rho, ref_count, total),
                 _logpmf(1.0 - probability, rho, ref_count, total),
@@ -134,7 +126,7 @@ def _unphased_feature_oracle(frame: pd.DataFrame, dispersion: pd.Series) -> dict
 
     fit = minimize_scalar(
         negative_log_likelihood,
-        bounds=(0.5, 1.0),
+        bounds=(0.0, 1.0),
         method="bounded",
         options={"xatol": 1e-10},
     )
@@ -271,29 +263,23 @@ def _run_legacy(
 
 
 @pytest.mark.rust
-@pytest.mark.parametrize("method", ["single", "linear"])
-def test_unphased_feature_results_are_row_permutation_invariant(
-    tmp_path: Path,
-    rust_backend: Any,
-    method: str,
-) -> None:
-    counts = (
-        _statistical_counts()
-        .loc[lambda frame: frame["donor_id"] == "donor_a"]
-        .drop(columns="donor_id")
-    )
-    forward = tmp_path / "forward.tsv"
-    shuffled = tmp_path / "shuffled.tsv"
-    counts.to_csv(forward, sep="\t", index=False)
-    counts.sample(frac=1.0, random_state=1729).to_csv(shuffled, sep="\t", index=False)
-
-    first = _run_legacy(rust_backend, forward, method=method, phased=False, region_col="region")
-    second = _run_legacy(rust_backend, shuffled, method=method, phased=False, region_col="region")
-    assert first[["region", "ref_count", "alt_count", "N", "snp_count"]].equals(
-        second[["region", "ref_count", "alt_count", "N", "snp_count"]]
-    )
-    for column in ["null_ll", "alt_ll", "mu", "lrt", "pval", "fdr_pval"]:
-        np.testing.assert_allclose(first[column], second[column], rtol=0, atol=1e-12)
+def test_unphased_feature_keeps_archived_first_snp_orientation(tmp_path, rust_backend):
+    counts = _statistical_counts().loc[lambda f: f["donor_id"] == "donor_a"].copy()
+    counts = counts.drop(columns="donor_id")
+    dispersion = pd.Series({"model": "single", "rho": 0.08})
+    for frame in [counts, counts.iloc[::-1]]:
+        path = tmp_path / "counts.tsv"
+        frame.to_csv(path, sep="\t", index=False)
+        run = rust_backend.analyze_imbalance_run(
+            str(path), min_count=0, pseudocount=0, method="single", rho=0.08, region_col="region"
+        )
+        assert run["pvalue_method"] == "chi_square_lrt"
+        assert run["exact_snv"] is False
+        actual = pd.DataFrame(run["results"]).set_index("region")
+        for region, group in frame.groupby("region", sort=False):
+            expected = _unphased_feature_oracle(group, dispersion)
+            for column, value in expected.items():
+                np.testing.assert_allclose(actual.loc[region, column], value, rtol=3e-5, atol=3e-5)
 
 
 @pytest.mark.rust

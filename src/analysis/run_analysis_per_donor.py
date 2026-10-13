@@ -729,7 +729,6 @@ def _call_analyzer_with_fit(
         "linear_d2": fit.linear_d2,
         "linear_depth_center": fit.linear_depth_center,
         "linear_depth_scale": fit.linear_depth_scale,
-        "exact_snv": region_col is None,
     }
     if _is_known_pyo3_api(analyzer):
         raw_run = analyzer(str(path), **explicit_kwargs)
@@ -965,7 +964,7 @@ def run_per_donor_analysis(
     region_col: str | None = None,
     phased: bool = False,
     min_count: int = 10,
-    pseudocount: int = 0,
+    pseudocount: int = 1,
     min_donor_observations: int = 50,
     expected_manifest_sha256: str | None = None,
 ) -> dict[str, Path]:
@@ -1198,6 +1197,7 @@ def run_per_donor_analysis(
                 "region_col": normalized_region_col,
                 "phased": phased,
                 "multiple_testing": "Benjamini-Hochberg independently within each donor",
+                "pvalue_method": "chi_square_lrt",
             },
             "parameters": {
                 "min_count": min_count,

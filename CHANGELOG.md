@@ -4,6 +4,14 @@ All notable changes to WASP2 will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- Restore archived chi-square LRT p-values and first-SNP-anchored unphased
+  feature likelihoods in donor-local and legacy bulk analysis.
+- Default donor-local pseudocounts to 1, matching archived Python. Per-donor
+  nuisance fitting and independent donor tests/BH correction remain available.
+- Integrate the raw-count and single-cell layout compatibility fixes from #135.
+  Exact-SNV requests are rejected rather than switching the p-value method.
+
 ## [1.5.0] - 2026-07-21
 
 ### Added

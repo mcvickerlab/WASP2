@@ -603,10 +603,10 @@ fn analyze_imbalance_run(
         linear_depth_scale,
     )?;
     let fixed_nuisance = fixed_parameters.is_some();
-    let exact_snv = exact_snv.unwrap_or(fixed_nuisance && region_col.is_none());
-    if exact_snv && !fixed_nuisance {
+    let exact_snv = exact_snv.unwrap_or(false);
+    if exact_snv {
         return Err(PyRuntimeError::new_err(
-            "exact_snv=True requires nuisance parameters from fit_imbalance_dispersion()",
+            "exact_snv=True is not supported; use the archived chi-square LRT",
         ));
     }
     let config = analysis::AnalysisConfig {
@@ -645,14 +645,7 @@ fn analyze_imbalance_run(
         if fixed_nuisance { "fixed" } else { "fitted" },
     )?;
     result.set_item("exact_snv", exact_snv)?;
-    result.set_item(
-        "pvalue_method",
-        if exact_snv {
-            "beta_binomial_exact_two_sided"
-        } else {
-            "chi_square_lrt"
-        },
-    )?;
+    result.set_item("pvalue_method", "chi_square_lrt")?;
     Ok(result.unbind().into_any())
 }
 

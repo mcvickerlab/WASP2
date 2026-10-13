@@ -214,7 +214,7 @@ def run_ai_analysis(
             region_col=region_col,
             phased=bool(phased),
             min_count=10 if min_count is None else min_count,
-            pseudocount=0 if pseudocount is None else pseudocount,
+            pseudocount=1 if pseudocount is None else pseudocount,
             min_donor_observations=min_donor_observations,
             expected_manifest_sha256=expected_manifest_sha256,
         )

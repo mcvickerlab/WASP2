@@ -461,7 +461,7 @@ def test_per_donor_route_defaults_to_raw_counts_without_pseudocount(
     assert observed["unit"] == "feature"
     assert observed["model"] == "linear"
     assert observed["dispersion_scope"] == "global"
-    assert observed["pseudocount"] == 0
+    assert observed["pseudocount"] == 1
 
 
 @pytest.mark.unit
@@ -496,7 +496,7 @@ def test_run_ai_analysis_forwards_model_scope_unit_matrix(
     assert observed["region_col"] == region_col
     assert observed["model"] == model
     assert observed["dispersion_scope"] == dispersion_scope
-    assert observed["pseudocount"] == 0
+    assert observed["pseudocount"] == 1
 
 
 @pytest.mark.unit
@@ -668,6 +668,7 @@ def test_sidecar_and_provenance_schema(
         "region_col": region_col,
         "phased": False,
         "multiple_testing": "Benjamini-Hochberg independently within each donor",
+        "pvalue_method": "chi_square_lrt",
     }
     assert provenance["parameters"] == {
         "min_count": 0,
