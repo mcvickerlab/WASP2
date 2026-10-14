@@ -427,18 +427,12 @@ def _load_counts(
         )
 
     gt_qc = _genotype_qc(frame) if phased else None
-    repeated_values = ["ref_count", "alt_count"]
-    if phased and "GT" in frame.columns:
-        repeated_values.append("GT")
-    count_conflict = _first_conflicting_group(frame, SNV_COLUMNS, repeated_values)
-    if count_conflict is not None:
-        donor_id, chrom, pos, ref, alt = count_conflict
-        raise ValueError(
-            f"Conflicting repeated rows for donor/SNV {donor_id} {chrom}:{pos}:{ref}>{alt}"
-        )
-
     raw_rows = len(frame)
-    identity = [*SNV_COLUMNS, selected_region] if selected_region is not None else SNV_COLUMNS
+    identity = [*SNV_COLUMNS, "ref_count", "alt_count"]
+    if selected_region is not None:
+        identity.append(selected_region)
+    if phased and "GT" in frame.columns:
+        identity.append("GT")
     frame = frame.drop_duplicates(identity, keep="first").copy()
     frame["pos"] = frame["pos"].astype("uint32")
     frame["ref_count"] = frame["ref_count"].astype("uint32")
@@ -637,6 +631,7 @@ def _fit_dispersion(
     min_count: int,
     pseudocount: int,
     region_col: str | None = None,
+    phased: bool = False,
 ) -> DispersionFit:
     fitter = rust_fit_imbalance_dispersion
     if fitter is None:
@@ -646,9 +641,14 @@ def _fit_dispersion(
     # Rust deduplicates within its region key. Preserve Python's SNP-feature
     # observations and keep identical sites in separate donors distinct.
     memberships = frame[region_col] if region_col is not None else [None] * len(frame)
+    phases = pd.Series(None, index=frame.index, dtype=object)
+    if phased:
+        for _, donor_frame in frame.groupby("donor_id", sort=False):
+            if _phase_fallback_reason(donor_frame, True) is None:
+                phases.loc[donor_frame.index] = donor_frame["GT"]
     fit_frame["_fit_identity"] = [
-        json.dumps([donor, region], ensure_ascii=True, separators=(",", ":"))
-        for donor, region in zip(frame["donor_id"], memberships, strict=True)
+        json.dumps([donor, region, gt], ensure_ascii=True, separators=(",", ":"))
+        for donor, region, gt in zip(frame["donor_id"], memberships, phases, strict=True)
     ]
     _write_tsv(fit_frame, path, [*fit_columns, "_fit_identity"])
     base_kwargs: dict[str, Any] = {
@@ -849,13 +849,11 @@ def _format_donor_results(
         )
 
     if unit == "snv":
-        annotations = donor_frame.loc[
-            :, ["snv_id", "chrom", "pos", "ref", "alt", "ref_count", "alt_count"]
-        ].rename(
-            columns={
-                "ref_count": "expected_ref_count",
-                "alt_count": "expected_alt_count",
-            }
+        annotation_columns = ["snv_id", "chrom", "pos", "ref", "alt"]
+        annotations = donor_frame.groupby(annotation_columns, sort=False, as_index=False).agg(
+            expected_ref_count=("ref_count", "sum"),
+            expected_alt_count=("alt_count", "sum"),
+            expected_snp_count=("pos", "size"),
         )
         annotations["region"] = annotations["chrom"] + "_" + annotations["pos"].astype(str)
         results = annotations.merge(results, on="region", how="inner", validate="one_to_one")
@@ -865,12 +863,14 @@ def _format_donor_results(
             results["ref_count"].ne(results["expected_ref_count"])
             | results["alt_count"].ne(results["expected_alt_count"])
             | results["N"].ne(results["expected_ref_count"] + results["expected_alt_count"])
-            | results["snp_count"].ne(1)
+            | results["snp_count"].ne(results["expected_snp_count"])
         )
         if mismatch.any():
             raise RuntimeError(f"Rust SNV counts differ from input for donor {donor_id}")
         leading_columns = ["donor_id", "snv_id", "chrom", "pos", "ref", "alt"]
-        results = results.drop(columns=["region", "expected_ref_count", "expected_alt_count"])
+        results = results.drop(
+            columns=["region", "expected_ref_count", "expected_alt_count", "expected_snp_count"]
+        )
     else:
         if region_col is None:
             raise RuntimeError("Feature analysis has no normalized region column")
@@ -1018,6 +1018,19 @@ def run_per_donor_analysis(
         )
 
     eligible_rows = frame.loc[frame["_total_count"] >= min_count].copy()
+    retained_groups = []
+    phase_decisions: dict[str, str | None] = {}
+    for donor_id, donor_rows in eligible_rows.groupby("donor_id", sort=False):
+        fallback_reason = _phase_fallback_reason(donor_rows, phased)
+        phase_decisions[str(donor_id)] = fallback_reason
+        identity = [*SNV_COLUMNS, "ref_count", "alt_count"]
+        if normalized_region_col is not None:
+            identity.append(normalized_region_col)
+        if phased and fallback_reason is None:
+            identity.append("GT")
+        retained_groups.append(donor_rows.drop_duplicates(identity, keep="first"))
+    if retained_groups:
+        eligible_rows = pd.concat(retained_groups).sort_index(kind="stable")
     fit_rows = eligible_rows.copy()
     donor_qc = (
         frame.groupby("donor_id", sort=True)
@@ -1070,6 +1083,7 @@ def run_per_donor_analysis(
                 min_count=min_count,
                 pseudocount=pseudocount,
                 region_col=normalized_region_col,
+                phased=phased,
             )
 
         result_frames: list[pd.DataFrame] = []
@@ -1087,8 +1101,9 @@ def run_per_donor_analysis(
                 min_count=min_count,
                 pseudocount=pseudocount,
                 region_col=normalized_region_col,
+                phased=phased,
             )
-            fallback_reason = _phase_fallback_reason(donor_rows, phased)
+            fallback_reason = phase_decisions[donor_id]
             rust_region_col, donor_rows = _prepare_analysis_table(
                 donor_rows,
                 work / "donor_counts.tsv",

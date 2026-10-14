@@ -54,7 +54,11 @@ The supported units are ``snv`` and ``feature``; ``peak`` is an alias for
 uses the locked ``region`` column, or an explicit ``--region-col`` for a
 standalone count table. Overlapping feature memberships are retained for feature
 tests and dispersion fitting, matching archived Python's retained SNP-feature
-observations. Exact duplicate memberships are removed.
+observations. Deduplication follows Python's chromosome, position, counts, and
+feature key, including GT only when phasing is effective. Different count
+observations at the same SNP are retained. SNV output aggregates those retained
+observations into one result per position, as archived Python does. Allele and
+SNV-ID consistency checks remain enforced.
 
 ``--dispersion-scope per-donor`` fits ``single`` or ``linear`` nuisance
 parameters independently for each included donor. ``--dispersion-scope global``
@@ -67,7 +71,8 @@ within each donor after depth filtering. Missing GT, a single distinct GT, or
 no numeric ``0|1``/``1|0`` genotype selects unphased inference. Allele-string GT
 such as ``A|G`` is retained rather than converted to numeric phase. Provenance
 ``donors.phasing`` records each included donor's ``requested_phased``,
-``effective_phased``, and ``fallback_reason``; ``analysis.phased`` remains the
+``effective_phased``, and ``fallback_reason`` before phase-aware deduplication;
+``analysis.phased`` remains the
 original request. A shared dispersion fit does not share phasing decisions.
 
 QC ``eligible_snv_observations`` and dispersion-sidecar

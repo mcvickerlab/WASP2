@@ -242,3 +242,93 @@ def test_donor_phasing_decisions_are_independent(tmp_path):
     assert decisions["informative"]["effective_phased"] is True
     assert decisions["fallback"]["effective_phased"] is False
     assert decisions["fallback"]["fallback_reason"] == "identical_gt"
+
+
+@pytest.mark.rust
+@pytest.mark.parametrize("unit,phased", [("snv", False), ("feature", False), ("feature", True)])
+@pytest.mark.parametrize("pc", [0, 1])
+@pytest.mark.parametrize("scope", ["global", "per-donor"])
+def test_distinct_repeated_snp_observations_match_archive(tmp_path, unit, phased, pc, scope):
+    import contextlib
+    import io
+
+    from scripts.compare_archive_analysis import load_archive
+
+    base = bulk_counts().drop(columns="gene")
+    changed = base.iloc[:1].copy()
+    changed["ref_count"] += 3
+    opposite = base.iloc[:1].copy()
+    opposite["GT"] = "1|0"
+    parts = [base, changed, opposite, changed.copy()]
+    if unit == "feature":
+        overlapping = changed.copy()
+        overlapping["region"] = "overlap"
+        parts.append(overlapping)
+    base = pd.concat(parts, ignore_index=True)
+    if unit == "snv":
+        base = base.drop(columns="region")
+    counts = pd.concat([base.assign(donor_id=donor) for donor in ["A", "B"]])
+    file = tmp_path / "counts.tsv"
+    counts.to_csv(file, sep="\t", index=False)
+    with contextlib.redirect_stdout(io.StringIO()):
+        expected = load_archive()["as_analysis"].get_imbalance(
+            base.copy(),
+            region_col="region" if unit == "feature" else None,
+            phased=phased,
+            pseudocount=pc,
+        )
+    if unit == "snv":
+        expected = expected.rename(columns={"variant": "region"})
+    paths = run_per_donor_analysis(
+        file,
+        tmp_path / "results.tsv",
+        unit=unit,
+        region_col="region" if unit == "feature" else None,
+        phased=phased,
+        pseudocount=pc,
+        dispersion_scope=scope,
+        min_donor_observations=4,
+    )
+    actual = pd.read_csv(paths["results"], sep="\t")
+    for _, observed in actual.groupby("donor_id"):
+        observed = observed.copy()
+        if unit == "feature":
+            observed = observed.rename(columns={"feature_id": "region"})
+        else:
+            observed["region"] = observed["chrom"] + "_" + observed["pos"].astype(str)
+        comparison = compare_frames(expected, observed)
+        assert comparison["status"] == "PASS", comparison
+
+
+@pytest.mark.rust
+def test_fallback_duplicate_gt_is_ignored_after_phase_decision(tmp_path):
+    import contextlib
+    import io
+
+    from scripts.compare_archive_analysis import load_archive
+
+    base = bulk_counts().drop(columns="gene").assign(GT="A|G")
+    duplicate = base.iloc[:1].copy()
+    duplicate["GT"] = "G|A"
+    base = pd.concat([base, duplicate], ignore_index=True)
+    file = tmp_path / "counts.tsv"
+    base.assign(donor_id="A").to_csv(file, sep="\t", index=False)
+    with contextlib.redirect_stdout(io.StringIO()):
+        expected = load_archive()["as_analysis"].get_imbalance(
+            base.copy(),
+            region_col="region",
+            phased=True,
+        )
+    paths = run_per_donor_analysis(
+        file,
+        tmp_path / "results.tsv",
+        unit="feature",
+        region_col="region",
+        phased=True,
+        min_donor_observations=4,
+    )
+    actual = pd.read_csv(paths["results"], sep="\t").rename(columns={"feature_id": "region"})
+    assert compare_frames(expected, actual)["status"] == "PASS"
+    provenance = json.loads(paths["provenance"].read_text())
+    assert provenance["donors"]["phasing"][0]["fallback_reason"] == "no_numeric_phased_gt"
+    assert pd.read_csv(paths["dispersion"], sep="\t")["fit_observations"].item() == 12

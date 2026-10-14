@@ -379,7 +379,7 @@ def test_overlapping_feature_membership_is_preserved_in_dispersion_fit(
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("conflict_column,replacement", [("alt", "T"), ("ref_count", 17)])
+@pytest.mark.parametrize("conflict_column,replacement", [("alt", "T")])
 def test_conflicting_repeated_feature_rows_fail_closed(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -5,6 +5,9 @@ All notable changes to WASP2 will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- Retain distinct repeated SNP count observations in donor analysis and apply
+  Python phase-aware deduplication after depth filtering. SNV outputs aggregate
+  retained observations per position; fitting preserves their phase identities.
 - Donor feature analysis follows archived Python phasing fallback for missing,
   identical, or nonnumeric GT after depth filtering, without converting allele
   strings. Provenance records requested and effective phase per included donor.
