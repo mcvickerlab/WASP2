@@ -169,12 +169,19 @@ def test_overlapping_donor_features_match_python(tmp_path, dispersion_scope, pha
                 method=model,
             )
         comparison = compare_frames(expected, actual.loc[actual["donor_id"] == donor])
-        assert comparison["status"] == "PASS", comparison
+        expected_fit = shared_fit if shared_fit is not None else independent_fit(base)
+        assert comparison["status"] == "PASS", json.dumps(
+            {
+                "donor": donor,
+                "comparison": comparison,
+                "python_fit": np.asarray(expected_fit).tolist(),
+                "rust_fit": fits.loc[donor].to_dict(),
+            }
+        )
         assert fits.loc[donor, "fit_observations"] == (28 if dispersion_scope == "global" else 14)
         assert fits.loc[donor, "donor_eligible_snv_observations"] == 12
         assert qc.loc[donor, "eligible_snv_observations"] == 12
         assert qc.loc[donor, "eligible_test_rows"] == 14
-        expected_fit = shared_fit if shared_fit is not None else independent_fit(base)
         if model == "single":
             np.testing.assert_allclose(fits.loc[donor, "rho"], expected_fit, rtol=5e-5, atol=5e-5)
         else:

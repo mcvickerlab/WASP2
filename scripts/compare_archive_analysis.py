@@ -80,7 +80,14 @@ def adapt_linear_reference(archive: dict[str, types.ModuleType]) -> None:
         first_ll = scalar_prob(prob, first_disp, first_ref[0], first_n[0])
         p1 = np.atleast_1d(scalar_prob(prob, phase_disp, phase_ref, phase_n, log=False))
         p2 = np.atleast_1d(scalar_prob(1 - prob, phase_disp, phase_ref, phase_n, log=False))
-        return float(first_ll - np.log(np.prod(0.5 * p1 + 0.5 * p2)))
+        # Preserve the archive's arithmetic as well as its likelihood. Reducing
+        # pre-mixed probabilities with np.prod changes last-bit rounding.
+        previous = 1
+        for forward, reverse in zip(p1, p2, strict=True):
+            forward_combined = previous * forward
+            reverse_combined = previous * reverse
+            previous = 0.5 * forward_combined + 0.5 * reverse_combined
+        return float(first_ll - np.log(previous))
 
     module.opt_prob = scalar_prob
     module.opt_unphased_dp = aligned_dp

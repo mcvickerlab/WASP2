@@ -78,7 +78,13 @@ def test_full_public_atac_matrix(tmp_path, unit, model, phased, pc):
         str(path), method=model, phased=phased, region_col=region, pseudocount=pc
     )
     comparison = compare_frames(expected, pd.DataFrame(output["results"]))
-    assert comparison["status"] == "PASS", comparison
+    assert comparison["status"] == "PASS", json.dumps(
+        {
+            "comparison": comparison,
+            "python_fit": np.asarray(fitted[0]).tolist(),
+            "rust_fit": {key: output[key] for key in ["rho", "linear_d1", "linear_d2"]},
+        }
+    )
 
     def check_dispersion(fit):
         if model == "single":

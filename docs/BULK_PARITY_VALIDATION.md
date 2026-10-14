@@ -47,12 +47,24 @@ matrix. Other Python versions run the remaining compatibility regressions.
 Final-head Linux and container outcomes must be reviewed separately in GitHub
 Actions; local results do not establish those outcomes.
 
+The first full Linux run at `cb7b834` exposed six dynamic-reference failures:
+three public unphased peak cases differed in raw mu, and three heterogeneous
+per-donor linear cases differed in fitted statistics. Earlier frozen regressions
+passed, so they did not establish full Linux compatibility. Both native amd64
+and arm64 container builds, ATAC smoke tests and label checks passed on that head.
+These strict failures remain integration gates while platform arithmetic is
+investigated. `scripts/diagnose_bulk_numerics.py` compares fused/unfused kernels
+and NumPy scalar/vector arithmetic without modifying production source.
+
 ## Deliberate extensions and reference repairs
 
 Global/per-donor dispersion is the intended extension. Shared dispersion does
 not pool effect tests or multiple-testing correction across donors. Archived
 linear array shapes require explicit reference adapters; phased linear tests
 explicitly forward the phase flag that the archived linear wrapper ignored.
+The shape adapter preserves the original sequential probability recurrence;
+exact scalar/vector recurrence tests guard against replacing it with a
+mathematically equivalent but differently rounded product reduction.
 
 Interior rho values are preserved, including tested values from `1e-12` to
 `1-1e-12`. Exact endpoints retain a finite regularization because archived
