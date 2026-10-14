@@ -60,9 +60,13 @@ multiply/add arithmetic at the tested Cephes components, while the macOS arm64
 build uses fused arithmetic. Rust now follows that measured compiler policy;
 the full strict matrix must verify the resulting inference on each platform.
 At `9d3006d`, all 32 executed-reference Linux matrix runs and heterogeneous donor
-comparisons pass. A remaining frozen Mac expectation and its duplicate Rust
-trace check must be validated against independently executed Linux Python.
-Conditional tests now execute the native archived oracle at identical supplied
+comparisons pass. At `625252d`, Linux Python 3.11 passes 464 tests, 76 skipped,
+1 deselected, including all 16 native conditional checks; Python 3.10 and 3.12
+also pass. Independently executed archived Linux Python returns
+`mu=0.6928487541708976` for the fixed symmetric linear case where the Mac
+reference returns `0.3071512458291038`. The Rust trace test records each measured
+platform's raw outcome, without accepting complementary outputs.
+Conditional tests execute the native archived oracle at identical supplied
 dispersion parameters; the original Mac snapshot is unchanged and also checked
 in its pinned environment. Matching version numbers alone does not establish
 identical compiler/library arithmetic across platforms.
