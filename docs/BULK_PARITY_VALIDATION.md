@@ -30,7 +30,7 @@ Source links, compressed count tables and checksums are in
 - Heterogeneous donor tests independently fit dispersion with Python and compare
   donor effects, chi-square LRT p-values and donor-local BH correction. They cover
   overlapping features, both dispersion models, phase modes and pseudocounts.
-- Local suite: 443 Python tests passed, 82 skipped, 1 deselected; 132 Rust tests
+- Local suite: 458 Python tests passed, 82 skipped, 1 deselected; 132 Rust tests
   passed, 7 ignored. Ruff, formatting and diff checks pass. Rust 1.88 Clippy
   passes with the pre-existing `uninlined_format_args` lint disabled.
 
@@ -59,6 +59,13 @@ The probe confirms that the pinned Linux x86_64 SciPy build uses separate
 multiply/add arithmetic at the tested Cephes components, while the macOS arm64
 build uses fused arithmetic. Rust now follows that measured compiler policy;
 the full strict matrix must verify the resulting inference on each platform.
+At `9d3006d`, all 32 executed-reference Linux matrix runs and heterogeneous donor
+comparisons pass. A remaining frozen Mac expectation and its duplicate Rust
+trace check must be validated against independently executed Linux Python.
+Conditional tests now execute the native archived oracle at identical supplied
+dispersion parameters; the original Mac snapshot is unchanged and also checked
+in its pinned environment. Matching version numbers alone does not establish
+identical compiler/library arithmetic across platforms.
 
 ## Deliberate extensions and reference repairs
 

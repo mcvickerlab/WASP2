@@ -25,7 +25,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from anndata import AnnData
+from scipy.optimize import OptimizeResult
 from scipy.sparse import csr_matrix
+from scipy.special import expit
 
 ROOT = Path(__file__).resolve().parents[1]
 ARCHIVE_REF = "41354fc"
@@ -91,6 +93,64 @@ def adapt_linear_reference(archive: dict[str, types.ModuleType]) -> None:
 
     module.opt_prob = scalar_prob
     module.opt_unphased_dp = aligned_dp
+
+
+def fixed_bulk_reference(case: dict, ref: str = ARCHIVE_REF) -> pd.DataFrame:
+    """Execute archived inference with supplied nuisance parameters, on this platform.
+
+    Only nuisance fitting is replaced. The archived data preparation, effect
+    optimizer, likelihood recurrence, LRT and BH functions remain the oracle.
+    Linear predictions evaluate the supplied four-field API directly to avoid
+    a coefficient-conversion roundtrip. Forwarding its ignored phase flag and
+    scalar/array shape repairs are the same explicit reference adaptations.
+    """
+    modules = load_archive(ref)
+    archive = modules["as_analysis"]
+    fixed = case["fixed_dispersion"]
+    pc = case["pseudocount"]
+    if case["method"] == "single":
+        original = archive.minimize_scalar
+
+        def fixed_scalar_optimizer(fun, *args, **kwargs):
+            if len(kwargs.get("args", ())) == 2:
+                return OptimizeResult(x=fixed["rho"])
+            return original(fun, *args, **kwargs)
+
+        archive.minimize_scalar = fixed_scalar_optimizer
+    else:
+        adapt_linear_reference(modules)
+        original_model = archive.linear_model
+        original_parse = archive.parse_opt
+
+        def fixed_linear_model(frame, region_col, phased=False):
+            # frame already has the archive's pseudocounts, filtering and dedup.
+            depth = frame["N"].to_numpy() - 2 * pc
+            prediction = expit(
+                fixed["linear_d1"]
+                + ((depth - fixed["linear_depth_center"]) / fixed["linear_depth_scale"])
+                * fixed["linear_d2"]
+            )
+            # The original model obtains coefficients from minimize, then calls
+            # expit once to build this vector. Supply the fixed vector there.
+            archive.minimize = lambda *args, **kwargs: OptimizeResult(
+                x=[fixed["linear_d1"], fixed["linear_d2"]]
+            )
+            archive.expit = lambda _: prediction
+            archive.parse_opt = lambda df, disp=None, phased=False: original_parse(
+                df, disp=disp, phased=effective_phase
+            )
+            effective_phase = phased
+            return original_model(frame, region_col, phased=phased)
+
+        archive.linear_model = fixed_linear_model
+    with contextlib.redirect_stdout(io.StringIO()):
+        return archive.get_imbalance(
+            pd.DataFrame(case["counts"]),
+            method=case["method"],
+            phased=case["phased"],
+            pseudocount=pc,
+            region_col="region",
+        )
 
 
 def bulk_counts() -> pd.DataFrame:

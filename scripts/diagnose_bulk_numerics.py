@@ -14,6 +14,7 @@ import math
 import os
 import platform
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -126,6 +127,17 @@ fn main() {
         "rows": rows,
     }
     print(json.dumps(report, indent=2))
+    sys.path.insert(0, str(ROOT))
+    from scripts.compare_archive_analysis import fixed_bulk_reference
+
+    reference = json.loads(
+        (ROOT / "tests/analysis/fixtures/real_atac_optimizer_reference.json").read_text()
+    )
+    # These are newly executed Python outcomes, not adjusted Rust expectations.
+    fixed_cases = {
+        case["name"]: fixed_bulk_reference(case).to_dict("records") for case in reference["cases"]
+    }
+    print("ARCHIVED_FIXED_NUISANCE_REFERENCES=" + json.dumps(fixed_cases))
 
 
 if __name__ == "__main__":
