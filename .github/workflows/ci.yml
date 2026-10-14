@@ -116,6 +116,10 @@ jobs:
           source .venv/bin/activate
           python -c "import wasp2_rust; print('wasp2_rust loaded:', wasp2_rust.__file__)"
 
+      - name: Pin historical numerical reference for the full real ATAC matrix
+        if: matrix.python-version == '3.11'
+        run: uv pip install --python .venv/bin/python numpy==1.26.4 scipy==1.13.1
+
       - name: Run tests
         run: |
           source .venv/bin/activate

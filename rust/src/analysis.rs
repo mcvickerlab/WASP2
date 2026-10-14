@@ -23,9 +23,10 @@ pub struct VariantCounts {
     pub ref_count: u32,
     pub alt_count: u32,
     pub region: String,
-    /// Genotype phase relative to the reference allele: 0 = ref|alt, 1 = alt|ref.
-    /// `None` when genotypes are absent or unphased. Required by phased analysis.
+    /// First numeric allele, parsed as in archived Python after phasing checks.
     pub gt: Option<u8>,
+    /// Original GT token for Python's table-wide diversity/heterozygosity checks.
+    pub raw_gt: Option<String>,
 }
 
 /// Deduplication key for matching Python's `df[keep_cols].drop_duplicates()`.
@@ -202,11 +203,11 @@ impl Default for AnalysisConfig {
 // Rho Parameter Bounds (Issue #228)
 // ============================================================================
 
-/// Epsilon for clamping rho parameter to avoid division by zero.
-/// Matches Python's RHO_EPSILON in as_analysis.py.
+/// Regularization for exact endpoints, where archived beta-binomial shapes
+/// are undefined. Interior values retain the archived parameter unchanged.
 const RHO_EPSILON: f64 = 1e-10;
 
-/// Clamp rho to safe range (epsilon, 1-epsilon) to prevent division by zero.
+/// Regularize exact endpoints without clipping valid interior dispersion.
 ///
 /// The beta-binomial parameterization uses alpha = mu * (1-rho) / rho, which
 /// causes division by zero when rho=0 and produces zero alpha/beta when rho=1.
@@ -219,7 +220,13 @@ const RHO_EPSILON: f64 = 1e-10;
 /// implementation (`as_analysis.py`) supports optional warning via `warn=True`.
 #[inline]
 fn clamp_rho(rho: f64) -> f64 {
-    rho.clamp(RHO_EPSILON, 1.0 - RHO_EPSILON)
+    if rho <= 0.0 {
+        RHO_EPSILON
+    } else if rho >= 1.0 {
+        1.0 - RHO_EPSILON
+    } else {
+        rho
+    }
 }
 
 /// Deduplicate variants to match Python's `df[keep_cols].drop_duplicates()`.
@@ -247,27 +254,30 @@ fn deduplicate_variants(variants: Vec<VariantCounts>, phased: bool) -> Vec<Varia
     result
 }
 
-fn effective_phased(variants: &[VariantCounts], requested_phased: bool) -> bool {
+fn effective_phased(variants: &[VariantCounts], requested_phased: bool) -> Result<bool> {
     if !requested_phased {
-        return false;
+        return Ok(false);
     }
-
-    let mut saw_ref_alt = false;
-    let mut saw_alt_ref = false;
-    for variant in variants {
-        match variant.gt {
-            Some(0) => saw_ref_alt = true,
-            Some(1) => saw_alt_ref = true,
-            _ => {}
-        }
-    }
-
-    if saw_ref_alt && saw_alt_ref {
-        true
-    } else {
+    let unique: HashSet<_> = variants.iter().map(|v| v.raw_gt.as_deref()).collect();
+    let informative = variants
+        .iter()
+        .any(|v| matches!(v.raw_gt.as_deref(), Some("0|1" | "1|0")));
+    if unique.len() <= 1 || !informative {
         eprintln!("No informative numeric phased GT found: switching to unphased model");
-        false
+        return Ok(false);
     }
+    // Once Python enables phasing it parses every retained GT, and fails on
+    // malformed mixed input. Do not silently change likelihoods per region.
+    for variant in variants {
+        anyhow::ensure!(
+            matches!(variant.gt, Some(0 | 1)),
+            "Invalid GT {:?} at {}:{} for phased analysis; provide numeric phased genotypes or run unphased",
+            variant.raw_gt,
+            variant.chrom,
+            variant.pos
+        );
+    }
+    Ok(true)
 }
 
 /// Sigmoid function (inverse logit): expit(x) = 1 / (1 + e^-x)
@@ -1092,7 +1102,10 @@ struct PreparedAnalysis {
     effective_phased: bool,
 }
 
-fn prepare_analysis(variants: Vec<VariantCounts>, config: &AnalysisConfig) -> PreparedAnalysis {
+fn prepare_analysis(
+    variants: Vec<VariantCounts>,
+    config: &AnalysisConfig,
+) -> Result<PreparedAnalysis> {
     let filtered: Vec<VariantCounts> = variants
         .into_iter()
         .map(|mut v| {
@@ -1108,7 +1121,7 @@ fn prepare_analysis(variants: Vec<VariantCounts>, config: &AnalysisConfig) -> Pr
 
     eprintln!("Processing {} variants after filtering", filtered.len());
 
-    let phased = effective_phased(&filtered, config.phased);
+    let phased = effective_phased(&filtered, config.phased)?;
 
     // Deduplicate variants for Python parity.
     // Python's get_imbalance() does: df[keep_cols].drop_duplicates()
@@ -1122,10 +1135,10 @@ fn prepare_analysis(variants: Vec<VariantCounts>, config: &AnalysisConfig) -> Pr
             before - deduped.len()
         );
     }
-    PreparedAnalysis {
+    Ok(PreparedAnalysis {
         variants: deduped,
         effective_phased: phased,
-    }
+    })
 }
 
 fn remove_result_pseudocounts(results: &mut [ImbalanceResult], pseudocount: u32) {
@@ -1182,7 +1195,7 @@ pub fn fit_imbalance_dispersion(
     variants: Vec<VariantCounts>,
     config: &AnalysisConfig,
 ) -> Result<DispersionFit> {
-    let prepared = prepare_analysis(variants, config);
+    let prepared = prepare_analysis(variants, config)?;
     if prepared.variants.is_empty() {
         anyhow::bail!("no variants passed the count threshold for dispersion fitting");
     }
@@ -1221,7 +1234,7 @@ pub fn analyze_imbalance_with_fixed_dispersion(
     exact_snv_pvalues: bool,
 ) -> Result<AnalysisOutput> {
     let parameters = parameters.validate_for(config.method)?;
-    let prepared = prepare_analysis(variants, config);
+    let prepared = prepare_analysis(variants, config)?;
     analyze_prepared(prepared, config, parameters, exact_snv_pvalues)
 }
 
@@ -1229,7 +1242,7 @@ pub fn analyze_imbalance_detailed(
     variants: Vec<VariantCounts>,
     config: &AnalysisConfig,
 ) -> Result<AnalysisOutput> {
-    let prepared = prepare_analysis(variants, config);
+    let prepared = prepare_analysis(variants, config)?;
     let n_observations = prepared.variants.len();
     if n_observations == 0 {
         return Ok(AnalysisOutput {
@@ -1329,6 +1342,8 @@ mod tests {
         assert!((clamp_rho(0.5) - 0.5).abs() < 1e-15);
         assert!((clamp_rho(-1.0) - RHO_EPSILON).abs() < 1e-15);
         assert!((clamp_rho(2.0) - (1.0 - RHO_EPSILON)).abs() < 1e-15);
+        assert_eq!(clamp_rho(1e-12), 1e-12);
+        assert_eq!(clamp_rho(1.0 - 1e-12), 1.0 - 1e-12);
     }
 
     #[test]
@@ -1556,6 +1571,7 @@ mod tests {
             alt_count: ac,
             region: "peak1".to_string(),
             gt,
+            raw_gt: gt.map(|g| if g == 0 { "0|1" } else { "1|0" }.to_string()),
         }
     }
 
@@ -1572,19 +1588,22 @@ mod tests {
     }
 
     #[test]
-    fn test_effective_phased_requires_both_numeric_orientations() {
+    fn test_effective_phased_follows_python_table_checks() {
         let both = vec![vc_peak(100, 18, 4, Some(0)), vc_peak(200, 5, 15, Some(1))];
-        assert!(effective_phased(&both, true));
-        assert!(!effective_phased(&both, false));
+        assert!(effective_phased(&both, true).unwrap());
+        assert!(!effective_phased(&both, false).unwrap());
 
         let none = vec![vc_peak(100, 18, 4, None), vc_peak(200, 5, 15, None)];
-        assert!(!effective_phased(&none, true));
+        assert!(!effective_phased(&none, true).unwrap());
 
         let same = vec![vc_peak(100, 18, 4, Some(0)), vc_peak(200, 12, 8, Some(0))];
-        assert!(!effective_phased(&same, true));
+        assert!(!effective_phased(&same, true).unwrap());
 
         let partial = vec![vc_peak(100, 18, 4, Some(0)), vc_peak(200, 12, 8, None)];
-        assert!(!effective_phased(&partial, true));
+        assert!(effective_phased(&partial, true).is_err());
+        let mut numeric = same;
+        numeric[1].raw_gt = Some("0|0".to_string());
+        assert!(effective_phased(&numeric, true).unwrap());
     }
 
     #[test]

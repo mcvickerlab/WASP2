@@ -33,11 +33,10 @@ use bam_counter_sc::BamCounterSC;
 use mapping_filter::filter_bam_wasp;
 
 fn parse_numeric_phased_gt(gt: &str) -> Option<u8> {
-    match gt {
-        "0|1" => Some(0),
-        "1|0" => Some(1),
-        _ => None,
-    }
+    // Python parses the first allele after its table-wide phasing checks.
+    // Retain homozygous numeric GT too; the original string determines whether
+    // the table is informative, not the number of distinct first alleles.
+    gt.split('|').next()?.parse::<u8>().ok()
 }
 
 // ============================================================================
@@ -465,6 +464,7 @@ fn read_analysis_variants(
             alt_count,
             region,
             gt,
+            raw_gt: gt_idx.map(|idx| fields[idx].to_string()),
         });
     }
     Ok(variants)
@@ -1251,11 +1251,13 @@ mod tests {
     use super::parse_numeric_phased_gt;
 
     #[test]
-    fn test_parse_numeric_phased_gt_accepts_only_aho_numeric_hets() {
+    fn test_parse_numeric_phased_gt_follows_python_first_allele() {
         assert_eq!(parse_numeric_phased_gt("0|1"), Some(0));
         assert_eq!(parse_numeric_phased_gt("1|0"), Some(1));
 
-        for gt in ["A|G", "G|A", "0/1", "0|0", "1|1", "./.", ".|."] {
+        assert_eq!(parse_numeric_phased_gt("0|0"), Some(0));
+        assert_eq!(parse_numeric_phased_gt("1|1"), Some(1));
+        for gt in ["A|G", "G|A", "0/1", "./.", ".|."] {
             assert_eq!(
                 parse_numeric_phased_gt(gt),
                 None,

@@ -94,8 +94,8 @@ def find_imbalance(
             "--pseudo",
             "--pseudocount",
             help=(
-                "Pseudocount added when measuring allelic imbalance. Defaults to 0 for "
-                "--scope per-donor and 1 for the legacy route."
+                "Pseudocount added when measuring allelic imbalance. Defaults to 1 "
+                "for both donor-local and legacy analysis."
             ),
         ),
     ] = None,

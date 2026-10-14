@@ -160,7 +160,7 @@ def run_ai_analysis(
     min_count : int | None, optional
         Minimum total count threshold, by default 10.
     pseudocount : int | None, optional
-        Pseudocount to add. Defaults to 0 for donor-local analysis and 1 for
+        Pseudocount to add. Defaults to 1 for donor-local analysis and for
         the legacy route.
     phased : bool | None, optional
         Use phased genotype information, by default False.

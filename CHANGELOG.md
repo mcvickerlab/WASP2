@@ -5,6 +5,17 @@ All notable changes to WASP2 will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- Bulk phasing retains the original genotype tokens for archived table-wide
+  checks, parses numeric first alleles consistently, and rejects malformed mixed
+  phased input instead of silently changing a region's likelihood. Interior
+  dispersion values are no longer clipped to the endpoint regularization range.
+- Full 32-run public ATAC comparisons execute archived Python in pinned Linux
+  CI, including CLI inference and donor routes. Heterogeneous donor checks cover
+  both dispersion models, phasing modes and pseudocounts with independent fits.
+- Container checks exercise reordered ATAC headers, region grouping, phased
+  likelihoods and raw counts. Images carry package-version and source-revision
+  labels; smoke tests require a matching Python/Rust distribution version.
+- CLI help now reports the actual donor-local pseudocount default of 1.
 - Bulk beta-binomial calculations use a SciPy 1.13.1-compatible Cephes kernel,
   reference FMA arithmetic, and NumPy float64 reductions. Unphased inference
   follows archived probability accumulation when safe and uses log-space fallback
@@ -57,8 +68,8 @@ All notable changes to WASP2 will be documented in this file.
 ### Changed
 - VCF conversion now selects biallelic SNVs by default; multi-allelic records require the
   explicit `--include-multiallelic` option.
-- Phased inference accepts only numeric VCF heterozygote orientation (`0|1` and `1|0`) for parity
-  with the archived Python implementation; allele-string genotypes do not imply cross-SNV phase.
+- Phased inference follows archived numeric first-allele parsing after table-wide
+  genotype checks; allele-string genotypes do not imply cross-SNV phase.
 - `--phased` and `--region_col` are forwarded to the Rust backend; unsupported `--groupby`
   requests fail closed and direct users to `--region_col <parent_column>`.
 - SNV analysis is unphased by contract, while feature analysis supports phased and unphased

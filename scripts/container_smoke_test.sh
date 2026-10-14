@@ -53,7 +53,7 @@ echo ""
 # ─────────────────────────────────────────────────────────────────────────────
 # Test 1: CLI binaries exist and print version
 # ─────────────────────────────────────────────────────────────────────────────
-echo "[1/4] Version checks..."
+echo "[1/5] Version checks..."
 
 for cmd in wasp2-count wasp2-map wasp2-analyze; do
     if $cmd --version > /dev/null 2>&1; then
@@ -64,18 +64,32 @@ for cmd in wasp2-count wasp2-map wasp2-analyze; do
         FAIL=$((FAIL + 1))
     fi
 done
+python - <<'PY'
+import os
+from importlib.metadata import version
+import wasp2
+import wasp2_rust
+
+installed = version("wasp2")
+assert wasp2.__version__ == wasp2_rust.__version__ == installed
+expected = os.environ.get("EXPECTED_WASP2_VERSION", installed)
+assert installed == expected, (installed, expected)
+print(f"  PASS: Python, Rust and distribution versions agree: {installed}")
+PY
+PASS=$((PASS + 1))
 echo ""
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Test 2: Python imports
 # ─────────────────────────────────────────────────────────────────────────────
-echo "[2/4] Python imports..."
+echo "[2/5] Python imports..."
 
 if python -c "import wasp2_rust; print('Rust extension OK')" 2>/dev/null; then
     echo "  PASS: wasp2_rust import"
     PASS=$((PASS + 1))
 else
-    echo "  INFO: wasp2_rust not available (Python-only mode)"
+    echo "  FAIL: wasp2_rust import"
+    FAIL=$((FAIL + 1))
 fi
 
 if python -c "from counting.run_counting import run_count_variants; print('counting OK')" 2>/dev/null; then
@@ -88,9 +102,9 @@ fi
 echo ""
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Test 3: Count variants with real data
+# Test 3: Count variants with the bundled synthetic BAM/VCF
 # ─────────────────────────────────────────────────────────────────────────────
-echo "[3/4] Count variants with real data..."
+echo "[3/5] Count variants with bundled BAM/VCF..."
 
 if [[ -f "$DATA_DIR/sample1.bam" && -f "$DATA_DIR/variants.vcf.gz" ]]; then
     if wasp2-count count-variants \
@@ -120,7 +134,7 @@ echo ""
 # ─────────────────────────────────────────────────────────────────────────────
 # Test 4: External tools (samtools, bcftools, bedtools)
 # ─────────────────────────────────────────────────────────────────────────────
-echo "[4/4] External tool availability..."
+echo "[4/5] External tool availability..."
 
 for tool in samtools bcftools bedtools; do
     if command -v $tool > /dev/null 2>&1; then
@@ -131,6 +145,49 @@ for tool in samtools bcftools bedtools; do
         FAIL=$((FAIL + 1))
     fi
 done
+echo ""
+
+# Exercise the original ATAC failure: reordered columns, nonnumeric region IDs,
+# and both phase orientations. Compare phased and unphased CLI runs to catch
+# silently ignored --phased as well as positional parsing and ignored grouping.
+echo "[5/5] ATAC region analysis..."
+python - "$TMP_DIR/regions.tsv" <<'PY'
+import csv
+import sys
+
+with open(sys.argv[1], "w") as handle:
+    writer = csv.writer(handle, delimiter="\t")
+    writer.writerow(["ref", "alt", "region", "chrom", "start", "pos", "GT", "ref_count", "alt_count"])
+    for pos, gt, ref, alt in [(101, "0|1", 18, 2), (201, "1|0", 3, 17),
+                              (301, "0|1", 22, 18), (401, "1|0", 25, 15)]:
+        region = "chr1:100-250" if pos < 300 else "chr1:300-450"
+        writer.writerow(["A", "G", region, "chr1", pos - 1, pos, gt, ref, alt])
+PY
+wasp2-analyze find-imbalance "$TMP_DIR/regions.tsv" --phased \
+    --region_col region --out_file "$TMP_DIR/phased.tsv"
+wasp2-analyze find-imbalance "$TMP_DIR/regions.tsv" \
+    --region_col region --out_file "$TMP_DIR/unphased.tsv"
+python - "$TMP_DIR/phased.tsv" "$TMP_DIR/unphased.tsv" <<'PY'
+import csv
+import math
+import sys
+
+def read(path):
+    with open(path) as handle:
+        return {row["region"]: row for row in csv.DictReader(handle, delimiter="\t")}
+
+phased, unphased = map(read, sys.argv[1:])
+assert set(phased) == set(unphased) == {"chr1:100-250", "chr1:300-450"}
+for region, counts in [("chr1:100-250", (21, 19)), ("chr1:300-450", (47, 33))]:
+    for results in (phased, unphased):
+        row = results[region]
+        assert (int(row["ref_count"]), int(row["alt_count"])) == counts
+        assert int(row["snp_count"]) == 2
+        assert all(math.isfinite(float(row[key])) for key in ["mu", "null_ll", "alt_ll", "pval", "fdr_pval"])
+assert any(abs(float(phased[k]["alt_ll"]) - float(unphased[k]["alt_ll"])) > 1e-6 for k in phased)
+print("  PASS: region grouping, raw counts and phased likelihood through CLI")
+PY
+PASS=$((PASS + 1))
 echo ""
 
 # ─────────────────────────────────────────────────────────────────────────────

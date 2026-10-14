@@ -77,15 +77,17 @@ def test_donor_default_pseudocount_matches_python(tmp_path):
 @pytest.mark.parametrize("dispersion_scope", ["global", "per-donor"])
 @pytest.mark.parametrize("phased", [False, True])
 @pytest.mark.parametrize("pc", [0, 1])
-def test_overlapping_donor_features_match_python(tmp_path, dispersion_scope, phased, pc):
+@pytest.mark.parametrize("model", ["single", "linear"])
+def test_overlapping_donor_features_match_python(tmp_path, dispersion_scope, phased, pc, model):
     """Preserve Python observation weights with heterogeneous donors and overlaps."""
     import contextlib
     import io
 
     import numpy as np
-    from scipy.optimize import OptimizeResult, minimize_scalar
+    from scipy.optimize import OptimizeResult, minimize, minimize_scalar
+    from scipy.special import expit
     from scipy.stats import betabinom
-    from scripts.compare_archive_analysis import load_archive
+    from scripts.compare_archive_analysis import adapt_linear_reference, load_archive
 
     first = bulk_counts().drop(columns="gene")
     second = first.copy()
@@ -108,6 +110,7 @@ def test_overlapping_donor_features_match_python(tmp_path, dispersion_scope, pha
         tmp_path / "results.tsv",
         unit="feature",
         region_col="region",
+        model=model,
         dispersion_scope=dispersion_scope,
         phased=phased,
         pseudocount=pc,
@@ -116,27 +119,46 @@ def test_overlapping_donor_features_match_python(tmp_path, dispersion_scope, pha
     actual = pd.read_csv(paths["results"], sep="\t").rename(columns={"feature_id": "region"})
     fits = pd.read_csv(paths["dispersion"], sep="\t").set_index("donor_id")
     qc = pd.read_csv(paths["qc"], sep="\t").set_index("donor_id")
-    archive = load_archive()["as_analysis"]
+    modules = load_archive()
+    if model == "linear":
+        adapt_linear_reference(modules)
+    archive = modules["as_analysis"]
+    if model == "linear" and phased:
+        original_parse = archive.parse_opt
+        archive.parse_opt = lambda df, disp=None, phased=False: original_parse(
+            df, disp=disp, phased=True
+        )
     original_optimizer = archive.minimize_scalar
-    global_rho = None
-    if dispersion_scope == "global":
-        ref = retained["ref_count"].to_numpy() + pc
-        depth = retained["ref_count"].to_numpy() + retained["alt_count"].to_numpy() + 2 * pc
+
+    def independent_fit(frame):
+        ref = frame["ref_count"].to_numpy() + pc
+        depth = frame["ref_count"].to_numpy() + frame["alt_count"].to_numpy() + 2 * pc
+        if model == "linear":
+            return minimize(
+                archive.opt_linear, x0=(0, 0), method="Nelder-Mead", args=(ref, depth)
+            ).x
 
         def balanced_null(rho):
             shape = 0.5 * (1 - rho) / rho
             return -np.sum(betabinom.logpmf(ref, depth, shape, shape))
 
-        global_rho = minimize_scalar(balanced_null, method="bounded", bounds=(0, 1)).x
+        return minimize_scalar(balanced_null, method="bounded", bounds=(0, 1)).x
+
+    shared_fit = independent_fit(retained) if dispersion_scope == "global" else None
+    if shared_fit is not None and model == "single":
 
         def shared_null_optimizer(fun, *args, **kwargs):
             # Only replace the balanced-null dispersion fit. Effect optimizers
             # still execute the archived Python functions separately per donor.
             if len(kwargs.get("args", ())) == 2:
-                return OptimizeResult(x=global_rho)
+                return OptimizeResult(x=shared_fit)
             return original_optimizer(fun, *args, **kwargs)
 
         archive.minimize_scalar = shared_null_optimizer
+    elif shared_fit is not None:
+        # The archive calls minimize only for linear nuisance fitting. Effects
+        # still use its original minimize_scalar and phased/unphased objective.
+        archive.minimize = lambda *args, **kwargs: OptimizeResult(x=shared_fit)
     for donor, base in donors.items():
         with contextlib.redirect_stdout(io.StringIO()):
             expected = archive.get_imbalance(
@@ -144,6 +166,7 @@ def test_overlapping_donor_features_match_python(tmp_path, dispersion_scope, pha
                 region_col="region",
                 phased=phased,
                 pseudocount=pc,
+                method=model,
             )
         comparison = compare_frames(expected, actual.loc[actual["donor_id"] == donor])
         assert comparison["status"] == "PASS", comparison
@@ -151,8 +174,22 @@ def test_overlapping_donor_features_match_python(tmp_path, dispersion_scope, pha
         assert fits.loc[donor, "donor_eligible_snv_observations"] == 12
         assert qc.loc[donor, "eligible_snv_observations"] == 12
         assert qc.loc[donor, "eligible_test_rows"] == 14
-        if global_rho is not None:
-            np.testing.assert_allclose(fits.loc[donor, "rho"], global_rho, rtol=5e-5, atol=5e-5)
+        expected_fit = shared_fit if shared_fit is not None else independent_fit(base)
+        if model == "single":
+            np.testing.assert_allclose(fits.loc[donor, "rho"], expected_fit, rtol=5e-5, atol=5e-5)
+        else:
+            depth = base["ref_count"].to_numpy() + base["alt_count"].to_numpy()
+            fit = fits.loc[donor]
+            actual_rho = expit(
+                fit.linear_d1
+                + ((depth - fit.linear_depth_center) / fit.linear_depth_scale) * fit.linear_d2
+            )
+            expected_rho = expit(expected_fit[0] + (depth + 2 * pc) * expected_fit[1])
+            np.testing.assert_allclose(actual_rho, expected_rho, rtol=5e-5, atol=5e-5)
+    if dispersion_scope == "global":
+        assert fits["fit_id"].nunique() == 1
+    else:
+        assert fits["fit_id"].nunique() == 2
 
 
 @pytest.mark.rust
