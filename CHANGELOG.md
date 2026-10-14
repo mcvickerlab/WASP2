@@ -5,6 +5,10 @@ All notable changes to WASP2 will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- Allelic-proportion optimization uses archived Python bounded Brent defaults
+  for single-SNP, phased, and unphased bulk tests, including empty-allele inputs
+  with pseudocount 0. Balanced first-SNP unphased objectives can still select
+  mirrored proportions across numerical libraries; no tie-breaking rule is added.
 - Linear dispersion follows archived Python single-start Nelder-Mead fitting
   on pseudocounted depth, then converts coefficients for reusable raw-depth
   standardization. Equal depths use a unit scale; testing no longer applies

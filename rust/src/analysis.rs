@@ -458,7 +458,7 @@ fn optimize_prob(ref_counts: &[u32], n_array: &[u32], disp: f64) -> Result<(f64,
             opt_prob(prob, disp, ref_counts[0], n_array[0]).unwrap_or(f64::INFINITY)
         };
 
-        let mu = golden_section_search(objective, 0.0, 1.0, 1e-6)?;
+        let mu = scipy_bounded_minimize(objective, 0.0, 1.0, 1e-5, 500)?;
         let alt_ll = -objective(mu);
         return Ok((alt_ll, mu));
     }
@@ -475,7 +475,7 @@ fn optimize_prob(ref_counts: &[u32], n_array: &[u32], disp: f64) -> Result<(f64,
         sum
     };
 
-    let mu = golden_section_search(objective, 0.0, 1.0, 1e-6)?;
+    let mu = scipy_bounded_minimize(objective, 0.0, 1.0, 1e-5, 500)?;
     let alt_ll = -objective(mu);
     Ok((alt_ll, mu))
 }
@@ -536,7 +536,7 @@ fn optimize_prob_phased(
         sum
     };
 
-    let mu = golden_section_search(objective, 0.0, 1.0, 1e-6)?;
+    let mu = scipy_bounded_minimize(objective, 0.0, 1.0, 1e-5, 500)?;
     let alt_ll = -objective(mu);
     Ok((alt_ll, mu))
 }
@@ -721,50 +721,6 @@ where
         anyhow::bail!("bounded scalar optimization produced a non-finite result");
     }
     Ok(xf)
-}
-
-/// Golden section search for 1D optimization
-///
-/// Simple but robust method for bounded scalar optimization.
-/// Equivalent to scipy's minimize_scalar with method='bounded'
-#[allow(unused_assignments)]
-fn golden_section_search<F>(f: F, a: f64, mut b: f64, tol: f64) -> Result<f64>
-where
-    F: Fn(f64) -> f64,
-{
-    let phi = (1.0 + 5.0_f64.sqrt()) / 2.0;
-    let inv_phi = 1.0 / phi;
-    let inv_phi2 = 1.0 / (phi * phi);
-
-    let mut a = a;
-    let mut h = b - a;
-
-    // Initial points
-    let mut c = a + inv_phi2 * h;
-    let mut d = a + inv_phi * h;
-    let mut fc = f(c);
-    let mut fd = f(d);
-
-    // Iterate until convergence
-    while h.abs() > tol {
-        if fc < fd {
-            b = d;
-            d = c;
-            fd = fc;
-            h *= inv_phi;
-            c = a + inv_phi2 * h;
-            fc = f(c);
-        } else {
-            a = c;
-            c = d;
-            fc = fd;
-            h *= inv_phi;
-            d = a + inv_phi * h;
-            fd = f(d);
-        }
-    }
-
-    Ok(if fc < fd { c } else { d })
 }
 
 /// Nelder-Mead simplex optimization for 2D functions
@@ -1094,7 +1050,7 @@ fn test_fixed_dispersion(
                     .unwrap_or(f64::INFINITY)
                 };
                 // Preserve the archived first-SNP reference orientation and domain.
-                let mu = golden_section_search(objective, 0.0, 1.0, 1e-6)?;
+                let mu = scipy_bounded_minimize(objective, 0.0, 1.0, 1e-5, 500)?;
                 let alt_ll = -objective(mu);
                 (alt_ll, mu)
             } else {
@@ -1429,10 +1385,10 @@ mod tests {
     }
 
     #[test]
-    fn test_golden_section() {
+    fn test_scipy_bounded_minimize_interior_solution() {
         // Test optimization on simple quadratic
         let f = |x: f64| (x - 0.7).powi(2);
-        let min = golden_section_search(f, 0.0, 1.0, 1e-6).unwrap();
+        let min = scipy_bounded_minimize(f, 0.0, 1.0, 1e-5, 500).unwrap();
         assert!((min - 0.7).abs() < 1e-5);
     }
 

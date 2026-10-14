@@ -133,6 +133,12 @@ fit for every included donor; testing and BH correction remain donor-local. Both
 reuse `linear_d1`, `linear_d2`, `linear_depth_center`, and
 `linear_depth_scale` together.
 
+Allelic-proportion fitting follows archived Python bounded Brent defaults for
+SNP, phased, and unphased bulk tests. An unphased region whose first retained SNP
+has equal reference and alternate counts has a symmetric likelihood: `mu` and
+`1 - mu` are equally likely. Numerical libraries may select opposite optima;
+the reported direction is not identifiable in that case.
+
 Feature analysis preserves one SNV in every overlapping feature. `peak` remains
 an alias for `feature`:
 
