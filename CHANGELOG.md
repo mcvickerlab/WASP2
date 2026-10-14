@@ -5,6 +5,9 @@ All notable changes to WASP2 will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- Donor feature analysis follows archived Python phasing fallback for missing,
+  identical, or nonnumeric GT after depth filtering, without converting allele
+  strings. Provenance records requested and effective phase per included donor.
 - Donor dispersion fits retain overlapping SNP-feature observations as archived
   Python does, with separate donor-feature identities in global fits. Unique-SNP
   QC and donor eligibility counts retain their existing meanings.

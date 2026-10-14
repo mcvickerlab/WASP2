@@ -62,6 +62,14 @@ fits the combined eligible donor-SNP-feature observations and reuses the returne
 parameters unchanged in each donor run. In both modes, effect inference and
 Benjamini-Hochberg correction are independent within each donor.
 
+A feature-level ``--phased`` request follows archived Python's fallback checks
+within each donor after depth filtering. Missing GT, a single distinct GT, or
+no numeric ``0|1``/``1|0`` genotype selects unphased inference. Allele-string GT
+such as ``A|G`` is retained rather than converted to numeric phase. Provenance
+``donors.phasing`` records each included donor's ``requested_phased``,
+``effective_phased``, and ``fallback_reason``; ``analysis.phased`` remains the
+original request. A shared dispersion fit does not share phasing decisions.
+
 QC ``eligible_snv_observations`` and dispersion-sidecar
 ``donor_eligible_snv_observations`` count unique eligible SNPs per donor, so
 multiple memberships do not inflate the donor eligibility threshold.

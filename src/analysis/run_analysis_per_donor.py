@@ -272,29 +272,30 @@ def _validate_text_column(frame: pd.DataFrame, column: str) -> None:
     frame[column] = values
 
 
-def _normalize_genotypes(frame: pd.DataFrame) -> dict[str, int]:
-    if "GT" not in frame.columns:
-        raise ValueError("Phased feature analysis requires a GT column")
-    gt = frame["GT"].astype(str)
-    ref = frame["ref"]
-    alt = frame["alt"]
-    numeric_forward = gt.eq("0|1")
-    numeric_reverse = gt.eq("1|0")
-    allele_forward = gt.eq(ref + "|" + alt)
-    allele_reverse = gt.eq(alt + "|" + ref)
-    valid = numeric_forward | numeric_reverse | allele_forward | allele_reverse
-    if not valid.all():
-        bad = frame.loc[~valid, ["donor_id", "chrom", "pos", "ref", "alt", "GT"]].iloc[0]
-        raise ValueError(
-            f"Phased GT must be exact 0|1, 1|0, REF|ALT, or ALT|REF; found {bad.to_dict()}"
-        )
-    forward = numeric_forward | allele_forward
-    frame["GT"] = forward.map({True: "0|1", False: "1|0"})
+def _genotype_qc(frame: pd.DataFrame) -> dict[str, int]:
+    gt = frame["GT"] if "GT" in frame.columns else pd.Series(dtype=str)
     return {
-        "forward": int(forward.sum()),
-        "reverse": int((~forward).sum()),
-        "converted_from_alleles": int((allele_forward | allele_reverse).sum()),
+        "forward": int(gt.eq("0|1").sum()),
+        "reverse": int(gt.eq("1|0").sum()),
+        "converted_from_alleles": 0,
     }
+
+
+def _phase_fallback_reason(frame: pd.DataFrame, requested: bool) -> str | None:
+    """Apply archived Python's checks after donor-local depth filtering."""
+    if not requested:
+        return "not_requested"
+    if "GT" not in frame.columns:
+        return "missing_gt"
+    gt = frame["GT"]
+    if gt.nunique(dropna=False) <= 1:
+        return "identical_gt"
+    if not gt.isin(["0|1", "1|0"]).any():
+        return "no_numeric_phased_gt"
+    # The archive parses the first numeric allele only after these checks.
+    # Malformed mixed genotypes must not be silently treated as informative.
+    gt.str.split("|", n=1).str[0].astype("uint8")
+    return None
 
 
 def _first_conflicting_group(
@@ -425,9 +426,9 @@ def _load_counts(
             + frame["alt"]
         )
 
-    gt_qc = _normalize_genotypes(frame) if phased else None
+    gt_qc = _genotype_qc(frame) if phased else None
     repeated_values = ["ref_count", "alt_count"]
-    if phased:
+    if phased and "GT" in frame.columns:
         repeated_values.append("GT")
     count_conflict = _first_conflicting_group(frame, SNV_COLUMNS, repeated_values)
     if count_conflict is not None:
@@ -817,7 +818,7 @@ def _prepare_analysis_table(
 ) -> tuple[str | None, pd.DataFrame]:
     columns = ["chrom", "pos", "ref", "alt"]
     rust_region_col = None
-    if phased:
+    if phased and "GT" in donor_frame.columns:
         columns.append("GT")
     if unit == "feature":
         if region_col is None:
@@ -1074,6 +1075,7 @@ def run_per_donor_analysis(
         result_frames: list[pd.DataFrame] = []
         dispersion_rows: list[dict[str, Any]] = []
         provenance_fits: dict[str, dict[str, Any]] = {}
+        donor_phasing: list[dict[str, Any]] = []
         for donor_id in included_donors:
             donor_id = str(donor_id)
             donor_rows = eligible_rows.loc[eligible_rows["donor_id"] == donor_id].copy()
@@ -1086,6 +1088,7 @@ def run_per_donor_analysis(
                 pseudocount=pseudocount,
                 region_col=normalized_region_col,
             )
+            fallback_reason = _phase_fallback_reason(donor_rows, phased)
             rust_region_col, donor_rows = _prepare_analysis_table(
                 donor_rows,
                 work / "donor_counts.tsv",
@@ -1105,8 +1108,17 @@ def run_per_donor_analysis(
             _require_exact_fit_echo(run, fit, donor_id)
             if bool(run.get("requested_phased")) != phased:
                 raise RuntimeError(f"Rust donor run for {donor_id} changed requested_phased")
-            if phased and not bool(run.get("effective_phased")):
-                raise RuntimeError(f"Rust silently fell back to unphased analysis for {donor_id}")
+            effective_phased = bool(run.get("effective_phased"))
+            if effective_phased != (phased and fallback_reason is None):
+                raise RuntimeError(f"Rust phasing decision disagrees with Python for {donor_id}")
+            donor_phasing.append(
+                {
+                    "donor_id": donor_id,
+                    "requested_phased": phased,
+                    "effective_phased": effective_phased,
+                    "fallback_reason": fallback_reason,
+                }
+            )
             donor_results = _format_donor_results(
                 run,
                 donor_rows,
@@ -1230,6 +1242,7 @@ def run_per_donor_analysis(
                 "total": len(qc),
                 "included": int(qc["analyzed"].sum()),
                 "excluded": int((~qc["analyzed"]).sum()),
+                "phasing": donor_phasing,
             },
             "outputs": output_records,
         }

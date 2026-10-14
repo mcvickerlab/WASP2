@@ -99,7 +99,20 @@ def test_per_donor_analysis_isolates_rho_and_bh(tmp_path, monkeypatch):
     provenance = json.loads(paths["provenance"].read_text())
     assert provenance["analysis"]["scope"] == "per-donor"
     assert provenance["analysis"]["multiple_testing"].endswith("within each donor")
-    assert provenance["donors"] == {"excluded": 1, "included": 2, "total": 3}
+    assert provenance["donors"] == {
+        "excluded": 1,
+        "included": 2,
+        "total": 3,
+        "phasing": [
+            {
+                "donor_id": donor,
+                "requested_phased": False,
+                "effective_phased": False,
+                "fallback_reason": "not_requested",
+            }
+            for donor in ["donor_a", "donor_b"]
+        ],
+    }
 
 
 @pytest.mark.unit

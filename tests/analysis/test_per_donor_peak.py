@@ -13,7 +13,7 @@ def _write_peak_counts(path: Path, *, bad_gt: bool = False) -> None:
         count = 50 if donor != "donor_low" else 2
         for index in range(count):
             ref, alt = ("A", "G")
-            gt = f"{ref}|{alt}" if index % 2 == 0 else f"{alt}|{ref}"
+            gt = "0|1" if index % 2 == 0 else "1|0"
             if bad_gt and donor == "donor_a" and index == 0:
                 gt = "A/G"
             rows.append(
@@ -34,7 +34,7 @@ def _write_peak_counts(path: Path, *, bad_gt: bool = False) -> None:
 
 
 @pytest.mark.unit
-def test_per_donor_peak_analysis_normalizes_phase_and_isolates_models(tmp_path, monkeypatch):
+def test_per_donor_peak_analysis_preserves_numeric_phase_and_isolates_models(tmp_path, monkeypatch):
     counts = tmp_path / "counts.tsv"
     _write_peak_counts(counts)
     calls = []
@@ -113,16 +113,9 @@ def test_per_donor_peak_analysis_normalizes_phase_and_isolates_models(tmp_path, 
 def test_per_donor_peak_analysis_rejects_nonphased_gt(tmp_path, monkeypatch):
     counts = tmp_path / "counts.tsv"
     _write_peak_counts(counts, bad_gt=True)
-    monkeypatch.setattr(peak_analysis, "rust_fit_imbalance_dispersion", lambda *a, **k: None)
-    monkeypatch.setattr(peak_analysis, "rust_analyze_imbalance_run", lambda *a, **k: None)
-    with pytest.raises(ValueError, match="Phased GT must be exact"):
-        peak_analysis.run_per_donor_analysis(
-            counts,
-            tmp_path / "results.tsv",
-            unit="feature",
-            region_col="capeak_id",
-            phased=True,
-        )
+    frame = pd.read_csv(counts, sep="\t")
+    with pytest.raises(ValueError, match="invalid literal"):
+        peak_analysis._phase_fallback_reason(frame.loc[frame["sample"] == "donor_a"], True)
 
 
 @pytest.mark.unit

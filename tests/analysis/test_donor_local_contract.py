@@ -675,7 +675,20 @@ def test_sidecar_and_provenance_schema(
         "pseudocount": 0,
         "min_donor_observations": 1,
     }
-    assert provenance["donors"] == {"total": 2, "included": 2, "excluded": 0}
+    assert provenance["donors"] == {
+        "total": 2,
+        "included": 2,
+        "excluded": 0,
+        "phasing": [
+            {
+                "donor_id": donor,
+                "requested_phased": False,
+                "effective_phased": False,
+                "fallback_reason": "not_requested",
+            }
+            for donor in ["donor_a", "donor_b"]
+        ],
+    }
     assert set(provenance["outputs"]) == {"results", "dispersion", "qc"}
     for name, record in provenance["outputs"].items():
         assert set(record) == {"path", "sha256", "size_bytes", "mtime_utc"}

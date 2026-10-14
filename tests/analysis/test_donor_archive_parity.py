@@ -153,3 +153,92 @@ def test_overlapping_donor_features_match_python(tmp_path, dispersion_scope, pha
         assert qc.loc[donor, "eligible_test_rows"] == 14
         if global_rho is not None:
             np.testing.assert_allclose(fits.loc[donor, "rho"], global_rho, rtol=5e-5, atol=5e-5)
+
+
+@pytest.mark.rust
+@pytest.mark.parametrize("scope", ["global", "per-donor"])
+@pytest.mark.parametrize("pc", [0, 1])
+@pytest.mark.parametrize(
+    "case,reason",
+    [
+        ("missing", "missing_gt"),
+        ("same_forward", "identical_gt"),
+        ("same_reverse", "identical_gt"),
+        ("alleles", "no_numeric_phased_gt"),
+        ("unphased", "no_numeric_phased_gt"),
+        ("filtered", "identical_gt"),
+        ("informative", None),
+    ],
+)
+def test_donor_phasing_matches_archive_fallback(tmp_path, scope, pc, case, reason):
+    import contextlib
+    import io
+
+    from scripts.compare_archive_analysis import load_archive
+
+    base = bulk_counts().drop(columns="gene")
+    if case == "missing":
+        base = base.drop(columns="GT")
+    elif case in {"same_forward", "same_reverse"}:
+        base["GT"] = "0|1" if case == "same_forward" else "1|0"
+    elif case == "alleles":
+        base["GT"] = base["GT"].replace({"0|1": "A|G", "1|0": "G|A"})
+    elif case == "unphased":
+        base["GT"] = base["GT"].replace({"0|1": "0/1", "1|0": "1/0"})
+    elif case == "filtered":
+        base.loc[base["GT"] == "1|0", ["ref_count", "alt_count"]] = 0
+    file = tmp_path / "counts.tsv"
+    base.assign(donor_id="donorA").to_csv(file, sep="\t", index=False)
+    with contextlib.redirect_stdout(io.StringIO()):
+        expected = load_archive()["as_analysis"].get_imbalance(
+            base.copy(),
+            region_col="region",
+            phased=True,
+            pseudocount=pc,
+        )
+    paths = run_per_donor_analysis(
+        file,
+        tmp_path / "results.tsv",
+        unit="feature",
+        region_col="region",
+        phased=True,
+        pseudocount=pc,
+        dispersion_scope=scope,
+        min_donor_observations=4,
+    )
+    actual = pd.read_csv(paths["results"], sep="\t").rename(columns={"feature_id": "region"})
+    comparison = compare_frames(expected, actual)
+    assert comparison["status"] == "PASS", comparison
+    provenance = json.loads(paths["provenance"].read_text())
+    assert provenance["analysis"]["phased"] is True
+    assert provenance["donors"]["phasing"] == [
+        {
+            "donor_id": "donorA",
+            "requested_phased": True,
+            "effective_phased": reason is None,
+            "fallback_reason": reason,
+        }
+    ]
+
+
+@pytest.mark.rust
+def test_donor_phasing_decisions_are_independent(tmp_path):
+    base = bulk_counts().drop(columns="gene")
+    first = base.assign(donor_id="informative")
+    second = base.assign(donor_id="fallback", GT="0|1")
+    file = tmp_path / "counts.tsv"
+    pd.concat([first, second]).to_csv(file, sep="\t", index=False)
+    paths = run_per_donor_analysis(
+        file,
+        tmp_path / "results.tsv",
+        unit="feature",
+        region_col="region",
+        phased=True,
+        dispersion_scope="global",
+        min_donor_observations=4,
+    )
+    provenance = json.loads(paths["provenance"].read_text())
+    decisions = {row["donor_id"]: row for row in provenance["donors"]["phasing"]}
+    assert decisions["informative"]["effective_phased"] is True
+    assert decisions["fallback"]["effective_phased"] is False
+    assert decisions["fallback"]["fallback_reason"] == "identical_gt"
