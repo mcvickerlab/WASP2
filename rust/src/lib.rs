@@ -19,6 +19,7 @@ mod cigar_utils; // Shared CIGAR-aware position mapping utilities
 mod mapping_filter;
 mod multi_sample;
 mod read_pairer;
+mod scipy_compat;
 mod seq_decode;
 mod unified_pipeline;
 mod vcf_to_bed;

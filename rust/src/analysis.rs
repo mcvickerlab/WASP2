@@ -1,3 +1,4 @@
+use crate::scipy_compat::{betabinom_logpmf, numpy_sum};
 /// WASP2 Analysis Module - Beta-binomial Allelic Imbalance Detection
 ///
 /// Rust implementation of the Python analysis stage (src/analysis/as_analysis.py)
@@ -6,8 +7,6 @@
 /// Performance target: 3-5x speedup over Python (2.7s → 0.5-0.9s)
 use anyhow::{Context, Result};
 use rayon::prelude::*;
-use rv::dist::BetaBinomial;
-use rv::traits::HasDensity;
 use statrs::distribution::{ChiSquared, ContinuousCDF};
 use std::collections::{HashMap, HashSet};
 
@@ -276,12 +275,9 @@ fn effective_phased(variants: &[VariantCounts], requested_phased: bool) -> bool 
 /// Numerically stable implementation that avoids overflow for large |x|.
 #[inline]
 fn expit(x: f64) -> f64 {
-    if x >= 0.0 {
-        1.0 / (1.0 + (-x).exp())
-    } else {
-        let e = x.exp();
-        e / (1.0 + e)
-    }
+    // Preserve SciPy's expression, including its rounding for negative inputs.
+    // IEEE exp overflow gives infinity and the quotient remains the valid 0.
+    1.0 / (1.0 + (-x).exp())
 }
 
 // ============================================================================
@@ -308,13 +304,7 @@ pub fn opt_prob(prob: f64, rho: f64, k: u32, n: u32) -> Result<f64> {
     let alpha = prob * (1.0 - rho) / rho;
     let beta = (1.0 - prob) * (1.0 - rho) / rho;
 
-    // Create beta-binomial distribution (rv uses: n as u32, alpha, beta)
-    let bb =
-        BetaBinomial::new(n, alpha, beta).context("Failed to create beta-binomial distribution")?;
-
-    // Return negative log-likelihood (rv uses reference for ln_f, k as u64)
-    let log_pmf = bb.ln_f(&(k as u64));
-    Ok(-log_pmf)
+    Ok(-betabinom_logpmf(k, n, alpha, beta)?)
 }
 
 /// Calculate beta-binomial log-likelihood for array of counts
@@ -326,15 +316,12 @@ pub fn betabinom_logpmf_sum(
     alpha: f64,
     beta: f64,
 ) -> Result<f64> {
-    let mut sum = 0.0;
-
-    for (k, n) in ref_counts.iter().zip(n_array.iter()) {
-        let bb = BetaBinomial::new(*n, alpha, beta)
-            .context("Failed to create beta-binomial distribution")?;
-        sum += bb.ln_f(&(*k as u64));
-    }
-
-    Ok(sum)
+    let values: Vec<_> = ref_counts
+        .iter()
+        .zip(n_array)
+        .map(|(&k, &n)| betabinom_logpmf(k, n, alpha, beta))
+        .collect::<Result<_>>()?;
+    Ok(numpy_sum(&values))
 }
 
 // ============================================================================
@@ -364,37 +351,8 @@ fn optimize_dispersion(ref_counts: &[u32], n_array: &[u32]) -> Result<f64> {
     scipy_bounded_minimize(objective, 0.0, 1.0, 1e-5, 500)
 }
 
-fn depth_standardization(raw_depths: &[u32]) -> Result<(f64, f64)> {
-    if raw_depths.is_empty() {
-        anyhow::bail!("cannot standardize linear depth without observations");
-    }
-
-    // Welford's algorithm avoids cancellation when depths are large and tightly clustered.
-    let mut center = 0.0;
-    let mut squared_deviations = 0.0;
-    for (index, &depth) in raw_depths.iter().enumerate() {
-        let depth = depth as f64;
-        let count = (index + 1) as f64;
-        let delta = depth - center;
-        center += delta / count;
-        squared_deviations += delta * (depth - center);
-    }
-
-    if !center.is_finite() {
-        anyhow::bail!("linear depth center is non-finite");
-    }
-    let variance = squared_deviations / raw_depths.len() as f64;
-    let scale = variance.sqrt();
-    if !scale.is_finite() {
-        anyhow::bail!("linear depth scale is non-finite");
-    }
-    // A unit scale represents constant depths without changing predictions.
-    // The archive fits these inputs rather than rejecting them.
-    Ok((center, if scale > 0.0 { scale } else { 1.0 }))
-}
-
-/// Fit the archived raw, pseudocounted-depth predictor from (0, 0), then
-/// express it using reusable standardized raw-depth parameters.
+/// Fit the archived pseudocounted-depth predictor without converting its
+/// coefficients. The reusable raw-depth origin is shifted by the pseudocount.
 fn optimize_dispersion_linear(
     ref_counts: &[u32],
     n_array: &[u32],
@@ -403,14 +361,16 @@ fn optimize_dispersion_linear(
     if ref_counts.len() != n_array.len() || ref_counts.len() != raw_depths.len() {
         anyhow::bail!("linear dispersion inputs have inconsistent lengths");
     }
-    let (depth_center, depth_scale) = depth_standardization(raw_depths)?;
+    if raw_depths.is_empty() {
+        anyhow::bail!("cannot fit linear dispersion without observations");
+    }
 
     let objective = |params: [f64; 2]| -> f64 {
         let (d1, d2) = (params[0], params[1]);
         if !d1.is_finite() || !d2.is_finite() {
             return f64::INFINITY;
         }
-        let mut neg_ll = 0.0;
+        let mut values = Vec::with_capacity(ref_counts.len());
 
         for (&ref_count, &n) in ref_counts.iter().zip(n_array.iter()) {
             let predictor = d1 + f64::from(n) * d2;
@@ -421,15 +381,14 @@ fn optimize_dispersion_linear(
             let alpha = 0.5 * (1.0 - rho) / rho;
 
             // Beta-binomial log-pmf with α = β (null: p=0.5)
-            if let Ok(bb) = rv::dist::BetaBinomial::new(n, alpha, alpha) {
-                use rv::traits::HasDensity;
-                neg_ll -= bb.ln_f(&(ref_count as u64));
+            if let Ok(log_pmf) = betabinom_logpmf(ref_count, n, alpha, alpha) {
+                values.push(log_pmf);
             } else {
                 return f64::INFINITY;
             }
         }
 
-        neg_ll
+        -numpy_sum(&values)
     };
 
     // Match scipy.optimize.minimize(method="Nelder-Mead", x0=(0, 0)):
@@ -443,9 +402,9 @@ fn optimize_dispersion_linear(
     {
         anyhow::bail!("linear fit requires a consistent pseudocount offset");
     }
-    let d1 = intercept + slope * (depth_center + offset);
-    let d2 = slope * depth_scale;
-    Ok((d1, d2, depth_center, depth_scale))
+    // Nraw - (-offset) evaluates the original adjusted depth exactly. Avoid
+    // mean/std coefficient conversion, whose roundtrip can change a tied basin.
+    Ok((intercept, slope, -offset, 1.0))
 }
 
 /// Optimize probability parameter for alternative model
@@ -582,21 +541,24 @@ pub fn optimize_prob_unphased_dp(
     // Average orientations only after the first SNP, as in archived Python.
     // For each SNP:
     //   log(0.5 * p1 + 0.5 * p2) = ln(0.5) + logaddexp(ln(p1), ln(p2))
-    let orientation_log_likelihood = |ref_count: u32, n: u32, rho: f64| -> Result<f64> {
+    let orientation_log_likelihood = |ref_count: u32, n: u32, rho: f64| -> Result<(f64, f64)> {
         let rho = clamp_rho(rho);
         let alpha1 = prob * (1.0 - rho) / rho;
         let beta1 = (1.0 - prob) * (1.0 - rho) / rho;
-        let bb1 = BetaBinomial::new(n, alpha1, beta1)
-            .context("Failed to create beta-binomial for orientation 1")?;
-        let lp1 = bb1.ln_f(&(ref_count as u64));
-
-        let bb2 = BetaBinomial::new(n, beta1, alpha1)
-            .context("Failed to create beta-binomial for orientation 2")?;
-        let lp2 = bb2.ln_f(&(ref_count as u64));
-        Ok((0.5_f64).ln() + logaddexp(lp1, lp2))
+        let lp1 = betabinom_logpmf(ref_count, n, alpha1, beta1)?;
+        // Python calls opt_prob(1-prob), recomputing both shape parameters.
+        // Swapping alpha/beta avoids a subtraction and changes last-bit rounding.
+        let opposite_prob = 1.0 - prob;
+        let alpha2 = opposite_prob * (1.0 - rho) / rho;
+        let beta2 = (1.0 - opposite_prob) * (1.0 - rho) / rho;
+        let lp2 = betabinom_logpmf(ref_count, n, alpha2, beta2)?;
+        Ok((lp1, lp2))
     };
 
-    let mut log_likelihood = -opt_prob(prob, first_disp, first_ref, first_n)?;
+    let first_nll = opt_prob(prob, first_disp, first_ref, first_n)?;
+    let mut log_likelihood = -first_nll;
+    let mut previous_probability = 1.0;
+    let mut product_is_normal = true;
 
     for (i, (&ref_count, &n)) in phase_ref.iter().zip(phase_n.iter()).enumerate() {
         let rho = if phase_disp.len() > 1 {
@@ -604,9 +566,21 @@ pub fn optimize_prob_unphased_dp(
         } else {
             phase_disp[0]
         };
-        log_likelihood += orientation_log_likelihood(ref_count, n, rho)?;
+        let (lp1, lp2) = orientation_log_likelihood(ref_count, n, rho)?;
+        log_likelihood += (0.5_f64).ln() + logaddexp(lp1, lp2);
+        if product_is_normal {
+            // Preserve the archived sequential probability recurrence when safe.
+            let phase1 = previous_probability * lp1.exp();
+            let phase2 = previous_probability * lp2.exp();
+            previous_probability = 0.5 * phase1 + 0.5 * phase2;
+            product_is_normal = previous_probability.is_normal();
+        }
     }
 
+    if product_is_normal {
+        return Ok(first_nll - previous_probability.ln());
+    }
+    // Preserve stable inference when the archive's product loses range.
     if !log_likelihood.is_finite() {
         return Ok(f64::INFINITY);
     }
@@ -615,16 +589,18 @@ pub fn optimize_prob_unphased_dp(
 
 /// Numerically stable two-argument log-sum-exp: ln(exp(a) + exp(b)).
 ///
-/// Equivalent to NumPy's `np.logaddexp`. Subtracting the max before exponentiating
-/// avoids overflow/underflow. If the max is non-finite (e.g. -inf when both
-/// inputs are -inf), the max is returned directly.
+/// Follows NumPy's `np.logaddexp` arithmetic with log1p of the smaller
+/// exponential, avoiding overflow and retaining small contributions.
 #[inline]
 fn logaddexp(a: f64, b: f64) -> f64 {
-    let m = a.max(b);
-    if !m.is_finite() {
-        m
+    // NumPy uses log1p for the smaller exponential; log(1 + exp(...))
+    // rounds differently and can alter a symmetric optimizer's branch.
+    if a == b {
+        a + std::f64::consts::LN_2
+    } else if a > b {
+        a + (b - a).exp().ln_1p()
     } else {
-        m + ((a - m).exp() + (b - m).exp()).ln()
+        b + (a - b).exp().ln_1p()
     }
 }
 
@@ -632,6 +608,23 @@ fn logaddexp(a: f64, b: f64) -> f64 {
 fn scipy_bounded_minimize<F>(f: F, x1: f64, x2: f64, xatol: f64, maxfun: usize) -> Result<f64>
 where
     F: Fn(f64) -> f64,
+{
+    scipy_bounded_minimize_traced(f, x1, x2, xatol, maxfun, |_, _, _, _, _| {})
+}
+
+/// Diagnostic hook records candidate, objective, updated interval and acceptance.
+/// The regular wrapper supplies an empty hook; no production output is changed.
+fn scipy_bounded_minimize_traced<F, T>(
+    f: F,
+    x1: f64,
+    x2: f64,
+    xatol: f64,
+    maxfun: usize,
+    mut trace: T,
+) -> Result<f64>
+where
+    F: Fn(f64) -> f64,
+    T: FnMut(f64, f64, f64, f64, bool),
 {
     if !x1.is_finite() || !x2.is_finite() || x1 > x2 {
         anyhow::bail!("invalid bounded optimization interval");
@@ -644,6 +637,7 @@ where
     let (mut rat, mut e) = (0.0_f64, 0.0_f64);
     let mut fx = f(xf);
     let (mut ffulc, mut fnfc) = (fx, fx);
+    trace(xf, fx, a, b, true);
     let mut fu = f64::INFINITY;
     let mut calls = 1_usize;
     let mut xm = 0.5 * (a + b);
@@ -681,7 +675,8 @@ where
         let x = xf + direction * rat.abs().max(tol1);
         fu = f(x);
         calls += 1;
-        if fu <= fx {
+        let accepted = fu <= fx;
+        if accepted {
             if x >= xf {
                 a = xf;
             } else {
@@ -710,6 +705,7 @@ where
             }
         }
 
+        trace(x, fu, a, b, accepted);
         xm = 0.5 * (a + b);
         tol1 = sqrt_eps * xf.abs() + xatol / 3.0;
         tol2 = 2.0 * tol1;
@@ -1020,10 +1016,7 @@ fn test_fixed_dispersion(
                 .zip(region_rho.iter())
             {
                 let alpha = 0.5 * (1.0 - rho) / rho;
-                let bb = rv::dist::BetaBinomial::new(n, alpha, alpha)
-                    .context("Failed to create beta-binomial for null")?;
-                use rv::traits::HasDensity;
-                null_ll += bb.ln_f(&(ref_count as u64));
+                null_ll += betabinom_logpmf(ref_count, n, alpha, alpha)?;
             }
 
             let all_gt = indices.iter().all(|&i| variants[i].gt.is_some());
@@ -1358,6 +1351,19 @@ mod tests {
     }
 
     #[test]
+    fn test_expit_matches_scipy_expression() {
+        for (x, expected) in [
+            (-0.7, 0.3318122278318339),
+            (-2.3, 0.09112296101485616),
+            (-2.5, 0.07585818002124355),
+        ] {
+            assert_eq!(expit(x), expected);
+        }
+        assert_eq!(expit(-1000.0), 0.0);
+        assert_eq!(expit(1000.0), 1.0);
+    }
+
+    #[test]
     fn test_linear_prediction_is_not_clipped_at_fit_guard() {
         let parameters = DispersionParameters::Linear {
             d1: 0.0,
@@ -1369,11 +1375,6 @@ mod tests {
     }
 
     #[test]
-    fn test_depth_standardization_accepts_constant_depth() {
-        assert_eq!(depth_standardization(&[20, 20, 20]).unwrap(), (20.0, 1.0));
-    }
-
-    #[test]
     fn test_fdr_correction() {
         let pvals = vec![0.01, 0.05, 0.1, 0.5];
         let fdr = fdr_correction(&pvals);
@@ -1381,6 +1382,97 @@ mod tests {
         // FDR-adjusted p-values should be >= original
         for (orig, adj) in pvals.iter().zip(fdr.iter()) {
             assert!(adj >= orig);
+        }
+    }
+
+    #[test]
+    fn test_linear_real_optimizer_trace() {
+        let counts = [6, 10, 3, 11, 1, 8];
+        let depths = [12, 27, 13, 14, 15, 12];
+        let parameters = DispersionParameters::Linear {
+            d1: -2.5581565149445686,
+            d2: -0.011773137230599792,
+            depth_center: 0.0,
+            depth_scale: 1.0,
+        };
+        let rho: Vec<_> = depths
+            .iter()
+            .map(|n| parameters.rho_at_depth(n - 2))
+            .collect();
+        for mu in [0.3819660112501051, 0.6180339887498948] {
+            let forward: Vec<_> = counts
+                .iter()
+                .zip(&depths)
+                .zip(&rho)
+                .map(|((&k, &n), &r)| -opt_prob(mu, r, k, n).unwrap())
+                .collect();
+            let reverse: Vec<_> = counts
+                .iter()
+                .zip(&depths)
+                .zip(&rho)
+                .map(|((&k, &n), &r)| -opt_prob(1.0 - mu, r, k, n).unwrap())
+                .collect();
+            eprintln!("mu={mu:.17}, rho={rho:?}, forward={forward:?}, reverse={reverse:?}");
+        }
+        let objective = |mu| {
+            optimize_prob_unphased_dp(mu, &rho, counts[0], depths[0], &counts[1..], &depths[1..])
+                .unwrap()
+        };
+        let mut evaluations = Vec::new();
+        let mu = scipy_bounded_minimize_traced(
+            objective,
+            0.0,
+            1.0,
+            1e-5,
+            500,
+            |x, fx, a, b, accepted| evaluations.push((x, fx, a, b, accepted)),
+        )
+        .unwrap();
+        eprintln!("linear fixed-rho mu={mu:.17}, trace={evaluations:?}");
+        assert!((mu - 0.3071512458291038).abs() < 5e-5);
+    }
+
+    #[test]
+    fn test_real_unphased_optimizer_trace_matches_python_basin() {
+        // Archived SciPy 1.13.1 outcomes, fixed nuisance to isolate arithmetic.
+        let examples = [
+            (vec![7, 5], vec![14, 18], 0.41804483019409894),
+            (
+                vec![5, 9, 2, 10, 0, 7],
+                vec![10, 25, 11, 12, 13, 10],
+                0.2550470457103756,
+            ),
+        ];
+        for (ref_counts, depths, expected_mu) in examples {
+            let rho = [0.03295621518540146];
+            let objective = |mu| {
+                optimize_prob_unphased_dp(
+                    mu,
+                    &rho,
+                    ref_counts[0],
+                    depths[0],
+                    &ref_counts[1..],
+                    &depths[1..],
+                )
+                .unwrap()
+            };
+            let mut evaluations = Vec::new();
+            let mu = scipy_bounded_minimize_traced(
+                objective,
+                0.0,
+                1.0,
+                1e-5,
+                500,
+                |x, fx, a, b, accepted| evaluations.push((x, fx, a, b, accepted)),
+            )
+            .unwrap();
+            assert!(
+                (mu - expected_mu).abs() < 5e-5,
+                "mu={mu}, trace={evaluations:?}"
+            );
+            assert!((evaluations[0].0 - 0.3819660112501051).abs() < 1e-15);
+            assert!((evaluations[1].0 - 0.6180339887498948).abs() < 1e-15);
+            eprintln!("fixed-rho optimizer mu={mu:.17}, trace={evaluations:?}");
         }
     }
 
@@ -1628,7 +1720,7 @@ mod tests {
     }
 
     #[test]
-    fn test_linear_fit_reports_raw_depth_standardization() {
+    fn test_linear_fit_preserves_adjusted_depth_predictor() {
         let variants = vec![
             vc_peak(100, 8, 2, None),
             vc_peak(200, 10, 10, None),
@@ -1642,8 +1734,14 @@ mod tests {
         };
         let fit = fit_imbalance_dispersion(variants, &config).unwrap();
         let (center, scale) = fit.parameters.linear_depth_standardization().unwrap();
-        assert!((center - 20.0).abs() < 1e-12);
-        assert!((scale - (200.0_f64 / 3.0).sqrt()).abs() < 1e-12);
+        assert_eq!((center, scale), (-6.0, 1.0));
+        let (intercept, slope) = fit.parameters.linear_params().unwrap();
+        for depth in [10, 20, 30] {
+            assert_eq!(
+                fit.parameters.rho_at_depth(depth),
+                clamp_rho(expit(intercept + (depth + 6) as f64 * slope))
+            );
+        }
     }
 
     #[test]
@@ -1658,7 +1756,7 @@ mod tests {
         let fit = fit_imbalance_dispersion(variants, &config).unwrap();
         assert_eq!(
             fit.parameters.linear_depth_standardization(),
-            Some((10.0, 1.0))
+            Some((-4.0, 1.0))
         );
         assert!(fit.parameters.rho_at_depth(10).is_finite());
     }

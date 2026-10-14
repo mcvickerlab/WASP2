@@ -132,6 +132,10 @@ fit for every included donor; testing and BH correction remain donor-local. Both
 `single` and `linear` dispersion models are supported. Linear fits record and
 reuse `linear_d1`, `linear_d2`, `linear_depth_center`, and
 `linear_depth_scale` together.
+New fits preserve the original adjusted-depth coefficients: `linear_depth_center`
+is `-2 * pseudocount` and `linear_depth_scale` is 1. This avoids rounding from
+converting the predictor to mean/std coordinates. Existing fixed parameter sets
+continue to use their supplied center and scale.
 
 Allelic-proportion fitting follows archived Python bounded Brent defaults for
 SNP, phased, and unphased bulk tests. An unphased region whose first retained SNP

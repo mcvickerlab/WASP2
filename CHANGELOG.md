@@ -5,6 +5,12 @@ All notable changes to WASP2 will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- Bulk beta-binomial calculations use a SciPy 1.13.1-compatible Cephes kernel,
+  reference FMA arithmetic, and NumPy float64 reductions. Unphased inference
+  follows archived probability accumulation when safe and uses log-space fallback
+  when products lose range. Linear fits preserve adjusted-depth coefficients in
+  the existing four-field representation to avoid conversion-rounding changes.
+  Strict real ATAC comparisons include raw allelic proportions.
 - Bulk archive validation separately verifies symmetric unphased optima using
   retained anchor counts and independent Python objective evaluations, while
   preserving strict comparisons, raw proportions, and numerical tolerances.
@@ -13,8 +19,8 @@ All notable changes to WASP2 will be documented in this file.
   with pseudocount 0. Balanced first-SNP unphased objectives can still select
   mirrored proportions across numerical libraries; no tie-breaking rule is added.
 - Linear dispersion follows archived Python single-start Nelder-Mead fitting
-  on pseudocounted depth, then converts coefficients for reusable raw-depth
-  standardization. Equal depths use a unit scale; testing no longer applies
+  on pseudocounted depth, retains coefficients with a pseudocount depth-origin
+  shift for exact reusable prediction. Equal depths use a unit scale; testing no longer applies
   the fitting-only predictor clip.
 - Retain distinct repeated SNP count observations in donor analysis and apply
   Python phase-aware deduplication after depth filtering. SNV outputs aggregate
