@@ -5,6 +5,9 @@ All notable changes to WASP2 will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- Donor feature deduplication uses the parsed first GT allele, as Python does.
+  Original GT tokens remain available for the backend's pre-dedup phasing
+  decision; fitting weights, raw counts, QC and provenance reflect retained rows.
 - Cephes arithmetic follows the measured reference compiler policy: separate
   multiplication/addition for Linux x86_64 and fused operations for the macOS
   arm64 reference. Platform probes distinguish this from statistical-model changes.

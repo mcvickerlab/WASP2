@@ -1020,6 +1020,7 @@ def run_per_donor_analysis(
     eligible_rows = frame.loc[frame["_total_count"] >= min_count].copy()
     retained_groups = []
     phase_decisions: dict[str, str | None] = {}
+    phase_source_frames: dict[str, pd.DataFrame] = {}
     for donor_id, donor_rows in eligible_rows.groupby("donor_id", sort=False):
         fallback_reason = _phase_fallback_reason(donor_rows, phased)
         phase_decisions[str(donor_id)] = fallback_reason
@@ -1027,8 +1028,20 @@ def run_per_donor_analysis(
         if normalized_region_col is not None:
             identity.append(normalized_region_col)
         if phased and fallback_reason is None:
-            identity.append("GT")
-        retained_groups.append(donor_rows.drop_duplicates(identity, keep="first"))
+            # Python parses the first allele before phase-aware deduplication.
+            # Distinct raw tokens such as 0|0/0|1 can become the same key.
+            normalized = donor_rows.loc[:, identity].copy()
+            # A private object label cannot overwrite a user-supplied column.
+            normalized[object()] = donor_rows["GT"].str.split("|", n=1).str[0].astype("uint8")
+            retained = donor_rows.loc[~normalized.duplicated(keep="first")]
+            if len(retained) != len(donor_rows.drop_duplicates([*identity, "GT"])):
+                # Preserve the original tokens for Rust's pre-dedup phase check.
+                # Rust then removes the same normalized duplicates; formatting
+                # and nuisance fitting use the retained observations below.
+                phase_source_frames[str(donor_id)] = donor_rows.copy()
+        else:
+            retained = donor_rows.drop_duplicates(identity, keep="first")
+        retained_groups.append(retained)
     if retained_groups:
         eligible_rows = pd.concat(retained_groups).sort_index(kind="stable")
     fit_rows = eligible_rows.copy()
@@ -1104,8 +1117,8 @@ def run_per_donor_analysis(
                 phased=phased,
             )
             fallback_reason = phase_decisions[donor_id]
-            rust_region_col, donor_rows = _prepare_analysis_table(
-                donor_rows,
+            rust_region_col, _ = _prepare_analysis_table(
+                phase_source_frames.get(donor_id, donor_rows),
                 work / "donor_counts.tsv",
                 unit=normalized_unit,
                 region_col=normalized_region_col,

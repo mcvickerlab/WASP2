@@ -2,6 +2,7 @@
 
 import contextlib
 import io
+import json
 
 import numpy as np
 import pandas as pd
@@ -78,6 +79,61 @@ def test_malformed_mixed_genotypes_fail_like_python(tmp_path, gt, scope):
                 dispersion_scope=scope,
                 min_donor_observations=4,
             )
+
+
+@pytest.mark.rust
+@pytest.mark.parametrize("scope", ["per-donor", "global"])
+@pytest.mark.parametrize("orientation", ["0|1", "1|0"])
+@pytest.mark.parametrize("model", ["single", "linear"])
+@pytest.mark.parametrize("pc", [0, 1])
+def test_numeric_gt_duplicates_preserve_pre_dedup_phase_decision(
+    tmp_path, scope, orientation, model, pc
+):
+    frame = bulk_counts().drop(columns="gene")
+    frame["GT"] = orientation
+    duplicate = frame.iloc[:1].copy()
+    duplicate["GT"] = "0|0" if orientation == "0|1" else "1|1"
+    frame = pd.concat([frame, duplicate], ignore_index=True)
+    from scripts.compare_archive_analysis import adapt_linear_reference
+
+    modules = load_archive()
+    if model == "linear":
+        adapt_linear_reference(modules)
+        original = modules["as_analysis"].parse_opt
+        modules["as_analysis"].parse_opt = lambda df, disp=None, phased=False: original(
+            df, disp=disp, phased=True
+        )
+    with contextlib.redirect_stdout(io.StringIO()):
+        expected = modules["as_analysis"].get_imbalance(
+            frame.copy(),
+            phased=True,
+            region_col="region",
+            method=model,
+            pseudocount=pc,
+        )
+    path = tmp_path / "counts.tsv"
+    frame.assign(donor_id="A").to_csv(path, sep="\t", index=False)
+    paths = run_per_donor_analysis(
+        path,
+        tmp_path / "result.tsv",
+        unit="feature",
+        region_col="region",
+        phased=True,
+        model=model,
+        pseudocount=pc,
+        dispersion_scope=scope,
+        min_donor_observations=4,
+    )
+    actual = pd.read_csv(paths["results"], sep="\t").rename(columns={"feature_id": "region"})
+    comparison = compare_frames(expected, actual)
+    assert comparison["status"] == "PASS", comparison
+    fit = pd.read_csv(paths["dispersion"], sep="\t").iloc[0]
+    assert fit["fit_observations"] == len(frame) - 1
+    qc = pd.read_csv(paths["qc"], sep="\t").iloc[0]
+    assert qc["input_rows"] == len(frame)
+    assert qc["eligible_test_rows"] == len(frame) - 1
+    provenance = json.loads(paths["provenance"].read_text())
+    assert provenance["donors"]["phasing"][0]["effective_phased"] is True
 
 
 @pytest.mark.rust

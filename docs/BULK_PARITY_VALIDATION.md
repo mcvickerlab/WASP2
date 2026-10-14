@@ -30,7 +30,7 @@ Source links, compressed count tables and checksums are in
 - Heterogeneous donor tests independently fit dispersion with Python and compare
   donor effects, chi-square LRT p-values and donor-local BH correction. They cover
   overlapping features, both dispersion models, phase modes and pseudocounts.
-- Local suite: 458 Python tests passed, 82 skipped, 1 deselected; 132 Rust tests
+- Local suite: 474 Python tests passed, 82 skipped, 1 deselected; 132 Rust tests
   passed, 7 ignored. Ruff, formatting and diff checks pass. Rust 1.88 Clippy
   passes with the pre-existing `uninlined_format_args` lint disabled.
 
@@ -90,7 +90,11 @@ underflowing arithmetic rather than reproducing its failure.
 Archived phasing checks use distinct original GT tokens and the presence of
 `0|1`/`1|0`, then parse every retained first allele. Numeric homozygous tokens
 follow that behavior. Malformed mixed tokens raise an error instead of silently
-changing a region's likelihood. One public peak SNP has `0/1`: the unfiltered
+changing a region's likelihood. Numeric-GT duplicates are removed using the parsed first allele, while the
+original tokens remain available for the backend's pre-dedup phase decision.
+Sixteen extra regressions cover both models, both dispersion scopes, both
+orientations and pseudocounts, including fitting weights, QC and phase provenance.
+One public peak SNP has `0/1`: the unfiltered
 phased command is rejected by both implementations. Phased comparisons explicitly
 select truly phased heterozygous SNPs; unphased comparisons retain all SNPs.
 
