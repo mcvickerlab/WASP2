@@ -65,6 +65,9 @@ const GAMMA_C: [f64; 6] = [
     -2.01889141433532773231E6,
 ];
 const MAXGAM: f64 = 171.624376956302725;
+// Retain the pinned Cephes literal on Rust versions without EULER_GAMMA.
+#[allow(clippy::approx_constant)]
+const CEPHES_EULER_GAMMA: f64 = 0.5772156649015329;
 
 fn polevl(x: f64, coefficients: &[f64]) -> f64 {
     let mut result = coefficients[0];
@@ -114,7 +117,7 @@ fn gamma_positive(mut x: f64) -> f64 {
     }
     while x < 2.0 {
         if x < 1e-9 {
-            return z / (0.5772156649015329_f64.mul_add(x, 1.0) * x);
+            return z / (CEPHES_EULER_GAMMA.mul_add(x, 1.0) * x);
         }
         z /= x;
         x += 1.0;
@@ -221,7 +224,7 @@ pub(crate) fn numpy_sum(values: &[f64]) -> f64 {
         let mut lanes = [0.0; 8];
         lanes.copy_from_slice(&values[..8]);
         let end = n - n % 8;
-        for block in values[8..end].chunks_exact(8) {
+        for block in values[8..end].as_chunks::<8>().0 {
             for (lane, &value) in lanes.iter_mut().zip(block) {
                 *lane += value;
             }
