@@ -8,10 +8,15 @@ mu checks: this test does not certify orientation for symmetric unphased peaks.
 import json
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 import pytest
-from scripts.compare_archive_analysis import compare_frames
+from scipy.special import expit
+from scripts.compare_archive_analysis import (
+    adapt_linear_reference,
+    compare_bulk_equivalence,
+    load_archive,
+    prepare_bulk_reference_counts,
+)
 
 REFERENCE = json.loads(
     (Path(__file__).parent / "fixtures/real_atac_optimizer_reference.json").read_text()
@@ -36,18 +41,52 @@ def test_real_atac_conditional_optimizer_matches_python(tmp_path, case):
     )
     actual = pd.DataFrame(output["results"])
     expected = pd.DataFrame(case["expected"])
-    if case["family"] == "balanced_anchor" and not case["phased"]:
-        # A balanced anchor makes the unphased objective symmetric. Check all
-        # statistics and either equally likely optimum, without choosing a side.
-        retained = counts.loc[counts.ref_count + counts.alt_count >= 10]
-        first = retained.groupby("region", sort=False).first()
-        assert (first.ref_count == first.alt_count).all()
-        comparison = compare_frames(expected.drop(columns="mu"), actual.drop(columns="mu"))
-        expected_mu = expected.set_index("region").mu
-        actual_mu = actual.set_index("region").mu.reindex(expected_mu.index)
-        same = np.isclose(actual_mu, expected_mu, rtol=5e-5, atol=5e-5)
-        mirrored = np.isclose(actual_mu, 1 - expected_mu, rtol=5e-5, atol=5e-5)
-        assert (same | mirrored).all()
-    else:
-        comparison = compare_frames(expected, actual)
-    assert comparison["status"] == "PASS", comparison
+    retained = prepare_bulk_reference_counts(
+        counts,
+        min_count=10,
+        pseudocount=case["pseudocount"],
+        effective_phased=output["effective_phased"],
+        region_col="region",
+    )
+    modules = load_archive()
+    if case["method"] == "linear":
+        adapt_linear_reference(modules)
+    archive = modules["as_analysis"]
+
+    def reference_likelihood(region, mu):
+        rows = retained.loc[retained.region == region]
+        ref = rows.ref_count.to_numpy()
+        depth = rows.N.to_numpy()
+        fixed = case["fixed_dispersion"]
+        rho = (
+            fixed["rho"]
+            if case["method"] == "single"
+            else expit(
+                fixed["linear_d1"]
+                + fixed["linear_d2"]
+                * (
+                    (depth - 2 * case["pseudocount"] - fixed["linear_depth_center"])
+                    / fixed["linear_depth_scale"]
+                )
+            )
+        )
+        if len(rows) == 1:
+            value = archive.opt_prob(mu, rho, ref[0], depth[0])
+        else:
+            value = archive.opt_unphased_dp(mu, rho, ref[:1], depth[:1], ref[1:], depth[1:])
+        return -float(value)
+
+    # Fixed nuisance parameters are identical by construction in this conditional
+    # test; the full-data runner separately verifies fitted dispersion predictions.
+    comparison = compare_bulk_equivalence(
+        expected,
+        actual,
+        retained_counts=retained,
+        effective_phased=output["effective_phased"],
+        reference_log_likelihood=reference_likelihood,
+        dispersion_comparison={"status": "PASS", "source": "identical fixed nuisance"},
+    )
+    assert comparison["statistical_equivalence"] == "PASS", comparison
+    if comparison["strict_comparison"]["status"] != "PASS":
+        assert comparison["strict_comparison"]["failures"] == ["mu"]
+        assert any(row["status"] == "SYMMETRIC_EQUIVALENT" for row in comparison["regions"])

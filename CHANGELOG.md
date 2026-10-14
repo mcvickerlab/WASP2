@@ -5,6 +5,9 @@ All notable changes to WASP2 will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- Bulk archive validation separately verifies symmetric unphased optima using
+  retained anchor counts and independent Python objective evaluations, while
+  preserving strict comparisons, raw proportions, and numerical tolerances.
 - Allelic-proportion optimization uses archived Python bounded Brent defaults
   for single-SNP, phased, and unphased bulk tests, including empty-allele inputs
   with pseudocount 0. Balanced first-SNP unphased objectives can still select

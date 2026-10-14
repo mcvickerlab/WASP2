@@ -139,6 +139,12 @@ has equal reference and alternate counts has a symmetric likelihood: `mu` and
 `1 - mu` are equally likely. Numerical libraries may select opposite optima;
 the reported direction is not identifiable in that case.
 
+Archive validation reports strict numerical matching separately from statistical
+equivalence. A mirrored unphased proportion qualifies only with a balanced first
+retained SNP, complementary proportions, independently verified equal archived
+likelihoods, and passing counts, dispersion and all other statistical checks.
+Reports retain the raw proportion differences and strict failures.
+
 Feature analysis preserves one SNV in every overlapping feature. `peak` remains
 an alias for `feature`:
 
