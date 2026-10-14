@@ -5,6 +5,9 @@ All notable changes to WASP2 will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- Cephes arithmetic follows the measured reference compiler policy: separate
+  multiplication/addition for Linux x86_64 and fused operations for the macOS
+  arm64 reference. Platform probes distinguish this from statistical-model changes.
 - Bulk phasing retains the original genotype tokens for archived table-wide
   checks, parses numeric first alleles consistently, and rejects malformed mixed
   phased input instead of silently changing a region's likelihood. Interior

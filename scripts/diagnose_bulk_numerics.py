@@ -27,16 +27,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def main() -> None:
     source = (ROOT / "rust/src/scipy_compat.rs").read_text()
-    plain = source
-    replacements = {
-        "result.mul_add(x, coefficient)": "result * x + coefficient",
-        "w.mul_add(polevl(w, &GAMMA_STIR), 1.0)": "w * polevl(w, &GAMMA_STIR) + 1.0",
-        "CEPHES_EULER_GAMMA.mul_add(x, 1.0)": "CEPHES_EULER_GAMMA * x + 1.0",
-        "(x - 0.5).mul_add(x.ln(), -x)": "(x - 0.5) * x.ln() - x",
-    }
-    for old, new in replacements.items():
-        assert old in plain, old
-        plain = plain.replace(old, new)
+    start = source.index("#[inline]\nfn cephes_mul_add")
+    end = source.index("\n}\n", start) + 3
+    implementation = source[start:end]
+    signature = "#[inline]\nfn cephes_mul_add(a: f64, b: f64, c: f64) -> f64"
+    fused = source.replace(implementation, signature + " { a.mul_add(b, c) }\n")
+    plain = source.replace(implementation, signature + " { a * b + c }\n")
     wrapper = "\npub(crate) fn gamma_probe(x: f64) -> (f64, f64) { (gamma_positive(x), lgamma_positive(x)) }\n"
     rust_main = r"""
 mod fused;
@@ -70,7 +66,7 @@ fn main() {
             '[package]\nname="wasp2-numerical-probe"\nversion="0.0.0"\nedition="2021"\n'
             '[dependencies]\nanyhow="1"\n'
         )
-        (temp / "src/fused.rs").write_text(source + wrapper)
+        (temp / "src/fused.rs").write_text(fused + wrapper)
         (temp / "src/plain.rs").write_text(plain + wrapper)
         (temp / "src/main.rs").write_text(rust_main)
         env = dict(os.environ)

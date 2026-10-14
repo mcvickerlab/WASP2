@@ -55,6 +55,10 @@ and arm64 container builds, ATAC smoke tests and label checks passed on that hea
 These strict failures remain integration gates while platform arithmetic is
 investigated. `scripts/diagnose_bulk_numerics.py` compares fused/unfused kernels
 and NumPy scalar/vector arithmetic without modifying production source.
+The probe confirms that the pinned Linux x86_64 SciPy build uses separate
+multiply/add arithmetic at the tested Cephes components, while the macOS arm64
+build uses fused arithmetic. Rust now follows that measured compiler policy;
+the full strict matrix must verify the resulting inference on each platform.
 
 ## Deliberate extensions and reference repairs
 
