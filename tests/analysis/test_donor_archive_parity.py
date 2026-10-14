@@ -332,3 +332,114 @@ def test_fallback_duplicate_gt_is_ignored_after_phase_decision(tmp_path):
     provenance = json.loads(paths["provenance"].read_text())
     assert provenance["donors"]["phasing"][0]["fallback_reason"] == "no_numeric_phased_gt"
     assert pd.read_csv(paths["dispersion"], sep="\t")["fit_observations"].item() == 12
+
+
+@pytest.mark.rust
+@pytest.mark.parametrize("depth_case", ["variable", "constant", "overlapping"])
+@pytest.mark.parametrize("scope", ["global", "per-donor"])
+@pytest.mark.parametrize("pc", [0, 1])
+@pytest.mark.parametrize("phased", [False, True])
+def test_linear_donor_matches_archive_fitting(tmp_path, depth_case, scope, pc, phased):
+    """Explicit array repairs; phased cases also repair the archive's ignored flag."""
+    import contextlib
+    import io
+
+    import numpy as np
+    from scipy.optimize import OptimizeResult
+    from scipy.special import expit
+    from scripts.compare_archive_analysis import adapt_linear_reference, load_archive
+
+    base = bulk_counts().drop(columns="gene")
+    if depth_case == "constant":
+        base["alt_count"] = 40 - base["ref_count"]
+    elif depth_case == "overlapping":
+        extra = base.iloc[:2].copy()
+        extra["region"] = "overlap"
+        base = pd.concat([base, extra], ignore_index=True)
+    second = base.copy()
+    depths = second["ref_count"] + second["alt_count"]
+    second["ref_count"] = np.minimum(second["ref_count"] + 2, depths - 1)
+    second["alt_count"] = depths - second["ref_count"]
+    donors = {"A": base, "B": second}
+    counts = pd.concat(
+        [frame.assign(donor_id=donor) for donor, frame in donors.items()], ignore_index=True
+    )
+    file = tmp_path / "counts.tsv"
+    counts.to_csv(file, sep="\t", index=False)
+    archive_modules = load_archive()
+    adapt_linear_reference(archive_modules)
+    archive = archive_modules["as_analysis"]
+    original_minimize = archive.minimize
+    if phased:
+        original_parse_opt = archive.parse_opt
+
+        def forward_ignored_phase(frame, disp=None, phased=False):
+            # Explicitly repair only linear_model's missing phased argument.
+            return original_parse_opt(frame, disp=disp, phased=True)
+
+        archive.parse_opt = forward_ignored_phase
+    pooled_parameters = None
+    if scope == "global":
+        pooled_parameters = original_minimize(
+            archive.opt_linear,
+            x0=(0, 0),
+            method="Nelder-Mead",
+            args=(
+                counts["ref_count"].to_numpy() + pc,
+                counts["ref_count"].to_numpy() + counts["alt_count"].to_numpy() + 2 * pc,
+            ),
+        ).x
+    reference_parameters = []
+
+    def reference_fit(*args, **kwargs):
+        result = (
+            OptimizeResult(x=pooled_parameters)
+            if pooled_parameters is not None
+            else original_minimize(*args, **kwargs)
+        )
+        reference_parameters.append(result.x.copy())
+        return result
+
+    archive.minimize = reference_fit
+    expected_frames = {}
+    coefficients = {}
+    with contextlib.redirect_stdout(io.StringIO()):
+        for donor, donor_counts in donors.items():
+            expected_frames[donor] = archive.get_imbalance(
+                donor_counts.copy(),
+                method="linear",
+                region_col="region",
+                phased=phased,
+                pseudocount=pc,
+            )
+            coefficients[donor] = reference_parameters[-1]
+    paths = run_per_donor_analysis(
+        file,
+        tmp_path / "results.tsv",
+        unit="feature",
+        model="linear",
+        region_col="region",
+        pseudocount=pc,
+        phased=phased,
+        dispersion_scope=scope,
+        min_donor_observations=4,
+    )
+    actual = pd.read_csv(paths["results"], sep="\t").rename(columns={"feature_id": "region"})
+    fits = pd.read_csv(paths["dispersion"], sep="\t")
+    for _, fit in fits.iterrows():
+        donor = fit["donor_id"]
+        donor_counts = donors[donor]
+        raw_depth = (donor_counts["ref_count"] + donor_counts["alt_count"]).to_numpy()
+        intercept, slope = coefficients[donor]
+        expected_rho = expit(intercept + slope * (raw_depth + 2 * pc))
+        actual_rho = expit(
+            fit["linear_d1"]
+            + fit["linear_d2"]
+            * ((raw_depth - fit["linear_depth_center"]) / fit["linear_depth_scale"])
+        )
+        np.testing.assert_allclose(actual_rho, expected_rho, rtol=5e-5, atol=5e-5)
+        if depth_case == "constant":
+            assert fit["linear_depth_scale"] == 1
+    for donor, observed in actual.groupby("donor_id"):
+        comparison = compare_frames(expected_frames[donor], observed)
+        assert comparison["status"] == "PASS", comparison

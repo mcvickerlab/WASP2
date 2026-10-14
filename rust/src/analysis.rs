@@ -150,7 +150,7 @@ impl DispersionParameters {
                 depth_scale,
             } => {
                 let standardized_depth = (n as f64 - depth_center) / depth_scale;
-                clamp_rho(expit((d1 + standardized_depth * d2).clamp(-10.0, 10.0)))
+                clamp_rho(expit(d1 + standardized_depth * d2))
             }
         }
     }
@@ -388,16 +388,13 @@ fn depth_standardization(raw_depths: &[u32]) -> Result<(f64, f64)> {
     if !scale.is_finite() {
         anyhow::bail!("linear depth scale is non-finite");
     }
-    if scale <= 0.0 {
-        anyhow::bail!("linear dispersion requires non-zero raw depth variance");
-    }
-    Ok((center, scale))
+    // A unit scale represents constant depths without changing predictions.
+    // The archive fits these inputs rather than rejecting them.
+    Ok((center, if scale > 0.0 { scale } else { 1.0 }))
 }
 
-/// Optimize standardized linear dispersion parameters using Nelder-Mead.
-///
-/// Fits rho = expit(d1 + d2 * ((N - center) / scale)) using raw read depth for
-/// the predictor and pseudocounted observations for the beta-binomial likelihood.
+/// Fit the archived raw, pseudocounted-depth predictor from (0, 0), then
+/// express it using reusable standardized raw-depth parameters.
 fn optimize_dispersion_linear(
     ref_counts: &[u32],
     n_array: &[u32],
@@ -415,11 +412,8 @@ fn optimize_dispersion_linear(
         }
         let mut neg_ll = 0.0;
 
-        for ((&ref_count, &n), &raw_depth) in
-            ref_counts.iter().zip(n_array.iter()).zip(raw_depths.iter())
-        {
-            let standardized_depth = (raw_depth as f64 - depth_center) / depth_scale;
-            let predictor = d1 + standardized_depth * d2;
+        for (&ref_count, &n) in ref_counts.iter().zip(n_array.iter()) {
+            let predictor = d1 + f64::from(n) * d2;
             if predictor.is_nan() {
                 return f64::INFINITY;
             }
@@ -438,33 +432,19 @@ fn optimize_dispersion_linear(
         neg_ll
     };
 
-    // A constant-rho fit provides a data-driven intercept. Standardization makes
-    // fixed slope starts meaningful across donors with different depth ranges.
-    let scalar_rho = clamp_rho(optimize_dispersion(ref_counts, n_array)?);
-    let scalar_intercept = (scalar_rho / (1.0 - scalar_rho)).ln();
-    let starts: [[f64; 2]; 9] = [
-        [scalar_intercept, 0.0],
-        [scalar_intercept, -0.25],
-        [scalar_intercept, 0.25],
-        [scalar_intercept, -1.0],
-        [scalar_intercept, 1.0],
-        [scalar_intercept - 2.0, 0.0],
-        [scalar_intercept + 2.0, 0.0],
-        [0.0, -0.5],
-        [0.0, 0.5],
-    ];
-    let mut best: Option<(f64, (f64, f64))> = None;
-    for s in starts {
-        if let Ok((d1, d2)) = nelder_mead_2d(objective, s, 1e-6, 1000) {
-            let val = objective([d1, d2]);
-            if val.is_finite() && best.is_none_or(|(bv, _)| val < bv) {
-                best = Some((val, (d1, d2)));
-            }
-        }
+    // Match scipy.optimize.minimize(method="Nelder-Mead", x0=(0, 0)):
+    // default simplex, xatol=fatol=1e-4, maxiter=maxfev=400 for two parameters.
+    let (intercept, slope) = nelder_mead_2d(objective, [0.0, 0.0], 1e-4, 400)?;
+    let offset = f64::from(n_array[0]) - f64::from(raw_depths[0]);
+    if n_array
+        .iter()
+        .zip(raw_depths)
+        .any(|(&n, &raw)| (f64::from(n) - f64::from(raw)) != offset)
+    {
+        anyhow::bail!("linear fit requires a consistent pseudocount offset");
     }
-    let (d1, d2) = best
-        .map(|(_, parameters)| parameters)
-        .ok_or_else(|| anyhow::anyhow!("linear dispersion optimization failed from all starts"))?;
+    let d1 = intercept + slope * (depth_center + offset);
+    let d2 = slope * depth_scale;
     Ok((d1, d2, depth_center, depth_scale))
 }
 
@@ -795,103 +775,98 @@ fn nelder_mead_2d<F>(f: F, x0: [f64; 2], tol: f64, max_iter: usize) -> Result<(f
 where
     F: Fn([f64; 2]) -> f64,
 {
-    // Standard Nelder-Mead coefficients
-    let alpha = 1.0; // reflection
-    let gamma = 2.0; // expansion
-    let rho = 0.5; // contraction
-    let sigma = 0.5; // shrinkage
-
-    // Initialize simplex: equilateral triangle around x0
-    let step = 1.0;
+    let step = |x: f64| if x == 0.0 { 0.00025 } else { 1.05 * x };
     let mut simplex = [
         (x0, f(x0)),
-        ([x0[0] + step, x0[1]], f([x0[0] + step, x0[1]])),
-        ([x0[0], x0[1] + step], f([x0[0], x0[1] + step])),
+        ([step(x0[0]), x0[1]], f([step(x0[0]), x0[1]])),
+        ([x0[0], step(x0[1])], f([x0[0], step(x0[1])])),
     ];
-
-    for _iter in 0..max_iter {
-        // Sort by function value (ascending)
-        simplex.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-
-        let (x_best, f_best) = simplex[0];
-        let (x_worst, f_worst) = simplex[2];
-        let (x_second, f_second) = simplex[1];
-
-        // Check convergence: simplex size
-        let size = ((x_worst[0] - x_best[0]).powi(2) + (x_worst[1] - x_best[1]).powi(2)).sqrt();
-        if size < tol {
-            return Ok((x_best[0], x_best[1]));
-        }
-
-        // Centroid of all points except worst
-        let centroid = [
-            (x_best[0] + x_second[0]) / 2.0,
-            (x_best[1] + x_second[1]) / 2.0,
-        ];
-
-        // Reflection
-        let x_r = [
-            centroid[0] + alpha * (centroid[0] - x_worst[0]),
-            centroid[1] + alpha * (centroid[1] - x_worst[1]),
-        ];
-        let f_r = f(x_r);
-
-        if f_r < f_second && f_r >= f_best {
-            // Accept reflection
-            simplex[2] = (x_r, f_r);
-            continue;
-        }
-
-        if f_r < f_best {
-            // Try expansion
-            let x_e = [
-                centroid[0] + gamma * (x_r[0] - centroid[0]),
-                centroid[1] + gamma * (x_r[1] - centroid[1]),
-            ];
-            let f_e = f(x_e);
-
-            if f_e < f_r {
-                simplex[2] = (x_e, f_e);
-            } else {
-                simplex[2] = (x_r, f_r);
-            }
-            continue;
-        }
-
-        // f_r >= f_second: try contraction
-        let x_c = if f_r < f_worst {
-            // Outside contraction
-            [
-                centroid[0] + rho * (x_r[0] - centroid[0]),
-                centroid[1] + rho * (x_r[1] - centroid[1]),
-            ]
+    let mut evaluations = 3;
+    let mut evaluate = |point| {
+        if evaluations >= max_iter {
+            None
         } else {
-            // Inside contraction
-            [
-                centroid[0] + rho * (x_worst[0] - centroid[0]),
-                centroid[1] + rho * (x_worst[1] - centroid[1]),
-            ]
-        };
-        let f_c = f(x_c);
-
-        if f_c < f_worst {
-            simplex[2] = (x_c, f_c);
-            continue;
+            evaluations += 1;
+            Some(f(point))
         }
-
-        // Shrink toward best point
-        for point in simplex.iter_mut().skip(1) {
-            let (x_i, _) = *point;
-            let x_new = [
-                x_best[0] + sigma * (x_i[0] - x_best[0]),
-                x_best[1] + sigma * (x_i[1] - x_best[1]),
+    };
+    'iterations: for _ in 1..max_iter {
+        simplex.sort_by(|a, b| a.1.total_cmp(&b.1));
+        let (best, best_value) = simplex[0];
+        let (second, second_value) = simplex[1];
+        let (worst, worst_value) = simplex[2];
+        let coordinate_spread = simplex[1..]
+            .iter()
+            .flat_map(|(x, _)| [(x[0] - best[0]).abs(), (x[1] - best[1]).abs()])
+            .fold(0.0, f64::max);
+        let objective_spread = simplex[1..]
+            .iter()
+            .map(|(_, value)| (value - best_value).abs())
+            .fold(0.0, f64::max);
+        if coordinate_spread <= tol && objective_spread <= tol {
+            break;
+        }
+        let center = [0.5 * (best[0] + second[0]), 0.5 * (best[1] + second[1])];
+        let reflected = [2.0 * center[0] - worst[0], 2.0 * center[1] - worst[1]];
+        let Some(reflected_value) = evaluate(reflected) else {
+            break;
+        };
+        if reflected_value < best_value {
+            let expanded = [
+                3.0 * center[0] - 2.0 * worst[0],
+                3.0 * center[1] - 2.0 * worst[1],
             ];
-            *point = (x_new, f(x_new));
+            let Some(expanded_value) = evaluate(expanded) else {
+                break;
+            };
+            simplex[2] = if expanded_value < reflected_value {
+                (expanded, expanded_value)
+            } else {
+                (reflected, reflected_value)
+            };
+        } else if reflected_value < second_value {
+            simplex[2] = (reflected, reflected_value);
+        } else {
+            let outside = reflected_value < worst_value;
+            let contracted = if outside {
+                [
+                    1.5 * center[0] - 0.5 * worst[0],
+                    1.5 * center[1] - 0.5 * worst[1],
+                ]
+            } else {
+                [
+                    0.5 * center[0] + 0.5 * worst[0],
+                    0.5 * center[1] + 0.5 * worst[1],
+                ]
+            };
+            let Some(contracted_value) = evaluate(contracted) else {
+                break;
+            };
+            let accept = if outside {
+                contracted_value <= reflected_value
+            } else {
+                contracted_value < worst_value
+            };
+            if accept {
+                simplex[2] = (contracted, contracted_value);
+            } else {
+                for point in simplex.iter_mut().skip(1) {
+                    point.0 = [
+                        best[0] + 0.5 * (point.0[0] - best[0]),
+                        best[1] + 0.5 * (point.0[1] - best[1]),
+                    ];
+                    let Some(value) = evaluate(point.0) else {
+                        break 'iterations;
+                    };
+                    point.1 = value;
+                }
+            }
         }
     }
-
-    // Return best point after max iterations
-    simplex.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+    simplex.sort_by(|a, b| a.1.total_cmp(&b.1));
+    if !simplex[0].1.is_finite() {
+        anyhow::bail!("linear dispersion optimization produced no finite objective");
+    }
     Ok((simplex[0].0[0], simplex[0].0[1]))
 }
 
@@ -961,7 +936,8 @@ pub fn single_model(variants: Vec<VariantCounts>, phased: bool) -> Result<Vec<Im
 /// Linear dispersion model analysis
 ///
 /// Python equivalent: `linear_model()` in as_analysis.py
-/// Uses standardized raw depth for the globally optimized linear predictor.
+/// Fits the archived pseudocounted-depth predictor and returns equivalent
+/// standardized raw-depth parameters for reuse.
 #[allow(dead_code)]
 pub fn linear_model_with_dispersion(
     variants: Vec<VariantCounts>,
@@ -1426,20 +1402,19 @@ mod tests {
     }
 
     #[test]
-    fn test_linear_predictor_keeps_archived_fit_guard() {
+    fn test_linear_prediction_is_not_clipped_at_fit_guard() {
         let parameters = DispersionParameters::Linear {
             d1: 0.0,
-            d2: 100.0,
+            d2: 12.0,
             depth_center: 0.0,
             depth_scale: 1.0,
         };
-        assert!((parameters.rho_at_depth(1) - expit(10.0)).abs() < 1e-12);
+        assert!((parameters.rho_at_depth(1) - expit(12.0)).abs() < 1e-15);
     }
 
     #[test]
-    fn test_depth_standardization_rejects_zero_variance() {
-        let error = depth_standardization(&[20, 20, 20]).unwrap_err();
-        assert!(error.to_string().contains("non-zero raw depth variance"));
+    fn test_depth_standardization_accepts_constant_depth() {
+        assert_eq!(depth_standardization(&[20, 20, 20]).unwrap(), (20.0, 1.0));
     }
 
     #[test]
@@ -1716,7 +1691,7 @@ mod tests {
     }
 
     #[test]
-    fn test_linear_fit_rejects_zero_raw_depth_variance() {
+    fn test_linear_fit_accepts_constant_raw_depth() {
         let variants = vec![vc_peak(100, 8, 2, None), vc_peak(200, 6, 4, None)];
         let config = AnalysisConfig {
             min_count: 0,
@@ -1724,7 +1699,11 @@ mod tests {
             method: AnalysisMethod::Linear,
             phased: false,
         };
-        let error = fit_imbalance_dispersion(variants, &config).unwrap_err();
-        assert!(error.to_string().contains("non-zero raw depth variance"));
+        let fit = fit_imbalance_dispersion(variants, &config).unwrap();
+        assert_eq!(
+            fit.parameters.linear_depth_standardization(),
+            Some((10.0, 1.0))
+        );
+        assert!(fit.parameters.rho_at_depth(10).is_finite());
     }
 }

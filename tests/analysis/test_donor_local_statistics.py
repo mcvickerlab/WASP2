@@ -70,7 +70,7 @@ def _rho_at_depth(dispersion: pd.Series, total: int) -> float:
         linear = float(dispersion["linear_d1"]) + standardized_depth * float(
             dispersion["linear_d2"]
         )
-        rho = float(expit(np.clip(linear, -10.0, 10.0)))
+        rho = float(expit(linear))
     return float(np.clip(rho, RHO_EPSILON, 1.0 - RHO_EPSILON))
 
 

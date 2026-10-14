@@ -5,6 +5,10 @@ All notable changes to WASP2 will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- Linear dispersion follows archived Python single-start Nelder-Mead fitting
+  on pseudocounted depth, then converts coefficients for reusable raw-depth
+  standardization. Equal depths use a unit scale; testing no longer applies
+  the fitting-only predictor clip.
 - Retain distinct repeated SNP count observations in donor analysis and apply
   Python phase-aware deduplication after depth filtering. SNV outputs aggregate
   retained observations per position; fitting preserves their phase identities.

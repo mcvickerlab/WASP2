@@ -83,7 +83,17 @@ for a global fit, or the individual donor for a per-donor fit.
 
 The ``linear`` model carries four inseparable nuisance values:
 ``linear_d1``, ``linear_d2``, ``linear_depth_center``, and
-``linear_depth_scale``. The fit ID includes all four, and fixed-nuisance donor
+``linear_depth_scale``.
+
+Linear fitting follows archived Python's balanced-null objective on
+pseudocounted depth, with Nelder-Mead starting at ``(0, 0)`` and SciPy's default
+simplex, tolerances, and evaluation limits. The fitted coefficients are then
+converted to the standardized raw-depth representation above. Equal-depth
+inputs use a unit scale, preserving their fitted predictions. The ``[-10, 10]``
+predictor guard applies during fitting only; testing uses the unclipped sigmoid
+prediction with the existing numerical rho boundary guard.
+
+The fit ID includes all four, and fixed-nuisance donor
 runs must echo all four exactly. The dispersion TSV and provenance JSON retain
 these values. They retain optimizer or fit status fields when Rust supplies
 them; otherwise ``fit_status=parameters_returned`` records only that a usable
