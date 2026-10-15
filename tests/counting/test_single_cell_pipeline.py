@@ -60,6 +60,10 @@ def test_three_way_single_cell_counting(tmp_path, scenario, reverse, threads):
                 read.query_name = "pair" if scenario == "paired" and i < 2 else f"read{i}"
                 read.reference_id, read.reference_start = chrom, 90 + i
                 read.mapping_quality, read.flag = 60, 0
+                if scenario == "paired" and i < 2:
+                    read.flag = 65 if i == 0 else 129
+                    read.next_reference_id = chrom
+                    read.next_reference_start = 91 if i == 0 else 90
                 read.cigarstring = {"deletion": "10M1D10M", "skip": "10M1N10M"}.get(scenario, "30M")
                 length = 20 if scenario in ["deletion", "skip"] else 30
                 read.query_sequence = ("A" if i % 2 == 0 else "G") * length
@@ -79,12 +83,17 @@ def test_three_way_single_cell_counting(tmp_path, scenario, reverse, threads):
     for counter in [archive_counter(), count_bc_snp_alleles]:
         counts = CountStatsSC()
         with pysam.AlignmentFile(str(bam_path), "rb") as bam:
-            for chrom in ["chr1", "chr2"]:
-                counter(bam, barcodes, chrom, iter(snps), counts)
+            for chrom_index, chrom in enumerate(["chr1", "chr2"]):
+                chromosome_snps = [
+                    (idx + 2 * chrom_index, pos, ref, alt) for idx, pos, ref, alt in snps
+                ]
+                counter(bam, barcodes, chrom, iter(chromosome_snps), counts)
         expected.append([dict(counts.ref_count), dict(counts.alt_count), dict(counts.other_count)])
     actual = [{}, {}, {}]
     regions = [
-        (idx, chrom, pos, ref, alt) for chrom in ["chr1", "chr2"] for idx, pos, ref, alt in snps
+        (idx + 2 * chrom_index, chrom, pos, ref, alt)
+        for chrom_index, chrom in enumerate(["chr1", "chr2"])
+        for idx, pos, ref, alt in snps
     ]
     for snp, bc, ref, alt, other in wasp2_rust.BamCounterSC(str(bam_path)).count_bc_alleles(
         regions, barcodes, 0, threads
