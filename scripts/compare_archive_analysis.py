@@ -28,7 +28,15 @@ from scipy.special import expit
 ROOT = Path(__file__).resolve().parents[1]
 ARCHIVE_REF = "41354fc"
 STAT_COLUMNS = ["null_ll", "alt_ll", "mu", "lrt", "pval", "fdr_pval"]
-COUNT_COLUMNS = ["ref_count", "alt_count", "N", "snp_count", "num_snps"]
+COUNT_COLUMNS = [
+    "ref_count",
+    "alt_count",
+    "N",
+    "snp_count",
+    "num_snps",
+    "num_snps_group1",
+    "num_snps_group2",
+]
 
 
 def load_archive(

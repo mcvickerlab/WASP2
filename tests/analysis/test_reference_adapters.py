@@ -85,3 +85,16 @@ def test_wide_archive_accumulators_prevent_overflow(monkeypatch):
     monkeypatch.setattr(archive, "minimize_scalar", inspect_fit)
     with pytest.raises(RuntimeError, match="inspected reference inputs"):
         archive.get_imbalance_sc(historical, sample="sample1", groups=["A", "B"], pseudocount=1)
+
+
+@pytest.mark.parametrize("column", ["num_snps_group1", "num_snps_group2"])
+def test_differential_snp_membership_counts_require_exact_agreement(column):
+    import pandas as pd
+    from scripts.compare_archive_analysis import compare_frames
+
+    expected = pd.DataFrame({"region": ["feature"], column: [2], "fdr_pval": [0.5]})
+    observed = expected.copy()
+    observed[column] = 3
+    comparison = compare_frames(expected, observed)
+    assert comparison["status"] == "FAIL"
+    assert column in comparison["failures"]
