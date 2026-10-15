@@ -4,6 +4,20 @@ All notable changes to WASP2 will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- Bulk SNP counting preserves archived Python input-order priority across paired
+  mates, with read names consumed before checking aligned bases at each SNP.
+- Bulk region outputs remove one pseudocount per retained SNP and allele, restoring
+  the archived Python raw-count aggregation without changing the fitted statistics.
+- Single-cell analysis input preparation and differential comparisons now follow
+  the cells-by-variants AnnData layout throughout, including barcode groups and genotypes.
+- Differential pseudobulk sums widen to UInt64 rather than wrapping at 65,535.
+
+### Tests
+- Frozen outputs from archived Python commit `41354fc` cover bulk, single-cell,
+  and differential analysis. Linear-reference array-shape adaptations are explicit;
+  the archive's ignored phased-linear flag is reported as a reference limitation.
+
 ## [1.5.0] - 2026-07-14
 
 ### Added

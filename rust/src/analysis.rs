@@ -508,9 +508,9 @@ fn golden_section_search<F>(f: F, a: f64, mut b: f64, tol: f64) -> Result<f64>
 where
     F: Fn(f64) -> f64,
 {
-    const PHI: f64 = 1.618033988749895; // Golden ratio
-    let inv_phi = 1.0 / PHI;
-    let inv_phi2 = 1.0 / (PHI * PHI);
+    let phi = (1.0 + 5.0_f64.sqrt()) / 2.0;
+    let inv_phi = 1.0 / phi;
+    let inv_phi2 = 1.0 / (phi * phi);
 
     let mut a = a;
     let mut h = b - a;
@@ -1211,18 +1211,20 @@ pub fn analyze_imbalance(
 
     // Remove pseudocounts from results
     for result in results.iter_mut() {
-        if result.ref_count < config.pseudocount
-            || result.alt_count < config.pseudocount
-            || result.n < 2 * config.pseudocount
+        // Each retained SNP contributes one pseudocount per allele.
+        let region_pseudocount = config.pseudocount.saturating_mul(result.snp_count as u32);
+        if result.ref_count < region_pseudocount
+            || result.alt_count < region_pseudocount
+            || result.n < 2 * region_pseudocount
         {
             eprintln!(
                 "[WARN] Counts smaller than pseudocount for region {}: ref={}, alt={}, n={}, pc={}",
-                result.region, result.ref_count, result.alt_count, result.n, config.pseudocount
+                result.region, result.ref_count, result.alt_count, result.n, region_pseudocount
             );
         }
-        result.ref_count = result.ref_count.saturating_sub(config.pseudocount);
-        result.alt_count = result.alt_count.saturating_sub(config.pseudocount);
-        result.n = result.n.saturating_sub(2 * config.pseudocount);
+        result.ref_count = result.ref_count.saturating_sub(region_pseudocount);
+        result.alt_count = result.alt_count.saturating_sub(region_pseudocount);
+        result.n = result.n.saturating_sub(2 * region_pseudocount);
     }
 
     Ok(results)
@@ -1231,6 +1233,40 @@ pub fn analyze_imbalance(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_region_counts_remove_pseudocounts_per_retained_snp() {
+        let variant = |pos, ref_count, alt_count| VariantCounts {
+            chrom: "chr1".to_string(),
+            pos,
+            ref_count,
+            alt_count,
+            region: "peak".to_string(),
+            sample: None,
+            gt: None,
+        };
+        for pseudocount in [0, 1, 2] {
+            // The duplicate must not contribute counts or extra pseudocounts.
+            let variants = vec![
+                variant(101, 18, 2),
+                variant(201, 3, 17),
+                variant(101, 18, 2),
+            ];
+            let config = AnalysisConfig {
+                min_count: 10,
+                pseudocount,
+                method: AnalysisMethod::Single,
+                phased: false,
+            };
+            let results = analyze_imbalance(variants, &config).unwrap();
+            assert_eq!(results.len(), 1);
+            let result = &results[0];
+            assert_eq!(result.snp_count, 2);
+            assert_eq!(result.ref_count, 21);
+            assert_eq!(result.alt_count, 19);
+            assert_eq!(result.n, 40);
+        }
+    }
 
     #[test]
     fn test_opt_prob() {
