@@ -5,6 +5,15 @@ All notable changes to WASP2 will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- Single-cell sparse counts and totals use UInt64 so H5AD output preserves values
+  above 65,535. Metadata conversion no longer requires an undeclared PyArrow install.
+- Automatic single-sample selection now applies the same heterozygote filtering
+  and feature reindexing as explicit selection, correcting inherited Python behavior.
+- Single-cell counting normalizes repeated, comma-separated and file-based sample options.
+- Shared-SNP differential analysis applies minimum depth per region, as archived
+  Python did. Unphased Python likelihoods preserve its sequential arithmetic while
+  retaining log-space fallback for underflow. Expanded comparisons explicitly widen
+  the archive's UInt16 accumulators; this also avoids incidental float32 dispatch.
 - Donor feature deduplication uses the parsed first GT allele, as Python does.
   Original GT tokens remain available for the backend's pre-dedup phasing
   decision; fitting weights, raw counts, QC and provenance reflect retained rows.

@@ -51,19 +51,19 @@ class WaspCountSC:
         self.feature_file = feature_file
         self.use_region_names = use_region_names
 
-        # Make sure samples turned into str list
-        # Ideally single sample for single cell
-        normalized_samples: list[str] | None
-        if isinstance(samples, str):
-            # Check if sample file or comma delim string
-            if Path(samples).is_file():
-                with open(samples) as sample_file:
-                    normalized_samples = [l.strip() for l in sample_file]
-            else:
-                normalized_samples = [s.strip() for s in samples.split(",")]
-        else:
-            normalized_samples = samples
-        self.samples: list[str] | None = normalized_samples
+        # Typer supplies repeated options as a list; normalize each value equally.
+        normalized_samples: list[str] | None = None
+        if samples is not None:
+            normalized_samples = []
+            for value in [samples] if isinstance(samples, str) else samples:
+                entries = Path(value).read_text().splitlines() if Path(value).is_file() else [value]
+                normalized_samples.extend(
+                    sample.strip()
+                    for entry in entries
+                    for sample in entry.split(",")
+                    if sample.strip()
+                )
+        self.samples = normalized_samples
 
         # parse output?
         self.out_file: str = (

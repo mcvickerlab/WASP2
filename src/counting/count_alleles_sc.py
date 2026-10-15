@@ -34,11 +34,11 @@ def _sparse_from_counts(
     shape: tuple[int, int],
 ) -> csr_matrix:
     if not counts:
-        return csr_matrix(shape, dtype=np.uint16)
+        return csr_matrix(shape, dtype=np.uint64)
     return csr_matrix(
         (list(counts.values()), list(zip(*counts.keys()))),
         shape=shape,
-        dtype=np.uint16,
+        dtype=np.uint64,
     )
 
 
@@ -189,7 +189,7 @@ def make_count_matrix(
         layers={"ref": sparse_ref, "alt": sparse_alt, "other": sparse_other},
     )
 
-    adata.obs = snp_df.to_pandas()
+    adata.obs = pd.DataFrame(snp_df.to_dict(as_series=False))
     adata.obs["ref_count"] = adata.layers["ref"].sum(axis=1).T.A1
     adata.obs["alt_count"] = adata.layers["alt"].sum(axis=1).T.A1
 
@@ -212,7 +212,7 @@ def make_count_matrix(
         )
         if "region" not in feature_df.columns:
             feature_df = feature_df.with_columns(pl.col(feature_cols[0]).alias("region"))
-        adata.uns["feature"] = feature_df.to_pandas()
+        adata.uns["feature"] = pd.DataFrame(feature_df.to_dict(as_series=False))
 
         # region_snp_dict = dict(
         #     df.join(snp_df, on=["chrom", "pos", "ref", "alt"], how="left"

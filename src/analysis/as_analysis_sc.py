@@ -3,7 +3,7 @@
 Provides functions for analyzing allelic imbalance in single-cell data
 stored in AnnData format with SNP counts in layers.
 
-Orientation contract (scverse convention, see ISSUE2_ORIENTATION_DECISION §2b):
+Orientation contract (scverse convention):
 
     obs = cells (barcodes); var = SNPs (variants).
 

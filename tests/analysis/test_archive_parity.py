@@ -10,7 +10,12 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
-from scripts.compare_archive_analysis import bulk_counts, compare_frames, single_cell_counts
+from scripts.compare_archive_analysis import (
+    bulk_counts,
+    compare_frames,
+    load_archive,
+    single_cell_counts,
+)
 from typer.testing import CliRunner
 
 from analysis.as_analysis_sc import get_imbalance_sc
@@ -21,6 +26,105 @@ from analysis.run_analysis_sc import process_adata_inputs
 REFERENCE = json.loads(
     (Path(__file__).parent / "fixtures/archive_python_reference.json").read_text()
 )
+
+
+@pytest.mark.parametrize("scenario", ["base", "overlap", "zeros", "unequal_depth"])
+@pytest.mark.parametrize("mode", ["single", "shared", "different"])
+@pytest.mark.parametrize("phased", [False, True])
+@pytest.mark.parametrize("pc", [0, 1])
+@pytest.mark.parametrize("min_count", [0, 10, 20])
+def test_live_single_cell_archive_matrix(scenario, mode, phased, pc, min_count):
+    from scipy.sparse import csr_matrix
+
+    historical = single_cell_counts()
+    if scenario == "overlap":
+        historical.uns["feature"] = pd.concat(
+            [historical.uns["feature"], pd.DataFrame({"index": [0, 1], "region": ["overlap"] * 2})],
+            ignore_index=True,
+        )
+    elif scenario in ["zeros", "unequal_depth"]:
+        for layer in ["ref", "alt"]:
+            values = historical.layers[layer].toarray()
+            if scenario == "zeros":
+                values[0, :] = 0
+            else:
+                values[:, 2:] *= 4
+            historical.layers[layer] = csr_matrix(values)
+    # Explicit reference repair: current sums are uint64 to prevent overflow.
+    # The unchanged archive remains covered by the frozen tests below.
+    archive = load_archive(widen_single_cell_sums=True)
+    reference = {
+        "single": archive["as_analysis_sc"].get_imbalance_sc,
+        "shared": archive["compare_ai"].get_compared_imbalance,
+        "different": archive["compare_ai"].get_compared_imbalance_diff_snps,
+    }[mode]
+    current = {
+        "single": get_imbalance_sc,
+        "shared": get_compared_imbalance,
+        "different": get_compared_imbalance_diff_snps,
+    }[mode]
+    options = {
+        "sample": "sample1",
+        "groups": ["A", "B"],
+        "phased": phased,
+        "pseudocount": pc,
+        "min_count": min_count,
+    }
+    expected = reference(historical.copy(), **options)
+    actual = current(historical.T.copy(), **options)
+    assert expected.keys() == actual.keys()
+    for key in expected:
+        comparison = compare_frames(expected[key], actual[key])
+        assert comparison["status"] == "PASS", comparison
+
+
+@pytest.mark.parametrize("phased", [False, True, None])
+def test_automatic_sample_selection_filters_like_explicit_selection(phased):
+    current = single_cell_counts().T.copy()
+    current.var.loc[current.var.index[0], "sample1"] = "0/0"
+    automatic = process_adata_inputs(current.copy(), phased=phased)
+    explicit = process_adata_inputs(current.copy(), sample="sample1", phased=phased)
+    assert automatic.sample == explicit.sample == "sample1"
+    assert automatic.phased == explicit.phased
+    assert automatic.adata.n_vars == explicit.adata.n_vars == 5
+    pd.testing.assert_frame_equal(automatic.adata.var, explicit.adata.var)
+    pd.testing.assert_frame_equal(automatic.adata.uns["feature"], explicit.adata.uns["feature"])
+    np.testing.assert_array_equal(
+        automatic.adata.layers["ref"].toarray(), explicit.adata.layers["ref"].toarray()
+    )
+
+
+@pytest.mark.parametrize("sample", [None, "sample1"])
+def test_sample_selection_rejects_no_heterozygotes(sample):
+    current = single_cell_counts().T.copy()
+    current.var["sample1"] = "0/0"
+    with pytest.raises(ValueError, match="Heterozygous genotypes not found"):
+        process_adata_inputs(current, sample=sample)
+
+
+@pytest.mark.parametrize("cutoff", [0.5, 1, 3])
+def test_outlier_filtering_matches_archived_feature_reindexing(cutoff):
+    from analysis.as_analysis_sc import adata_count_qc
+
+    historical = single_cell_counts()
+    historical.obs.loc[historical.obs.index[0], "ref_count"] = 10000
+    expected = load_archive()["as_analysis_sc"].adata_count_qc(historical.copy(), z_cutoff=cutoff)
+    actual = adata_count_qc(historical.T.copy(), z_cutoff=cutoff)
+    np.testing.assert_array_equal(
+        actual.layers["ref"].toarray(), expected.layers["ref"].toarray().T
+    )
+    pd.testing.assert_frame_equal(actual.uns["feature"], expected.uns["feature"])
+
+
+@pytest.mark.parametrize("phased", [False, True, None])
+def test_missing_genotypes_force_unphased_and_missing_groups_fail(phased):
+    current = single_cell_counts().T.copy()
+    del current.uns["samples"]
+    prepared = process_adata_inputs(current.copy(), phased=phased)
+    assert prepared.phased is False
+    assert prepared.sample is None
+    with pytest.raises(KeyError, match="not found"):
+        process_adata_inputs(current, groups=["missing"], phased=phased)
 
 
 @pytest.mark.rust

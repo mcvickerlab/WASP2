@@ -9,6 +9,7 @@ cell-by-SNP layout. This is a compatibility check, not statistical calibration.
 
 from __future__ import annotations
 
+import ast
 import contextlib
 import io
 import subprocess
@@ -30,8 +31,15 @@ STAT_COLUMNS = ["null_ll", "alt_ll", "mu", "lrt", "pval", "fdr_pval"]
 COUNT_COLUMNS = ["ref_count", "alt_count", "N", "snp_count", "num_snps"]
 
 
-def load_archive(ref: str = ARCHIVE_REF) -> dict[str, types.ModuleType]:
-    """Load unmodified historical modules, restoring their legacy import names."""
+def load_archive(
+    ref: str = ARCHIVE_REF, *, widen_single_cell_sums: bool = False
+) -> dict[str, types.ModuleType]:
+    """Load historical modules, optionally repairing uint16 single-cell sums.
+
+    The explicit dtype repair prevents count overflow and SciPy float32 dispatch.
+    It changes only sum accumulator keywords, never likelihoods or optimization.
+    The default executes the unmodified archive.
+    """
     names = ["as_analysis", "as_analysis_sc", "compare_ai"]
     saved = {name: sys.modules.get(name) for name in names}
     modules = {}
@@ -43,7 +51,26 @@ def load_archive(ref: str = ARCHIVE_REF) -> dict[str, types.ModuleType]:
             module = types.ModuleType(f"archive_{name}")
             modules[name] = module
             sys.modules[name] = module
-            exec(compile(source, f"{ref}:src/analysis/{name}.py", "exec"), module.__dict__)
+            tree = ast.parse(source)
+            if widen_single_cell_sums and name in {"as_analysis_sc", "compare_ai"}:
+                for node in ast.walk(tree):
+                    if not (
+                        isinstance(node, ast.Call)
+                        and isinstance(node.func, ast.Attribute)
+                        and node.func.attr == "sum"
+                    ):
+                        continue
+                    for keyword in node.keywords:
+                        value = keyword.value
+                        if (
+                            keyword.arg == "dtype"
+                            and isinstance(value, ast.Attribute)
+                            and isinstance(value.value, ast.Name)
+                            and value.value.id == "np"
+                            and value.attr == "uint16"
+                        ):
+                            value.attr = "uint64"
+            exec(compile(tree, f"{ref}:src/analysis/{name}.py", "exec"), module.__dict__)
     finally:
         for name, module in saved.items():
             if module is None:

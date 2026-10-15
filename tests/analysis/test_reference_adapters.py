@@ -38,3 +38,50 @@ def test_vector_adapter_only_slices_dispersion(mu):
         mu, dispersions, first_ref, first_n, rest_ref, rest_n
     )
     assert actual == expected
+
+
+@pytest.mark.parametrize("mu", [0.06, 0.25, 0.38196601125, 0.7, 0.94])
+def test_python_unphased_likelihood_preserves_archive_recurrence(mu):
+    from analysis.as_analysis import opt_unphased_dp
+
+    archive = load_archive()["as_analysis"]
+    ref, depth = np.array([10, 3, 18, 0]), np.array([20, 20, 24, 10])
+    expected = archive.opt_unphased_dp(mu, 0.03, ref[:1], depth[:1], ref[1:], depth[1:])
+    actual = opt_unphased_dp(mu, 0.03, ref[:1], depth[:1], ref[1:], depth[1:])
+    assert actual == float(np.asarray(expected).item())
+
+
+def test_python_unphased_underflow_fallback_remains_finite():
+    from scipy.stats import betabinom
+
+    from analysis.as_analysis import opt_unphased_dp
+
+    mu, rho = 0.2, 0.03
+    ref, depth = np.arange(2000, 2200), np.full(200, 100_000)
+    shape = (1 - rho) / rho
+    forward = betabinom.logpmf(ref, depth, mu * shape, (1 - mu) * shape)
+    reverse = betabinom.logpmf(ref, depth, (1 - mu) * shape, mu * shape)
+    expected = -forward[0] - np.sum(np.logaddexp(forward[1:], reverse[1:]) - np.log(2))
+    actual = opt_unphased_dp(mu, rho, ref[:1], depth[:1], ref[1:], depth[1:])
+    assert np.isfinite(actual)
+    assert np.isclose(actual, expected, rtol=5e-5, atol=5e-5)
+
+
+def test_wide_archive_accumulators_prevent_overflow(monkeypatch):
+    from scipy.sparse import csr_matrix
+    from scripts.compare_archive_analysis import single_cell_counts
+
+    archive = load_archive(widen_single_cell_sums=True)["as_analysis_sc"]
+    historical = single_cell_counts()
+    historical.layers["ref"] = csr_matrix(np.full(historical.shape, 40000, dtype=np.uint16))
+
+    def inspect_fit(function, args, **kwargs):
+        ref, depth = args
+        np.testing.assert_array_equal(ref, np.full(historical.n_obs, 160001))
+        assert ref.dtype == np.uint64
+        assert np.all(depth >= ref)
+        raise RuntimeError("inspected reference inputs")
+
+    monkeypatch.setattr(archive, "minimize_scalar", inspect_fit)
+    with pytest.raises(RuntimeError, match="inspected reference inputs"):
+        archive.get_imbalance_sc(historical, sample="sample1", groups=["A", "B"], pseudocount=1)

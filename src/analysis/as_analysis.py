@@ -173,6 +173,19 @@ def opt_unphased_dp(
     # Get likelihood of first pos
     first_ll = opt_prob(prob, first_disp, first_ref[0], first_n[0])
 
+    # Preserve the archived sequential arithmetic while products remain normal.
+    # Equivalent log-space operations can select another symmetric optimum.
+    forward = np.atleast_1d(opt_prob(prob, phase_disp, phase_ref, phase_n, log=False))
+    reverse = np.atleast_1d(opt_prob(1 - prob, phase_disp, phase_ref, phase_n, log=False))
+    previous = 1.0
+    for p1, p2 in zip(forward, reverse, strict=True):
+        phase1, phase2 = previous * p1, previous * p2
+        previous = 0.5 * phase1 + 0.5 * phase2
+        if previous < np.finfo(float).tiny:
+            break
+    else:
+        return float(first_ll - np.log(previous))
+
     # Get LOG likelihood with regard to phasing of first pos.
     # opt_prob(..., log=True) returns the NEGATIVE log-pmf, so negate to get the
     # log-pmf itself for stable log-space accumulation.

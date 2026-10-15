@@ -123,7 +123,7 @@ def process_adata_inputs(
         else:
             sample = sample_list[0]
 
-    else:
+    if sample is not None:
         sample_list = adata.uns["samples"]
 
         if sample not in sample_list:
