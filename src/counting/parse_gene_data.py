@@ -116,13 +116,18 @@ def parse_gene_file(
     if df.is_empty():
         raise ValueError(f"No {feature!r} features found in {gene_file}")
 
-    def has_attribute(name: str) -> bool:
-        return bool(df.select(_attribute_values(name).is_not_null().any()).item())
+    def has_attribute(name: str, *, every_row: bool = True) -> bool:
+        present = _attribute_values(name).is_not_null()
+        return bool(df.select(present.all() if every_row else present.any()).item())
 
     if attribute is None:
-        attribute = next(
-            (name for name in (f"{feature}_id", "ID", "Name") if has_attribute(name)), None
-        )
+        candidates = (f"{feature}_id", "ID", "Name")
+        attribute = next((name for name in candidates if has_attribute(name)), None)
+        if attribute is None:
+            # If no complete key exists, report which records lack the preferred ID.
+            attribute = next(
+                (name for name in candidates if has_attribute(name, every_row=False)), None
+            )
     if attribute is None:
         raise ValueError(
             f"No feature identifier found for {feature!r} in {gene_file}; "

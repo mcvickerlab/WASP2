@@ -47,7 +47,7 @@ def test_annotation_selection_matches_archive(tmp_path, suffix, feature):
     rows = []
     for kind in ("gene", "transcript", "exon"):
         attrs = (
-            f'gene_id "g1"; transcript_id "t1"; {kind}_id "{kind}1";'
+            ('gene_id "g1"; transcript_id "t1"; ' + ('exon_id "e1";' if kind == "exon" else ""))
             if suffix.startswith("gtf")
             else f"ID={kind}1;Parent=g1;"
         )
@@ -337,3 +337,35 @@ def test_rna_annotation_counting_cli(tmp_path, rna_counts, suffix):
         actual.select(columns).sort(columns).to_dicts()
         == expected.select(columns).sort(columns).to_dicts()
     )
+
+
+@pytest.mark.parametrize("partial", ["identifier", "parent"])
+def test_auto_attributes_require_complete_keys_like_archive(tmp_path, partial):
+    attributes = (
+        ["ID=e1;Name=first;", "Name=second;"]
+        if partial == "identifier"
+        else ['exon_id "e1"; transcript_id "t1"; gene_id "g1";', 'exon_id "e2"; gene_id "g1";']
+    )
+    path = _annotation(
+        tmp_path / "annotation.gtf",
+        [
+            ("exon", start, start + 10, attrs)
+            for start, attrs in zip([1, 31], attributes, strict=True)
+        ],
+    )
+    expected = _archive_annotations().parse_gene_file(path)
+    actual = parse_gene_file(path)
+    assert actual[1:] == expected[1:]
+    assert actual.gene_df.to_dicts() == expected.gene_df.to_dicts()
+
+
+def test_partial_auto_identifier_reports_affected_records(tmp_path):
+    path = _annotation(
+        tmp_path / "annotation.gtf",
+        [
+            ("exon", 1, 20, 'exon_id "e1"; gene_id "g1";'),
+            ("exon", 31, 50, 'gene_id "g1";'),
+        ],
+    )
+    with pytest.raises(ValueError, match="exon_id.*1.*chr1:31-50"):
+        parse_gene_file(path)
