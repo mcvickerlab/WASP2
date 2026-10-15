@@ -44,6 +44,14 @@ run_analysis
    :undoc-members:
    :show-inheritance:
 
+run_analysis_per_donor
+~~~~~~~~~~~~~~~~~~~~~~
+
+.. automodule:: analysis.run_analysis_per_donor
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 run_analysis_sc
 ~~~~~~~~~~~~~~~
 

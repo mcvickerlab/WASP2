@@ -114,6 +114,77 @@ to retain peak identifiers for feature-level analysis.
 wasp2-analyze find-imbalance counts.tsv -o ai_results.tsv
 ```
 
+### Donor-local cohort analysis
+
+Analyze the locked count directory (or its `count_manifest.json` or
+`counts.tsv.gz`) with an explicit unit. SNV analysis rejects `--phased` and tests
+each variant independently within each donor:
+
+```bash
+wasp2-analyze find-imbalance cohort_counts \
+  --scope per-donor --unit snv --min-donor-observations 50 \
+  -o atac_snv_results.tsv
+```
+
+`--dispersion-scope per-donor` is the default. `--dispersion-scope global`
+fits one nuisance model over retained eligible donor-feature-SNV observations and reuses that exact
+fit for every included donor; testing and BH correction remain donor-local. Both
+`single` and `linear` dispersion models are supported. Linear fits record and
+reuse `linear_d1`, `linear_d2`, `linear_depth_center`, and
+`linear_depth_scale` together.
+New fits preserve the original adjusted-depth coefficients: `linear_depth_center`
+is `-2 * pseudocount` and `linear_depth_scale` is 1. This avoids rounding from
+converting the predictor to mean/std coordinates. Existing fixed parameter sets
+continue to use their supplied center and scale.
+
+Allelic-proportion fitting follows archived Python bounded Brent defaults for
+SNP, phased, and unphased bulk tests. An unphased region whose first retained SNP
+has equal reference and alternate counts has a symmetric likelihood: `mu` and
+`1 - mu` are equally likely. Numerical libraries may select opposite optima;
+the reported direction is not identifiable in that case.
+
+Archive validation reports strict numerical matching separately from statistical
+equivalence. A mirrored unphased proportion qualifies only with a balanced first
+retained SNP, complementary proportions, independently verified equal archived
+likelihoods, and passing counts, dispersion and all other statistical checks.
+Reports retain the raw proportion differences and strict failures.
+
+Feature analysis preserves one SNV in every overlapping feature. `peak` remains
+an alias for `feature`:
+
+```bash
+wasp2-count count-cohort donors.tsv variants.vcf.gz feature_counts \
+  --unit feature --regions peaks.bed
+
+wasp2-analyze find-imbalance feature_counts \
+  --scope per-donor --unit feature --model linear --phased \
+  -o atac_feature_results.tsv
+```
+
+The donor-local route defaults to pseudocount 1. It writes
+`atac_feature_results.tsv`, `atac_feature_results.dispersion.tsv`,
+`atac_feature_results.qc.tsv`, and `atac_feature_results.provenance.json` and
+refuses to overwrite any of them. For standalone legacy count tables only,
+`sample` is accepted and normalized to `donor_id`; providing both columns is an
+error. Use `--expected-manifest-sha256` to require an externally trusted locked
+bundle manifest. An input `snv_id` is preserved exactly after validating its
+donor and allele identity; coordinate-based IDs are synthesized only when the
+column is absent. Dispersion and provenance metadata report optimizer status
+only when Rust provides it; `parameters_returned` does not assert convergence.
+
+Phasing checks run after depth filtering. Missing GT, identical GT tokens, or
+absence of numeric `0|1`/`1|0` genotypes selects unphased inference. Otherwise,
+every retained GT must have a numeric first allele: mixed `0|0`/`1|1` tokens
+follow archived Python's first-allele behavior, while malformed mixed tokens
+(such as `0/1` or `A|G`) raise an error. For phased inference, prepare a table of
+truly phased heterozygous SNPs; otherwise omit `--phased`.
+
+Valid interior dispersion values are retained without clipping. Exact rho
+endpoints and probability-product underflow use documented finite extensions
+because archived Python is undefined there. The full public ATAC comparison
+and its reference adaptations are described in
+[the validation report](docs/BULK_PARITY_VALIDATION.md).
+
 ## Single-Cell Example
 
 ```bash

@@ -33,6 +33,83 @@ Useful options:
 * ``--region_col``: explicit region column name if auto-detection is not desired
 * ``--groupby``: group on an alternate annotation column, such as a parent gene column
 
+Donor-Local Bulk Analysis
+-------------------------
+
+Locked cohort count bundles use ``donor_id`` as the donor identity. Analyze the
+bundle directory, its ``count_manifest.json``, or its locked ``counts.tsv.gz``:
+
+.. code-block:: bash
+
+   wasp2-analyze find-imbalance cohort_counts \
+     --scope per-donor \
+     --unit snv \
+     --model single \
+     --dispersion-scope per-donor \
+     --min-donor-observations 50 \
+     --output donor_snv.tsv
+
+The supported units are ``snv`` and ``feature``; ``peak`` is an alias for
+``feature``. SNV analysis is unphased. Feature analysis may use ``--phased`` and
+uses the locked ``region`` column, or an explicit ``--region-col`` for a
+standalone count table. Overlapping feature memberships are retained for feature
+tests and dispersion fitting, matching archived Python's retained SNP-feature
+observations. Deduplication follows Python's chromosome, position, counts, and
+feature key, including GT only when phasing is effective. Different count
+observations at the same SNP are retained. SNV output aggregates those retained
+observations into one result per position, as archived Python does. Allele and
+SNV-ID consistency checks remain enforced.
+
+``--dispersion-scope per-donor`` fits ``single`` or ``linear`` nuisance
+parameters independently for each included donor. ``--dispersion-scope global``
+fits the combined eligible donor-SNP-feature observations and reuses the returned fit ID and
+parameters unchanged in each donor run. In both modes, effect inference and
+Benjamini-Hochberg correction are independent within each donor.
+
+A feature-level ``--phased`` request follows archived Python's fallback checks
+within each donor after depth filtering. Missing GT, a single distinct GT, or
+no numeric ``0|1``/``1|0`` genotype selects unphased inference. Allele-string GT
+such as ``A|G`` is retained rather than converted to numeric phase. Provenance
+``donors.phasing`` records each included donor's ``requested_phased``,
+``effective_phased``, and ``fallback_reason`` before phase-aware deduplication;
+``analysis.phased`` remains the
+original request. A shared dispersion fit does not share phasing decisions.
+
+QC ``eligible_snv_observations`` and dispersion-sidecar
+``donor_eligible_snv_observations`` count unique eligible SNPs per donor, so
+multiple memberships do not inflate the donor eligibility threshold.
+``fit_observations`` counts actual retained fitting rows: all included donors
+for a global fit, or the individual donor for a per-donor fit.
+
+The ``linear`` model carries four inseparable nuisance values:
+``linear_d1``, ``linear_d2``, ``linear_depth_center``, and
+``linear_depth_scale``.
+
+Linear fitting follows archived Python's balanced-null objective on
+pseudocounted depth, with Nelder-Mead starting at ``(0, 0)`` and SciPy's default
+simplex, tolerances, and evaluation limits. The fitted coefficients are then
+converted to the standardized raw-depth representation above. Equal-depth
+inputs use a unit scale, preserving their fitted predictions. The ``[-10, 10]``
+predictor guard applies during fitting only; testing uses the unclipped sigmoid
+prediction with the existing numerical rho boundary guard.
+
+The fit ID includes all four, and fixed-nuisance donor
+runs must echo all four exactly. The dispersion TSV and provenance JSON retain
+these values. They retain optimizer or fit status fields when Rust supplies
+them; otherwise ``fit_status=parameters_returned`` records only that a usable
+parameter payload was returned and does not claim optimizer convergence.
+
+The donor-local route defaults to pseudocount 1 and creates result,
+``.dispersion.tsv``, ``.qc.tsv``, and ``.provenance.json`` artifacts without
+overwriting existing files. ``--expected-manifest-sha256`` can pin the locked
+bundle manifest to an external digest. Standalone legacy tables may use
+``sample`` instead of ``donor_id``; a locked bundle may not, and a table with
+both columns is rejected. If the count table has ``snv_id``, its exact text is
+retained after enforcing a one-to-one mapping with donor, chromosome, position,
+reference, and alternate allele. Only tables without the column receive a
+synthesized ``chrom:pos:ref:alt`` identifier, so canonical zero-based input IDs
+are not rewritten.
+
 Single-Cell Analysis
 --------------------
 
@@ -81,16 +158,24 @@ Notes
 Defaults and contracts
 ----------------------
 
-- ``pseudocount`` defaults to **1** (added to both ``ref_count`` and
+Both routes retain the archived chi-square LRT p-values (one degree of freedom).
+Unphased feature likelihoods anchor the first SNP to its reference allele and
+average the two orientations only for subsequent SNPs. Input order therefore
+sets the reference orientation; the first SNP is not symmetrized.
+
+- ``pseudocount`` defaults to **1** on both the legacy route and with
+  ``--scope per-donor``. It is added to both ``ref_count`` and
   ``alt_count`` — Laplace-style shrinkage toward :math:`\mu = 0.5`,
-  conservative under :math:`H_0`).
+  before likelihood fitting; raw output counts exclude these pseudocounts.
 - ``min_count`` defaults to **10**; regions with :math:`N < 10` are dropped.
 - Beta-binomial LRT: :math:`\rho` is held at its **null-model MLE** while
   maximizing the alternative likelihood over :math:`\mu` (profile likelihood,
   df = 1). :math:`\rho` is not jointly re-estimated under :math:`H_1`.
-- Dispersion optimizer bounds :math:`\rho \in (10^{-6},\, 1-10^{-6})`; the
-  linear-dispersion model clips the logit at :math:`\pm 10` for numerical
-  stability on extreme :math:`N`.
+- Scalar dispersion is fit on :math:`(0,1)` with boundary values clamped for
+  numerical stability. The linear predictor retains the :math:`\pm 10` guard. The
+  linear model uses raw-depth standardization,
+  :math:`\rho(N)=\operatorname{expit}(d_1 + d_2(N-c)/s)`, and persists the fitted
+  center :math:`c` and positive scale :math:`s` with :math:`d_1` and :math:`d_2`.
 - FDR correction uses :func:`scipy.stats.false_discovery_control` with
   ``method='bh'`` (Benjamini–Hochberg). ``scipy`` raises on NaN p-values,
   but a hand-written BH loop using ``np.minimum.accumulate`` silently

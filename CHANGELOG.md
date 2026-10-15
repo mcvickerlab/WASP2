@@ -5,26 +5,68 @@ All notable changes to WASP2 will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- Donor feature deduplication uses the parsed first GT allele, as Python does.
+  Original GT tokens remain available for the backend's pre-dedup phasing
+  decision; fitting weights, raw counts, QC and provenance reflect retained rows.
+- Cephes arithmetic follows the measured reference compiler policy: separate
+  multiplication/addition for Linux x86_64 and fused operations for the macOS
+  arm64 reference. Platform probes distinguish this from statistical-model changes.
+- Bulk phasing retains the original genotype tokens for archived table-wide
+  checks, parses numeric first alleles consistently, and rejects malformed mixed
+  phased input instead of silently changing a region's likelihood. Interior
+  dispersion values are no longer clipped to the endpoint regularization range.
+- Full 32-run public ATAC comparisons execute archived Python in pinned Linux
+  CI, including CLI inference and donor routes. Heterogeneous donor checks cover
+  both dispersion models, phasing modes and pseudocounts with independent fits.
+- Container checks exercise reordered ATAC headers, region grouping, phased
+  likelihoods and raw counts. Images carry package-version and source-revision
+  labels; smoke tests require a matching Python/Rust distribution version.
+- CLI help now reports the actual donor-local pseudocount default of 1.
+- Bulk beta-binomial calculations use a SciPy 1.13.1-compatible Cephes kernel,
+  reference FMA arithmetic, and NumPy float64 reductions. Unphased inference
+  follows archived probability accumulation when safe and uses log-space fallback
+  when products lose range. Linear fits preserve adjusted-depth coefficients in
+  the existing four-field representation to avoid conversion-rounding changes.
+  Strict real ATAC comparisons include raw allelic proportions.
+- Bulk archive validation separately verifies symmetric unphased optima using
+  retained anchor counts and independent Python objective evaluations, while
+  preserving strict comparisons, raw proportions, and numerical tolerances.
+- Allelic-proportion optimization uses archived Python bounded Brent defaults
+  for single-SNP, phased, and unphased bulk tests, including empty-allele inputs
+  with pseudocount 0. Balanced first-SNP unphased objectives can still select
+  mirrored proportions across numerical libraries; no tie-breaking rule is added.
+- Linear dispersion follows archived Python single-start Nelder-Mead fitting
+  on pseudocounted depth, retains coefficients with a pseudocount depth-origin
+  shift for exact reusable prediction. Equal depths use a unit scale; testing no longer applies
+  the fitting-only predictor clip.
+- Retain distinct repeated SNP count observations in donor analysis and apply
+  Python phase-aware deduplication after depth filtering. SNV outputs aggregate
+  retained observations per position; fitting preserves their phase identities.
+- Donor feature analysis follows archived Python phasing fallback for missing,
+  identical, or nonnumeric GT after depth filtering, without converting allele
+  strings. Provenance records requested and effective phase per included donor.
+- Donor dispersion fits retain overlapping SNP-feature observations as archived
+  Python does, with separate donor-feature identities in global fits. Unique-SNP
+  QC and donor eligibility counts retain their existing meanings.
 - Bulk SNP counting preserves archived Python input-order priority across paired
   mates, with read names consumed before checking aligned bases at each SNP.
-- Bulk region outputs remove one pseudocount per retained SNP and allele, restoring
-  the archived Python raw-count aggregation without changing the fitted statistics.
-- Single-cell analysis input preparation and differential comparisons now follow
-  the cells-by-variants AnnData layout throughout, including barcode groups and genotypes.
-- Differential pseudobulk sums widen to UInt64 rather than wrapping at 65,535.
+- Restore archived chi-square LRT p-values and first-SNP-anchored unphased
+  feature likelihoods in donor-local and legacy bulk analysis.
+- Default donor-local pseudocounts to 1, matching archived Python. Per-donor
+  nuisance fitting and independent donor tests/BH correction remain available.
+- Integrate the raw-count and single-cell layout compatibility fixes from #135.
+  Exact-SNV requests are rejected rather than switching the p-value method.
 
-### Tests
-- Frozen outputs from archived Python commit `41354fc` cover bulk, single-cell,
-  and differential analysis. Linear-reference array-shape adaptations are explicit;
-  the archive's ignored phased-linear flag is reported as a reference limitation.
-
-## [1.5.0] - 2026-07-14
+## [1.5.0] - 2026-07-21
 
 ### Added
 - `wasp2-count count-cohort` for one-final-BAM-per-donor bulk counting with explicit
   `donor_id`/`vcf_sample` mapping, atomic locked outputs, and SHA-256 provenance manifests.
 - Linear-dispersion and donor-specific-dispersion beta-binomial implementations in the Rust
   analysis API, including phased feature-level inference.
+- Donor-local bulk imbalance orchestration through `wasp2-analyze find-imbalance` with explicit
+  SNV or feature units, global or per-donor nuisance fitting, donor-local inference and BH
+  correction, manifest pinning, and non-overwriting result, dispersion, QC, and provenance files.
 - `--per-variant` / `--snv-solo` for independent SNV tests and explicit `--region_col` support
   for feature- or peak-level aggregation.
 - A Rust single-cell ATAC allele counter with chromosome-parallel execution and Python fallback.
@@ -32,10 +74,12 @@ All notable changes to WASP2 will be documented in this file.
 ### Changed
 - VCF conversion now selects biallelic SNVs by default; multi-allelic records require the
   explicit `--include-multiallelic` option.
-- Phased inference accepts only numeric VCF heterozygote orientation (`0|1` and `1|0`) for parity
-  with the archived Python implementation; allele-string genotypes do not imply cross-SNV phase.
+- Phased inference follows archived numeric first-allele parsing after table-wide
+  genotype checks; allele-string genotypes do not imply cross-SNV phase.
 - `--phased` and `--region_col` are forwarded to the Rust backend; unsupported `--groupby`
   requests fail closed and direct users to `--region_col <parent_column>`.
+- SNV analysis is unphased by contract, while feature analysis supports phased and unphased
+  likelihoods without pooling effect inference across donors.
 - Single-cell AnnData output now follows the scverse `obs=cells`, `var=variants` orientation.
 - Packaging derives the Python version from installed metadata and synchronizes Cargo, pixi,
   containers, Galaxy, Nextflow, documentation, and citation metadata from one release command.
@@ -48,6 +92,10 @@ All notable changes to WASP2 will be documented in this file.
 - Unphased multi-SNV likelihoods now use log-space dynamic programming to prevent underflow.
 - Linear inference uses per-SNV dispersion throughout the alternative optimization, phased
   donor-specific inference uses each observation's donor dispersion, and LRTs are non-negative.
+- Linear nuisance fits now standardize raw depth and persist the fitted center and scale with both
+  coefficients so fixed global fits are reused exactly in every donor-local run.
+- Ambiguous multi-allelic count rows are rejected instead of being silently coerced into
+  biallelic SNV identities.
 - Bulk counts use `UInt32`, and single-cell pseudobulk/observation sums widen safely instead of
   overflowing at 65,535; single-cell counting also works without an optional feature file.
 - Count-analysis TSV parsing is header-driven, so `pos0`, `GT`, sample, and donor metadata cannot

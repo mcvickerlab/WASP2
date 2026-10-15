@@ -92,6 +92,19 @@ def make_count_df(bam_file: str, df: pl.DataFrame, use_rust: bool = True) -> pl.
 
     chrom_list = df.get_column("chrom").unique(maintain_order=True)
 
+    multi_allelic = (
+        df.select(["chrom", "pos", "ref", "alt"])
+        .unique()
+        .group_by(["chrom", "pos"])
+        .len()
+        .filter(pl.col("len") > 1)
+    )
+    if multi_allelic.height:
+        raise ValueError(
+            "Bulk allele counting supports biallelic positions only; "
+            "remove multi-allelic sites before counting"
+        )
+
     # Require Rust path (no Python fallback)
     if not (use_rust and RUST_AVAILABLE):
         raise RuntimeError(
@@ -117,9 +130,7 @@ def make_count_df(bam_file: str, df: pl.DataFrame, use_rust: bool = True) -> pl.
             chrom_df = df.filter(pl.col("chrom") == chrom)
 
             snp_list = (
-                chrom_df.select(["pos", "ref", "alt"])
-                .unique(subset=["pos"], maintain_order=True)
-                .iter_rows()
+                chrom_df.select(["pos", "ref", "alt"]).unique(maintain_order=True).iter_rows()
             )
 
             start = timeit.default_timer()

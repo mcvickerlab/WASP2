@@ -129,7 +129,7 @@ module-name = "wasp2_rust"
 python-packages = ["counting", "mapping", "analysis", "wasp2"]
 bindings = "pyo3"
 strip = false
-include = ["LICENSE", "README.md"]
+include = ["LICENSE", "README.md", "rust/licenses/SCIPY-LICENSE.txt", "rust/licenses/NUMPY-LICENSE.txt"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -19,12 +19,15 @@ import sys
 import tempfile
 import types
 import warnings
+from collections.abc import Callable
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 from anndata import AnnData
+from scipy.optimize import OptimizeResult
 from scipy.sparse import csr_matrix
+from scipy.special import expit
 
 ROOT = Path(__file__).resolve().parents[1]
 ARCHIVE_REF = "41354fc"
@@ -79,10 +82,75 @@ def adapt_linear_reference(archive: dict[str, types.ModuleType]) -> None:
         first_ll = scalar_prob(prob, first_disp, first_ref[0], first_n[0])
         p1 = np.atleast_1d(scalar_prob(prob, phase_disp, phase_ref, phase_n, log=False))
         p2 = np.atleast_1d(scalar_prob(1 - prob, phase_disp, phase_ref, phase_n, log=False))
-        return float(first_ll - np.log(np.prod(0.5 * p1 + 0.5 * p2)))
+        # Preserve the archive's arithmetic as well as its likelihood. Reducing
+        # pre-mixed probabilities with np.prod changes last-bit rounding.
+        previous = 1
+        for forward, reverse in zip(p1, p2, strict=True):
+            forward_combined = previous * forward
+            reverse_combined = previous * reverse
+            previous = 0.5 * forward_combined + 0.5 * reverse_combined
+        return float(first_ll - np.log(previous))
 
     module.opt_prob = scalar_prob
     module.opt_unphased_dp = aligned_dp
+
+
+def fixed_bulk_reference(case: dict, ref: str = ARCHIVE_REF) -> pd.DataFrame:
+    """Execute archived inference with supplied nuisance parameters, on this platform.
+
+    Only nuisance fitting is replaced. The archived data preparation, effect
+    optimizer, likelihood recurrence, LRT and BH functions remain the oracle.
+    Linear predictions evaluate the supplied four-field API directly to avoid
+    a coefficient-conversion roundtrip. Forwarding its ignored phase flag and
+    scalar/array shape repairs are the same explicit reference adaptations.
+    """
+    modules = load_archive(ref)
+    archive = modules["as_analysis"]
+    fixed = case["fixed_dispersion"]
+    pc = case["pseudocount"]
+    if case["method"] == "single":
+        original = archive.minimize_scalar
+
+        def fixed_scalar_optimizer(fun, *args, **kwargs):
+            if len(kwargs.get("args", ())) == 2:
+                return OptimizeResult(x=fixed["rho"])
+            return original(fun, *args, **kwargs)
+
+        archive.minimize_scalar = fixed_scalar_optimizer
+    else:
+        adapt_linear_reference(modules)
+        original_model = archive.linear_model
+        original_parse = archive.parse_opt
+
+        def fixed_linear_model(frame, region_col, phased=False):
+            # frame already has the archive's pseudocounts, filtering and dedup.
+            depth = frame["N"].to_numpy() - 2 * pc
+            prediction = expit(
+                fixed["linear_d1"]
+                + ((depth - fixed["linear_depth_center"]) / fixed["linear_depth_scale"])
+                * fixed["linear_d2"]
+            )
+            # The original model obtains coefficients from minimize, then calls
+            # expit once to build this vector. Supply the fixed vector there.
+            archive.minimize = lambda *args, **kwargs: OptimizeResult(
+                x=[fixed["linear_d1"], fixed["linear_d2"]]
+            )
+            archive.expit = lambda _: prediction
+            archive.parse_opt = lambda df, disp=None, phased=False: original_parse(
+                df, disp=disp, phased=effective_phase
+            )
+            effective_phase = phased
+            return original_model(frame, region_col, phased=phased)
+
+        archive.linear_model = fixed_linear_model
+    with contextlib.redirect_stdout(io.StringIO()):
+        return archive.get_imbalance(
+            pd.DataFrame(case["counts"]),
+            method=case["method"],
+            phased=case["phased"],
+            pseudocount=pc,
+            region_col="region",
+        )
 
 
 def bulk_counts() -> pd.DataFrame:
@@ -176,6 +244,158 @@ def compare_frames(expected: pd.DataFrame, observed: pd.DataFrame, key: str = "r
         "status": "FAIL" if failures else "PASS",
         "failures": failures,
         "max_absolute_differences": deltas,
+    }
+
+
+def prepare_bulk_reference_counts(
+    counts: pd.DataFrame,
+    *,
+    min_count: int,
+    pseudocount: int,
+    effective_phased: bool,
+    region_col: str | None = None,
+) -> pd.DataFrame:
+    """Reproduce archived filtering/deduplication while preserving the anchor order.
+
+    Input counts are raw. Returned counts include pseudocounts and N, as used
+    by the archived objective. Phase fallback must already have been resolved.
+    """
+    frame = counts.copy()
+    if region_col is None:
+        frame["region"] = frame["chrom"].astype(str) + "_" + frame["pos"].astype(str)
+    elif region_col != "region":
+        frame["region"] = frame[region_col]
+    frame[["ref_count", "alt_count"]] = (
+        frame[["ref_count", "alt_count"]].astype("int64") + pseudocount
+    )
+    frame["N"] = frame["ref_count"] + frame["alt_count"]
+    frame = frame.loc[frame["N"] >= min_count + 2 * pseudocount].copy()
+    columns = ["chrom", "pos", "ref_count", "alt_count", "N", "region"]
+    if effective_phased:
+        frame["GT"] = frame["GT"].str.split("|", regex=False).str[0].astype("uint8")
+        columns.append("GT")
+    return frame[columns].drop_duplicates()
+
+
+def compare_bulk_equivalence(
+    expected: pd.DataFrame,
+    observed: pd.DataFrame,
+    *,
+    retained_counts: pd.DataFrame,
+    effective_phased: bool,
+    reference_log_likelihood: Callable[[str, float], float],
+    dispersion_comparison: dict,
+) -> dict:
+    """Keep strict results; independently verify mirrored unphased bulk optima.
+
+    The caller supplies the ordered, filtered/deduplicated objective observations,
+    a Python reference objective, and the independently checked nuisance fit.
+    This helper never edits results or applies to single-cell comparisons.
+    """
+    required = {"region", "ref_count", "alt_count", "N", "snp_count", *STAT_COLUMNS}
+    if (
+        expected.empty
+        or not required.issubset(expected.columns)
+        or not required.issubset(observed.columns)
+    ):
+        return {
+            "strict_comparison": {"status": "FAIL", "reason": "missing required bulk outputs"},
+            "statistical_equivalence": "FAIL",
+            "failures": ["missing required bulk outputs"],
+            "regions": [],
+        }
+    strict = compare_frames(expected, observed)
+    failures = []
+    evidence = []
+    if dispersion_comparison.get("status") != "PASS":
+        failures.append("dispersion comparison did not pass")
+    if expected["region"].duplicated().any() or observed["region"].duplicated().any():
+        failures.append("duplicate tested identities")
+    if strict.get("reason") or any(item != "mu" for item in strict.get("failures", [])):
+        failures.append("strict differences other than mu")
+    if failures:
+        return {
+            "strict_comparison": strict,
+            "statistical_equivalence": "FAIL",
+            "failures": failures,
+            "regions": evidence,
+        }
+    actual = observed.set_index("region")
+    for row in expected.itertuples(index=False):
+        identity = row.region
+        python_mu = float(row.mu)
+        rust_mu = float(actual.loc[identity, "mu"])
+        finite = np.isfinite(python_mu) and np.isfinite(rust_mu)
+        valid = finite and 0 <= python_mu <= 1 and 0 <= rust_mu <= 1
+        same = valid and np.isclose(python_mu, rust_mu, rtol=5e-5, atol=5e-5)
+        columns = {"region", "ref_count", "alt_count", "N"}
+        rows = (
+            retained_counts.loc[retained_counts["region"] == identity]
+            if columns.issubset(retained_counts.columns)
+            else pd.DataFrame()
+        )
+        symmetric = bool(
+            not effective_phased
+            and len(rows) > 1
+            and len(rows) == row.snp_count
+            and rows.iloc[0]["ref_count"] == rows.iloc[0]["alt_count"]
+            and np.isfinite(rows[["ref_count", "alt_count", "N"]].to_numpy()).all()
+            and (rows[["ref_count", "alt_count", "N"]].to_numpy() >= 0).all()
+            and (rows["N"] == rows["ref_count"] + rows["alt_count"]).all()
+        )
+        item = {
+            "region": identity,
+            "python_mu": python_mu if finite else None,
+            "rust_mu": rust_mu if finite else None,
+            "symmetric_unphased_anchor": symmetric,
+            "retained_observations": len(rows),
+            "strict_mu_match": bool(same),
+        }
+        if len(rows) and np.isfinite(rows[["ref_count", "alt_count", "N"]].to_numpy()).all():
+            item["first_retained_counts"] = {
+                "ref_count": int(rows.iloc[0]["ref_count"]),
+                "alt_count": int(rows.iloc[0]["alt_count"]),
+                "N": int(rows.iloc[0]["N"]),
+            }
+        if same:
+            item["status"] = "STRICT_MATCH"
+        elif not valid or not symmetric:
+            item["status"] = "FAIL"
+            failures.append(f"{identity}: mu mismatch without a valid symmetric anchor")
+        elif not np.isclose(rust_mu, 1 - python_mu, rtol=5e-5, atol=5e-5):
+            item["status"] = "FAIL"
+            failures.append(f"{identity}: proportions are not complementary")
+        else:
+            try:
+                values = np.array(
+                    [
+                        reference_log_likelihood(identity, mu)
+                        for mu in [python_mu, rust_mu, 1 - python_mu]
+                    ],
+                    dtype=float,
+                )
+                reported = np.array([row.alt_ll, actual.loc[identity, "alt_ll"]], dtype=float)
+                equal = (
+                    np.isfinite(values).all()
+                    and np.allclose(values, values[0], rtol=5e-5, atol=5e-5)
+                    and np.allclose(values[:2], reported, rtol=5e-5, atol=5e-5)
+                )
+                item["reference_log_likelihoods"] = (
+                    values.tolist() if np.isfinite(values).all() else None
+                )
+                item["reference_evaluation_order"] = ["python_mu", "rust_mu", "1-python_mu"]
+                item["status"] = "SYMMETRIC_EQUIVALENT" if equal else "FAIL"
+                if not equal:
+                    failures.append(f"{identity}: reference likelihoods do not agree")
+            except Exception as exc:
+                item["status"] = "FAIL"
+                failures.append(f"{identity}: reference evaluation failed: {exc}")
+        evidence.append(item)
+    return {
+        "strict_comparison": strict,
+        "statistical_equivalence": "FAIL" if failures else "PASS",
+        "failures": failures,
+        "regions": evidence,
     }
 
 

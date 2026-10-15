@@ -1,0 +1,29 @@
+{
+  "experiment": "ENCSR637XSC",
+  "bam": "ENCFF962FMH",
+  "peaks": "ENCFF452ZBX",
+  "genotypes": "HG001 GIAB NISTv3.3.1 GRCh38",
+  "chromosome": "chr21",
+  "archive_commit": "41354fc087404ba1fa99542803ee9cb9b7e0e6bf",
+  "reference_environment": {
+    "numpy": "1.26.4",
+    "scipy": "1.13.1"
+  },
+  "sources": {
+    "bam_md5": "9d7b262ae771a5e638473f801840772e",
+    "vcf_md5": "3ddb1305f14e39a04c93ba2db3f7247e",
+    "peaks_md5": "9be61c6cb1158d47516fdedd54cfb333"
+  },
+  "counts": {
+    "snv": {
+      "file": "snp_counts.tsv.gz",
+      "sha256": "d024e628c1e3b734317f04c59e5af680d9c13ce45a6a507cc05f48255677f043",
+      "rows": 27182
+    },
+    "peak": {
+      "file": "peak_counts.tsv.gz",
+      "sha256": "4d6769bb4725b5ad973dddf9fb2dfe3f091725ecbbeebb70be476408c965a9b3",
+      "rows": 556
+    }
+  }
+}

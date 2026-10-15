@@ -66,6 +66,8 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           persist-credentials: false
+          # Runtime reference tests read the pinned pre-Rust archive commit.
+          fetch-depth: 0
 
       - name: Install system dependencies
         run: |
@@ -113,6 +115,14 @@ jobs:
         run: |
           source .venv/bin/activate
           python -c "import wasp2_rust; print('wasp2_rust loaded:', wasp2_rust.__file__)"
+
+      - name: Pin historical numerical reference for the full real ATAC matrix
+        if: matrix.python-version == '3.11'
+        run: uv pip install --python .venv/bin/python numpy==1.26.4 scipy==1.13.1
+
+      - name: Diagnose platform numerical arithmetic
+        if: matrix.python-version == '3.11'
+        run: .venv/bin/python scripts/diagnose_bulk_numerics.py
 
       - name: Run tests
         run: |

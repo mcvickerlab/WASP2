@@ -1,3 +1,4 @@
+use crate::scipy_compat::{betabinom_logpmf, numpy_sum};
 /// WASP2 Analysis Module - Beta-binomial Allelic Imbalance Detection
 ///
 /// Rust implementation of the Python analysis stage (src/analysis/as_analysis.py)
@@ -6,8 +7,6 @@
 /// Performance target: 3-5x speedup over Python (2.7s → 0.5-0.9s)
 use anyhow::{Context, Result};
 use rayon::prelude::*;
-use rv::dist::BetaBinomial;
-use rv::traits::HasDensity;
 use statrs::distribution::{ChiSquared, ContinuousCDF};
 use std::collections::{HashMap, HashSet};
 
@@ -24,11 +23,10 @@ pub struct VariantCounts {
     pub ref_count: u32,
     pub alt_count: u32,
     pub region: String,
-    /// Donor/sample identifier; required only by the per_donor model.
-    pub sample: Option<String>,
-    /// Genotype phase relative to the reference allele: 0 = ref|alt, 1 = alt|ref.
-    /// `None` when genotypes are absent or unphased. Required by phased analysis.
+    /// First numeric allele, parsed as in archived Python after phasing checks.
     pub gt: Option<u8>,
+    /// Original GT token for Python's table-wide diversity/heterozygosity checks.
+    pub raw_gt: Option<String>,
 }
 
 /// Deduplication key for matching Python's `df[keep_cols].drop_duplicates()`.
@@ -60,6 +58,18 @@ pub struct ImbalanceResult {
     pub fdr_pval: f64, // FDR-corrected p-value
 }
 
+/// Results and fitted nuisance parameters from one independent analysis table.
+#[derive(Debug, Clone)]
+pub struct AnalysisOutput {
+    pub results: Vec<ImbalanceResult>,
+    pub rho: Option<f64>,
+    pub linear_params: Option<(f64, f64)>,
+    pub linear_depth_center: Option<f64>,
+    pub linear_depth_scale: Option<f64>,
+    pub n_observations: usize,
+    pub effective_phased: bool,
+}
+
 /// Configuration for analysis
 #[derive(Debug, Clone)]
 pub struct AnalysisConfig {
@@ -71,9 +81,111 @@ pub struct AnalysisConfig {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AnalysisMethod {
-    Single,   // Single global dispersion parameter
-    Linear,   // Linear dispersion model: rho = expit(d1 + N*d2)
-    PerDonor, // Per-donor dispersion: rho fit separately per sample
+    Single, // Single global dispersion parameter
+    Linear, // Linear dispersion model: rho = expit(d1 + d2*((N-center)/scale))
+}
+
+/// Nuisance parameters fitted under the balanced beta-binomial null.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum DispersionParameters {
+    Single {
+        rho: f64,
+    },
+    Linear {
+        d1: f64,
+        d2: f64,
+        depth_center: f64,
+        depth_scale: f64,
+    },
+}
+
+impl DispersionParameters {
+    fn validate_for(self, method: AnalysisMethod) -> Result<Self> {
+        match (method, self) {
+            (AnalysisMethod::Single, Self::Single { rho }) => {
+                if !rho.is_finite() || !(0.0..=1.0).contains(&rho) {
+                    anyhow::bail!("fixed scalar rho must be finite and in [0, 1]");
+                }
+            }
+            (
+                AnalysisMethod::Linear,
+                Self::Linear {
+                    d1,
+                    d2,
+                    depth_center,
+                    depth_scale,
+                },
+            ) => {
+                if !d1.is_finite() || !d2.is_finite() {
+                    anyhow::bail!("fixed linear dispersion parameters must be finite");
+                }
+                if !depth_center.is_finite() {
+                    anyhow::bail!("fixed linear depth center must be finite");
+                }
+                if !depth_scale.is_finite() || depth_scale <= 0.0 {
+                    anyhow::bail!("fixed linear depth scale must be finite and positive");
+                }
+            }
+            (AnalysisMethod::Single, Self::Linear { .. }) => {
+                anyhow::bail!("method 'single' requires a fixed scalar rho");
+            }
+            (AnalysisMethod::Linear, Self::Single { .. }) => {
+                anyhow::bail!(
+                    "method 'linear' requires fixed linear_d1, linear_d2, \
+                     linear_depth_center, and linear_depth_scale"
+                );
+            }
+        }
+        Ok(self)
+    }
+
+    #[inline]
+    fn rho_at_depth(self, n: u32) -> f64 {
+        match self {
+            Self::Single { rho } => clamp_rho(rho),
+            Self::Linear {
+                d1,
+                d2,
+                depth_center,
+                depth_scale,
+            } => {
+                let standardized_depth = (n as f64 - depth_center) / depth_scale;
+                clamp_rho(expit(d1 + standardized_depth * d2))
+            }
+        }
+    }
+
+    pub fn rho(self) -> Option<f64> {
+        match self {
+            Self::Single { rho } => Some(rho),
+            Self::Linear { .. } => None,
+        }
+    }
+
+    pub fn linear_params(self) -> Option<(f64, f64)> {
+        match self {
+            Self::Single { .. } => None,
+            Self::Linear { d1, d2, .. } => Some((d1, d2)),
+        }
+    }
+
+    pub fn linear_depth_standardization(self) -> Option<(f64, f64)> {
+        match self {
+            Self::Single { .. } => None,
+            Self::Linear {
+                depth_center,
+                depth_scale,
+                ..
+            } => Some((depth_center, depth_scale)),
+        }
+    }
+}
+
+/// Result of nuisance-only fitting on one independent table.
+#[derive(Debug, Clone, Copy)]
+pub struct DispersionFit {
+    pub parameters: DispersionParameters,
+    pub n_observations: usize,
 }
 
 impl Default for AnalysisConfig {
@@ -91,11 +203,11 @@ impl Default for AnalysisConfig {
 // Rho Parameter Bounds (Issue #228)
 // ============================================================================
 
-/// Epsilon for clamping rho parameter to avoid division by zero.
-/// Matches Python's RHO_EPSILON in as_analysis.py.
+/// Regularization for exact endpoints, where archived beta-binomial shapes
+/// are undefined. Interior values retain the archived parameter unchanged.
 const RHO_EPSILON: f64 = 1e-10;
 
-/// Clamp rho to safe range (epsilon, 1-epsilon) to prevent division by zero.
+/// Regularize exact endpoints without clipping valid interior dispersion.
 ///
 /// The beta-binomial parameterization uses alpha = mu * (1-rho) / rho, which
 /// causes division by zero when rho=0 and produces zero alpha/beta when rho=1.
@@ -108,7 +220,13 @@ const RHO_EPSILON: f64 = 1e-10;
 /// implementation (`as_analysis.py`) supports optional warning via `warn=True`.
 #[inline]
 fn clamp_rho(rho: f64) -> f64 {
-    rho.clamp(RHO_EPSILON, 1.0 - RHO_EPSILON)
+    if rho <= 0.0 {
+        RHO_EPSILON
+    } else if rho >= 1.0 {
+        1.0 - RHO_EPSILON
+    } else {
+        rho
+    }
 }
 
 /// Deduplicate variants to match Python's `df[keep_cols].drop_duplicates()`.
@@ -136,27 +254,30 @@ fn deduplicate_variants(variants: Vec<VariantCounts>, phased: bool) -> Vec<Varia
     result
 }
 
-fn effective_phased(variants: &[VariantCounts], requested_phased: bool) -> bool {
+fn effective_phased(variants: &[VariantCounts], requested_phased: bool) -> Result<bool> {
     if !requested_phased {
-        return false;
+        return Ok(false);
     }
-
-    let mut saw_ref_alt = false;
-    let mut saw_alt_ref = false;
-    for variant in variants {
-        match variant.gt {
-            Some(0) => saw_ref_alt = true,
-            Some(1) => saw_alt_ref = true,
-            _ => {}
-        }
-    }
-
-    if saw_ref_alt && saw_alt_ref {
-        true
-    } else {
+    let unique: HashSet<_> = variants.iter().map(|v| v.raw_gt.as_deref()).collect();
+    let informative = variants
+        .iter()
+        .any(|v| matches!(v.raw_gt.as_deref(), Some("0|1" | "1|0")));
+    if unique.len() <= 1 || !informative {
         eprintln!("No informative numeric phased GT found: switching to unphased model");
-        false
+        return Ok(false);
     }
+    // Once Python enables phasing it parses every retained GT, and fails on
+    // malformed mixed input. Do not silently change likelihoods per region.
+    for variant in variants {
+        anyhow::ensure!(
+            matches!(variant.gt, Some(0 | 1)),
+            "Invalid GT {:?} at {}:{} for phased analysis; provide numeric phased genotypes or run unphased",
+            variant.raw_gt,
+            variant.chrom,
+            variant.pos
+        );
+    }
+    Ok(true)
 }
 
 /// Sigmoid function (inverse logit): expit(x) = 1 / (1 + e^-x)
@@ -164,12 +285,9 @@ fn effective_phased(variants: &[VariantCounts], requested_phased: bool) -> bool 
 /// Numerically stable implementation that avoids overflow for large |x|.
 #[inline]
 fn expit(x: f64) -> f64 {
-    if x >= 0.0 {
-        1.0 / (1.0 + (-x).exp())
-    } else {
-        let e = x.exp();
-        e / (1.0 + e)
-    }
+    // Preserve SciPy's expression, including its rounding for negative inputs.
+    // IEEE exp overflow gives infinity and the quotient remains the valid 0.
+    1.0 / (1.0 + (-x).exp())
 }
 
 // ============================================================================
@@ -196,13 +314,7 @@ pub fn opt_prob(prob: f64, rho: f64, k: u32, n: u32) -> Result<f64> {
     let alpha = prob * (1.0 - rho) / rho;
     let beta = (1.0 - prob) * (1.0 - rho) / rho;
 
-    // Create beta-binomial distribution (rv uses: n as u32, alpha, beta)
-    let bb =
-        BetaBinomial::new(n, alpha, beta).context("Failed to create beta-binomial distribution")?;
-
-    // Return negative log-likelihood (rv uses reference for ln_f, k as u64)
-    let log_pmf = bb.ln_f(&(k as u64));
-    Ok(-log_pmf)
+    Ok(-betabinom_logpmf(k, n, alpha, beta)?)
 }
 
 /// Calculate beta-binomial log-likelihood for array of counts
@@ -214,15 +326,12 @@ pub fn betabinom_logpmf_sum(
     alpha: f64,
     beta: f64,
 ) -> Result<f64> {
-    let mut sum = 0.0;
-
-    for (k, n) in ref_counts.iter().zip(n_array.iter()) {
-        let bb = BetaBinomial::new(*n, alpha, beta)
-            .context("Failed to create beta-binomial distribution")?;
-        sum += bb.ln_f(&(*k as u64));
-    }
-
-    Ok(sum)
+    let values: Vec<_> = ref_counts
+        .iter()
+        .zip(n_array)
+        .map(|(&k, &n)| betabinom_logpmf(k, n, alpha, beta))
+        .collect::<Result<_>>()?;
+    Ok(numpy_sum(&values))
 }
 
 // ============================================================================
@@ -246,65 +355,66 @@ fn optimize_dispersion(ref_counts: &[u32], n_array: &[u32]) -> Result<f64> {
         }
     };
 
-    // Use golden section search (simple but effective)
-    let result = golden_section_search(objective, 0.001, 0.999, 1e-6)?;
-    Ok(result)
+    // Match scipy.optimize.minimize_scalar(method="bounded") used by AHO.
+    // In sparse donors the MLE can be far below 0.001, so imposing a floor
+    // changes the null likelihood and every downstream p-value.
+    scipy_bounded_minimize(objective, 0.0, 1.0, 1e-5, 500)
 }
 
-/// Optimize linear dispersion parameters using Nelder-Mead
-///
-/// Python equivalent: `minimize(opt_linear, x0=(0, 0), method="Nelder-Mead")`
-/// Fits ρ = expit(d1 + N × d2) to the data.
-fn optimize_dispersion_linear(ref_counts: &[u32], n_array: &[u32]) -> Result<(f64, f64)> {
+/// Fit the archived pseudocounted-depth predictor without converting its
+/// coefficients. The reusable raw-depth origin is shifted by the pseudocount.
+fn optimize_dispersion_linear(
+    ref_counts: &[u32],
+    n_array: &[u32],
+    raw_depths: &[u32],
+) -> Result<(f64, f64, f64, f64)> {
+    if ref_counts.len() != n_array.len() || ref_counts.len() != raw_depths.len() {
+        anyhow::bail!("linear dispersion inputs have inconsistent lengths");
+    }
+    if raw_depths.is_empty() {
+        anyhow::bail!("cannot fit linear dispersion without observations");
+    }
+
     let objective = |params: [f64; 2]| -> f64 {
         let (d1, d2) = (params[0], params[1]);
-        let mut neg_ll = 0.0;
+        if !d1.is_finite() || !d2.is_finite() {
+            return f64::INFINITY;
+        }
+        let mut values = Vec::with_capacity(ref_counts.len());
 
         for (&ref_count, &n) in ref_counts.iter().zip(n_array.iter()) {
-            // Clamp to prevent overflow in expit
-            let exp_in = (d1 + n as f64 * d2).clamp(-10.0, 10.0);
-            let rho = clamp_rho(expit(exp_in));
+            let predictor = d1 + f64::from(n) * d2;
+            if predictor.is_nan() {
+                return f64::INFINITY;
+            }
+            let rho = clamp_rho(expit(predictor.clamp(-10.0, 10.0)));
             let alpha = 0.5 * (1.0 - rho) / rho;
 
             // Beta-binomial log-pmf with α = β (null: p=0.5)
-            if let Ok(bb) = rv::dist::BetaBinomial::new(n, alpha, alpha) {
-                use rv::traits::HasDensity;
-                neg_ll -= bb.ln_f(&(ref_count as u64));
+            if let Ok(log_pmf) = betabinom_logpmf(ref_count, n, alpha, alpha) {
+                values.push(log_pmf);
             } else {
                 return f64::INFINITY;
             }
         }
 
-        neg_ll
+        -numpy_sum(&values)
     };
 
-    // Multi-start Nelder-Mead. A single start at (0,0) can stall on the flat plateau
-    // created by the exp_in clamp (when |d1 + N*d2| > 10 for all N, rho is constant, so
-    // the surface has no descent direction and the simplex collapses at an unconverged,
-    // worse point). Run NM from a neutral grid of starts spanning the plausible (d1,d2)
-    // range and keep the best (lowest neg-LL). Deterministic; starts are NOT seeded near
-    // any expected answer. Fixes the case where the simple simplex returned e.g. (1.5,-2.0).
-    let starts: [[f64; 2]; 8] = [
-        [0.0, 0.0],
-        [-3.0, 0.0],
-        [-6.0, 0.0],
-        [3.0, 0.0],
-        [0.0, -0.2],
-        [-3.0, -0.2],
-        [-6.0, -0.2],
-        [3.0, -0.2],
-    ];
-    let mut best: Option<(f64, (f64, f64))> = None;
-    for s in starts {
-        if let Ok((d1, d2)) = nelder_mead_2d(objective, s, 1e-6, 1000) {
-            let val = objective([d1, d2]);
-            if val.is_finite() && best.is_none_or(|(bv, _)| val < bv) {
-                best = Some((val, (d1, d2)));
-            }
-        }
+    // Match scipy.optimize.minimize(method="Nelder-Mead", x0=(0, 0)):
+    // default simplex, xatol=fatol=1e-4, maxiter=maxfev=400 for two parameters.
+    let (intercept, slope) = nelder_mead_2d(objective, [0.0, 0.0], 1e-4, 400)?;
+    let offset = f64::from(n_array[0]) - f64::from(raw_depths[0]);
+    if n_array
+        .iter()
+        .zip(raw_depths)
+        .any(|(&n, &raw)| (f64::from(n) - f64::from(raw)) != offset)
+    {
+        anyhow::bail!("linear fit requires a consistent pseudocount offset");
     }
-    best.map(|(_, p)| p)
-        .ok_or_else(|| anyhow::anyhow!("linear dispersion optimization failed from all starts"))
+    // Nraw - (-offset) evaluates the original adjusted depth exactly. Avoid
+    // mean/std coefficient conversion, whose roundtrip can change a tied basin.
+    Ok((intercept, slope, -offset, 1.0))
 }
 
 /// Optimize probability parameter for alternative model
@@ -317,7 +427,7 @@ fn optimize_prob(ref_counts: &[u32], n_array: &[u32], disp: f64) -> Result<(f64,
             opt_prob(prob, disp, ref_counts[0], n_array[0]).unwrap_or(f64::INFINITY)
         };
 
-        let mu = golden_section_search(objective, 0.0, 1.0, 1e-6)?;
+        let mu = scipy_bounded_minimize(objective, 0.0, 1.0, 1e-5, 500)?;
         let alt_ll = -objective(mu);
         return Ok((alt_ll, mu));
     }
@@ -334,7 +444,7 @@ fn optimize_prob(ref_counts: &[u32], n_array: &[u32], disp: f64) -> Result<(f64,
         sum
     };
 
-    let mu = golden_section_search(objective, 0.0, 1.0, 1e-6)?;
+    let mu = scipy_bounded_minimize(objective, 0.0, 1.0, 1e-5, 500)?;
     let alt_ll = -objective(mu);
     Ok((alt_ll, mu))
 }
@@ -395,7 +505,7 @@ fn optimize_prob_phased(
         sum
     };
 
-    let mu = golden_section_search(objective, 0.0, 1.0, 1e-6)?;
+    let mu = scipy_bounded_minimize(objective, 0.0, 1.0, 1e-5, 500)?;
     let alt_ll = -objective(mu);
     Ok((alt_ll, mu))
 }
@@ -404,9 +514,8 @@ fn optimize_prob_phased(
 ///
 /// Python equivalent: `opt_unphased_dp()` in as_analysis.py
 ///
-/// This marginalizes over unknown phase using dynamic programming. At each
-/// position after the first, we consider both phase possibilities and weight
-/// them equally (0.5 each), accumulating likelihood across the region.
+/// Preserve archived Python: anchor the first SNP to its reference allele,
+/// then marginalize both orientations for each subsequent SNP.
 ///
 /// # Arguments
 /// * `prob` - Probability parameter (0 to 1)
@@ -427,6 +536,10 @@ pub fn optimize_prob_unphased_dp(
     phase_ref: &[u32],
     phase_n: &[u32],
 ) -> Result<f64> {
+    if disp.is_empty() {
+        anyhow::bail!("at least one dispersion value is required");
+    }
+
     // Split per-variant dispersion for first vs subsequent positions (linear model)
     let (first_disp, phase_disp): (f64, &[f64]) = if disp.len() > 1 {
         (disp[0], &disp[1..])
@@ -435,112 +548,185 @@ pub fn optimize_prob_unphased_dp(
         (disp[0], disp)
     };
 
-    // Get likelihood of first position (negative log-likelihood)
-    let first_ll = opt_prob(prob, first_disp, first_ref, first_n)?;
-
-    // If no subsequent positions, just return first_ll
-    if phase_ref.is_empty() {
-        return Ok(first_ll);
-    }
-
-    // Accumulate likelihoods for subsequent positions under both phase hypotheses
-    // in LOG-space (mathematically identical to the old linear product, but without
-    // underflow). For each position:
+    // Average orientations only after the first SNP, as in archived Python.
+    // For each SNP:
     //   log(0.5 * p1 + 0.5 * p2) = ln(0.5) + logaddexp(ln(p1), ln(p2))
-    // where lp1 = ln-pmf with prob and lp2 = ln-pmf with (1 - prob).
-    let mut log_prev: f64 = 0.0;
-
-    for (i, (&ref_count, &n)) in phase_ref.iter().zip(phase_n.iter()).enumerate() {
-        // Get dispersion for this position
-        let rho = if phase_disp.len() > 1 {
-            clamp_rho(phase_disp[i.min(phase_disp.len() - 1)])
-        } else {
-            clamp_rho(phase_disp[0])
-        };
-
-        // Phase 1: use prob
+    let orientation_log_likelihood = |ref_count: u32, n: u32, rho: f64| -> Result<(f64, f64)> {
+        let rho = clamp_rho(rho);
         let alpha1 = prob * (1.0 - rho) / rho;
         let beta1 = (1.0 - prob) * (1.0 - rho) / rho;
-        let bb1 = BetaBinomial::new(n, alpha1, beta1)
-            .context("Failed to create beta-binomial for phase1")?;
-        let lp1 = bb1.ln_f(&(ref_count as u64)); // log-pmf
+        let lp1 = betabinom_logpmf(ref_count, n, alpha1, beta1)?;
+        // Python calls opt_prob(1-prob), recomputing both shape parameters.
+        // Swapping alpha/beta avoids a subtraction and changes last-bit rounding.
+        let opposite_prob = 1.0 - prob;
+        let alpha2 = opposite_prob * (1.0 - rho) / rho;
+        let beta2 = (1.0 - opposite_prob) * (1.0 - rho) / rho;
+        let lp2 = betabinom_logpmf(ref_count, n, alpha2, beta2)?;
+        Ok((lp1, lp2))
+    };
 
-        // Phase 2: use (1 - prob)
-        let alpha2 = (1.0 - prob) * (1.0 - rho) / rho;
-        let beta2 = prob * (1.0 - rho) / rho;
-        let bb2 = BetaBinomial::new(n, alpha2, beta2)
-            .context("Failed to create beta-binomial for phase2")?;
-        let lp2 = bb2.ln_f(&(ref_count as u64)); // log-pmf
+    let first_nll = opt_prob(prob, first_disp, first_ref, first_n)?;
+    let mut log_likelihood = -first_nll;
+    let mut previous_probability = 1.0;
+    let mut product_is_normal = true;
 
-        // DP update in log-space: marginalize over both phases with equal weight.
-        log_prev += (0.5_f64).ln() + logaddexp(lp1, lp2);
+    for (i, (&ref_count, &n)) in phase_ref.iter().zip(phase_n.iter()).enumerate() {
+        let rho = if phase_disp.len() > 1 {
+            phase_disp[i.min(phase_disp.len() - 1)]
+        } else {
+            phase_disp[0]
+        };
+        let (lp1, lp2) = orientation_log_likelihood(ref_count, n, rho)?;
+        log_likelihood += (0.5_f64).ln() + logaddexp(lp1, lp2);
+        if product_is_normal {
+            // Preserve the archived sequential probability recurrence when safe.
+            let phase1 = previous_probability * lp1.exp();
+            let phase2 = previous_probability * lp2.exp();
+            previous_probability = 0.5 * phase1 + 0.5 * phase2;
+            product_is_normal = previous_probability.is_normal();
+        }
     }
 
-    // Return first_ll + (-log_prev)
-    if !log_prev.is_finite() {
+    if product_is_normal {
+        return Ok(first_nll - previous_probability.ln());
+    }
+    // Preserve stable inference when the archive's product loses range.
+    if !log_likelihood.is_finite() {
         return Ok(f64::INFINITY);
     }
-
-    Ok(first_ll + (-log_prev))
+    Ok(-log_likelihood)
 }
 
 /// Numerically stable two-argument log-sum-exp: ln(exp(a) + exp(b)).
 ///
-/// Equivalent to NumPy's `np.logaddexp`. Subtracting the max before exponentiating
-/// avoids overflow/underflow. If the max is non-finite (e.g. -inf when both
-/// inputs are -inf), the max is returned directly.
+/// Follows NumPy's `np.logaddexp` arithmetic with log1p of the smaller
+/// exponential, avoiding overflow and retaining small contributions.
 #[inline]
 fn logaddexp(a: f64, b: f64) -> f64 {
-    let m = a.max(b);
-    if !m.is_finite() {
-        m
+    // NumPy uses log1p for the smaller exponential; log(1 + exp(...))
+    // rounds differently and can alter a symmetric optimizer's branch.
+    if a == b {
+        a + std::f64::consts::LN_2
+    } else if a > b {
+        a + (b - a).exp().ln_1p()
     } else {
-        m + ((a - m).exp() + (b - m).exp()).ln()
+        b + (a - b).exp().ln_1p()
     }
 }
 
-/// Golden section search for 1D optimization
-///
-/// Simple but robust method for bounded scalar optimization.
-/// Equivalent to scipy's minimize_scalar with method='bounded'
-#[allow(unused_assignments)]
-fn golden_section_search<F>(f: F, a: f64, mut b: f64, tol: f64) -> Result<f64>
+/// Bounded Brent minimizer matching SciPy's default scalar-bounded routine.
+fn scipy_bounded_minimize<F>(f: F, x1: f64, x2: f64, xatol: f64, maxfun: usize) -> Result<f64>
 where
     F: Fn(f64) -> f64,
 {
-    let phi = (1.0 + 5.0_f64.sqrt()) / 2.0;
-    let inv_phi = 1.0 / phi;
-    let inv_phi2 = 1.0 / (phi * phi);
+    scipy_bounded_minimize_traced(f, x1, x2, xatol, maxfun, |_, _, _, _, _| {})
+}
 
-    let mut a = a;
-    let mut h = b - a;
+/// Diagnostic hook records candidate, objective, updated interval and acceptance.
+/// The regular wrapper supplies an empty hook; no production output is changed.
+fn scipy_bounded_minimize_traced<F, T>(
+    f: F,
+    x1: f64,
+    x2: f64,
+    xatol: f64,
+    maxfun: usize,
+    mut trace: T,
+) -> Result<f64>
+where
+    F: Fn(f64) -> f64,
+    T: FnMut(f64, f64, f64, f64, bool),
+{
+    if !x1.is_finite() || !x2.is_finite() || x1 > x2 {
+        anyhow::bail!("invalid bounded optimization interval");
+    }
+    let sqrt_eps = (2.2e-16_f64).sqrt();
+    let golden_mean = 0.5 * (3.0 - 5.0_f64.sqrt());
+    let (mut a, mut b) = (x1, x2);
+    let mut fulc = a + golden_mean * (b - a);
+    let (mut nfc, mut xf) = (fulc, fulc);
+    let (mut rat, mut e) = (0.0_f64, 0.0_f64);
+    let mut fx = f(xf);
+    let (mut ffulc, mut fnfc) = (fx, fx);
+    trace(xf, fx, a, b, true);
+    let mut fu = f64::INFINITY;
+    let mut calls = 1_usize;
+    let mut xm = 0.5 * (a + b);
+    let mut tol1 = sqrt_eps * xf.abs() + xatol / 3.0;
+    let mut tol2 = 2.0 * tol1;
 
-    // Initial points
-    let mut c = a + inv_phi2 * h;
-    let mut d = a + inv_phi * h;
-    let mut fc = f(c);
-    let mut fd = f(d);
+    while (xf - xm).abs() > tol2 - 0.5 * (b - a) {
+        let mut golden = true;
+        if e.abs() > tol1 {
+            let r = (xf - nfc) * (fx - ffulc);
+            let q0 = (xf - fulc) * (fx - fnfc);
+            let mut p = (xf - fulc) * q0 - (xf - nfc) * r;
+            let mut q = 2.0 * (q0 - r);
+            if q > 0.0 {
+                p = -p;
+            }
+            q = q.abs();
+            let previous_e = e;
+            e = rat;
+            if p.abs() < (0.5 * q * previous_e).abs() && p > q * (a - xf) && p < q * (b - xf) {
+                rat = p / q;
+                let candidate = xf + rat;
+                if candidate - a < tol2 || b - candidate < tol2 {
+                    rat = tol1 * if xm - xf >= 0.0 { 1.0 } else { -1.0 };
+                }
+                golden = false;
+            }
+        }
+        if golden {
+            e = if xf >= xm { a - xf } else { b - xf };
+            rat = golden_mean * e;
+        }
 
-    // Iterate until convergence
-    while h.abs() > tol {
-        if fc < fd {
-            b = d;
-            d = c;
-            fd = fc;
-            h *= inv_phi;
-            c = a + inv_phi2 * h;
-            fc = f(c);
+        let direction = if rat >= 0.0 { 1.0 } else { -1.0 };
+        let x = xf + direction * rat.abs().max(tol1);
+        fu = f(x);
+        calls += 1;
+        let accepted = fu <= fx;
+        if accepted {
+            if x >= xf {
+                a = xf;
+            } else {
+                b = xf;
+            }
+            fulc = nfc;
+            ffulc = fnfc;
+            nfc = xf;
+            fnfc = fx;
+            xf = x;
+            fx = fu;
         } else {
-            a = c;
-            c = d;
-            fc = fd;
-            h *= inv_phi;
-            d = a + inv_phi * h;
-            fd = f(d);
+            if x < xf {
+                a = x;
+            } else {
+                b = x;
+            }
+            if fu <= fnfc || nfc == xf {
+                fulc = nfc;
+                ffulc = fnfc;
+                nfc = x;
+                fnfc = fu;
+            } else if fu <= ffulc || fulc == xf || fulc == nfc {
+                fulc = x;
+                ffulc = fu;
+            }
+        }
+
+        trace(x, fu, a, b, accepted);
+        xm = 0.5 * (a + b);
+        tol1 = sqrt_eps * xf.abs() + xatol / 3.0;
+        tol2 = 2.0 * tol1;
+        if calls >= maxfun {
+            anyhow::bail!("bounded scalar optimization exceeded {maxfun} evaluations");
         }
     }
-
-    Ok(if fc < fd { c } else { d })
+    if !xf.is_finite() || !fx.is_finite() || fu.is_nan() {
+        anyhow::bail!("bounded scalar optimization produced a non-finite result");
+    }
+    Ok(xf)
 }
 
 /// Nelder-Mead simplex optimization for 2D functions
@@ -551,103 +737,98 @@ fn nelder_mead_2d<F>(f: F, x0: [f64; 2], tol: f64, max_iter: usize) -> Result<(f
 where
     F: Fn([f64; 2]) -> f64,
 {
-    // Standard Nelder-Mead coefficients
-    let alpha = 1.0; // reflection
-    let gamma = 2.0; // expansion
-    let rho = 0.5; // contraction
-    let sigma = 0.5; // shrinkage
-
-    // Initialize simplex: equilateral triangle around x0
-    let step = 1.0;
+    let step = |x: f64| if x == 0.0 { 0.00025 } else { 1.05 * x };
     let mut simplex = [
         (x0, f(x0)),
-        ([x0[0] + step, x0[1]], f([x0[0] + step, x0[1]])),
-        ([x0[0], x0[1] + step], f([x0[0], x0[1] + step])),
+        ([step(x0[0]), x0[1]], f([step(x0[0]), x0[1]])),
+        ([x0[0], step(x0[1])], f([x0[0], step(x0[1])])),
     ];
-
-    for _iter in 0..max_iter {
-        // Sort by function value (ascending)
-        simplex.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-
-        let (x_best, f_best) = simplex[0];
-        let (x_worst, f_worst) = simplex[2];
-        let (x_second, f_second) = simplex[1];
-
-        // Check convergence: simplex size
-        let size = ((x_worst[0] - x_best[0]).powi(2) + (x_worst[1] - x_best[1]).powi(2)).sqrt();
-        if size < tol {
-            return Ok((x_best[0], x_best[1]));
-        }
-
-        // Centroid of all points except worst
-        let centroid = [
-            (x_best[0] + x_second[0]) / 2.0,
-            (x_best[1] + x_second[1]) / 2.0,
-        ];
-
-        // Reflection
-        let x_r = [
-            centroid[0] + alpha * (centroid[0] - x_worst[0]),
-            centroid[1] + alpha * (centroid[1] - x_worst[1]),
-        ];
-        let f_r = f(x_r);
-
-        if f_r < f_second && f_r >= f_best {
-            // Accept reflection
-            simplex[2] = (x_r, f_r);
-            continue;
-        }
-
-        if f_r < f_best {
-            // Try expansion
-            let x_e = [
-                centroid[0] + gamma * (x_r[0] - centroid[0]),
-                centroid[1] + gamma * (x_r[1] - centroid[1]),
-            ];
-            let f_e = f(x_e);
-
-            if f_e < f_r {
-                simplex[2] = (x_e, f_e);
-            } else {
-                simplex[2] = (x_r, f_r);
-            }
-            continue;
-        }
-
-        // f_r >= f_second: try contraction
-        let x_c = if f_r < f_worst {
-            // Outside contraction
-            [
-                centroid[0] + rho * (x_r[0] - centroid[0]),
-                centroid[1] + rho * (x_r[1] - centroid[1]),
-            ]
+    let mut evaluations = 3;
+    let mut evaluate = |point| {
+        if evaluations >= max_iter {
+            None
         } else {
-            // Inside contraction
-            [
-                centroid[0] + rho * (x_worst[0] - centroid[0]),
-                centroid[1] + rho * (x_worst[1] - centroid[1]),
-            ]
-        };
-        let f_c = f(x_c);
-
-        if f_c < f_worst {
-            simplex[2] = (x_c, f_c);
-            continue;
+            evaluations += 1;
+            Some(f(point))
         }
-
-        // Shrink toward best point
-        for point in simplex.iter_mut().skip(1) {
-            let (x_i, _) = *point;
-            let x_new = [
-                x_best[0] + sigma * (x_i[0] - x_best[0]),
-                x_best[1] + sigma * (x_i[1] - x_best[1]),
+    };
+    'iterations: for _ in 1..max_iter {
+        simplex.sort_by(|a, b| a.1.total_cmp(&b.1));
+        let (best, best_value) = simplex[0];
+        let (second, second_value) = simplex[1];
+        let (worst, worst_value) = simplex[2];
+        let coordinate_spread = simplex[1..]
+            .iter()
+            .flat_map(|(x, _)| [(x[0] - best[0]).abs(), (x[1] - best[1]).abs()])
+            .fold(0.0, f64::max);
+        let objective_spread = simplex[1..]
+            .iter()
+            .map(|(_, value)| (value - best_value).abs())
+            .fold(0.0, f64::max);
+        if coordinate_spread <= tol && objective_spread <= tol {
+            break;
+        }
+        let center = [0.5 * (best[0] + second[0]), 0.5 * (best[1] + second[1])];
+        let reflected = [2.0 * center[0] - worst[0], 2.0 * center[1] - worst[1]];
+        let Some(reflected_value) = evaluate(reflected) else {
+            break;
+        };
+        if reflected_value < best_value {
+            let expanded = [
+                3.0 * center[0] - 2.0 * worst[0],
+                3.0 * center[1] - 2.0 * worst[1],
             ];
-            *point = (x_new, f(x_new));
+            let Some(expanded_value) = evaluate(expanded) else {
+                break;
+            };
+            simplex[2] = if expanded_value < reflected_value {
+                (expanded, expanded_value)
+            } else {
+                (reflected, reflected_value)
+            };
+        } else if reflected_value < second_value {
+            simplex[2] = (reflected, reflected_value);
+        } else {
+            let outside = reflected_value < worst_value;
+            let contracted = if outside {
+                [
+                    1.5 * center[0] - 0.5 * worst[0],
+                    1.5 * center[1] - 0.5 * worst[1],
+                ]
+            } else {
+                [
+                    0.5 * center[0] + 0.5 * worst[0],
+                    0.5 * center[1] + 0.5 * worst[1],
+                ]
+            };
+            let Some(contracted_value) = evaluate(contracted) else {
+                break;
+            };
+            let accept = if outside {
+                contracted_value <= reflected_value
+            } else {
+                contracted_value < worst_value
+            };
+            if accept {
+                simplex[2] = (contracted, contracted_value);
+            } else {
+                for point in simplex.iter_mut().skip(1) {
+                    point.0 = [
+                        best[0] + 0.5 * (point.0[0] - best[0]),
+                        best[1] + 0.5 * (point.0[1] - best[1]),
+                    ];
+                    let Some(value) = evaluate(point.0) else {
+                        break 'iterations;
+                    };
+                    point.1 = value;
+                }
+            }
         }
     }
-
-    // Return best point after max iterations
-    simplex.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+    simplex.sort_by(|a, b| a.1.total_cmp(&b.1));
+    if !simplex[0].1.is_finite() {
+        anyhow::bail!("linear dispersion optimization produced no finite objective");
+    }
     Ok((simplex[0].0[0], simplex[0].0[1]))
 }
 
@@ -690,160 +871,134 @@ pub fn fdr_correction(pvals: &[f64]) -> Vec<f64> {
 /// Single dispersion model analysis
 ///
 /// Python equivalent: `single_model()` in as_analysis.py
-pub fn single_model(variants: Vec<VariantCounts>, phased: bool) -> Result<Vec<ImbalanceResult>> {
+#[allow(dead_code)]
+fn single_model_with_dispersion(
+    variants: Vec<VariantCounts>,
+    phased: bool,
+) -> Result<(Vec<ImbalanceResult>, f64)> {
     if variants.is_empty() {
-        return Ok(vec![]);
+        return Ok((vec![], f64::NAN));
     }
 
-    // Extract ref_counts and N for all variants
-    let ref_counts: Vec<u32> = variants.iter().map(|v| v.ref_count).collect();
-    let n_array: Vec<u32> = variants.iter().map(|v| v.ref_count + v.alt_count).collect();
-
-    // Step 1: Optimize global dispersion parameter
     eprintln!("Optimizing dispersion parameter...");
-    let disp = optimize_dispersion(&ref_counts, &n_array)?;
+    let parameters = fit_dispersion_parameters(&variants, AnalysisMethod::Single, 0)?;
+    let DispersionParameters::Single { rho: disp } = parameters else {
+        unreachable!("single fit returned linear parameters")
+    };
     eprintln!("  Dispersion: {:.6}", disp);
+    let results = test_fixed_dispersion(variants, phased, parameters, false, 0)?;
+    Ok((results, disp))
+}
 
-    // Step 2: Group by region
-    let mut region_map: HashMap<String, Vec<usize>> = HashMap::new();
-    for (i, variant) in variants.iter().enumerate() {
-        region_map
-            .entry(variant.region.clone())
-            .or_default()
-            .push(i);
-    }
-
-    eprintln!(
-        "Optimizing imbalance likelihood for {} regions...",
-        region_map.len()
-    );
-
-    // Step 3: Calculate null and alternative likelihoods per region (parallel)
-    // Clamp disp before calculating null_param (Issue #228)
-    let disp = clamp_rho(disp);
-    let null_param = 0.5 * (1.0 - disp) / disp;
-
-    let results: Result<Vec<_>> = region_map
-        .par_iter()
-        .map(|(region, indices)| -> Result<ImbalanceResult> {
-            // Extract counts for this region
-            let region_ref: Vec<u32> = indices.iter().map(|&i| ref_counts[i]).collect();
-            let region_n: Vec<u32> = indices.iter().map(|&i| n_array[i]).collect();
-
-            // Null model: prob = 0.5 (no imbalance)
-            let null_ll = betabinom_logpmf_sum(&region_ref, &region_n, null_param, null_param)?;
-
-            // Alternative model: optimize prob (phase-aware routing)
-            let all_gt = indices.iter().all(|&i| variants[i].gt.is_some());
-            let (alt_ll, mu) = if phased && indices.len() > 1 && all_gt {
-                // Phased multi-SNP region: use known genotype phase.
-                let region_gt: Vec<u8> = indices
-                    .iter()
-                    .map(|&i| variants[i].gt.expect("gt present (checked by all_gt)"))
-                    .collect();
-                // single_model uses one global scalar dispersion; pass it as a
-                // 1-element slice so the broadcast fallback keeps results identical.
-                optimize_prob_phased(&region_ref, &region_n, &region_gt, &[disp])?
-            } else if indices.len() > 1 {
-                // Unphased multi-SNP region: marginalize over phase via DP,
-                // minimizing opt_unphased_dp over prob in (0, 1)
-                // (first = index 0, phase = remaining), matching Python's
-                // parse_opt() unphased branch (minimize_scalar(opt_unphased_dp,...)).
-                let disp_slice = [disp];
-                let first_ref = region_ref[0];
-                let first_n = region_n[0];
-                let phase_ref = &region_ref[1..];
-                let phase_n = &region_n[1..];
-                let objective = |prob: f64| -> f64 {
-                    optimize_prob_unphased_dp(
-                        prob,
-                        &disp_slice,
-                        first_ref,
-                        first_n,
-                        phase_ref,
-                        phase_n,
-                    )
-                    .unwrap_or(f64::INFINITY)
-                };
-                let mu = golden_section_search(objective, 0.0, 1.0, 1e-6)?;
-                let alt_ll = -objective(mu);
-                (alt_ll, mu)
-            } else {
-                optimize_prob(&region_ref, &region_n, disp)?
-            };
-
-            // Likelihood ratio test
-            let lrt = -2.0 * (null_ll - alt_ll);
-
-            // P-value from chi-squared distribution (df=1)
-            let chi2 = ChiSquared::new(1.0).context("Failed to create chi-squared distribution")?;
-            let pval = 1.0 - chi2.cdf(lrt);
-
-            // Sum counts for this region
-            let total_ref: u32 = region_ref.iter().sum();
-            let total_alt: u32 = indices.iter().map(|&i| variants[i].alt_count).sum();
-            let total_n = total_ref + total_alt;
-
-            Ok(ImbalanceResult {
-                region: region.clone(),
-                ref_count: total_ref,
-                alt_count: total_alt,
-                n: total_n,
-                snp_count: indices.len(),
-                null_ll,
-                alt_ll,
-                mu,
-                lrt,
-                pval,
-                fdr_pval: 0.0, // Will be filled later
-            })
-        })
-        .collect();
-
-    let mut results = results?;
-
-    // Sort by region name for deterministic output across runs
-    results.sort_by(|a, b| a.region.cmp(&b.region));
-
-    // Step 4: FDR correction
-    let pvals: Vec<f64> = results.iter().map(|r| r.pval).collect();
-    let fdr_pvals = fdr_correction(&pvals);
-
-    for (result, fdr_pval) in results.iter_mut().zip(fdr_pvals.iter()) {
-        result.fdr_pval = *fdr_pval;
-    }
-
-    Ok(results)
+#[allow(dead_code)]
+pub fn single_model(variants: Vec<VariantCounts>, phased: bool) -> Result<Vec<ImbalanceResult>> {
+    Ok(single_model_with_dispersion(variants, phased)?.0)
 }
 
 /// Linear dispersion model analysis
 ///
 /// Python equivalent: `linear_model()` in as_analysis.py
-/// Uses ρ = expit(d1 + N × d2) where d1, d2 are globally optimized parameters.
+/// Fits the archived pseudocounted-depth predictor and returns equivalent
+/// standardized raw-depth parameters for reuse.
+#[allow(dead_code)]
+pub fn linear_model_with_dispersion(
+    variants: Vec<VariantCounts>,
+    phased: bool,
+) -> Result<(Vec<ImbalanceResult>, f64, f64)> {
+    if variants.is_empty() {
+        return Ok((vec![], f64::NAN, f64::NAN));
+    }
+
+    eprintln!("Optimizing linear dispersion parameters...");
+    let parameters = fit_dispersion_parameters(&variants, AnalysisMethod::Linear, 0)?;
+    let DispersionParameters::Linear { d1, d2, .. } = parameters else {
+        unreachable!("linear fit returned scalar parameters")
+    };
+    eprintln!("  d1 = {:.6}, d2 = {:.6}", d1, d2);
+    let results = test_fixed_dispersion(variants, phased, parameters, false, 0)?;
+    Ok((results, d1, d2))
+}
+
+#[allow(dead_code)]
 pub fn linear_model(variants: Vec<VariantCounts>, phased: bool) -> Result<Vec<ImbalanceResult>> {
+    Ok(linear_model_with_dispersion(variants, phased)?.0)
+}
+
+fn fit_dispersion_parameters(
+    variants: &[VariantCounts],
+    method: AnalysisMethod,
+    pseudocount: u32,
+) -> Result<DispersionParameters> {
+    if variants.is_empty() {
+        anyhow::bail!("cannot fit dispersion without observations");
+    }
+
+    let ref_counts: Vec<u32> = variants.iter().map(|variant| variant.ref_count).collect();
+    let n_array: Vec<u32> = variants
+        .iter()
+        .map(|variant| variant.ref_count + variant.alt_count)
+        .collect();
+    match method {
+        AnalysisMethod::Single => Ok(DispersionParameters::Single {
+            rho: optimize_dispersion(&ref_counts, &n_array)?,
+        }),
+        AnalysisMethod::Linear => {
+            let raw_depths: Vec<u32> = variants
+                .iter()
+                .map(|variant| raw_depth(variant, pseudocount))
+                .collect::<Result<_>>()?;
+            let (d1, d2, depth_center, depth_scale) =
+                optimize_dispersion_linear(&ref_counts, &n_array, &raw_depths)?;
+            Ok(DispersionParameters::Linear {
+                d1,
+                d2,
+                depth_center,
+                depth_scale,
+            })
+        }
+    }
+}
+
+fn raw_depth(variant: &VariantCounts, pseudocount: u32) -> Result<u32> {
+    let raw_ref = variant.ref_count.checked_sub(pseudocount).ok_or_else(|| {
+        anyhow::anyhow!("reference count is smaller than the configured pseudocount")
+    })?;
+    let raw_alt = variant.alt_count.checked_sub(pseudocount).ok_or_else(|| {
+        anyhow::anyhow!("alternate count is smaller than the configured pseudocount")
+    })?;
+    raw_ref
+        .checked_add(raw_alt)
+        .ok_or_else(|| anyhow::anyhow!("raw read depth exceeds the supported range"))
+}
+
+fn test_fixed_dispersion(
+    variants: Vec<VariantCounts>,
+    phased: bool,
+    parameters: DispersionParameters,
+    exact_snv_pvalues: bool,
+    pseudocount: u32,
+) -> Result<Vec<ImbalanceResult>> {
+    if exact_snv_pvalues {
+        anyhow::bail!("Exact SNV p-values are not supported; use the archived chi-square LRT");
+    }
     if variants.is_empty() {
         return Ok(vec![]);
     }
 
-    // Extract ref_counts and N for all variants
-    let ref_counts: Vec<u32> = variants.iter().map(|v| v.ref_count).collect();
-    let n_array: Vec<u32> = variants.iter().map(|v| v.ref_count + v.alt_count).collect();
-
-    // Step 1: Optimize linear dispersion parameters (d1, d2)
-    eprintln!("Optimizing linear dispersion parameters...");
-    let (d1, d2) = optimize_dispersion_linear(&ref_counts, &n_array)?;
-    eprintln!("  d1 = {:.6}, d2 = {:.6}", d1, d2);
-
-    // Step 2: Compute per-variant rho array
-    let rho_array: Vec<f64> = n_array
+    let ref_counts: Vec<u32> = variants.iter().map(|variant| variant.ref_count).collect();
+    let n_array: Vec<u32> = variants
         .iter()
-        .map(|&n| {
-            let exp_in = (d1 + n as f64 * d2).clamp(-10.0, 10.0);
-            clamp_rho(expit(exp_in))
-        })
+        .map(|variant| variant.ref_count + variant.alt_count)
+        .collect();
+    let raw_depths: Vec<u32> = variants
+        .iter()
+        .map(|variant| raw_depth(variant, pseudocount))
+        .collect::<Result<_>>()?;
+    let rho_array: Vec<f64> = raw_depths
+        .iter()
+        .map(|&depth| parameters.rho_at_depth(depth))
         .collect();
 
-    // Step 3: Group by region
     let mut region_map: HashMap<String, Vec<usize>> = HashMap::new();
     for (i, variant) in variants.iter().enumerate() {
         region_map
@@ -857,16 +1012,13 @@ pub fn linear_model(variants: Vec<VariantCounts>, phased: bool) -> Result<Vec<Im
         region_map.len()
     );
 
-    // Step 4: Calculate null and alternative likelihoods per region (parallel)
     let results: Result<Vec<_>> = region_map
         .par_iter()
         .map(|(region, indices)| -> Result<ImbalanceResult> {
-            // Extract counts and rho for this region
             let region_ref: Vec<u32> = indices.iter().map(|&i| ref_counts[i]).collect();
             let region_n: Vec<u32> = indices.iter().map(|&i| n_array[i]).collect();
             let region_rho: Vec<f64> = indices.iter().map(|&i| rho_array[i]).collect();
 
-            // Null model: prob = 0.5, using per-variant rho
             let mut null_ll = 0.0;
             for ((&ref_count, &n), &rho) in region_ref
                 .iter()
@@ -874,32 +1026,17 @@ pub fn linear_model(variants: Vec<VariantCounts>, phased: bool) -> Result<Vec<Im
                 .zip(region_rho.iter())
             {
                 let alpha = 0.5 * (1.0 - rho) / rho;
-                let bb = rv::dist::BetaBinomial::new(n, alpha, alpha)
-                    .context("Failed to create beta-binomial for null")?;
-                use rv::traits::HasDensity;
-                null_ll += bb.ln_f(&(ref_count as u64));
+                null_ll += betabinom_logpmf(ref_count, n, alpha, alpha)?;
             }
 
-            // Alternative model: optimize prob using the per-SNP rho slice
-            // (region_rho), which is aligned 1:1 with region_ref/region_n in the
-            // region's index order ([0] = first SNP, [1..] = subsequent SNPs).
-            // This matches Python's per-row df["disp"] and intentionally differs
-            // from single_model's single global scalar dispersion.
             let all_gt = indices.iter().all(|&i| variants[i].gt.is_some());
             let (alt_ll, mu) = if phased && indices.len() > 1 && all_gt {
-                // Phased multi-SNP region: use known genotype phase.
                 let region_gt: Vec<u8> = indices
                     .iter()
                     .map(|&i| variants[i].gt.expect("gt present (checked by all_gt)"))
                     .collect();
                 optimize_prob_phased(&region_ref, &region_n, &region_gt, &region_rho)?
             } else if indices.len() > 1 {
-                // Unphased multi-SNP region: marginalize over phase via DP,
-                // minimizing opt_unphased_dp over prob in (0, 1)
-                // (first = index 0, phase = remaining), matching Python's
-                // parse_opt() unphased branch (minimize_scalar(opt_unphased_dp,...)).
-                // region_rho is in the region's index order ([0] = first,
-                // [1..] = phase), matching opt_unphased_dp's internal split.
                 let first_ref = region_ref[0];
                 let first_n = region_n[0];
                 let phase_ref = &region_ref[1..];
@@ -915,213 +1052,17 @@ pub fn linear_model(variants: Vec<VariantCounts>, phased: bool) -> Result<Vec<Im
                     )
                     .unwrap_or(f64::INFINITY)
                 };
-                let mu = golden_section_search(objective, 0.0, 1.0, 1e-6)?;
+                // Preserve the archived first-SNP reference orientation and domain.
+                let mu = scipy_bounded_minimize(objective, 0.0, 1.0, 1e-5, 500)?;
                 let alt_ll = -objective(mu);
                 (alt_ll, mu)
             } else {
                 optimize_prob(&region_ref, &region_n, region_rho[0])?
             };
 
-            // Likelihood ratio test (clamped at 0 to avoid tiny negative LRT from
-            // optimizer noise; matches Python's chi2.sf behavior on near-zero LRT)
-            let lrt = (-2.0 * (null_ll - alt_ll)).max(0.0);
-
-            // P-value from chi-squared distribution (df=1)
-            let chi2 = ChiSquared::new(1.0).context("Failed to create chi-squared distribution")?;
-            let pval = 1.0 - chi2.cdf(lrt);
-
-            // Sum counts for this region
-            let total_ref: u32 = region_ref.iter().sum();
-            let total_alt: u32 = indices.iter().map(|&i| variants[i].alt_count).sum();
-            let total_n = total_ref + total_alt;
-
-            Ok(ImbalanceResult {
-                region: region.clone(),
-                ref_count: total_ref,
-                alt_count: total_alt,
-                n: total_n,
-                snp_count: indices.len(),
-                null_ll,
-                alt_ll,
-                mu,
-                lrt,
-                pval,
-                fdr_pval: 0.0,
-            })
-        })
-        .collect();
-
-    let mut results = results?;
-
-    // Step 5: FDR correction
-    let pvals: Vec<f64> = results.iter().map(|r| r.pval).collect();
-    let fdr_pvals = fdr_correction(&pvals);
-
-    for (result, fdr_pval) in results.iter_mut().zip(fdr_pvals.iter()) {
-        result.fdr_pval = *fdr_pval;
-    }
-
-    Ok(results)
-}
-
-/// Fit per-donor dispersion (rho) via bounded MLE, one value per `sample`.
-///
-/// Python equivalent: `compute_per_donor_rho()` — each donor's rho is the
-/// symmetric beta-binomial MLE over all that donor's observations, bounded to
-/// (1e-6, 1-1e-6). No extra floor (matches locked donor_rho.tsv: min ~7e-6).
-fn compute_donor_rho(variants: &[VariantCounts]) -> Result<HashMap<String, f64>> {
-    // Group observation indices by donor
-    let mut donor_map: HashMap<String, Vec<usize>> = HashMap::new();
-    for (i, v) in variants.iter().enumerate() {
-        let donor = v.sample.clone().ok_or_else(|| {
-            anyhow::anyhow!("per_donor model requires a 'sample' column in the counts TSV")
-        })?;
-        donor_map.entry(donor).or_default().push(i);
-    }
-
-    // Fit rho per donor in parallel (golden-section on symmetric beta-binomial)
-    donor_map
-        .par_iter()
-        .map(|(donor, idx)| -> Result<(String, f64)> {
-            let dref: Vec<u32> = idx.iter().map(|&i| variants[i].ref_count).collect();
-            let dn: Vec<u32> = idx
-                .iter()
-                .map(|&i| variants[i].ref_count + variants[i].alt_count)
-                .collect();
-            let objective = |rho: f64| -> f64 {
-                let rho = clamp_rho(rho);
-                let a = 0.5 * (1.0 - rho) / rho;
-                match betabinom_logpmf_sum(&dref, &dn, a, a) {
-                    Ok(ll) => -ll,
-                    Err(_) => f64::INFINITY,
-                }
-            };
-            // Bounds (1e-6, 1-1e-6) match scipy minimize_scalar(method="bounded")
-            let rho = golden_section_search(objective, 1e-6, 1.0 - 1e-6, 1e-6)?;
-            Ok((donor.clone(), rho))
-        })
-        .collect()
-}
-
-/// Per-donor dispersion model analysis.
-///
-/// Python equivalent: WASP2 `per_donor` extension — fit rho per `sample`, then
-/// run the standard per-region beta-binomial LRT using each observation's
-/// donor-specific rho (per-observation rho in BOTH null and alternative).
-pub fn per_donor_model(variants: Vec<VariantCounts>, phased: bool) -> Result<Vec<ImbalanceResult>> {
-    if variants.is_empty() {
-        return Ok(vec![]);
-    }
-
-    // Step 1: fit per-donor dispersion
-    eprintln!("Fitting per-donor dispersion...");
-    let donor_rho = compute_donor_rho(&variants)?;
-    eprintln!("  Fit rho for {} donors", donor_rho.len());
-    // Emit fitted rho (for validation against locked donor_rho.tsv)
-    let mut donors_sorted: Vec<(&String, &f64)> = donor_rho.iter().collect();
-    donors_sorted.sort_by(|a, b| a.0.cmp(b.0));
-    for (donor, rho) in donors_sorted {
-        eprintln!("DONOR_RHO\t{}\t{:.8}", donor, rho);
-    }
-
-    // Step 2: per-observation rho = each obs's donor rho
-    let ref_counts: Vec<u32> = variants.iter().map(|v| v.ref_count).collect();
-    let n_array: Vec<u32> = variants.iter().map(|v| v.ref_count + v.alt_count).collect();
-    let rho_array: Vec<f64> = variants
-        .iter()
-        .map(|v| {
-            let donor = v
-                .sample
-                .as_ref()
-                .expect("sample present (checked in compute_donor_rho)");
-            clamp_rho(
-                *donor_rho
-                    .get(donor)
-                    .expect("donor rho fit for every sample"),
-            )
-        })
-        .collect();
-
-    // Step 3: group by region
-    let mut region_map: HashMap<String, Vec<usize>> = HashMap::new();
-    for (i, variant) in variants.iter().enumerate() {
-        region_map
-            .entry(variant.region.clone())
-            .or_default()
-            .push(i);
-    }
-    eprintln!(
-        "Optimizing imbalance likelihood for {} regions...",
-        region_map.len()
-    );
-
-    // Step 4: per-region null/alt LL + LRT, using per-observation rho
-    let results: Result<Vec<_>> = region_map
-        .par_iter()
-        .map(|(region, indices)| -> Result<ImbalanceResult> {
-            let region_ref: Vec<u32> = indices.iter().map(|&i| ref_counts[i]).collect();
-            let region_n: Vec<u32> = indices.iter().map(|&i| n_array[i]).collect();
-            let region_rho: Vec<f64> = indices.iter().map(|&i| rho_array[i]).collect();
-
-            use rv::traits::HasDensity;
-
-            // Null model: prob = 0.5, per-observation rho
-            let mut null_ll = 0.0;
-            for ((&ref_count, &n), &rho) in region_ref
-                .iter()
-                .zip(region_n.iter())
-                .zip(region_rho.iter())
-            {
-                let alpha = 0.5 * (1.0 - rho) / rho;
-                let bb = rv::dist::BetaBinomial::new(n, alpha, alpha)
-                    .context("Failed to create beta-binomial for null")?;
-                null_ll += bb.ln_f(&(ref_count as u64));
-            }
-
-            // Alternative model: optimize one pi, per-observation rho.
-            // Phase-aware routing (mirrors single_model): for a phased multi-SNP
-            // region with known GT, use the haplotype-phased likelihood, feeding
-            // the per-observation (per-donor) rho slice into optimize_prob_phased's
-            // &[f64] disp argument. Otherwise (unphased, or single-SNP, or missing
-            // GT) use the unphased shared-pi product UNCHANGED — so phased=false is
-            // byte-identical to the pre-phasing per_donor model.
-            let all_gt = indices.iter().all(|&i| variants[i].gt.is_some());
-            let (alt_ll, mu) = if phased && indices.len() > 1 && all_gt {
-                let region_gt: Vec<u8> = indices
-                    .iter()
-                    .map(|&i| variants[i].gt.expect("gt present (checked by all_gt)"))
-                    .collect();
-                // Per-observation donor rho flows straight into the &[f64] slice.
-                optimize_prob_phased(&region_ref, &region_n, &region_gt, &region_rho)?
-            } else {
-                // Unphased: optimize one pi over the per-observation beta-binomial
-                // product (matches Python _alt_ll: a=pi(1-rho)/rho, b=(1-pi)(1-rho)/rho)
-                let alt_obj = |pi: f64| -> f64 {
-                    let pi = pi.clamp(1e-6, 1.0 - 1e-6);
-                    let mut nll = 0.0;
-                    for ((&ref_count, &n), &rho) in region_ref
-                        .iter()
-                        .zip(region_n.iter())
-                        .zip(region_rho.iter())
-                    {
-                        let a = pi * (1.0 - rho) / rho;
-                        let b = (1.0 - pi) * (1.0 - rho) / rho;
-                        match rv::dist::BetaBinomial::new(n, a, b) {
-                            Ok(bb) => nll -= bb.ln_f(&(ref_count as u64)),
-                            Err(_) => return f64::INFINITY,
-                        }
-                    }
-                    nll
-                };
-                let mu = golden_section_search(alt_obj, 1e-6, 1.0 - 1e-6, 1e-6)?;
-                let alt_ll = -alt_obj(mu);
-                (alt_ll, mu)
-            };
-
-            // Likelihood ratio test (clamped at 0 like Python)
             let lrt = (-2.0 * (null_ll - alt_ll)).max(0.0);
             let chi2 = ChiSquared::new(1.0).context("Failed to create chi-squared distribution")?;
-            let pval = 1.0 - chi2.cdf(lrt);
+            let pval = chi2.sf(lrt);
 
             let total_ref: u32 = region_ref.iter().sum();
             let total_alt: u32 = indices.iter().map(|&i| variants[i].alt_count).sum();
@@ -1144,28 +1085,27 @@ pub fn per_donor_model(variants: Vec<VariantCounts>, phased: bool) -> Result<Vec
         .collect();
 
     let mut results = results?;
-
-    // Deterministic output order
-    results.sort_by(|a, b| a.region.cmp(&b.region));
-
-    // FDR correction (BH)
+    results.sort_by(|left, right| left.region.cmp(&right.region));
     let pvals: Vec<f64> = results.iter().map(|r| r.pval).collect();
     let fdr_pvals = fdr_correction(&pvals);
     for (result, fdr_pval) in results.iter_mut().zip(fdr_pvals.iter()) {
         result.fdr_pval = *fdr_pval;
     }
-
     Ok(results)
 }
 
 /// Main entry point for allelic imbalance analysis
 ///
 /// Python equivalent: `get_imbalance()` in as_analysis.py
-pub fn analyze_imbalance(
+struct PreparedAnalysis {
+    variants: Vec<VariantCounts>,
+    effective_phased: bool,
+}
+
+fn prepare_analysis(
     variants: Vec<VariantCounts>,
     config: &AnalysisConfig,
-) -> Result<Vec<ImbalanceResult>> {
-    // Apply filters and pseudocounts
+) -> Result<PreparedAnalysis> {
     let filtered: Vec<VariantCounts> = variants
         .into_iter()
         .map(|mut v| {
@@ -1181,38 +1121,29 @@ pub fn analyze_imbalance(
 
     eprintln!("Processing {} variants after filtering", filtered.len());
 
-    let phased = effective_phased(&filtered, config.phased);
+    let phased = effective_phased(&filtered, config.phased)?;
 
-    // Deduplicate variants for Python parity (single and linear models only).
+    // Deduplicate variants for Python parity.
     // Python's get_imbalance() does: df[keep_cols].drop_duplicates()
-    // Per-donor model skips dedup as it's a Rust-only feature.
-    let deduped = if config.method != AnalysisMethod::PerDonor {
-        let before = filtered.len();
-        let after = deduplicate_variants(filtered, phased);
-        if after.len() < before {
-            eprintln!(
-                "Deduplicated {} → {} variants ({} duplicates removed)",
-                before,
-                after.len(),
-                before - after.len()
-            );
-        }
-        after
-    } else {
-        filtered
-    };
+    let before = filtered.len();
+    let deduped = deduplicate_variants(filtered, phased);
+    if deduped.len() < before {
+        eprintln!(
+            "Deduplicated {} → {} variants ({} duplicates removed)",
+            before,
+            deduped.len(),
+            before - deduped.len()
+        );
+    }
+    Ok(PreparedAnalysis {
+        variants: deduped,
+        effective_phased: phased,
+    })
+}
 
-    // Run analysis based on method
-    let mut results = match config.method {
-        AnalysisMethod::Single => single_model(deduped, phased)?,
-        AnalysisMethod::Linear => linear_model(deduped, phased)?,
-        AnalysisMethod::PerDonor => per_donor_model(deduped, phased)?,
-    };
-
-    // Remove pseudocounts from results
-    for result in results.iter_mut() {
-        // Each retained SNP contributes one pseudocount per allele.
-        let region_pseudocount = config.pseudocount.saturating_mul(result.snp_count as u32);
+fn remove_result_pseudocounts(results: &mut [ImbalanceResult], pseudocount: u32) {
+    for result in results {
+        let region_pseudocount = pseudocount.saturating_mul(result.snp_count as u32);
         if result.ref_count < region_pseudocount
             || result.alt_count < region_pseudocount
             || result.n < 2 * region_pseudocount
@@ -1226,47 +1157,139 @@ pub fn analyze_imbalance(
         result.alt_count = result.alt_count.saturating_sub(region_pseudocount);
         result.n = result.n.saturating_sub(2 * region_pseudocount);
     }
+}
 
-    Ok(results)
+fn analyze_prepared(
+    prepared: PreparedAnalysis,
+    config: &AnalysisConfig,
+    parameters: DispersionParameters,
+    exact_snv_pvalues: bool,
+) -> Result<AnalysisOutput> {
+    let n_observations = prepared.variants.len();
+    let mut results = test_fixed_dispersion(
+        prepared.variants,
+        prepared.effective_phased,
+        parameters,
+        exact_snv_pvalues,
+        config.pseudocount,
+    )?;
+    remove_result_pseudocounts(&mut results, config.pseudocount);
+
+    Ok(AnalysisOutput {
+        results,
+        rho: parameters.rho(),
+        linear_params: parameters.linear_params(),
+        linear_depth_center: parameters
+            .linear_depth_standardization()
+            .map(|standardization| standardization.0),
+        linear_depth_scale: parameters
+            .linear_depth_standardization()
+            .map(|standardization| standardization.1),
+        n_observations,
+        effective_phased: prepared.effective_phased,
+    })
+}
+
+/// Fit only the balanced-null nuisance parameters for one independent table.
+pub fn fit_imbalance_dispersion(
+    variants: Vec<VariantCounts>,
+    config: &AnalysisConfig,
+) -> Result<DispersionFit> {
+    let prepared = prepare_analysis(variants, config)?;
+    if prepared.variants.is_empty() {
+        anyhow::bail!("no variants passed the count threshold for dispersion fitting");
+    }
+
+    match config.method {
+        AnalysisMethod::Single => eprintln!("Optimizing dispersion parameter..."),
+        AnalysisMethod::Linear => eprintln!("Optimizing linear dispersion parameters..."),
+    }
+    let parameters =
+        fit_dispersion_parameters(&prepared.variants, config.method, config.pseudocount)?;
+    match parameters {
+        DispersionParameters::Single { rho } => eprintln!("  Dispersion: {:.6}", rho),
+        DispersionParameters::Linear {
+            d1,
+            d2,
+            depth_center,
+            depth_scale,
+        } => {
+            eprintln!(
+                "  d1 = {:.6}, d2 = {:.6}, depth center = {:.6}, depth scale = {:.6}",
+                d1, d2, depth_center, depth_scale
+            )
+        }
+    }
+    Ok(DispersionFit {
+        parameters,
+        n_observations: prepared.variants.len(),
+    })
+}
+
+/// Test effects with nuisance parameters supplied by a separate fitting run.
+pub fn analyze_imbalance_with_fixed_dispersion(
+    variants: Vec<VariantCounts>,
+    config: &AnalysisConfig,
+    parameters: DispersionParameters,
+    exact_snv_pvalues: bool,
+) -> Result<AnalysisOutput> {
+    let parameters = parameters.validate_for(config.method)?;
+    let prepared = prepare_analysis(variants, config)?;
+    analyze_prepared(prepared, config, parameters, exact_snv_pvalues)
+}
+
+pub fn analyze_imbalance_detailed(
+    variants: Vec<VariantCounts>,
+    config: &AnalysisConfig,
+) -> Result<AnalysisOutput> {
+    let prepared = prepare_analysis(variants, config)?;
+    let n_observations = prepared.variants.len();
+    if n_observations == 0 {
+        return Ok(AnalysisOutput {
+            results: vec![],
+            rho: None,
+            linear_params: None,
+            linear_depth_center: None,
+            linear_depth_scale: None,
+            n_observations,
+            effective_phased: prepared.effective_phased,
+        });
+    }
+
+    match config.method {
+        AnalysisMethod::Single => eprintln!("Optimizing dispersion parameter..."),
+        AnalysisMethod::Linear => eprintln!("Optimizing linear dispersion parameters..."),
+    }
+    let parameters =
+        fit_dispersion_parameters(&prepared.variants, config.method, config.pseudocount)?;
+    match parameters {
+        DispersionParameters::Single { rho } => eprintln!("  Dispersion: {:.6}", rho),
+        DispersionParameters::Linear {
+            d1,
+            d2,
+            depth_center,
+            depth_scale,
+        } => {
+            eprintln!(
+                "  d1 = {:.6}, d2 = {:.6}, depth center = {:.6}, depth scale = {:.6}",
+                d1, d2, depth_center, depth_scale
+            )
+        }
+    }
+    analyze_prepared(prepared, config, parameters, false)
+}
+
+#[allow(dead_code)]
+pub fn analyze_imbalance(
+    variants: Vec<VariantCounts>,
+    config: &AnalysisConfig,
+) -> Result<Vec<ImbalanceResult>> {
+    Ok(analyze_imbalance_detailed(variants, config)?.results)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_region_counts_remove_pseudocounts_per_retained_snp() {
-        let variant = |pos, ref_count, alt_count| VariantCounts {
-            chrom: "chr1".to_string(),
-            pos,
-            ref_count,
-            alt_count,
-            region: "peak".to_string(),
-            sample: None,
-            gt: None,
-        };
-        for pseudocount in [0, 1, 2] {
-            // The duplicate must not contribute counts or extra pseudocounts.
-            let variants = vec![
-                variant(101, 18, 2),
-                variant(201, 3, 17),
-                variant(101, 18, 2),
-            ];
-            let config = AnalysisConfig {
-                min_count: 10,
-                pseudocount,
-                method: AnalysisMethod::Single,
-                phased: false,
-            };
-            let results = analyze_imbalance(variants, &config).unwrap();
-            assert_eq!(results.len(), 1);
-            let result = &results[0];
-            assert_eq!(result.snp_count, 2);
-            assert_eq!(result.ref_count, 21);
-            assert_eq!(result.alt_count, 19);
-            assert_eq!(result.n, 40);
-        }
-    }
 
     #[test]
     fn test_opt_prob() {
@@ -1319,6 +1342,51 @@ mod tests {
         assert!((clamp_rho(0.5) - 0.5).abs() < 1e-15);
         assert!((clamp_rho(-1.0) - RHO_EPSILON).abs() < 1e-15);
         assert!((clamp_rho(2.0) - (1.0 - RHO_EPSILON)).abs() < 1e-15);
+        assert_eq!(clamp_rho(1e-12), 1e-12);
+        assert_eq!(clamp_rho(1.0 - 1e-12), 1.0 - 1e-12);
+    }
+
+    #[test]
+    fn test_standardized_linear_predictor_is_algebraically_equivalent() {
+        let raw_intercept = -4.0;
+        let raw_slope = 0.02;
+        let depth_center = 20.0;
+        let depth_scale = 5.0;
+        let parameters = DispersionParameters::Linear {
+            d1: raw_intercept + raw_slope * depth_center,
+            d2: raw_slope * depth_scale,
+            depth_center,
+            depth_scale,
+        };
+
+        for depth in [0, 10, 20, 40, 100] {
+            let expected = clamp_rho(expit(raw_intercept + raw_slope * depth as f64));
+            assert!((parameters.rho_at_depth(depth) - expected).abs() < 1e-15);
+        }
+    }
+
+    #[test]
+    fn test_expit_matches_scipy_expression() {
+        for (x, expected) in [
+            (-0.7, 0.3318122278318339),
+            (-2.3, 0.09112296101485616),
+            (-2.5, 0.07585818002124355),
+        ] {
+            assert_eq!(expit(x), expected);
+        }
+        assert_eq!(expit(-1000.0), 0.0);
+        assert_eq!(expit(1000.0), 1.0);
+    }
+
+    #[test]
+    fn test_linear_prediction_is_not_clipped_at_fit_guard() {
+        let parameters = DispersionParameters::Linear {
+            d1: 0.0,
+            d2: 12.0,
+            depth_center: 0.0,
+            depth_scale: 1.0,
+        };
+        assert!((parameters.rho_at_depth(1) - expit(12.0)).abs() < 1e-15);
     }
 
     #[test]
@@ -1333,11 +1401,118 @@ mod tests {
     }
 
     #[test]
-    fn test_golden_section() {
+    fn test_linear_real_optimizer_trace() {
+        let counts = [6, 10, 3, 11, 1, 8];
+        let depths = [12, 27, 13, 14, 15, 12];
+        let parameters = DispersionParameters::Linear {
+            d1: -2.5581565149445686,
+            d2: -0.011773137230599792,
+            depth_center: 0.0,
+            depth_scale: 1.0,
+        };
+        let rho: Vec<_> = depths
+            .iter()
+            .map(|n| parameters.rho_at_depth(n - 2))
+            .collect();
+        for mu in [0.3819660112501051, 0.6180339887498948] {
+            let forward: Vec<_> = counts
+                .iter()
+                .zip(&depths)
+                .zip(&rho)
+                .map(|((&k, &n), &r)| -opt_prob(mu, r, k, n).unwrap())
+                .collect();
+            let reverse: Vec<_> = counts
+                .iter()
+                .zip(&depths)
+                .zip(&rho)
+                .map(|((&k, &n), &r)| -opt_prob(1.0 - mu, r, k, n).unwrap())
+                .collect();
+            eprintln!("mu={mu:.17}, rho={rho:?}, forward={forward:?}, reverse={reverse:?}");
+        }
+        let objective = |mu| {
+            optimize_prob_unphased_dp(mu, &rho, counts[0], depths[0], &counts[1..], &depths[1..])
+                .unwrap()
+        };
+        let mut evaluations = Vec::new();
+        let mu = scipy_bounded_minimize_traced(
+            objective,
+            0.0,
+            1.0,
+            1e-5,
+            500,
+            |x, fx, a, b, accepted| evaluations.push((x, fx, a, b, accepted)),
+        )
+        .unwrap();
+        eprintln!("linear fixed-rho mu={mu:.17}, trace={evaluations:?}");
+        // Independently executed archived Python at these exact fixed parameters:
+        // Linux x86_64/SciPy 1.13.1 and macOS arm64/SciPy 1.13.1 respectively.
+        // Preserve both raw reference outcomes, rather than accepting a flip.
+        let expected_mu = if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
+            0.6928487541708976
+        } else {
+            0.3071512458291038
+        };
+        assert!((mu - expected_mu).abs() < 5e-5);
+    }
+
+    #[test]
+    fn test_real_unphased_optimizer_trace_matches_python_basin() {
+        // Archived SciPy 1.13.1 outcomes, fixed nuisance to isolate arithmetic.
+        let examples = [
+            (vec![7, 5], vec![14, 18], 0.41804483019409894),
+            (
+                vec![5, 9, 2, 10, 0, 7],
+                vec![10, 25, 11, 12, 13, 10],
+                0.2550470457103756,
+            ),
+        ];
+        for (ref_counts, depths, expected_mu) in examples {
+            let rho = [0.03295621518540146];
+            let objective = |mu| {
+                optimize_prob_unphased_dp(
+                    mu,
+                    &rho,
+                    ref_counts[0],
+                    depths[0],
+                    &ref_counts[1..],
+                    &depths[1..],
+                )
+                .unwrap()
+            };
+            let mut evaluations = Vec::new();
+            let mu = scipy_bounded_minimize_traced(
+                objective,
+                0.0,
+                1.0,
+                1e-5,
+                500,
+                |x, fx, a, b, accepted| evaluations.push((x, fx, a, b, accepted)),
+            )
+            .unwrap();
+            assert!(
+                (mu - expected_mu).abs() < 5e-5,
+                "mu={mu}, trace={evaluations:?}"
+            );
+            assert!((evaluations[0].0 - 0.3819660112501051).abs() < 1e-15);
+            assert!((evaluations[1].0 - 0.6180339887498948).abs() < 1e-15);
+            eprintln!("fixed-rho optimizer mu={mu:.17}, trace={evaluations:?}");
+        }
+    }
+
+    #[test]
+    fn test_scipy_bounded_minimize_interior_solution() {
         // Test optimization on simple quadratic
         let f = |x: f64| (x - 0.7).powi(2);
-        let min = golden_section_search(f, 0.0, 1.0, 1e-6).unwrap();
+        let min = scipy_bounded_minimize(f, 0.0, 1.0, 1e-5, 500).unwrap();
         assert!((min - 0.7).abs() < 1e-5);
+    }
+
+    #[test]
+    fn test_scipy_bounded_minimize_preserves_near_zero_solution() {
+        let minimum = scipy_bounded_minimize(|rho| rho, 0.0, 1.0, 1e-5, 500).unwrap();
+        let scipy_boundary = 5.9608609865491405e-6;
+        assert!((minimum - scipy_boundary).abs() < 1e-15);
+        assert!(minimum < 0.001);
     }
 
     #[test]
@@ -1403,8 +1578,8 @@ mod tests {
             ref_count: rc,
             alt_count: ac,
             region: "peak1".to_string(),
-            sample: Some("d1".to_string()),
             gt,
+            raw_gt: gt.map(|g| if g == 0 { "0|1" } else { "1|0" }.to_string()),
         }
     }
 
@@ -1421,19 +1596,22 @@ mod tests {
     }
 
     #[test]
-    fn test_effective_phased_requires_both_numeric_orientations() {
+    fn test_effective_phased_follows_python_table_checks() {
         let both = vec![vc_peak(100, 18, 4, Some(0)), vc_peak(200, 5, 15, Some(1))];
-        assert!(effective_phased(&both, true));
-        assert!(!effective_phased(&both, false));
+        assert!(effective_phased(&both, true).unwrap());
+        assert!(!effective_phased(&both, false).unwrap());
 
         let none = vec![vc_peak(100, 18, 4, None), vc_peak(200, 5, 15, None)];
-        assert!(!effective_phased(&none, true));
+        assert!(!effective_phased(&none, true).unwrap());
 
         let same = vec![vc_peak(100, 18, 4, Some(0)), vc_peak(200, 12, 8, Some(0))];
-        assert!(!effective_phased(&same, true));
+        assert!(!effective_phased(&same, true).unwrap());
 
         let partial = vec![vc_peak(100, 18, 4, Some(0)), vc_peak(200, 12, 8, None)];
-        assert!(!effective_phased(&partial, true));
+        assert!(effective_phased(&partial, true).is_err());
+        let mut numeric = same;
+        numeric[1].raw_gt = Some("0|0".to_string());
+        assert!(effective_phased(&numeric, true).unwrap());
     }
 
     #[test]
@@ -1467,69 +1645,146 @@ mod tests {
         assert_result_close(&phased[0], &unphased[0]);
     }
 
-    // Helper: a per_donor VariantCounts for one donor "d1".
-    fn vc_d1(pos: u32, rc: u32, ac: u32, gt: u8) -> VariantCounts {
-        VariantCounts {
-            chrom: "chr1".to_string(),
-            pos,
-            ref_count: rc,
-            alt_count: ac,
-            region: "peak1".to_string(),
-            sample: Some("d1".to_string()),
-            gt: Some(gt),
+    #[test]
+    fn test_multi_snp_output_removes_every_pseudocount() {
+        let variants = vec![vc_peak(100, 10, 5, None), vc_peak(200, 7, 8, None)];
+        let config = AnalysisConfig {
+            min_count: 0,
+            pseudocount: 1,
+            method: AnalysisMethod::Single,
+            phased: false,
+        };
+        let output = analyze_imbalance_detailed(variants, &config).unwrap();
+        assert_eq!(output.results.len(), 1);
+        let result = &output.results[0];
+        assert_eq!(result.snp_count, 2);
+        assert_eq!(result.ref_count, 17);
+        assert_eq!(result.alt_count, 13);
+        assert_eq!(result.n, 30);
+    }
+
+    #[test]
+    fn test_fixed_nuisance_keeps_archived_chi_square_pvalues() {
+        let config = AnalysisConfig {
+            min_count: 0,
+            pseudocount: 1,
+            method: AnalysisMethod::Single,
+            phased: false,
+        };
+        let nuisance = DispersionParameters::Single { rho: 0.04 };
+        let output = analyze_imbalance_with_fixed_dispersion(
+            vec![vc_peak(100, 8, 2, None)],
+            &config,
+            nuisance,
+            false,
+        )
+        .unwrap();
+        let result = &output.results[0];
+        let expected = ChiSquared::new(1.0).unwrap().sf(result.lrt);
+        assert!((result.pval - expected).abs() < 1e-12);
+        assert_eq!(result.ref_count, 8);
+        assert_eq!(result.alt_count, 2);
+        assert!(analyze_imbalance_with_fixed_dispersion(
+            vec![vc_peak(100, 8, 2, None)],
+            &config,
+            nuisance,
+            true
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn test_fixed_linear_nuisance_is_reported_without_refitting() {
+        let config = AnalysisConfig {
+            min_count: 0,
+            pseudocount: 0,
+            method: AnalysisMethod::Linear,
+            phased: false,
+        };
+        let nuisance = DispersionParameters::Linear {
+            d1: -4.25,
+            d2: 0.031,
+            depth_center: 10.0,
+            depth_scale: 2.0,
+        };
+        let output = analyze_imbalance_with_fixed_dispersion(
+            vec![vc_peak(100, 7, 5, None)],
+            &config,
+            nuisance,
+            false,
+        )
+        .unwrap();
+        assert_eq!(output.linear_params, Some((-4.25, 0.031)));
+        assert_eq!(output.linear_depth_center, Some(10.0));
+        assert_eq!(output.linear_depth_scale, Some(2.0));
+        assert_eq!(output.rho, None);
+        assert_eq!(output.n_observations, 1);
+    }
+
+    #[test]
+    fn test_fixed_linear_nuisance_rejects_invalid_scale() {
+        let config = AnalysisConfig {
+            min_count: 0,
+            pseudocount: 0,
+            method: AnalysisMethod::Linear,
+            phased: false,
+        };
+        for depth_scale in [0.0, -1.0, f64::NAN, f64::INFINITY] {
+            let error = analyze_imbalance_with_fixed_dispersion(
+                vec![vc_peak(100, 7, 5, None)],
+                &config,
+                DispersionParameters::Linear {
+                    d1: -4.0,
+                    d2: 0.1,
+                    depth_center: 12.0,
+                    depth_scale,
+                },
+                false,
+            )
+            .unwrap_err();
+            assert!(error.to_string().contains("finite and positive"));
         }
     }
 
     #[test]
-    fn test_per_donor_phased_wiring() {
-        // Phased per_donor on a single-donor multi-SNP region must equal a DIRECT
-        // optimize_prob_phased call with that donor's fitted rho — proving
-        // region_rho / region_gt are wired into the phased likelihood correctly.
+    fn test_linear_fit_preserves_adjusted_depth_predictor() {
         let variants = vec![
-            vc_d1(100, 18, 4, 0),
-            vc_d1(200, 5, 15, 1),
-            vc_d1(300, 12, 8, 0),
+            vc_peak(100, 8, 2, None),
+            vc_peak(200, 10, 10, None),
+            vc_peak(300, 18, 12, None),
         ];
-
-        let rho_map = compute_donor_rho(&variants).unwrap();
-        let rho = clamp_rho(rho_map["d1"]);
-        let region_ref = vec![18u32, 5, 12];
-        let region_n = vec![22u32, 20, 20];
-        let region_gt = vec![0u8, 1, 0];
-        let region_rho = vec![rho, rho, rho];
-        let (exp_alt, exp_mu) =
-            optimize_prob_phased(&region_ref, &region_n, &region_gt, &region_rho).unwrap();
-
-        let res = per_donor_model(variants, true).unwrap();
-        assert_eq!(res.len(), 1);
-        assert!(
-            (res[0].alt_ll - exp_alt).abs() < 1e-9,
-            "phased per_donor alt_ll {} != direct optimize_prob_phased {}",
-            res[0].alt_ll,
-            exp_alt
-        );
-        assert!(
-            (res[0].mu - exp_mu).abs() < 1e-9,
-            "mu {} != {}",
-            res[0].mu,
-            exp_mu
-        );
-        assert!(res[0].lrt >= 0.0, "LRT must be clamped >= 0");
+        let config = AnalysisConfig {
+            min_count: 0,
+            pseudocount: 3,
+            method: AnalysisMethod::Linear,
+            phased: false,
+        };
+        let fit = fit_imbalance_dispersion(variants, &config).unwrap();
+        let (center, scale) = fit.parameters.linear_depth_standardization().unwrap();
+        assert_eq!((center, scale), (-6.0, 1.0));
+        let (intercept, slope) = fit.parameters.linear_params().unwrap();
+        for depth in [10, 20, 30] {
+            assert_eq!(
+                fit.parameters.rho_at_depth(depth),
+                clamp_rho(expit(intercept + (depth + 6) as f64 * slope))
+            );
+        }
     }
 
     #[test]
-    fn test_per_donor_unphased_ignores_gt() {
-        // phased=false uses the shared-pi product, which does NOT use GT —
-        // flipping GT must leave the unphased result unchanged.
-        let a = vec![vc_d1(100, 18, 4, 0), vc_d1(200, 5, 15, 1)];
-        let b = vec![vc_d1(100, 18, 4, 1), vc_d1(200, 5, 15, 0)]; // GT flipped
-        let ra = per_donor_model(a, false).unwrap();
-        let rb = per_donor_model(b, false).unwrap();
-        assert!(
-            (ra[0].lrt - rb[0].lrt).abs() < 1e-12,
-            "unphased per_donor must ignore GT: {} vs {}",
-            ra[0].lrt,
-            rb[0].lrt
+    fn test_linear_fit_accepts_constant_raw_depth() {
+        let variants = vec![vc_peak(100, 8, 2, None), vc_peak(200, 6, 4, None)];
+        let config = AnalysisConfig {
+            min_count: 0,
+            pseudocount: 2,
+            method: AnalysisMethod::Linear,
+            phased: false,
+        };
+        let fit = fit_imbalance_dispersion(variants, &config).unwrap();
+        assert_eq!(
+            fit.parameters.linear_depth_standardization(),
+            Some((-4.0, 1.0))
         );
+        assert!(fit.parameters.rho_at_depth(10).is_finite());
     }
 }
