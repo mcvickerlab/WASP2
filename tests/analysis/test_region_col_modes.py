@@ -8,8 +8,7 @@ flag and the ``wasp2 analysis`` CLI plumbing in ``analysis.run_analysis``:
   labels regions ``{chrom}_{pos}`` (must match Python's key for parity);
 * ``--per-variant`` forces per-variant even when a region column is present;
 * ``--per-variant`` + ``--region_col`` is rejected;
-* ``--groupby`` fails closed on the Rust backend (it only re-keys the grouping column,
-  so ``--region_col <parent>`` is the supported equivalent);
+* ``--groupby`` selects the parent grouping column in Rust;
 * ``--phased`` / ``--region_col`` are forwarded to the Rust backend.
 """
 
@@ -156,18 +155,26 @@ def test_cli_forwards_phased_and_region_col(tmp_path, spy_rust):
 
 
 @pytest.mark.unit
-def test_cli_groupby_fails_closed(tmp_path, spy_rust):
+@pytest.mark.parametrize(
+    "groupby,expected", [("parent", "parent"), ("region", "region"), ("absent", "region")]
+)
+def test_cli_groupby_resolves_parent(tmp_path, spy_rust, groupby, expected):
     from analysis.run_analysis import run_ai_analysis
 
     tsv = _write_counts(tmp_path / "counts.tsv")
-    with pytest.raises(RuntimeError, match="groupby"):
-        run_ai_analysis(
-            str(tsv),
-            min_count=0,
-            pseudocount=0,
-            groupby="parent",
-            out_file=str(tmp_path / "out.tsv"),
-        )
+    text = tsv.read_text().splitlines()
+    tsv.write_text("\n".join([text[0] + "\tparent", *(row + "\tgeneA" for row in text[1:])]) + "\n")
+    run_ai_analysis(str(tsv), groupby=groupby, out_file=str(tmp_path / "out.tsv"))
+    assert spy_rust["kwargs"]["region_col"] == expected
+
+
+@pytest.mark.unit
+def test_per_variant_groupby_conflict(tmp_path, spy_rust):
+    from analysis.run_analysis import run_ai_analysis
+
+    with pytest.raises(ValueError, match="per_variant"):
+        run_ai_analysis(_write_counts(tmp_path / "counts.tsv"), groupby="parent", per_variant=True)
+    assert not spy_rust
 
 
 @pytest.mark.unit

@@ -31,7 +31,10 @@ Useful options:
 * ``--model``: dispersion model (currently ``single`` or ``linear`` input)
 * ``--output`` / ``--out_file`` / ``-o``: output TSV path
 * ``--region_col``: explicit region column name if auto-detection is not desired
-* ``--groupby``: group on an alternate annotation column, such as a parent gene column
+* ``--groupby`` (aliases ``--group``, ``--parent_col``, ``--parent``): group on
+  an alternate annotation column, such as a parent gene column. The Rust backend
+  groups SNP observations by this column before deduplication and fitting;
+  this is equivalent to ``--region_col <parent_column>``.
 
 Donor-Local Bulk Analysis
 -------------------------

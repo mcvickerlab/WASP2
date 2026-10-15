@@ -5,6 +5,10 @@ All notable changes to WASP2 will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- Restore archived exon/transcript/gene annotation priority and parent-grouping
+  CLI aliases through the Rust bulk backend. Parse final GFF3 attributes without
+  requiring a trailing semicolon and reject missing feature or parent identifiers
+  before writing BED intervals.
 - Donor feature deduplication uses the parsed first GT allele, as Python does.
   Original GT tokens remain available for the backend's pre-dedup phasing
   decision; fitting weights, raw counts, QC and provenance reflect retained rows.

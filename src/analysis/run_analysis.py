@@ -82,9 +82,9 @@ class WaspAnalysisData:
     ) -> None:
         # Per-variant (SNV-solo) mode cannot also name a region column: per-variant tests each
         # SNV independently, whereas region_col groups variants by that column.
-        if per_variant and region_col is not None:
+        if per_variant and (region_col is not None or groupby is not None):
             raise ValueError(
-                "per_variant cannot be combined with region_col: per-variant tests each SNV "
+                "per_variant cannot be combined with region_col or groupby: per-variant tests each SNV "
                 "independently, while region_col groups by that column. Choose one."
             )
         self.per_variant: bool = per_variant
@@ -171,7 +171,7 @@ def run_ai_analysis(
     region_col : str | None, optional
         Column name for grouping variants.
     groupby : str | None, optional
-        Additional grouping column (not supported by the Rust backend; raises if set).
+        Parent column to use instead of the feature column for grouping in Rust.
     per_variant : bool, optional
         Test each SNV independently (per-variant) instead of grouping by a region column.
         Forces per-variant even when a region column is present. Default False.
@@ -226,16 +226,6 @@ def run_ai_analysis(
     if expected_manifest_sha256 is not None:
         raise ValueError("--expected-manifest-sha256 requires --scope per-donor")
 
-    # Fail closed: --groupby is not supported by the Rust backend. It only re-keys the grouping
-    # column (region_col = groupby), so the identical result is obtained with --region_col <parent>.
-    # Erroring prevents silently returning feature-level results when parent-level was requested.
-    if groupby is not None:
-        raise RuntimeError(
-            "--groupby (parent-level grouping) is not supported by the Rust analysis backend. "
-            "Since groupby only re-keys the grouping column, group by the parent column directly "
-            "with --region_col <parent_column> instead."
-        )
-
     # Store analysis data and params
     ai_files = WaspAnalysisData(
         count_file,
@@ -262,7 +252,7 @@ def run_ai_analysis(
         pseudocount=ai_files.pseudocount,
         method=ai_files.model,
         phased=ai_files.phased,
-        region_col=ai_files.region_col,
+        region_col=ai_files.groupby or ai_files.region_col,
     )
     ai_df = pd.DataFrame(results)
 

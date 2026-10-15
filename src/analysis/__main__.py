@@ -149,7 +149,7 @@ def find_imbalance(
             "--parent",
             help=(
                 "Report allelic imbalance by parent group instead of feature level in RNA-seq counts. "
-                "Name of parent column. Not valid if no parent column or if using ATAC-seq peaks. "
+                "Name of parent column; groups SNPs in Rust before deduplication and fitting. "
                 "(Default: Report by feature level instead of parent level)"
             ),
         ),

@@ -41,7 +41,9 @@ Supported region files:
 * GFF3
 
 For GTF/GFF3 inputs, WASP2 derives interval annotations from feature rows and
-defaults to ``gene`` features when present.
+selects ``exon``, then ``transcript``, then ``gene`` features by default.
+Use ``--gene_feature`` to select explicitly. Feature and parent identifiers must
+be present and nonempty on every selected annotation row.
 
 Useful options:
 
