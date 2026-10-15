@@ -120,10 +120,6 @@ jobs:
         if: matrix.python-version == '3.11'
         run: uv pip install --python .venv/bin/python numpy==1.26.4 scipy==1.13.1
 
-      - name: Diagnose platform numerical arithmetic
-        if: matrix.python-version == '3.11'
-        run: .venv/bin/python scripts/diagnose_bulk_numerics.py
-
       - name: Run tests
         run: |
           source .venv/bin/activate

@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Compare analysis with Aaron Ho's pinned, pre-migration Python implementation.
 
-Run from a full repository clone with an installed Rust extension:
-    python scripts/compare_archive_analysis.py --output comparison.json
+Reference helpers for regression tests in a full repository clone.
 The archived code is read from git without altering it. AnnData is transposed
 at the boundary to compare the historical SNP-by-cell layout with today's
 cell-by-SNP layout. This is a compatibility check, not statistical calibration.
@@ -10,15 +9,11 @@ cell-by-SNP layout. This is a compatibility check, not statistical calibration.
 
 from __future__ import annotations
 
-import argparse
 import contextlib
 import io
-import json
 import subprocess
 import sys
-import tempfile
 import types
-import warnings
 from collections.abc import Callable
 from pathlib import Path
 
@@ -397,153 +392,3 @@ def compare_bulk_equivalence(
         "failures": failures,
         "regions": evidence,
     }
-
-
-def run_comparison(archive: dict[str, types.ModuleType]) -> dict:
-    import wasp2_rust
-    from analysis.as_analysis_sc import get_imbalance_sc
-    from analysis.compare_ai import get_compared_imbalance, get_compared_imbalance_diff_snps
-    from analysis.run_analysis import run_ai_analysis
-    from analysis.run_analysis_sc import process_adata_inputs
-
-    cases = {}
-    with tempfile.TemporaryDirectory(prefix="wasp2-parity-") as tmp:
-        temp = Path(tmp)
-        for model in ["single", "linear"]:
-            for unit in ["snv", "atac", "rna"]:
-                for phased in [False, True]:
-                    for pc in [0, 1]:
-                        name = f"bulk/{model}/{unit}/phased={phased}/pc={pc}"
-                        region = {"snv": None, "atac": "region", "rna": "gene"}[unit]
-                        counts = bulk_counts().drop(
-                            columns=["region", "gene"]
-                            if unit == "snv"
-                            else ["gene"]
-                            if unit == "atac"
-                            else ["region"]
-                        )
-                        counts.to_csv(temp / "counts.tsv", sep="\t", index=False)
-                        try:
-                            expected = archive["as_analysis"].get_imbalance(
-                                counts.copy(),
-                                method=model,
-                                phased=phased,
-                                region_col=region,
-                                pseudocount=pc,
-                            )
-                        except Exception as exc:
-                            cases[name] = {"status": "REFERENCE_ERROR", "reason": repr(exc)}
-                            continue
-                        try:
-                            run_ai_analysis(
-                                temp / "counts.tsv",
-                                model=model,
-                                phased=phased,
-                                region_col=region,
-                                pseudocount=pc,
-                                out_file=str(temp / "results.tsv"),
-                            )
-                            actual = pd.read_csv(temp / "results.tsv", sep="\t")
-                            if region != "region":
-                                expected = expected.rename(columns={region or "variant": "region"})
-                            cases[name] = compare_frames(expected, actual)
-                        except Exception as exc:
-                            cases[name] = {"status": "ERROR", "reason": repr(exc)}
-        for phased in [False, True]:
-            for pc in [0, 1]:
-                old = single_cell_counts()
-                new = old.T.copy()
-                options = {
-                    "sample": "sample1",
-                    "phased": phased,
-                    "pseudocount": pc,
-                    "min_count": 10,
-                }
-                for label, reference, current in [
-                    ("single-cell", archive["as_analysis_sc"].get_imbalance_sc, get_imbalance_sc),
-                    (
-                        "differential/shared",
-                        archive["compare_ai"].get_compared_imbalance,
-                        get_compared_imbalance,
-                    ),
-                    (
-                        "differential/different",
-                        archive["compare_ai"].get_compared_imbalance_diff_snps,
-                        get_compared_imbalance_diff_snps,
-                    ),
-                ]:
-                    name = f"{label}/phased={phased}/pc={pc}"
-                    try:
-                        expected = reference(old.copy(), **options)
-                    except Exception as exc:
-                        cases[name] = {"status": "REFERENCE_ERROR", "reason": repr(exc)}
-                        continue
-                    try:
-                        prepared = process_adata_inputs(new.copy(), sample="sample1", phased=phased)
-                        actual = current(prepared.adata, **options)
-                        details = {
-                            str(key): compare_frames(frame, actual[key])
-                            for key, frame in expected.items()
-                        }
-                        cases[name] = {
-                            "status": "PASS"
-                            if expected.keys() == actual.keys()
-                            and all(d["status"] == "PASS" for d in details.values())
-                            else "FAIL",
-                            "groups": details,
-                        }
-                    except Exception as exc:
-                        cases[name] = {"status": "ERROR", "reason": repr(exc)}
-    return {
-        "archive_commit": subprocess.check_output(
-            ["git", "rev-parse", ARCHIVE_REF], cwd=ROOT, text=True
-        ).strip(),
-        "current_commit": subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
-        ).strip(),
-        "extension": wasp2_rust.__file__,
-        "cases": cases,
-    }
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument(
-        "--adapt-linear-reference",
-        action="store_true",
-        help="Explicitly repair archived scalar/array shapes; report this adaptation in JSON.",
-    )
-    args = parser.parse_args()
-    # Import the installed extension before src's stub package can shadow it.
-    import wasp2_rust  # noqa: F401
-
-    sys.path.insert(0, str(ROOT / "src"))
-    with warnings.catch_warnings(), contextlib.redirect_stdout(io.StringIO()):
-        warnings.simplefilter("ignore", FutureWarning)
-        archive = load_archive()
-        if args.adapt_linear_reference:
-            adapt_linear_reference(archive)
-        report = run_comparison(archive)
-    report["reference_adaptations"] = (
-        ["Scalarize one-element objectives and align per-SNP dispersion arrays"]
-        if args.adapt_linear_reference
-        else []
-    )
-    report["known_reference_limitations"] = [
-        "Archived linear_model does not forward phased to parse_opt; phased multi-SNP "
-        "linear comparisons therefore test different declared behavior."
-    ]
-    args.output.write_text(json.dumps(report, indent=2) + "\n")
-    summary = {
-        status: sum(c["status"] == status for c in report["cases"].values())
-        for status in ["PASS", "FAIL", "ERROR", "REFERENCE_ERROR"]
-    }
-    print(json.dumps(summary))
-    for name, result in report["cases"].items():
-        if result["status"] != "PASS":
-            print(name, result.get("failures", result.get("reason", result.get("groups"))))
-
-
-if __name__ == "__main__":
-    main()
