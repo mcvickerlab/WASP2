@@ -66,7 +66,7 @@ fn parse_intersect_bed(py: Python, intersect_bed: &str) -> PyResult<Py<PyAny>> {
 
     // Call Rust parser
     let variants = bam_remapper::parse_intersect_bed(intersect_bed)
-        .map_err(|e| PyRuntimeError::new_err(format!("Failed to parse BED: {}", e)))?;
+        .map_err(|e| PyRuntimeError::new_err(format!("Failed to parse BED: {e}")))?;
 
     // Convert to Python dict
     let py_dict = PyDict::new(py);
@@ -136,16 +136,16 @@ fn remap_chromosome(
 
     // Parse intersection file
     let variants = bam_remapper::parse_intersect_bed(intersect_bed)
-        .map_err(|e| PyRuntimeError::new_err(format!("Failed to parse BED: {}", e)))?;
+        .map_err(|e| PyRuntimeError::new_err(format!("Failed to parse BED: {e}")))?;
 
     // Process chromosome
     let (haplotypes, stats) =
         bam_remapper::swap_alleles_for_chrom(bam_path, &variants, chrom, &config)
-            .map_err(|e| PyRuntimeError::new_err(format!("Failed to swap alleles: {}", e)))?;
+            .map_err(|e| PyRuntimeError::new_err(format!("Failed to swap alleles: {e}")))?;
 
     // Write FASTQ files
     let (_r1_count, _r2_count) = bam_remapper::write_fastq_pair(&haplotypes, out_r1, out_r2)
-        .map_err(|e| PyRuntimeError::new_err(format!("Failed to write FASTQ: {}", e)))?;
+        .map_err(|e| PyRuntimeError::new_err(format!("Failed to write FASTQ: {e}")))?;
 
     Ok((stats.pairs_processed, stats.haplotypes_generated))
 }
@@ -185,15 +185,12 @@ fn remap_all_chromosomes(
     // Parse intersect file ONCE, grouped by chromosome
     // This is the key optimization: 22x fewer parse operations for RNA-seq
     let variants_by_chrom = bam_remapper::parse_intersect_bed_by_chrom(intersect_bed)
-        .map_err(|e| PyRuntimeError::new_err(format!("Failed to parse intersect BED: {}", e)))?;
+        .map_err(|e| PyRuntimeError::new_err(format!("Failed to parse intersect BED: {e}")))?;
 
     // Report chromosome count
     let num_chroms = variants_by_chrom.len();
     let total_reads: usize = variants_by_chrom.values().map(|v| v.len()).sum();
-    eprintln!(
-        "Parsed {} chromosomes with {} reads from intersect file",
-        num_chroms, total_reads
-    );
+    eprintln!("Parsed {num_chroms} chromosomes with {total_reads} reads from intersect file");
 
     let stats = if parallel {
         // Use streaming parallel version with crossbeam channels
@@ -203,8 +200,7 @@ fn remap_all_chromosomes(
             rayon::current_num_threads()
         };
         eprintln!(
-            "Processing {} chromosomes in parallel ({} threads) with streaming writes...",
-            num_chroms, effective_threads
+            "Processing {num_chroms} chromosomes in parallel ({effective_threads} threads) with streaming writes..."
         );
 
         bam_remapper::process_and_write_parallel(
@@ -215,18 +211,18 @@ fn remap_all_chromosomes(
             out_r2,
             num_threads,
         )
-        .map_err(|e| PyRuntimeError::new_err(format!("Failed to process chromosomes: {}", e)))?
+        .map_err(|e| PyRuntimeError::new_err(format!("Failed to process chromosomes: {e}")))?
     } else {
-        eprintln!("Processing {} chromosomes sequentially...", num_chroms);
+        eprintln!("Processing {num_chroms} chromosomes sequentially...");
         let (haplotypes, stats) =
             bam_remapper::process_all_chromosomes_sequential(bam_path, &variants_by_chrom, &config)
                 .map_err(|e| {
-                    PyRuntimeError::new_err(format!("Failed to process chromosomes: {}", e))
+                    PyRuntimeError::new_err(format!("Failed to process chromosomes: {e}"))
                 })?;
 
         // Write FASTQ output files
         bam_remapper::write_fastq_pair(&haplotypes, out_r1, out_r2)
-            .map_err(|e| PyRuntimeError::new_err(format!("Failed to write FASTQ: {}", e)))?;
+            .map_err(|e| PyRuntimeError::new_err(format!("Failed to write FASTQ: {e}")))?;
 
         stats
     };
@@ -676,7 +672,7 @@ fn analyze_imbalance_run(
 #[pyfunction]
 fn intersect_bam_bed(bam_path: &str, bed_path: &str, out_path: &str) -> PyResult<usize> {
     bam_intersect::intersect_bam_with_variants(bam_path, bed_path, out_path)
-        .map_err(|e| PyRuntimeError::new_err(format!("Intersect failed: {}", e)))
+        .map_err(|e| PyRuntimeError::new_err(format!("Intersect failed: {e}")))
 }
 
 /// Intersect BAM reads with multi-sample variant BED file
@@ -697,7 +693,7 @@ fn intersect_bam_bed_multi(
     num_samples: usize,
 ) -> PyResult<usize> {
     bam_intersect::intersect_bam_with_variants_multi(bam_path, bed_path, out_path, num_samples)
-        .map_err(|e| PyRuntimeError::new_err(format!("Multi-sample intersect failed: {}", e)))
+        .map_err(|e| PyRuntimeError::new_err(format!("Multi-sample intersect failed: {e}")))
 }
 
 // ============================================================================
@@ -756,7 +752,7 @@ fn filter_bam_by_variants_py(
         is_paired,
         threads,
     )
-    .map_err(|e| PyRuntimeError::new_err(format!("BAM filter failed: {}", e)))?;
+    .map_err(|e| PyRuntimeError::new_err(format!("BAM filter failed: {e}")))?;
 
     Ok((
         stats.remap_reads,
@@ -871,7 +867,7 @@ fn unified_make_reads_py(
     };
 
     let stats = unified_pipeline::unified_make_reads(bam_path, bed_path, out_r1, out_r2, &config)
-        .map_err(|e| PyRuntimeError::new_err(format!("Unified pipeline failed: {}", e)))?;
+        .map_err(|e| PyRuntimeError::new_err(format!("Unified pipeline failed: {e}")))?;
 
     stats_to_pydict(py, &stats)
 }
@@ -955,13 +951,13 @@ fn unified_make_reads_parallel_py(
             .num_threads(threads)
             .build()
             .map_err(|e| {
-                PyRuntimeError::new_err(format!("Failed to build Rayon thread pool: {}", e))
+                PyRuntimeError::new_err(format!("Failed to build Rayon thread pool: {e}"))
             })?;
         pool.install(run)
     } else {
         run()
     }
-    .map_err(|e| PyRuntimeError::new_err(format!("Parallel unified pipeline failed: {}", e)))?;
+    .map_err(|e| PyRuntimeError::new_err(format!("Parallel unified pipeline failed: {e}")))?;
 
     stats_to_pydict(py, &stats)
 }
@@ -1020,7 +1016,7 @@ fn vcf_to_bed_py(
     };
 
     vcf_to_bed::vcf_to_bed(vcf_path, bed_path, &config)
-        .map_err(|e| PyRuntimeError::new_err(format!("VCF to BED failed: {}", e)))
+        .map_err(|e| PyRuntimeError::new_err(format!("VCF to BED failed: {e}")))
 }
 
 // ============================================================================
@@ -1053,7 +1049,7 @@ fn parse_intersect_bed_multi(
     use pyo3::types::{PyDict, PyList};
 
     let variants = multi_sample::parse_intersect_bed_multi(intersect_bed, num_samples)
-        .map_err(|e| PyRuntimeError::new_err(format!("Failed to parse multi-sample BED: {}", e)))?;
+        .map_err(|e| PyRuntimeError::new_err(format!("Failed to parse multi-sample BED: {e}")))?;
 
     // Convert to Python dict
     let py_dict = PyDict::new(py);
@@ -1133,13 +1129,13 @@ fn remap_chromosome_multi(
 ) -> PyResult<(usize, usize)> {
     // Parse multi-sample intersection file
     let variants = multi_sample::parse_intersect_bed_multi(intersect_bed, num_samples)
-        .map_err(|e| PyRuntimeError::new_err(format!("Failed to parse multi-sample BED: {}", e)))?;
+        .map_err(|e| PyRuntimeError::new_err(format!("Failed to parse multi-sample BED: {e}")))?;
 
     // Process chromosome
     let stats = multi_sample::swap_alleles_for_chrom_multi(
         bam_path, &variants, chrom, out_r1, out_r2, max_seqs,
     )
-    .map_err(|e| PyRuntimeError::new_err(format!("Failed to swap alleles: {}", e)))?;
+    .map_err(|e| PyRuntimeError::new_err(format!("Failed to swap alleles: {e}")))?;
 
     Ok((stats.pairs_processed, stats.haplotypes_generated))
 }
@@ -1261,8 +1257,7 @@ mod tests {
             assert_eq!(
                 parse_numeric_phased_gt(gt),
                 None,
-                "{} should not be treated as phased GT",
-                gt
+                "{gt} should not be treated as phased GT"
             );
         }
     }

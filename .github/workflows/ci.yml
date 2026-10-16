@@ -123,10 +123,18 @@ jobs:
       - name: Run tests
         run: |
           source .venv/bin/activate
-          pytest tests/ -v --tb=short \
+          pytest tests/ -v --tb=short --junitxml=test-results.xml -o junit_family=xunit1 \
             -m "not benchmark and not sanity" \
             --ignore=tests/benchmarks \
             --ignore=tests/sanity
+
+      - name: Upload Python test results
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
+        with:
+          name: pytest-${{ matrix.python-version }}
+          path: test-results.xml
+          if-no-files-found: warn
 
   # ===========================================================================
   # Rust unit tests and clippy lints

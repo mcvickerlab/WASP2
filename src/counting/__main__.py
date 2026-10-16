@@ -133,7 +133,7 @@ def count_variants(
             "--feat",
             help=(
                 "Feature type in gtf/gff3 for counting intersecting SNPs. "
-                "Defaults to 'gene' when present."
+                "Defaults to exon, then transcript, then gene when present."
             ),
         ),
     ] = None,

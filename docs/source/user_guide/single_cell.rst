@@ -4,12 +4,22 @@ Single-Cell Analysis
 Overview
 --------
 
-WASP2 provides specialized tools for allele-specific analysis in single-cell RNA-seq (scRNA-seq) data. This guide covers the barcode file format requirements and single-cell-specific workflows.
+WASP2 supports barcode-based allele counting and group-level imbalance analysis.
+The validated workflow is scATAC-seq. Rust performs allele counting; Python/SciPy
+performs single-cell imbalance and differential inference through the Python CLI.
+The current counter does not implement UMI-aware molecule counting for scRNA-seq.
+
+Counting uses wide integer storage and inference uses wide count sums. Statistical
+compatibility follows the archived likelihood and testing procedures with consistent
+precision; it does not reproduce historical UInt16 overflow or mixed-precision
+rounding. The original and explicitly widened archive references are tested separately.
 
 Barcode File Format
 -------------------
 
-WASP2 uses a two-column TSV (tab-separated values) format for barcode files. This format maps cell barcodes to cell type annotations.
+Counting accepts a one-column barcode whitelist without a header. Analysis
+uses a two-column TSV mapping barcodes to groups. The format below describes
+the analysis mapping; derive a whitelist with ``cut -f1 barcodes.tsv``.
 
 Format Specification
 ~~~~~~~~~~~~~~~~~~~~
@@ -73,22 +83,11 @@ Format Specification
    AAACCCAAGAACCAAG-1	Monocyte
    AAACCCAAGAACGATA-1	NK_cell
 
-**Multi-Sample Aggregated Example:**
+**Aggregated samples:**
 
-When using Cell Ranger ``aggr`` to combine multiple samples, barcodes are distinguished by suffix:
-
-.. code-block:: text
-
-   AAACCCAAGAAACACT-1	B_cell	sample1
-   AAACCCAAGAAACTGT-1	B_cell	sample1
-   AAACCCAAGAAACACT-2	B_cell	sample2
-   AAACCCAAGAAACTGT-2	B_cell	sample2
-   AAACCCAAGAAACACT-3	CD4_T_cell	sample3
-
-.. note::
-
-   For multi-sample experiments, WASP2 uses only the first two columns (barcode, cell_type).
-   The third column (sample origin) is optional metadata for your reference.
+Preserve sample-specific barcode suffixes in both the whitelist and group
+mapping. The analysis mapping must contain exactly the barcode and group
+columns; keep additional sample metadata in a separate file.
 
 Barcode Format Validation
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -123,7 +122,7 @@ Before running WASP2, validate your barcode file format:
    import re
 
    def validate_10x_barcode_file(filepath):
-       """Validate 10X scRNA-seq barcode file format."""
+       """Validate 10X barcode syntax."""
        pattern = re.compile(r'^[ACGT]{16}-\d+$')
        errors = []
        i = 0
@@ -168,10 +167,12 @@ When using Cell Ranger output, barcodes can be found in:
 
    cellranger_output/
    └── outs/
-       └── filtered_feature_bc_matrix/
+       └── filtered_peak_bc_matrix/
            └── barcodes.tsv.gz
 
-This file contains only the barcode column. To create a WASP2-compatible barcode file, you need to add cell type annotations from your downstream analysis.
+Use this one-column file as the counting whitelist after decompression.
+For group-level analysis, create a separate two-column mapping with cell
+type annotations from downstream analysis.
 
 Generating Barcode Files
 ------------------------
@@ -244,7 +245,7 @@ Common Format Variations
 .. code-block:: bash
 
    # Extract filtered barcodes (single-column, add cell types later)
-   zcat cellranger_output/outs/filtered_feature_bc_matrix/barcodes.tsv.gz > barcodes_raw.txt
+   zcat cellranger_output/outs/filtered_peak_bc_matrix/barcodes.tsv.gz > barcodes_raw.txt
 
 **Barcode Suffix Handling:**
 
@@ -270,8 +271,8 @@ Count Alleles
    wasp2-count count-variants-sc \
      sample.bam \
      variants.vcf.gz \
-     barcodes.tsv \
-     --region peaks.bed \
+     barcodes.txt \
+     --feature peaks.bed \
      --samples NA12878 \
      --out_file allele_counts.h5ad
 
@@ -300,12 +301,14 @@ The single-cell counting module outputs an AnnData (``.h5ad``) file containing:
 
 **Observations (obs):**
 
-* SNP information (chrom, pos, ref, alt)
-* Aggregate counts per SNP
+* Cell barcodes in ``obs_names``; groups are added during analysis.
 
 **Variables (var):**
 
-* Cell barcodes
+* SNP information (chrom, pos, ref, alt) and selected sample genotypes
+* Aggregate counts per SNP
+
+Count layers have shape ``cells × SNPs``.
 
 **Unstructured (uns):**
 
@@ -321,7 +324,8 @@ Quality Filtering
 
 * Filter low-quality cells before generating barcode file
 * Remove doublets and dead cells
-* Use cells with sufficient UMI counts (>1000 for most protocols)
+* Use scATAC quality metrics, such as fragment depth and transcription-start-site
+  enrichment; the counter does not deduplicate UMIs.
 
 Cell Type Annotation
 ~~~~~~~~~~~~~~~~~~~~
@@ -364,7 +368,7 @@ regulatory variation.
    wasp2-analyze compare-imbalance \
      allele_counts.h5ad \
      barcode_celltype_map.tsv \
-     --groups "excitatory_neurons,inhibitory_neurons" \
+     --groups excitatory_neurons --groups inhibitory_neurons \
      --sample SAMPLE_ID \
      --phased
 
@@ -376,9 +380,8 @@ For comprehensive coverage of comparative analysis, see:
 * :doc:`analysis` - Statistical methods for comparative imbalance
 
 See Also
-
 --------
 
-* :doc:`/tutorials/single_cell_workflow` - scRNA-seq / scATAC-seq workflow
+* :doc:`/tutorials/single_cell_workflow` - scATAC-seq workflow
 * :doc:`analysis` - Statistical analysis methods
 * :doc:`counting` - General allele counting

@@ -1,9 +1,9 @@
 #!/usr/bin/env nextflow
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    nf-scatac: Single-Cell ATAC-seq Allelic Imbalance Pipeline
+    nf-scatac: Single-cell ATAC-seq counting and coverage workflow
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    Allelic imbalance analysis for single-cell ATAC-seq data using WASP2.
+    Counting and coverage outputs for single-cell ATAC-seq data using WASP2.
 
     Input modes:
     - BAM input: True allele-specific counting with ref/alt/hap1/hap2 layers

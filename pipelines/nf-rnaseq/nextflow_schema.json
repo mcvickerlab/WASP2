@@ -105,7 +105,7 @@
                 "min_count": {
                     "type": "integer",
                     "default": 10,
-                    "minimum": 1,
+                    "minimum": 0,
                     "description": "Minimum allele count for ASE analysis.",
                     "help_text": "Variants with fewer than this many reads for either allele will be excluded.",
                     "fa_icon": "fas fa-sort-numeric-up"

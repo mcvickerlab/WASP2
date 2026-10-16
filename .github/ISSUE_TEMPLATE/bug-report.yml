@@ -1,0 +1,31 @@
+name: Bug report
+description: Report a reproducible software or documentation problem
+title: "[BUG] "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Describe what happened and what you expected.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Include the exact command, relevant flags, and a small input example when possible. Do not attach sensitive data.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Installation and environment
+      description: Include the WASP2 version, installation method or container tag, operating system, and Python version.
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Error output
+      description: Paste the relevant error or traceback.
+      render: text

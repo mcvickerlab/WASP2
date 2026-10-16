@@ -1,14 +1,7 @@
 /*
- * SCATAC_PSEUDOBULK - Aggregate per-cell counts to pseudo-bulk for statistical analysis
- *
- * Aggregates per-cell allele counts to sample-level pseudo-bulk counts.
- * This increases statistical power for allelic imbalance testing by combining
- * sparse per-cell data into denser aggregate counts.
- *
- * Output format has columns matching WASP2_COUNT_ALLELES (ref_count, alt_count).
- * Note: Since fragment files lack sequence data, total overlaps are placed in
- * ref_count while alt_count is zero. This is a limitation of fragment-based
- * scATAC analysis - true allele-specific counting requires BAM-level data.
+ * Aggregate fragment overlap coverage across cells at each SNP position.
+ * Fragment coordinates do not identify observed alleles. Outputs are coverage
+ * summaries and must not be submitted to allelic imbalance inference.
  */
 
 process SCATAC_PSEUDOBULK {
@@ -24,7 +17,7 @@ process SCATAC_PSEUDOBULK {
     tuple val(meta), path(cell_counts)
 
     output:
-    tuple val(meta), path("*_pseudobulk_counts.tsv"), emit: counts
+    tuple val(meta), path("*_pseudobulk_coverage.tsv"), emit: counts
     tuple val(meta), path("*_aggregation_stats.tsv"), emit: stats
     path "versions.yml"                             , emit: versions
 
@@ -33,14 +26,14 @@ process SCATAC_PSEUDOBULK {
 
     script:
     def prefix = task.ext.prefix ?: "${meta.id}"
-    def min_cells = params.min_cells_per_snp ?: 3
+    def min_cells = params.min_cells_per_snp != null ? params.min_cells_per_snp : 3
     """
     set -euo pipefail
 
     # Aggregate per-cell counts to pseudo-bulk and generate stats in one pass
     awk -v OFS='\\t' -v min_cells="${min_cells}" -v prefix="${prefix}" '
     BEGIN {
-        print "chrom", "pos", "ref", "alt", "ref_count", "alt_count" > prefix "_pseudobulk_counts.tsv"
+        print "chrom", "pos", "ref", "alt", "overlap_count", "n_cells" > (prefix "_pseudobulk_coverage.tsv")
     }
     NR > 1 {
         key = \$2 OFS \$3 OFS \$4 OFS \$5
@@ -54,30 +47,30 @@ process SCATAC_PSEUDOBULK {
         filtered_count = 0
         for (key in total) {
             if (cells_per_snp[key] >= min_cells) {
-                print key, total[key], 0 >> prefix "_pseudobulk_counts.tsv"
+                print key, total[key], cells_per_snp[key] >> (prefix "_pseudobulk_coverage.tsv")
                 filtered_count++
             }
         }
 
         # Write aggregation stats
-        print "metric", "value" > prefix "_aggregation_stats.tsv"
-        print "total_cells_input", length(input_cells) >> prefix "_aggregation_stats.tsv"
-        print "total_snps_input", length(input_snps) >> prefix "_aggregation_stats.tsv"
-        print "snps_after_filtering", filtered_count >> prefix "_aggregation_stats.tsv"
+        print "metric", "value" > (prefix "_aggregation_stats.tsv")
+        print "total_cells_input", length(input_cells) >> (prefix "_aggregation_stats.tsv")
+        print "total_snps_input", length(input_snps) >> (prefix "_aggregation_stats.tsv")
+        print "snps_after_filtering", filtered_count >> (prefix "_aggregation_stats.tsv")
     }' ${cell_counts}
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        awk: \$(awk --version | head -1 | sed 's/GNU Awk //' | cut -d',' -f1)
+        awk: \$( (awk --version 2>/dev/null || awk -version) | sed -n '1p')
     END_VERSIONS
     """
 
     stub:
     def prefix = task.ext.prefix ?: "${meta.id}"
     """
-    echo -e "chrom\\tpos\\tref\\talt\\tref_count\\talt_count" > ${prefix}_pseudobulk_counts.tsv
-    echo -e "chr1\\t100000\\tA\\tG\\t45\\t0" >> ${prefix}_pseudobulk_counts.tsv
-    echo -e "chr1\\t200000\\tC\\tT\\t32\\t0" >> ${prefix}_pseudobulk_counts.tsv
+    echo -e "chrom\\tpos\\tref\\talt\\toverlap_count\\tn_cells" > ${prefix}_pseudobulk_coverage.tsv
+    echo -e "chr1\\t100000\\tA\\tG\\t45\\t3" >> ${prefix}_pseudobulk_coverage.tsv
+    echo -e "chr1\\t200000\\tC\\tT\\t32\\t3" >> ${prefix}_pseudobulk_coverage.tsv
 
     echo -e "metric\\tvalue" > ${prefix}_aggregation_stats.tsv
     echo -e "total_cells_input\\t10" >> ${prefix}_aggregation_stats.tsv

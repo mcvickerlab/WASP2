@@ -267,7 +267,7 @@ pub fn apply_cigar_aware_substitution(
     let query_start = ref2query_left
         .get(&ref_start)
         .copied()
-        .ok_or_else(|| anyhow::anyhow!("Ref position {} not in left map", ref_start))?;
+        .ok_or_else(|| anyhow::anyhow!("Ref position {ref_start} not in left map"))?;
 
     // For end position, we want the position AFTER the last ref base
     // ref_end is exclusive, so we look up ref_end - 1 and add 1

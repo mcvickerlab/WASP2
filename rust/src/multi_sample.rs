@@ -330,8 +330,7 @@ pub fn apply_allele_substitutions_cigar_aware(
         // Get query positions using CIGAR-aware mapping
         let query_start = ref2query_left.get(&ref_start).copied().ok_or_else(|| {
             anyhow::anyhow!(
-                "Variant at ref {} not in left map (read may not cover variant)",
-                ref_start
+                "Variant at ref {ref_start} not in left map (read may not cover variant)"
             )
         })?;
 
@@ -501,7 +500,7 @@ pub fn generate_multi_sample_sequences_from_record(
             Ok((new_seq, new_qual)) => results.push((new_seq, new_qual)),
             Err(e) => {
                 // Log error but continue - variant may not overlap read properly
-                eprintln!("Warning: failed to apply substitution: {}", e);
+                eprintln!("Warning: failed to apply substitution: {e}");
                 continue;
             }
         }
@@ -596,7 +595,7 @@ pub fn swap_alleles_for_chrom_multi(
     let tid = match header.tid(chrom.as_bytes()) {
         Some(t) => t,
         None => {
-            eprintln!("  Chromosome {} not found in BAM, skipping", chrom);
+            eprintln!("  Chromosome {chrom} not found in BAM, skipping");
             return Ok(stats);
         }
     };
@@ -772,7 +771,7 @@ fn write_fastq_record<W: Write>(
     seq: &[u8],
     qual: &[u8],
 ) -> Result<()> {
-    writeln!(writer, "@{}", name)?;
+    writeln!(writer, "@{name}")?;
     writer.write_all(seq)?;
     writeln!(writer)?;
     writeln!(writer, "+")?;

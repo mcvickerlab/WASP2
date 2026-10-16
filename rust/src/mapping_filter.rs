@@ -102,10 +102,7 @@ fn parse_wasp_name(qname: &[u8]) -> Option<WaspNameInfo<'_>> {
 /// Check if remapped positions match expected positions (mate-order agnostic)
 fn positions_match(rec_pos: i64, mate_pos: i64, exp_pos1: i64, exp_pos2: i64, slop: i64) -> bool {
     if slop < 0 {
-        eprintln!(
-            "[WARN] positions_match: negative slop ({}), clamping to 0",
-            slop
-        );
+        eprintln!("[WARN] positions_match: negative slop ({slop}), clamping to 0");
     }
     let slop = slop.max(0);
     if slop == 0 {
@@ -151,8 +148,7 @@ pub fn filter_bam_wasp(
         if let Some(sidecar_path) = expected_sidecar.as_ref() {
             let file = std::fs::File::open(sidecar_path).map_err(|e| {
                 PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
-                    "Failed to open sidecar {}: {}",
-                    sidecar_path, e
+                    "Failed to open sidecar {sidecar_path}: {e}"
                 ))
             })?;
             let mut reader = BufReader::new(file);
@@ -163,8 +159,7 @@ pub fn filter_bam_wasp(
                 buf.clear();
                 let n = reader.read_until(b'\n', &mut buf).map_err(|e| {
                     PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
-                        "Failed to read sidecar {}: {}",
-                        sidecar_path, e
+                        "Failed to read sidecar {sidecar_path}: {e}"
                     ))
                 })?;
                 if n == 0 {
@@ -212,7 +207,7 @@ pub fn filter_bam_wasp(
     let mut read_buffer: FxHashMap<Vec<u8>, BufferedRead> = FxHashMap::default();
 
     let mut remapped_reader = bam::Reader::from_path(&remapped_bam).map_err(|e| {
-        PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("Failed to open remapped BAM: {}", e))
+        PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("Failed to open remapped BAM: {e}"))
     })?;
     if threads > 1 {
         let _ = remapped_reader.set_threads(threads);
@@ -321,8 +316,7 @@ pub fn filter_bam_wasp(
     if let Some(path) = keep_read_file.as_ref() {
         let mut file = std::fs::File::create(path).map_err(|e| {
             PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
-                "Failed to create keep_read_file: {}",
-                e
+                "Failed to create keep_read_file: {e}"
             ))
         })?;
         for name in keep_set.iter() {
@@ -331,8 +325,7 @@ pub fn filter_bam_wasp(
                 .and_then(|_| file.write_all(b"\n"))
                 .map_err(|e| {
                     PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
-                        "Failed to write keep_read_file: {}",
-                        e
+                        "Failed to write keep_read_file: {e}"
                     ))
                 })?;
         }
@@ -340,7 +333,7 @@ pub fn filter_bam_wasp(
 
     // Write filtered BAM from original to_remap input
     let mut to_reader = bam::Reader::from_path(&to_remap_bam).map_err(|e| {
-        PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("Failed to open to_remap BAM: {}", e))
+        PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("Failed to open to_remap BAM: {e}"))
     })?;
     if threads > 1 {
         let _ = to_reader.set_threads(threads);
@@ -349,8 +342,7 @@ pub fn filter_bam_wasp(
     let mut writer =
         Writer::from_path(&remap_keep_bam, &header, bam::Format::Bam).map_err(|e| {
             PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
-                "Failed to create remap_keep_bam: {}",
-                e
+                "Failed to create remap_keep_bam: {e}"
             ))
         })?;
     if threads > 1 {
@@ -365,7 +357,7 @@ pub fn filter_bam_wasp(
         };
         if keep_set.contains(rec.qname()) {
             writer.write(&rec).map_err(|e| {
-                PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("Write failed: {}", e))
+                PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("Write failed: {e}"))
             })?;
             kept_written += 1;
         }

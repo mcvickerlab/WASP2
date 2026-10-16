@@ -472,7 +472,7 @@ pub fn swap_alleles_for_chrom(
     let header = bam.header().clone();
     let tid = header
         .tid(chrom.as_bytes())
-        .ok_or_else(|| anyhow::anyhow!("Chromosome {} not found in BAM", chrom))?;
+        .ok_or_else(|| anyhow::anyhow!("Chromosome {chrom} not found in BAM"))?;
 
     bam.fetch(tid as i32)
         .context("Failed to fetch chromosome")?;
@@ -1957,11 +1957,7 @@ fn generate_wasp_name(
     total_seqs: usize,
 ) -> Vec<u8> {
     let name_str = std::str::from_utf8(original_name).unwrap_or("unknown");
-    format!(
-        "{}_WASP_{}_{}_{}_{}",
-        name_str, pos1, pos2, seq_num, total_seqs
-    )
-    .into_bytes()
+    format!("{name_str}_WASP_{pos1}_{pos2}_{seq_num}_{total_seqs}").into_bytes()
 }
 
 // ============================================================================
@@ -2051,30 +2047,6 @@ mod tests {
         assert!(mate2
             .iter()
             .any(|s| s.vcf_start == 87401 && s.vcf_stop == 87402));
-    }
-
-    #[test]
-    #[ignore]
-    fn test_generate_haplotype_seqs() {
-        // TODO: Create mock BAM record
-        // TODO: Create test variants
-        // TODO: Generate haplotypes
-        // TODO: Verify sequences are correct
-    }
-
-    #[test]
-    #[ignore]
-    fn test_build_alignment_map() {
-        // TODO: Create read with known alignment
-        // TODO: Build map
-        // TODO: Verify positions are correct
-    }
-
-    #[test]
-    #[ignore]
-    fn test_generate_wasp_name() {
-        // TODO: Generate name with test inputs
-        // TODO: Verify format matches Python implementation
     }
 
     // ============================================================================

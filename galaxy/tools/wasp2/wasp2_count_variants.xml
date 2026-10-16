@@ -109,7 +109,7 @@ Counts allele-specific reads at heterozygous variant positions from aligned BAM 
 **Usage Notes**
 
 For best results, use phased VCF files from population imputation (e.g., SHAPEIT, Eagle).
-For single-cell data, use the companion tool "WASP2 Count Variants SC".
+Single-cell counting is available through the WASP2 command line; no single-cell Galaxy wrapper is included.
 
     ]]></help>
 

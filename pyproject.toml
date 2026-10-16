@@ -1,5 +1,5 @@
 [build-system]
-requires = ["maturin>=1.6,<2.0"]
+requires = ["maturin>=1.6,<2.0", "cmake>=3.14"]
 build-backend = "maturin"
 
 [project]

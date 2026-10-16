@@ -6,7 +6,7 @@
  *
  * Note: Fragment files contain only coordinates, not sequences, so we count total
  * overlaps per barcode/SNP. The overlap_count represents coverage at SNP sites;
- * allele-specific counts require downstream phasing or sequence-level analysis.
+ * allele-specific counts require sequence-level observations from BAM.
  */
 
 process SCATAC_COUNT_ALLELES {
@@ -24,7 +24,7 @@ process SCATAC_COUNT_ALLELES {
     path(peaks)     // Optional: BED file with peak regions to restrict analysis
 
     output:
-    tuple val(meta), path("*_allele_counts.tsv"), emit: counts
+    tuple val(meta), path("*_fragment_coverage.tsv"), emit: counts
     tuple val(meta), path("*_count_stats.tsv")  , emit: stats
     path "versions.yml"                         , emit: versions
 
@@ -33,7 +33,7 @@ process SCATAC_COUNT_ALLELES {
 
     script:
     def prefix = task.ext.prefix ?: "${meta.id}"
-    def min_frags = params.min_fragments_per_cell ?: 1000
+    def min_frags = params.min_fragments_per_cell != null ? params.min_fragments_per_cell : 1000
     def filter_barcodes = !barcodes.name.startsWith('NO_FILE') ? "true" : "false"
     def filter_peaks = !peaks.name.startsWith('NO_FILE') ? "true" : "false"
     """
@@ -68,7 +68,7 @@ process SCATAC_COUNT_ALLELES {
     END {
         print "barcode", "chrom", "pos", "ref", "alt", "overlap_count"
         for (k in counts) { split(k,p,OFS); if (bc_total[p[1]] >= min_frags) print k, counts[k] }
-    }' > ${prefix}_allele_counts.tsv
+    }' > ${prefix}_fragment_coverage.tsv
 
     # Generate counting statistics
     awk -v OFS='\\t' 'BEGIN { print "metric", "value" }
@@ -78,24 +78,24 @@ process SCATAC_COUNT_ALLELES {
         print "total_snps", length(snp)
         print "total_fragment_overlaps", tot
         print "mean_snps_per_cell", length(bc) > 0 ? length(snp)/length(bc) : 0
-    }' ${prefix}_allele_counts.tsv > ${prefix}_count_stats.tsv
+    }' ${prefix}_fragment_coverage.tsv > ${prefix}_count_stats.tsv
 
-    [ \$(wc -l < ${prefix}_allele_counts.tsv) -lt 2 ] && echo "WARNING: No overlaps found" >&2 || true
+    [ \$(wc -l < ${prefix}_fragment_coverage.tsv) -lt 2 ] && echo "WARNING: No overlaps found" >&2 || true
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
         bedtools: \$(bedtools --version | sed 's/bedtools v//')
-        awk: \$(awk --version | head -1 | sed 's/GNU Awk //' | cut -d',' -f1)
+        awk: \$( (awk --version 2>/dev/null || awk -version) | sed -n '1p')
     END_VERSIONS
     """
 
     stub:
     def prefix = task.ext.prefix ?: "${meta.id}"
     """
-    echo -e "barcode\\tchrom\\tpos\\tref\\talt\\toverlap_count" > ${prefix}_allele_counts.tsv
-    echo -e "AAACGAACAGTCAGTT-1\\tchr1\\t100000\\tA\\tG\\t8" >> ${prefix}_allele_counts.tsv
-    echo -e "AAACGAACAGTCAGTT-1\\tchr1\\t200000\\tC\\tT\\t5" >> ${prefix}_allele_counts.tsv
-    echo -e "AAACGAATCTGCGGCA-1\\tchr1\\t100000\\tA\\tG\\t12" >> ${prefix}_allele_counts.tsv
+    echo -e "barcode\\tchrom\\tpos\\tref\\talt\\toverlap_count" > ${prefix}_fragment_coverage.tsv
+    echo -e "AAACGAACAGTCAGTT-1\\tchr1\\t100000\\tA\\tG\\t8" >> ${prefix}_fragment_coverage.tsv
+    echo -e "AAACGAACAGTCAGTT-1\\tchr1\\t200000\\tC\\tT\\t5" >> ${prefix}_fragment_coverage.tsv
+    echo -e "AAACGAATCTGCGGCA-1\\tchr1\\t100000\\tA\\tG\\t12" >> ${prefix}_fragment_coverage.tsv
 
     echo -e "metric\\tvalue" > ${prefix}_count_stats.tsv
     echo -e "total_barcodes\\t2" >> ${prefix}_count_stats.tsv

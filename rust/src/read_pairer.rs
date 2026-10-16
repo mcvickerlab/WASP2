@@ -221,37 +221,3 @@ pub fn pair_reads_from_chromosome(
 // ============================================================================
 // Tests
 // ============================================================================
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    #[ignore] // Remove when implemented
-    fn test_read_pairer_basic() {
-        // TODO: Create test BAM file
-        // TODO: Pair reads
-        // TODO: Verify pairs are correct
-    }
-
-    #[test]
-    #[ignore]
-    fn test_read_pairer_stats() {
-        // TODO: Create test BAM with various read types
-        // TODO: Pair with statistics enabled
-        // TODO: Verify stats are accurate
-    }
-
-    #[test]
-    #[ignore]
-    fn test_filters() {
-        // TODO: Test each filter individually
-        // TODO: Verify discarded reads are counted correctly
-    }
-
-    #[test]
-    #[ignore]
-    fn test_chromosome_specific() {
-        // TODO: Create BAM with multiple chromosomes
-        // TODO: Pair only chr10
-        // TODO: Verify only chr10 pairs returned
-    }
-}

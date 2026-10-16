@@ -20,8 +20,8 @@ process WASP2_ANALYZE_IMBALANCE {
     script:
     def args = task.ext.args ?: ''
     def prefix = task.ext.prefix ?: "${meta.id}"
-    def min_count = params.min_count ?: 10
-    def pseudocount = params.pseudocount ?: 1
+    def min_count = params.min_count != null ? params.min_count : 10
+    def pseudocount = params.pseudocount != null ? params.pseudocount : 1
     """
     wasp2-analyze find-imbalance \\
         ${counts} \\
@@ -39,7 +39,7 @@ process WASP2_ANALYZE_IMBALANCE {
     stub:
     def prefix = task.ext.prefix ?: "${meta.id}"
     """
-    echo -e "region\\tsnp_count\\tref_sum\\talt_sum\\tmu\\tnull_ll\\talt_ll\\tLRT\\tpvalue\\tfdr" > ${prefix}_ai_results.tsv
+    echo -e "region\\tref_count\\talt_count\\tN\\tsnp_count\\tnull_ll\\talt_ll\\tmu\\tlrt\\tpval\\tfdr_pval" > ${prefix}_ai_results.tsv
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":

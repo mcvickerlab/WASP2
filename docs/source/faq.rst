@@ -16,8 +16,8 @@ Use Docker or Singularity on HPC clusters or when you need full reproducibility.
 
 **What Python versions are supported?**
 
-Python 3.10, 3.11, 3.12, and 3.13. Pre-built wheels are available for all four
-on Linux (x86_64, aarch64) and macOS (Intel, Apple Silicon).
+The development branch tests Python 3.10, 3.11, 3.12, and 3.13. Available
+published wheels depend on the release and platform; see the release files.
 
 **Why do I get an error about missing samtools/bcftools/bedtools?**
 
@@ -30,9 +30,10 @@ Input Data
 
 **Do I need phased genotypes?**
 
-Yes. WASP2 assigns reads to haplotypes using phased heterozygous variants. Without
-phase information, WASP2 cannot distinguish which allele a read came from. Use
-WhatsHap, SHAPEIT4, or Eagle2 to phase your VCF before running WASP2.
+No. Counting uses bases at heterozygous variant positions and does not require
+phasing. Bulk analysis supports phased and unphased likelihoods; select
+``--phased`` only when using suitable phased genotypes. Single-cell analysis
+checks genotypes automatically unless explicitly set to ``--unphased``.
 
 **What VCF formats does WASP2 support?**
 
@@ -43,9 +44,9 @@ Multi-sample VCFs are supported; use ``-s SAMPLE_ID`` to specify the target samp
 
 **Can I use an unphased VCF?**
 
-The counting step (``wasp2-count``) will still run but the allele assignments will
-be arbitrary. The statistical results will have reduced power and increased false
-positives. Always use phased genotypes when possible.
+Yes. REF and ALT counts remain defined by the variant alleles. Use unphased
+inference when haplotype phase is unavailable; this marginalizes possible
+orientations rather than treating arbitrary assignments as known phase.
 
 **My BAM doesn't have read groups. Will WASP2 work?**
 
@@ -76,27 +77,25 @@ parallelization automatically.
 
 **What is the ``--region`` flag for?**
 
-Restrict counting to a specific genomic region (e.g., ``chr1:1000000-2000000``).
-Useful for testing on a subset of data or for chromosome-level parallelization.
+Supply a region **file**, such as ``peaks.bed`` or ``genes.gtf``, to restrict
+and annotate overlapping variants. ``--region`` is not a ``chr:start-end``
+interval string. Single-cell region input uses BED peaks.
 
 Single-Cell
 -----------
 
 **What single-cell chemistries are supported?**
 
-All 10x Genomics Chromium chemistries (scRNA v1/v2/v3, scATAC v1/v2) and any
-other protocol with a cell barcode tag in the BAM (CB tag by default). See
-:doc:`user_guide/single_cell` for barcode format details.
+The validated workflow is scATAC-seq with a barcode-tagged BAM. The current
+counter does not implement UMI-aware molecule counting for scRNA-seq.
+See :doc:`user_guide/single_cell` for barcode files and supported outputs.
 
 **Do I need Cell Ranger output?**
 
-No, but it is the most common input. WASP2 needs:
-
-* A BAM with cell barcodes in a BAM tag (default: ``CB``)
-* A whitelist of valid barcodes (optional but recommended)
-* A phased VCF
-
-Any aligner that produces CB-tagged BAMs will work (STARsolo, Alevin-fry, etc.).
+No. Counting requires a sorted, indexed BAM with cell barcodes in a tag
+(default ``CB``), donor variants, and a one-column barcode whitelist.
+Analysis uses a separate two-column barcode-to-group mapping. Fragment
+coordinates alone cannot provide REF/ALT base evidence.
 
 **How do I get per-cell-type results?**
 
@@ -110,8 +109,8 @@ Output and Results
 **What does the p-value in the output represent?**
 
 The p-value comes from a likelihood ratio test comparing the beta-binomial model
-under allelic imbalance vs. the null model of balanced expression. The test is
-calibrated for the overdispersion typical of RNA-seq count data.
+under allelic imbalance vs. the null model of balanced expression. The model
+estimates overdispersion from the supplied counts.
 
 **What FDR threshold should I use?**
 
@@ -123,10 +122,9 @@ See :doc:`user_guide/analysis` for the BH procedure and the NaN-propagation warn
 
 Common causes:
 
-* Low coverage at heterozygous sites (increase ``--min_count``)
+* Low coverage at heterozygous sites (inspect depth and the minimum-count threshold)
 * Too few heterozygous variants in the VCF
 * VCF and BAM use different chromosome naming conventions (``chr1`` vs ``1``)
-* VCF is not phased
 
 **My output has too many significant sites (inflated FDR).**
 
@@ -139,7 +137,7 @@ Yes. WASP2 counting applies only the unmapped filter (see :doc:`methods/mapping_
 "Canonical Filter Contract"); it does **not** correct reference mapping bias
 on its own. You must run ``wasp2-map make-reads`` + re-alignment +
 ``wasp2-map filter-remapped`` first, then pass the resulting
-``*_wasp_filt_rmdup.bam`` to ``wasp2-count``. Counting on raw BWA output
+final filtered BAM to ``wasp2-count``. Counting on raw BWA output
 leaves reference bias uncorrected — reads carrying the alt allele are
 systematically under-represented.
 

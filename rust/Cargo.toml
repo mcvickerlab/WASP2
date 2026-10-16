@@ -2,6 +2,11 @@
 name = "wasp2"
 version = "1.5.0"
 edition = "2021"
+rust-version = "1.88"
+description = "Allele-specific analysis of next-generation sequencing data"
+license = "MIT"
+repository = "https://github.com/mcvickerlab/WASP2"
+documentation = "https://mcvickerlab.github.io/WASP2/"
 
 [lib]
 name = "wasp2_rust"
@@ -9,13 +14,12 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 pyo3 = { version = "0.29", features = ["extension-module"] }
-rust-htslib = { version = "1.0", default-features = false }  # Keep stable version (0.47+ has NFS build issues)
+rust-htslib = { version = "1.0", default-features = false }
 rayon = "1.8"
 anyhow = "1.0"
 rustc-hash = "2.1"
 statrs = "0.18"
-rv = "0.19"
-coitrees = "0.4"  # Fast interval tree for BAM-BED intersection (15-30x faster than pybedtools)
+coitrees = "0.4"  # Interval tree for BAM-BED intersection
 crossbeam-channel = "0.5"  # Fast MPMC channels for parallel FASTQ writing
 gzp = { version = "2.0", default-features = false, features = ["deflate_default"] }  # Parallel gzip compression
 itoa = "1.0" # Fast integer-to-ascii for FASTQ/sidecar writing
@@ -23,10 +27,10 @@ smallvec = "1.13" # Reduce heap allocs for small overlap/span vectors
 
 # VCF/BCF parsing (noodles - pure Rust, no C dependencies)
 # Note: noodles-bcf depends on noodles-vcf, so we use compatible versions
-noodles-vcf = "0.84"   # Updated from 0.72
-noodles-bcf = "0.82"   # Updated to match noodles-vcf
-noodles-core = "0.19"  # Core types remain stable
-noodles-bgzf = "0.35"  # Updated for compatibility
+noodles-vcf = "0.84"
+noodles-bcf = "0.82"
+noodles-core = "0.19"
+noodles-bgzf = "0.35"
 flate2 = "1.1"         # For gzip decompression
 
 [dev-dependencies]
@@ -35,11 +39,6 @@ tempfile = "3.25"
 
 [build-dependencies]
 pyo3-build-config = "0.29"
-
-# Benchmarks removed for clean release (benchmark files in paper branch only)
-# [[bench]]
-# name = "mapping_filter_bench"
-# harness = false
 
 [profile.release]
 debug = true  # Enable debug symbols for profiling

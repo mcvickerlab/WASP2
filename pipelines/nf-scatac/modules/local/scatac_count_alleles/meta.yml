@@ -55,7 +55,7 @@ output:
   - counts:
       type: file
       description: Per-cell fragment overlap counts at SNP positions (barcode, chrom, pos, ref, alt, overlap_count)
-      pattern: "*_allele_counts.tsv"
+      pattern: "*_fragment_coverage.tsv"
   - stats:
       type: file
       description: Counting statistics summary (total_barcodes, total_snps, total_fragment_overlaps)

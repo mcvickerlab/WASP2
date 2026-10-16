@@ -38,8 +38,8 @@ WASP2 is a hybrid Python/Rust project. You'll need both toolchains to build from
 
 | Requirement | Version | Notes |
 |-------------|---------|-------|
-| Python | 3.10+ | 3.10, 3.11, 3.12 supported (conda env uses 3.11) |
-| Rust | 1.70+ | Edition 2021 |
+| Python | 3.10+ | 3.10, 3.11, 3.12, 3.13 tested (conda env uses 3.11) |
+| Rust | 1.88+ | Edition 2021 |
 | Git | 2.0+ | For version control |
 | C compiler | gcc/clang | Required for native extensions |
 
@@ -50,7 +50,7 @@ WASP2 is a hybrid Python/Rust project. You'll need both toolchains to build from
 1. **Clone the repository:**
 
    ```bash
-   git clone https://github.com/mcvickerlab/WASP2.git
+   git clone --branch dev https://github.com/mcvickerlab/WASP2.git
    cd WASP2
    ```
 
@@ -66,7 +66,7 @@ WASP2 is a hybrid Python/Rust project. You'll need both toolchains to build from
    ```bash
    python -m venv .venv
    source .venv/bin/activate  # Linux/macOS
-   pip install -e ".[dev]"    # Includes maturin and dev tools
+   pip install -e ".[dev,docs]"    # Includes development and documentation tools
    ```
 
 3. **Install the Rust toolchain** (if not already installed):

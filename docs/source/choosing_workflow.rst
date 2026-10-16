@@ -1,7 +1,8 @@
 Choosing the Right Workflow
 ===========================
 
-WASP2 supports four major data types. Use this guide to find your workflow.
+WASP2 supports bulk RNA-seq, bulk ATAC-seq, and barcode-based scATAC-seq.
+Use this guide to find your workflow.
 
 .. list-table::
    :header-rows: 1
@@ -12,19 +13,15 @@ WASP2 supports four major data types. Use this guide to find your workflow.
      - Goal
      - Start Here
    * - **Bulk RNA-seq**
-     - BAM + phased VCF
+     - BAM + donor VCF
      - Allele-specific expression (ASE)
      - :doc:`tutorials/bulk_workflow`
    * - **Bulk ATAC-seq**
-     - BAM + phased VCF
+     - BAM + donor VCF
      - Allele-specific chromatin accessibility
      - :doc:`tutorials/bulk_workflow`
-   * - **scRNA-seq (10x)**
-     - Cell Ranger BAM + VCF + barcodes
-     - Per-cell or per-cell-type ASE
-     - :doc:`tutorials/single_cell_workflow`
    * - **scATAC-seq (10x)**
-     - Fragments/BAM + VCF + barcodes
+     - CB-tagged BAM + VCF + barcodes
      - Single-cell allelic imbalance in ATAC peaks
      - :doc:`tutorials/single_cell_workflow`
 
@@ -39,8 +36,8 @@ Decision Flowchart
 **Step 2: Bulk or single-cell RNA-seq?**
 
 * Bulk RNA-seq → :doc:`tutorials/bulk_workflow`
-* 10x Chromium scRNA-seq → :doc:`tutorials/single_cell_workflow`
-* Other single-cell protocol → see :doc:`user_guide/single_cell`
+* Single-cell RNA-seq → the counter does not implement UMI-aware molecule
+  counting; the scATAC tutorial is not an scRNA-seq workflow.
 
 **Step 3: Bulk or single-cell ATAC-seq?**
 
@@ -71,8 +68,9 @@ See :doc:`user_guide/mapping` for the full remapping workflow.
 What VCF Do I Need?
 --------------------
 
-WASP2 requires a **phased VCF** with heterozygous variants for the sample(s)
-you are analyzing. Supported formats:
+WASP2 uses heterozygous variants for the selected samples. Phasing is
+optional: use the phased likelihood only with suitable phased genotypes.
+Supported formats:
 
 * VCF/BCF (bgzip + tabix indexed)
 * PLINK2 PGEN files (with ``.pvar`` + ``.psam``)
@@ -88,7 +86,8 @@ and output publishing, use the bundled Nextflow pipelines instead of the CLI:
 
 * **nf-rnaseq** — bulk RNA-seq allele-specific expression
 * **nf-atacseq** — bulk ATAC-seq allele-specific chromatin accessibility
-* **nf-scatac** — single-cell ATAC-seq allelic imbalance
+* **nf-scatac** — scATAC coverage workflow; see its documentation for the
+  current BAM/inference limitations
 * **nf-outrider** — outlier expression detection with allele-aware correction
 
 See the pipeline-specific documentation for samplesheet format and parameter

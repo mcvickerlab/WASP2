@@ -60,12 +60,6 @@ position-dependent (see :doc:`/methods/mapping_filter` and [vandeGeijn2015]_).
    the original alignment. A different scoring function invalidates the
    filter contract.
 
-Filter rates are **approximately** 1–10% of SNP-overlapping reads dropped
-(developer experience; varies by sequencing platform, aligner, and variant
-density). Outlier rates should be investigated — they typically signal
-CNVs, aligner-version mismatch, or variant-call errors rather than a WASP
-failure.
-
 Step 2 — Count alleles
 ----------------------
 
@@ -115,38 +109,32 @@ Benjamini–Hochberg (:doc:`/user_guide/analysis`).
 ``--phased`` applies only when the VCF GT field uses ``0|1`` / ``1|0``; pass
 it off for unphased data.
 
-Output columns: ``region``, ``num_snps``, aggregated ``ref_count`` /
-``alt_count``, ``pval``, ``fdr_pval``, ``mu``, ``effect_size``
-(:math:`\log_2(\text{ref/alt})`).
+Output columns: ``region``, ``snp_count``, aggregated ``ref_count`` /
+``alt_count``, ``pval``, ``fdr_pval``, ``mu``, ``null_ll``, and ``alt_ll``.
+The bulk route also writes total count ``N`` and likelihood-ratio statistic
+``lrt``. Cohort outputs add donor and provenance information.
 
 Filtering and interpretation
 ----------------------------
-
-.. code-block:: bash
-
-   # FDR < 0.05 and |log2FC| > 1
-   awk -F'\t' 'NR==1 || ($5 < 0.05 && ($6 > 1 || $6 < -1))' \
-     ai_results.tsv > significant_ase.tsv
-
-Monoallelic expression (ref fraction > 0.9 or < 0.1) is a common hallmark of
-genomic imprinting on RNA-seq and of strong cis-regulatory variants on ATAC.
-
-eQTL integration (RNA-seq only)
--------------------------------
 
 .. code-block:: python
 
    import pandas as pd
 
-   ase = pd.read_csv('ai_results.tsv', sep='\t')
-   eqtl = pd.read_csv('gtex_eqtl.tsv', sep='\t')
+   results = pd.read_csv('ai_results.tsv', sep='\t')
+   significant = results.loc[results['fdr_pval'] < 0.05]
+   significant.to_csv('significant_ai.tsv', sep='\t', index=False)
 
-   merged = ase.merge(eqtl, left_on='region', right_on='gene_id')
+``mu`` is a fitted proportion in the model's regional orientation. In the
+unphased model, the first SNP anchors that orientation; subsequent SNPs
+are averaged over possible orientations. Phased orientation also depends
+on the selected genotypes. Regional ``mu`` does not identify the REF or
+ALT allele of every constituent SNP.
 
-   # ASE effect_size > 0 => REF allele more expressed.
-   # eQTL slope > 0      => ALT allele increases expression.
-   # Concordance = opposite signs.
-   merged['concordant'] = (merged['effect_size'] > 0) != (merged['slope'] > 0)
+Inspect coverage, genotypes, mapping bias, and copy-number changes before
+drawing biological conclusions. Integrating eQTL results requires matching
+variant identities and explicitly harmonizing effect alleles and haplotypes.
+The sign of ``mu - 0.5`` alone does not establish effect concordance.
 
 Troubleshooting
 ---------------
@@ -169,4 +157,4 @@ See Also
 - :doc:`/user_guide/analysis` — analysis CLI reference
 - :doc:`/methods/mapping_filter` — canonical WASP filter contract
 - :doc:`/user_guide/analysis` — analysis CLI + defaults + contracts
-- :doc:`/tutorials/single_cell_workflow` — single-cell RNA-seq / ATAC-seq
+- :doc:`/tutorials/single_cell_workflow` — single-cell ATAC-seq

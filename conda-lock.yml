@@ -13,8 +13,8 @@
 version: 1
 metadata:
   content_hash:
-    linux-64: 2881080b4f148b9c6bda70b6ed38695b20edd70e3d7d8abc465d218ceb78ef1f
-    osx-64: 9ceab0a4b044cdc738244ea38c22799aa223511023039a8757680246fae841ef
+    linux-64: bb05ae664cf9071c5d535fcaa891330ef6f0682ccc971f598a0457b78816e150
+    osx-64: 88e11e31b2d33d94f6c2834de4ee7908ebd89cd666ee28fd01489c60801ff44e
   channels:
   - url: conda-forge
     used_env_vars: []
@@ -2816,38 +2816,38 @@ package:
   category: main
   optional: false
 - name: llvmlite
-  version: 0.47.0
+  version: 0.45.1
   manager: conda
   platform: linux-64
   dependencies:
     __glibc: '>=2.17,<3.0.a0'
     libgcc: '>=14'
     libstdcxx: '>=14'
-    libzlib: '>=1.3.2,<2.0a0'
+    libzlib: '>=1.3.1,<2.0a0'
     python: '>=3.11,<3.12.0a0'
     python_abi: 3.11.*
     zstd: '>=1.5.7,<1.6.0a0'
-  url: https://conda.anaconda.org/conda-forge/linux-64/llvmlite-0.47.0-py311h41a00d4_1.conda
+  url: https://conda.anaconda.org/conda-forge/linux-64/llvmlite-0.45.1-py311h41a00d4_0.conda
   hash:
-    md5: 62d9d69ab00067a2b3cdf60407f4c491
-    sha256: 689cc23dc0f80c008094931aaa54ec229dd9dbabd169e825e13ea262d5e6dade
+    md5: 8f1e63415ecf9e21530b825dbcd843f4
+    sha256: 5529ee8dea19299f574991f39d1995334e1c2979c15736618cd2db0d6fb499e0
   category: main
   optional: false
 - name: llvmlite
-  version: 0.47.0
+  version: 0.45.1
   manager: conda
   platform: osx-64
   dependencies:
-    __osx: '>=11.0'
+    __osx: '>=10.13'
     libcxx: '>=19'
-    libzlib: '>=1.3.2,<2.0a0'
+    libzlib: '>=1.3.1,<2.0a0'
     python: '>=3.11,<3.12.0a0'
     python_abi: 3.11.*
     zstd: '>=1.5.7,<1.6.0a0'
-  url: https://conda.anaconda.org/conda-forge/osx-64/llvmlite-0.47.0-py311h2a7c09c_1.conda
+  url: https://conda.anaconda.org/conda-forge/osx-64/llvmlite-0.45.1-py311hb26b958_0.conda
   hash:
-    md5: 5777950d9751f0f58b20bcb72d4bd327
-    sha256: 307c38ebb38f9436d68ad71a56536c5f1d10e4cc3a388eabb724c9f9524f5ce2
+    md5: 5ee443cfd08cf3f81feda6167204f43a
+    sha256: 0740b6589efe049d93a767779457ff32e189b94238472d1a109acbb0f6feb967
   category: main
   optional: false
 - name: markdown-it-py
@@ -3147,7 +3147,7 @@ package:
   category: main
   optional: false
 - name: numba
-  version: 0.65.1
+  version: 0.62.1
   manager: conda
   platform: linux-64
   dependencies:
@@ -3155,32 +3155,32 @@ package:
     _openmp_mutex: '>=4.5'
     libgcc: '>=14'
     libstdcxx: '>=14'
-    llvmlite: '>=0.47.0,<0.48.0a0'
-    numpy: '>=1.22.3,<2.5,>=1.23,<3'
+    llvmlite: '>=0.45.1,<0.46.0a0'
+    numpy: '>=1.23,<3,>=1.24,<2.4'
     python: '>=3.11,<3.12.0a0'
     python_abi: 3.11.*
-  url: https://conda.anaconda.org/conda-forge/linux-64/numba-0.65.1-py311h3c884d5_1.conda
+  url: https://conda.anaconda.org/conda-forge/linux-64/numba-0.62.1-py311hcdb8226_1.conda
   hash:
-    md5: 89bb99267eee107ffb38f37fba4c973f
-    sha256: 5f6eacaba962cadba6da07756138492291c837cc83ac4d6d51224db6ac596953
+    md5: 1241ccc9ea3f6f8271554ba33a455084
+    sha256: 73b0692e95b677e4bafe9a0a8e09ddf966896c1be1810ec3ffbedf12ec0eb4ac
   category: main
   optional: false
 - name: numba
-  version: 0.65.1
+  version: 0.62.1
   manager: conda
   platform: osx-64
   dependencies:
-    __osx: '>=11.0'
+    __osx: '>=10.13'
     libcxx: '>=19'
-    llvm-openmp: '>=19.1.7'
-    llvmlite: '>=0.47.0,<0.48.0a0'
-    numpy: '>=1.22.3,<2.5,>=1.23,<3'
+    llvm-openmp: '>=19.1.7,>=21.1.7'
+    llvmlite: '>=0.45.1,<0.46.0a0'
+    numpy: '>=1.23,<3,>=1.24,<2.4'
     python: '>=3.11,<3.12.0a0'
     python_abi: 3.11.*
-  url: https://conda.anaconda.org/conda-forge/osx-64/numba-0.65.1-py311h7fce02c_1.conda
+  url: https://conda.anaconda.org/conda-forge/osx-64/numba-0.62.1-py311h70add3f_1.conda
   hash:
-    md5: 801327e8542545ab784f7e804750906d
-    sha256: 5196c330f8c20ac465627504718dc11f78a52d6beaaabafa77c7583d8ae8cf82
+    md5: fcfeac40673d6187d02dc77d239490a3
+    sha256: 732bf09c4c4565a42da729131d6152fb2963e08a2cbd93a993cde8caea97dd8b
   category: main
   optional: false
 - name: numpy
@@ -4819,7 +4819,7 @@ package:
   manager: conda
   platform: linux-64
   dependencies:
-    typing_extensions: ==4.16.0
+    typing_extensions: 4.16.0
   url: https://conda.anaconda.org/conda-forge/noarch/typing-extensions-4.16.0-h69aa097_0.conda
   hash:
     md5: c680b5747e8c4c8f23dca0bb7042a8fc
@@ -4831,7 +4831,7 @@ package:
   manager: conda
   platform: osx-64
   dependencies:
-    typing_extensions: ==4.16.0
+    typing_extensions: 4.16.0
   url: https://conda.anaconda.org/conda-forge/noarch/typing-extensions-4.16.0-h69aa097_0.conda
   hash:
     md5: c680b5747e8c4c8f23dca0bb7042a8fc

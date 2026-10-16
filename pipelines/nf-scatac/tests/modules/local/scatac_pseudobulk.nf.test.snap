@@ -7,7 +7,7 @@
                         {
                             "id": "test_sample"
                         },
-                        "test_sample_pseudobulk_counts.tsv:md5,8dd6eddd02ac9b332e7461893c1f6452"
+                        "test_sample_pseudobulk_coverage.tsv:md5,7aba3b2f98e9feac05e9c2a7c73d199b"
                     ]
                 ],
                 "1": [
@@ -26,7 +26,7 @@
                         {
                             "id": "test_sample"
                         },
-                        "test_sample_pseudobulk_counts.tsv:md5,8dd6eddd02ac9b332e7461893c1f6452"
+                        "test_sample_pseudobulk_coverage.tsv:md5,7aba3b2f98e9feac05e9c2a7c73d199b"
                     ]
                 ],
                 "stats": [

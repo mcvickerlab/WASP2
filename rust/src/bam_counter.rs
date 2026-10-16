@@ -36,7 +36,7 @@ impl BamCounter {
         // Verify BAM file exists
         if !Path::new(&bam_path).exists() {
             return Err(PyErr::new::<pyo3::exceptions::PyFileNotFoundError, _>(
-                format!("BAM file not found: {}", bam_path),
+                format!("BAM file not found: {bam_path}"),
             ));
         }
 
@@ -72,14 +72,12 @@ impl BamCounter {
             // Validate alleles are non-empty
             if ref_allele.is_empty() {
                 return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                    "Empty ref_allele for variant at {}:{}",
-                    chrom, pos
+                    "Empty ref_allele for variant at {chrom}:{pos}"
                 )));
             }
             if alt_allele.is_empty() {
                 return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                    "Empty alt_allele for variant at {}:{}",
-                    chrom, pos
+                    "Empty alt_allele for variant at {chrom}:{pos}"
                 )));
             }
 
@@ -118,8 +116,7 @@ impl BamCounter {
                 .build()
                 .map_err(|e| {
                     PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
-                        "Failed to create thread pool: {}",
-                        e
+                        "Failed to create thread pool: {e}"
                     ))
                 })?
                 .install(|| {
@@ -176,7 +173,7 @@ impl BamCounter {
             return self.process_chromosome_snps(chrom, regions, min_qual, debug_sites);
         }
         let mut bam = bam::IndexedReader::from_path(&self.bam_path).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("Failed to open BAM: {}", e))
+            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("Failed to open BAM: {e}"))
         })?;
 
         let mut seen_reads: FxHashSet<Vec<u8>> = FxHashSet::default();
@@ -236,7 +233,7 @@ impl BamCounter {
                 Err(e) => {
                     skipped_records += 1;
                     if skipped_records <= MAX_SKIP_WARNINGS {
-                        eprintln!("[WARN] Skipped corrupted BAM record on {}: {}", chrom, e);
+                        eprintln!("[WARN] Skipped corrupted BAM record on {chrom}: {e}");
                     }
                     continue;
                 }

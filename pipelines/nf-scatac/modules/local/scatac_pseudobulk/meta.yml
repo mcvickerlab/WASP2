@@ -1,5 +1,5 @@
 name: scatac_pseudobulk
-description: Aggregate per-cell allele counts to pseudo-bulk for statistical analysis
+description: Aggregate per-cell fragment overlap coverage
 keywords:
   - scatac
   - single-cell
@@ -20,8 +20,8 @@ input:
         e.g. [ id:'test', single_end:false ]
   - cell_counts:
       type: file
-      description: Per-cell allele counts TSV from SCATAC_COUNT_ALLELES
-      pattern: "*_allele_counts.tsv"
+      description: Per-cell fragment overlap coverage TSV from SCATAC_COUNT_ALLELES
+      pattern: "*_fragment_coverage.tsv"
 
 output:
   - meta:
@@ -29,8 +29,8 @@ output:
       description: Groovy Map containing sample information
   - counts:
       type: file
-      description: Pseudo-bulk aggregated counts compatible with WASP2_ANALYZE_IMBALANCE
-      pattern: "*_pseudobulk_counts.tsv"
+      description: Aggregated fragment coverage; not valid input to allelic imbalance inference
+      pattern: "*_pseudobulk_coverage.tsv"
   - stats:
       type: file
       description: Aggregation statistics (cells, SNPs, total counts)

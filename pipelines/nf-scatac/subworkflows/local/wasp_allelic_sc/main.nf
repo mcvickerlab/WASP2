@@ -8,7 +8,8 @@
     1. BAM-based (allele-specific): True ref/alt counting with hap1/hap2 layers
     2. Fragment-based (overlap counting): Total coverage at SNP positions
 
-    Includes per-cell counting, AnnData output, and optional pseudo-bulk analysis.
+    Includes per-cell counting, AnnData output, and optional coverage aggregation.
+    This workflow does not run allelic imbalance inference for either input path.
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
 
@@ -18,7 +19,6 @@ include { SCATAC_COUNT_ALLELES          } from '../../../modules/local/scatac_co
 include { SCATAC_CREATE_ANNDATA         } from '../../../modules/local/scatac_create_anndata/main'
 include { SCATAC_ADD_HAPLOTYPE_LAYERS   } from '../../../modules/local/scatac_add_haplotype_layers/main'
 include { SCATAC_PSEUDOBULK             } from '../../../modules/local/scatac_pseudobulk/main'
-include { WASP2_ANALYZE_IMBALANCE       } from '../../../../nf-modules/modules/wasp2/analyze_imbalance/main'
 
 workflow WASP_ALLELIC_SC {
     take:
@@ -65,7 +65,7 @@ workflow WASP_ALLELIC_SC {
         ch_bam_inputs.barcodes,
         ch_bam_inputs.peaks
     )
-    ch_versions = ch_versions.mix(WASP2_COUNT_SC.out.versions.first().ifEmpty([]))
+    ch_versions = ch_versions.mix(WASP2_COUNT_SC.out.versions)
 
     // Add haplotype layers using phased VCF
     if (!params.skip_anndata) {
@@ -74,14 +74,14 @@ workflow WASP_ALLELIC_SC {
             ch_vcf,
             params.create_zarr ?: false
         )
-        ch_versions = ch_versions.mix(SCATAC_ADD_HAPLOTYPE_LAYERS.out.versions.first().ifEmpty([]))
+        ch_versions = ch_versions.mix(SCATAC_ADD_HAPLOTYPE_LAYERS.out.versions)
         ch_anndata = ch_anndata.mix(SCATAC_ADD_HAPLOTYPE_LAYERS.out.anndata)
         ch_cell_qc = ch_cell_qc.mix(SCATAC_ADD_HAPLOTYPE_LAYERS.out.cell_qc)
         ch_zarr = ch_zarr.mix(SCATAC_ADD_HAPLOTYPE_LAYERS.out.zarr)
     }
 
     // For BAM-based, use stats from WASP2_COUNT_SC
-    ch_count_stats = ch_count_stats.mix(WASP2_COUNT_SC.out.stats.ifEmpty([]))
+    ch_count_stats = ch_count_stats.mix(WASP2_COUNT_SC.out.stats)
 
     //==========================================================================
     // PATH 2: Fragment-based overlap counting (total counts only)
@@ -101,7 +101,7 @@ workflow WASP_ALLELIC_SC {
         ch_frag_count_input.barcodes,
         ch_frag_count_input.peaks
     )
-    ch_versions = ch_versions.mix(SCATAC_COUNT_ALLELES.out.versions.first().ifEmpty([]))
+    ch_versions = ch_versions.mix(SCATAC_COUNT_ALLELES.out.versions)
     ch_cell_counts = ch_cell_counts.mix(SCATAC_COUNT_ALLELES.out.counts)
     ch_count_stats = ch_count_stats.mix(SCATAC_COUNT_ALLELES.out.stats)
 
@@ -111,26 +111,24 @@ workflow WASP_ALLELIC_SC {
             SCATAC_COUNT_ALLELES.out.counts,
             params.create_zarr ?: false
         )
-        ch_versions = ch_versions.mix(SCATAC_CREATE_ANNDATA.out.versions.first().ifEmpty([]))
+        ch_versions = ch_versions.mix(SCATAC_CREATE_ANNDATA.out.versions)
         ch_anndata = ch_anndata.mix(SCATAC_CREATE_ANNDATA.out.anndata)
         ch_cell_qc = ch_cell_qc.mix(SCATAC_CREATE_ANNDATA.out.cell_qc)
         ch_zarr = ch_zarr.mix(SCATAC_CREATE_ANNDATA.out.zarr)
     }
 
     //==========================================================================
-    // SHARED: Pseudo-bulk aggregation and statistical analysis
+    // Fragment coverage aggregation (no allele-specific inference)
     //==========================================================================
     if (!params.skip_pseudobulk) {
         // For fragment-based: use TSV counts
         SCATAC_PSEUDOBULK ( SCATAC_COUNT_ALLELES.out.counts )
-        ch_versions = ch_versions.mix(SCATAC_PSEUDOBULK.out.versions.first().ifEmpty([]))
+        ch_versions = ch_versions.mix(SCATAC_PSEUDOBULK.out.versions)
         ch_pseudobulk = ch_pseudobulk.mix(SCATAC_PSEUDOBULK.out.counts)
 
-        WASP2_ANALYZE_IMBALANCE ( SCATAC_PSEUDOBULK.out.counts )
-        ch_versions = ch_versions.mix(WASP2_ANALYZE_IMBALANCE.out.versions.first().ifEmpty([]))
-        ch_imbalance = ch_imbalance.mix(WASP2_ANALYZE_IMBALANCE.out.results)
+        // Fragment coordinates contain no observed alleles and cannot support
+        // allelic imbalance testing. BAM-to-inference aggregation is not yet wired.
 
-        // TODO: Add pseudo-bulk analysis for BAM-based path (aggregate from H5AD)
     }
 
     emit:
@@ -139,7 +137,7 @@ workflow WASP_ALLELIC_SC {
     anndata     = ch_anndata                           // channel: [ val(meta), path(*.h5ad) ]
     zarr        = ch_zarr                              // channel: [ val(meta), path(*.zarr) ]
     cell_qc     = ch_cell_qc                           // channel: [ val(meta), path(cell_qc.tsv) ]
-    pseudobulk  = ch_pseudobulk                        // channel: [ val(meta), path(pseudobulk.tsv) ]
+    pseudobulk  = ch_pseudobulk                        // channel: [ val(meta), path(pseudobulk_coverage.tsv) ]
     imbalance   = ch_imbalance                         // channel: [ val(meta), path(results.tsv) ]
     versions    = ch_versions                          // channel: [ path(versions.yml) ]
 }

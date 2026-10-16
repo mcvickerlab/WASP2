@@ -114,7 +114,8 @@ def get_compared_imbalance(
         raise ValueError("Please provide 2 or more groups to compare.")
 
     # Process initial minimums for whole data dispersion
-    snp_cutoff: int = min_count + (2 * pseudocount)
+    # SNP eligibility removes zero-count observations; min_count applies per region.
+    snp_cutoff: int = 2 * pseudocount
 
     ref_counts: NDArray[np.uint64] = (
         adata.layers["ref"].sum(axis=0, dtype=np.uint64).T.A1 + pseudocount

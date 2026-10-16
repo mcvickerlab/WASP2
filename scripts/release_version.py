@@ -71,11 +71,15 @@ def set_version(version: str, release_date: str) -> None:
     )
     replace_one("pixi.toml", rf'^(version\s*=\s*)"{SEMVER}"', rf'\1"{version}"')
     replace_one("CITATION.cff", rf'^(version:\s*)"{SEMVER}"', rf'\1"{version}"')
-    replace_one(
-        "CITATION.cff",
-        r'^(date-released:\s*)"[0-9]{4}-[0-9]{2}-[0-9]{2}"',
-        rf'\1"{release_date}"',
-    )
+    citation = read("CITATION.cff")
+    date_line = f'date-released: "{release_date}"'
+    if re.search(r"^date-released:.*$", citation, flags=re.MULTILINE):
+        citation = re.sub(r"^date-released:.*$", date_line, citation, flags=re.MULTILINE)
+    else:
+        citation = re.sub(
+            r"^(version:.*)$", rf"\1\n{date_line}", citation, count=1, flags=re.MULTILINE
+        )
+    write("CITATION.cff", citation)
     replace_one("Dockerfile", rf"^(ARG VERSION=){SEMVER}", rf"\g<1>{version}")
     replace_one(
         "Singularity.def",
@@ -109,6 +113,12 @@ def set_version(version: str, release_date: str) -> None:
 def check_version() -> list[str]:
     expected = cargo_version()
     errors: list[str] = []
+
+    lock_match = re.search(
+        r'^name = "wasp2"\nversion = "([^\"]+)"', read("rust/Cargo.lock"), flags=re.MULTILINE
+    )
+    if lock_match is None or lock_match.group(1) != expected:
+        errors.append("rust/Cargo.lock root package version differs from rust/Cargo.toml")
 
     pixi_version = toml_section_version("pixi.toml", "project")
     if pixi_version != expected:

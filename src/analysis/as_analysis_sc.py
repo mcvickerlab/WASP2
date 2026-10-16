@@ -3,7 +3,7 @@
 Provides functions for analyzing allelic imbalance in single-cell data
 stored in AnnData format with SNP counts in layers.
 
-Orientation contract (scverse convention, see ISSUE2_ORIENTATION_DECISION §2b):
+Orientation contract (scverse convention):
 
     obs = cells (barcodes); var = SNPs (variants).
 
@@ -126,7 +126,7 @@ def get_imbalance_sc(
     n_counts = ref_counts + alt_counts
 
     # Calculate dispersion across dataset
-    def opt_disp(rho: float, ref_data: NDArray[np.uint16], n_data: NDArray[np.uint16]) -> float:
+    def opt_disp(rho: float, ref_data: NDArray[np.uint64], n_data: NDArray[np.uint64]) -> float:
         rho_safe = float(clamp_rho(rho))  # Prevent division by zero
         return float(
             -np.sum(

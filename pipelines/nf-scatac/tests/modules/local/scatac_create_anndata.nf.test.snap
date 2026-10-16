@@ -7,7 +7,7 @@
                         {
                             "id": "test_sample_zarr"
                         },
-                        "test_sample_zarr_allelic.h5ad:md5,8b66deaf104c8e17f66cd4632c588a1d"
+                        "test_sample_zarr_coverage.h5ad:md5,8b66deaf104c8e17f66cd4632c588a1d"
                     ]
                 ],
                 "1": [
@@ -36,7 +36,7 @@
                         {
                             "id": "test_sample_zarr"
                         },
-                        "test_sample_zarr_allelic.h5ad:md5,8b66deaf104c8e17f66cd4632c588a1d"
+                        "test_sample_zarr_coverage.h5ad:md5,8b66deaf104c8e17f66cd4632c588a1d"
                     ]
                 ],
                 "cell_qc": [
@@ -76,7 +76,7 @@
                         {
                             "id": "test_sample"
                         },
-                        "test_sample_allelic.h5ad:md5,8b66deaf104c8e17f66cd4632c588a1d"
+                        "test_sample_coverage.h5ad:md5,8b66deaf104c8e17f66cd4632c588a1d"
                     ]
                 ],
                 "1": [
@@ -98,7 +98,7 @@
                         {
                             "id": "test_sample"
                         },
-                        "test_sample_allelic.h5ad:md5,8b66deaf104c8e17f66cd4632c588a1d"
+                        "test_sample_coverage.h5ad:md5,8b66deaf104c8e17f66cd4632c588a1d"
                     ]
                 ],
                 "cell_qc": [

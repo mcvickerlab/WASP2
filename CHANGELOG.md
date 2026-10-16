@@ -5,6 +5,39 @@ All notable changes to WASP2 will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- Restore archived single-cell phasing fallback for mixed phased/unphased
+  genotypes and require the native counter for normal single-cell counting.
+- Reject overflowing bulk count, threshold, pseudocount and regional-total
+  arithmetic instead of wrapping UInt32 values.
+- Preserve feature membership and zero-valued analysis parameters in Nextflow
+  wrappers; restore RNA annotation input. Fragment-only scATAC outputs represent
+  coverage and no longer enter allelic inference without allele observations.
+- Run native Nextflow process regressions and restore actual single-cell
+  pipeline test discovery in CI.
+- Correct tutorials, output schemas and installation guidance; remove obsolete
+  planning/audit reports and empty test placeholders.
+- Align the declared Rust minimum and environment locks with supported builds,
+  validate the root Cargo lockfile version, declare CMake for source builds,
+  and update release SIF setup.
+- Compare validation count columns exactly before floating-point conversion,
+  including UInt64 values above 2**53. Distinguish archived narrow CSV input
+  from explicitly widened reference counts; retain strict legacy discrepancies.
+- Document Rust counting/bulk inference and Python/SciPy single-cell inference,
+  and correct the single-cell AnnData axes. Precision regressions cover balanced
+  likelihoods, overflow and conditional unphased symmetry.
+- Single-cell sparse counts and totals use UInt64 so H5AD output preserves values
+  above 65,535. Metadata conversion no longer requires an undeclared PyArrow install.
+- Automatic single-sample selection now applies the same heterozygote filtering
+  and feature reindexing as explicit selection, correcting inherited Python behavior.
+- Single-cell counting normalizes repeated, comma-separated and file-based sample options.
+- Shared-SNP differential analysis applies minimum depth per region, as archived
+  Python did. Unphased Python likelihoods preserve its sequential arithmetic while
+  retaining log-space fallback for underflow. Expanded comparisons explicitly widen
+  the archive's UInt16 accumulators; this also avoids incidental float32 dispatch.
+- Restore archived exon/transcript/gene annotation priority and parent-grouping
+  CLI aliases through the Rust bulk backend. Parse final GFF3 attributes without
+  requiring a trailing semicolon and reject missing feature or parent identifiers
+  before writing BED intervals.
 - Donor feature deduplication uses the parsed first GT allele, as Python does.
   Original GT tokens remain available for the backend's pre-dedup phasing
   decision; fitting weights, raw counts, QC and provenance reflect retained rows.
@@ -15,8 +48,8 @@ All notable changes to WASP2 will be documented in this file.
   checks, parses numeric first alleles consistently, and rejects malformed mixed
   phased input instead of silently changing a region's likelihood. Interior
   dispersion values are no longer clipped to the endpoint regularization range.
-- Full 32-run public ATAC comparisons execute archived Python in pinned Linux
-  CI, including CLI inference and donor routes. Heterogeneous donor checks cover
+- Full 32-run public ATAC comparisons execute archived Python on wide-integer
+  DataFrames in pinned Linux CI; narrow CSV precision is checked separately, including CLI inference and donor routes. Heterogeneous donor checks cover
   both dispersion models, phasing modes and pseudocounts with independent fits.
 - Container checks exercise reordered ATAC headers, region grouping, phased
   likelihoods and raw counts. Images carry package-version and source-revision
@@ -57,7 +90,7 @@ All notable changes to WASP2 will be documented in this file.
 - Integrate the raw-count and single-cell layout compatibility fixes from #135.
   Exact-SNV requests are rejected rather than switching the p-value method.
 
-## [1.5.0] - 2026-07-21
+### Additional changes planned for 1.5.0
 
 ### Added
 - `wasp2-count count-cohort` for one-final-BAM-per-donor bulk counting with explicit
@@ -69,7 +102,7 @@ All notable changes to WASP2 will be documented in this file.
   correction, manifest pinning, and non-overwriting result, dispersion, QC, and provenance files.
 - `--per-variant` / `--snv-solo` for independent SNV tests and explicit `--region_col` support
   for feature- or peak-level aggregation.
-- A Rust single-cell ATAC allele counter with chromosome-parallel execution and Python fallback.
+- A Rust single-cell ATAC allele counter with chromosome-parallel execution.
 
 ### Changed
 - VCF conversion now selects biallelic SNVs by default; multi-allelic records require the

@@ -59,4 +59,30 @@ nextflow_process {
             )
         }
     }
+    test("Preserves zero minimum count and zero pseudocount") {
+        tag "correctness_regression"
+        when {
+            params {
+                min_count = 0
+                pseudocount = 0
+            }
+            process {
+                """
+                def counts_file = file("${workDir}/zero_counts.tsv")
+                counts_file.text = '''chrom\tpos\tref\talt\tGT\tregion\tref_count\talt_count\tother_count\nchr1\t100\tA\tG\t0|1\tlow_depth\t1\t1\t0\n'''
+                input[0] = [[id:'zero_test'], counts_file]
+                """
+            }
+        }
+        then {
+            assert process.success
+            def rows = path(process.out.results[0][1]).readLines()
+            assert rows.size() == 2
+            def result = [rows[0].split('\t'), rows[1].split('\t')].transpose().collectEntries()
+            assert result.region == 'low_depth'
+            assert result.N == '2'
+            assert Math.abs(result.null_ll.toDouble() - Math.log(0.5)) < 0.02
+        }
+    }
+
 }

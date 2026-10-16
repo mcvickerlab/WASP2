@@ -1,10 +1,10 @@
 name: "scatac_create_anndata"
-description: Convert per-cell allele counts to AnnData H5AD format for scverse ecosystem
+description: Convert per-cell fragment overlap coverage to AnnData H5AD format
 keywords:
   - scatac
   - anndata
   - single-cell
-  - allelic-imbalance
+  - fragment-coverage
   - h5ad
   - zarr
 tools:
@@ -21,15 +21,15 @@ input:
         e.g. [ id:'test', chemistry:'10x-atac-v2' ]
   - counts:
       type: file
-      description: TSV file with per-cell allele counts
-      pattern: "*_allele_counts.tsv"
+      description: TSV file with per-cell fragment overlap coverage
+      pattern: "*_fragment_coverage.tsv"
   - create_zarr:
       type: boolean
       description: Whether to also create Zarr output for GenVarLoader
 output:
   - anndata:
       type: file
-      description: AnnData H5AD file with sparse allele count matrices
+      description: AnnData H5AD file with X containing coverage (cells by SNPs), without allele-specific layers
       pattern: "*.h5ad"
   - zarr:
       type: directory

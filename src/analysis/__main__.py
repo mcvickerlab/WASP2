@@ -149,7 +149,7 @@ def find_imbalance(
             "--parent",
             help=(
                 "Report allelic imbalance by parent group instead of feature level in RNA-seq counts. "
-                "Name of parent column. Not valid if no parent column or if using ATAC-seq peaks. "
+                "Name of parent column; groups SNPs in Rust before deduplication and fitting. "
                 "(Default: Report by feature level instead of parent level)"
             ),
         ),
@@ -306,9 +306,7 @@ def find_imbalance_sc(
     try:
         from .run_analysis_sc import run_ai_analysis_sc
     except (ImportError, ModuleNotFoundError) as error:
-        raise typer.BadParameter(
-            "Single-cell analysis requires: pip install 'wasp2[single-cell]'"
-        ) from error
+        raise typer.BadParameter("Single-cell analysis requires: pip install wasp2") from error
 
     run_ai_analysis_sc(
         count_file=counts,
@@ -404,9 +402,7 @@ def compare_imbalance(
     try:
         from .run_compare_ai import run_ai_comparison
     except (ImportError, ModuleNotFoundError) as error:
-        raise typer.BadParameter(
-            "Single-cell comparison requires: pip install 'wasp2[single-cell]'"
-        ) from error
+        raise typer.BadParameter("Single-cell comparison requires: pip install wasp2") from error
 
     run_ai_comparison(
         count_file=counts,

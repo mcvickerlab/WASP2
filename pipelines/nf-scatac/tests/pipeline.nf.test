@@ -1,0 +1,65 @@
+nextflow_pipeline {
+
+    name "Test Pipeline nf-scatac"
+    script "../main.nf"
+
+    tag "pipeline"
+    tag "scatac"
+
+    test("nf-scatac - stub run") {
+
+        tag "ci_stub"
+
+        options "-stub"
+
+        when {
+            params {
+                // nf-test launches outside the checkout. Resolve the repository
+                // fixture paths in a temporary samplesheet for that launch.
+                def samplesheet = path("${outputDir}/samplesheet.csv").toFile()
+                samplesheet.parentFile.mkdirs()
+                samplesheet.text = path("${projectDir}/tests/stub/samplesheet.csv").toFile().text.replace(
+                    'tests/stub/', "${projectDir}/tests/stub/"
+                )
+                input = samplesheet.toString()
+                outdir = "$outputDir"
+            }
+        }
+
+        then {
+            assertAll(
+                { assert workflow.success },
+                { assert path("${outputDir}/fragment_coverage/test_sample_fragment_coverage.tsv").exists() },
+                { assert path("${outputDir}/anndata/test_sample_coverage.h5ad").exists() },
+                { assert path("${outputDir}/pseudobulk/test_sample_pseudobulk_coverage.tsv").exists() },
+                { assert !path("${outputDir}/imbalance").exists() }
+            )
+        }
+    }
+
+    test("nf-scatac - integration run - real data") {
+
+        tag "integration"
+
+        when {
+            params {
+                input                  = "${projectDir}/tests/data/samplesheet_test.csv"
+                vcf                    = "${projectDir}/tests/data/variants.vcf.gz"
+                outdir                 = "${outputDir}/results_integration"
+                min_fragments_per_cell = 1
+                min_cells_per_snp      = 1
+                min_count              = 1
+                skip_pseudobulk        = true
+            }
+        }
+
+        then {
+            assertAll(
+                { assert workflow.success },
+                { assert workflow.out.anndata != null },
+                { assert path("${outputDir}/results_integration").exists() },
+                { assert snapshot(workflow.trace.tasks().size()).match("integration_task_count") }
+            )
+        }
+    }
+}
