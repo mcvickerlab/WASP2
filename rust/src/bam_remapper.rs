@@ -2025,7 +2025,7 @@ mod tests {
             .unwrap()
             .unwrap();
             assert_eq!(output.len(), expected_pairs * 2);
-            for (index, pair) in output.chunks_exact(2).enumerate() {
+            for (index, pair) in output.as_chunks::<2>().0.iter().enumerate() {
                 let base = format!("test_read_WASP_100_200_{}_{}", index + 1, expected_pairs);
                 assert_eq!(pair[0].name, format!("{base}/1").as_bytes());
                 assert_eq!(pair[1].name, format!("{base}/2").as_bytes());
