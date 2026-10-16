@@ -249,3 +249,38 @@ def test_untouched_archive_balanced_precision_defect_is_reported(tmp_path):
     assert float(narrow.pval.iloc[0]) < 0.9999
     assert float(wide.pval.iloc[0]) == 1.0
     assert compare_frames(narrow, wide)["status"] == "FAIL"
+
+
+@pytest.mark.rust
+@pytest.mark.parametrize("ref_count,alt_count,pc", [(40000, 40000, 1), (65536, 65537, 0)])
+def test_wide_bulk_counts_preserve_raw_outputs_and_fitting_depth(
+    tmp_path, ref_count, alt_count, pc
+):
+    import wasp2_rust
+
+    path = tmp_path / "counts.tsv"
+    pd.DataFrame(
+        {
+            "chrom": ["chr1"],
+            "pos": [101],
+            "ref": ["A"],
+            "alt": ["G"],
+            "region": ["peak"],
+            "ref_count": [ref_count],
+            "alt_count": [alt_count],
+        }
+    ).to_csv(path, sep="\t", index=False)
+    rho = 0.1
+    result = wasp2_rust.analyze_imbalance_run(
+        str(path), method="single", min_count=0, pseudocount=pc, region_col="region", rho=rho
+    )["results"][0]
+    assert (result["ref_count"], result["alt_count"], result["N"]) == (
+        ref_count,
+        alt_count,
+        ref_count + alt_count,
+    )
+    shape = 0.5 * (1 - rho) / rho
+    expected_null = betabinom.logpmf(
+        np.uint64(ref_count + pc), np.uint64(ref_count + alt_count + 2 * pc), shape, shape
+    )
+    assert result["null_ll"] == pytest.approx(expected_null, abs=1e-9, rel=1e-9)
