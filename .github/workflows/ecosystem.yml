@@ -73,6 +73,14 @@ jobs:
       - uses: nf-core/setup-nf-test@f2db585128ae681918440f6c074dededeceadce1  # v1
         with:
           version: "0.9.2"
+      - name: Set up Python for single-cell H5AD stubs
+        if: matrix.pipeline == 'nf-scatac'
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: "3.11"
+      - name: Install single-cell stub dependencies
+        if: matrix.pipeline == 'nf-scatac'
+        run: python -m pip install "pandas>=1.5,<3.0" "scipy>=1.10" "anndata>=0.8,<0.12"
       - name: Run pipeline compatibility test
         run: |
           test_file=tests/main.nf.test
