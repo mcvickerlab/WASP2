@@ -43,12 +43,12 @@ jobs:
             zlib1g-dev \
             libssl-dev \
             pkg-config \
-            libclang-dev
+            libclang-dev samtools bcftools bedtools bwa
 
       - name: Install system dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install htslib xz bzip2 openssl@3 pkg-config llvm@19
+          brew install htslib xz bzip2 openssl@3 pkg-config llvm@19 samtools bcftools bedtools bwa
 
       - name: Set macOS library paths
         if: runner.os == 'macOS'
@@ -93,6 +93,8 @@ jobs:
           cd /tmp
           /tmp/wasp2-wheel/bin/python -c "import wasp2_rust; print(wasp2_rust.__file__)"
           /tmp/wasp2-wheel/bin/wasp2-count count-cohort --help
+          export PATH="/tmp/wasp2-wheel/bin:$PATH"
+          bash "$GITHUB_WORKSPACE/scripts/container_smoke_test.sh"
 
       - name: Upload wheel artifact
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6

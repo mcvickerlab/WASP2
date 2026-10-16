@@ -67,10 +67,19 @@
     </outputs>
 
     <tests>
-        <test expect_num_outputs="1">
-            <param name="remapped_bam" value="remapped.bam"/>
-            <param name="to_remap_bam" value="test.bam"/>
+        <test expect_num_outputs="3">
+            <param name="remapped_bam" value="mapping_remapped.bam"/>
+            <param name="to_remap_bam" value="mapping.bam"/>
             <param name="keep_bam" value="test.bam"/>
+            <section name="advanced">
+                <param name="output_keep_info" value="true"/>
+            </section>
+            <output name="kept_reads_list" ftype="txt">
+                <assert_contents>
+                    <has_n_lines n="1"/>
+                    <has_text text="pairR"/>
+                </assert_contents>
+            </output>
             <output name="filtered_bam" ftype="bam">
                 <assert_contents>
                     <has_size min="100"/>

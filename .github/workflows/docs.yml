@@ -33,7 +33,7 @@ jobs:
         uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306  # v5.0.3
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-docs-${{ hashFiles('pyproject.toml') }}
+          key: ${{ runner.os }}-pip-docs-${{ hashFiles('docs/requirements.txt') }}
           restore-keys: ${{ runner.os }}-pip-docs-
 
       - name: Install pandoc
@@ -44,29 +44,25 @@ jobs:
       - name: Install documentation dependencies
         run: |
           pip install --upgrade pip
-          # Install docs extras directly (avoids building the Rust extension)
-          pip install \
-            "sphinx>=7.0" \
-            "pydata-sphinx-theme>=0.15" \
-            "sphinx-autodoc-typehints>=1.25" \
-            "nbsphinx>=0.9" \
-            "myst-parser>=2.0" \
-            "sphinx-copybutton>=0.5" \
-            "sphinx-design>=0.5" \
-            "ipython>=8.0" \
-            "tomli>=2.0; python_version < '3.11'"
-          # Install core Python deps needed by autodoc (Rust ext is mocked in conf.py)
-          pip install \
-            "numpy>=1.21" \
-            "pandas>=1.5,<3.0" \
-            "polars>=0.19" \
-            "scipy>=1.10" \
-            "typer>=0.12" \
-            "rich>=13.0"
+          pip install -r docs/requirements.txt
 
       - name: Build Sphinx documentation
         working-directory: docs
-        run: make html
+        run: make html SPHINXOPTS="-W --keep-going"
+
+      - name: Verify API documentation was imported
+        run: |
+          python - <<'PYDOCS'
+          from pathlib import Path
+          for page, anchors in {
+              "counting": ["counting.count_alleles.make_count_df", "counting.run_counting_cohort.run_count_cohort"],
+              "analysis": ["analysis.as_analysis.get_imbalance"],
+              "mapping": ["mapping.__main__.make_reads"],
+          }.items():
+              html = Path(f"docs/build/html/api/{page}.html").read_text()
+              for anchor in anchors:
+                  assert f'id="{anchor}"' in html, anchor
+          PYDOCS
 
       - name: Upload artifact
         if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'

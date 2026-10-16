@@ -161,6 +161,9 @@ def make_count_df(bam_file: str, df: pl.DataFrame, use_rust: bool = True) -> pl.
         orient="row",
     )
 
+    # Older supported Polars releases require identical join-key dtypes.
+    # Preserve the caller's position dtype rather than relying on coercion.
+    count_df = count_df.with_columns(pl.col("pos").cast(df.schema["pos"]))
     df = df.with_columns([pl.col("chrom").cast(chrom_enum)]).join(
         count_df, on=["chrom", "pos"], how="left"
     )

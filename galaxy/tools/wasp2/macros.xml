@@ -52,6 +52,7 @@
         <param argument="--samples" type="text" value="" optional="true"
                label="Sample name(s)"
                help="One or more samples to use from variant file. Comma-separated or leave empty for all samples.">
+            <validator type="regex" message="Use sample names containing letters, digits, periods, underscores or hyphens, separated by commas.">^([A-Za-z0-9_.-]+(,[A-Za-z0-9_.-]+)*)?$</validator>
             <expand macro="sanitize_sample"/>
         </param>
     </xml>
@@ -60,6 +61,7 @@
         <param argument="--samples" type="text"
                label="VCF sample name(s)"
                help="One or more phased samples from the variant file, separated by commas.">
+            <validator type="regex" message="Use sample names containing letters, digits, periods, underscores or hyphens, separated by commas.">^([A-Za-z0-9_.-]+(,[A-Za-z0-9_.-]+)*)?$</validator>
             <expand macro="sanitize_sample"/>
         </param>
     </xml>
@@ -82,13 +84,14 @@
                help="Process indels in addition to SNPs"/>
     </xml>
 
-    <!-- Sanitizer for sample names (letters, digits, underscore, hyphen, comma) -->
+    <!-- Sanitizer for sample names (letters, digits, underscore, hyphen, dot, comma) -->
     <xml name="sanitize_sample">
         <sanitizer invalid_char="">
             <valid initial="string.letters,string.digits">
                 <add value="_"/>
                 <add value="-"/>
                 <add value=","/>
+                <add value="."/>
             </valid>
         </sanitizer>
     </xml>

@@ -412,34 +412,61 @@ class PGENSource(VariantSource):
         samples: list[str] | None = None,
         het_only: bool = True,
         include_genotypes: bool = True,
+        include_indels: bool = False,
+        max_indel_len: int = 10,
+        biallelic_only: bool = True,
     ) -> Path:
-        """Export variants to BED format file.
+        """Export one BED row per variant, preserving sample order and phase.
 
-        BED format uses 0-based start, 1-based end coordinates.
-
-        Args:
-            output: Output BED file path
-            samples: Optional list of sample IDs to include
-            het_only: If True, only export heterozygous variants
-            include_genotypes: If True, include genotype column
-
-        Returns:
-            Path to the created BED file
+        Genotypes use VCF allele indices, as in VCFSource. Unphased calls retain
+        ``/``; they must not acquire invented haplotype orientation on export.
+        With no sample selection, emit sites without genotype columns.
         """
         output_path = Path(output)
-
-        with open(output_path, "w") as f:
-            for vg in self.iter_variants(samples=samples, het_only=het_only):
-                # Write BED line: chrom, start (0-based), end (1-based), ref, alt
-                line = vg.variant.to_bed_line()
-
-                # Add genotype if requested
+        selected = [self.get_sample_idx(sample) for sample in samples] if samples else []
+        subset = sorted(set(selected))
+        if samples is not None and not selected:
+            raise ValueError("Select at least one PGEN sample")
+        if subset:
+            self._reader.change_sample_subset(np.asarray(subset, dtype=np.uint32))
+        positions = {sample: index for index, sample in enumerate(subset)}
+        alleles = np.empty(2 * len(subset), dtype=np.int32)
+        phase = np.empty(len(subset), dtype=np.uint8)
+        with output_path.open("w") as handle:
+            for variant_idx in range(self.variant_count):
+                row = self._pvar_df.iloc[variant_idx]
+                ref, alt = str(row["REF"]), str(row["ALT"])
+                alternatives = alt.split(",")
+                if biallelic_only and len(alternatives) != 1:
+                    continue
+                if not include_indels and any(len(base) != 1 for base in [ref, *alternatives]):
+                    continue
+                if include_indels and any(
+                    abs(len(ref) - len(base)) > max_indel_len for base in alternatives
+                ):
+                    continue
+                genotype_columns = []
+                if selected:
+                    self._reader.read_alleles_and_phasepresent(variant_idx, alleles, phase)
+                    if het_only and not any(
+                        alleles[2 * i] >= 0
+                        and alleles[2 * i + 1] >= 0
+                        and alleles[2 * i] != alleles[2 * i + 1]
+                        for i in range(len(subset))
+                    ):
+                        continue
+                    for sample in selected:
+                        index = positions[sample]
+                        left, right = alleles[2 * index : 2 * index + 2]
+                        separator = "|" if phase[index] else "/"
+                        genotype_columns.append(
+                            f"{left}{separator}{right}" if left >= 0 and right >= 0 else "./."
+                        )
+                pos = int(row["POS"])
+                fields = [str(row["CHROM"]), str(pos - 1), str(pos - 1 + len(ref)), ref, alt]
                 if include_genotypes:
-                    gt_str = self._genotype_to_string(vg.genotype)
-                    line += f"\t{gt_str}"
-
-                f.write(line + "\n")
-
+                    fields.extend(genotype_columns)
+                handle.write("\t".join(fields) + "\n")
         return output_path
 
     def _normalize_chrom(self, chrom: str) -> str:

@@ -6,8 +6,10 @@
 # ============================================================================
 # Stage 1: Install cargo-chef
 # ============================================================================
-FROM rust:1.88-bookworm AS chef
-RUN cargo install cargo-chef --version 0.1.77 --locked
+FROM rust:1.88-bookworm@sha256:af306cfa71d987911a781c37b59d7d67d934f49684058f96cf72079c3626bfe0 AS chef
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
+    && rm -rf /var/lib/apt/lists/* \
+    && cargo install cargo-chef --version 0.1.77 --locked
 WORKDIR /build
 
 # ============================================================================
@@ -47,7 +49,7 @@ COPY rust/Cargo.toml rust/Cargo.lock ./
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/build/rust/target \
-    cargo chef cook --release --recipe-path /build/recipe.json
+    cargo chef cook --release --locked --recipe-path /build/recipe.json
 
 # Copy full source and build wheel
 WORKDIR /build
@@ -60,12 +62,12 @@ COPY LICENSE .
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/build/rust/target \
-    maturin build --release -m rust/Cargo.toml -o /wheels
+    maturin build --release --locked -m rust/Cargo.toml -o /wheels
 
 # ============================================================================
 # Stage 4: Runtime image
 # ============================================================================
-FROM python:3.11-slim-bookworm
+FROM python:3.11-slim-bookworm@sha256:0a310eeecf4e1f5a0743f9a6520c90c88d089c903ca5fd283f501e3a805f5f89
 
 # Version: keep in sync with rust/Cargo.toml (single source of truth)
 # Run scripts/check-version-consistency.sh to verify
@@ -83,13 +85,15 @@ LABEL maintainer="Jeff Jaureguy <jeffpjaureguy@gmail.com>"
 
 # Install runtime deps + temporary build deps for pybedtools C++ extension
 # Combined into one RUN to minimize layers; build tools purged at the end
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends \
     # PID 1 init for proper signal handling (Nextflow/HPC)
     tini \
     # Bioinformatics tools
     samtools \
     bcftools \
     bedtools \
+    bwa \
     tabix \
     # htslib runtime libs
     libhts3 \
@@ -107,7 +111,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy wheel from builder and install, then purge build tools in same layer
 COPY --from=rust-builder /wheels/*.whl /tmp/
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install /tmp/*.whl \
+    for wheel in /tmp/*.whl; do pip install "${wheel}[export]" || exit; done \
     && rm -rf /tmp/*.whl \
     && apt-get purge -y --auto-remove g++ zlib1g-dev \
     && rm -rf /var/lib/apt/lists/* \
@@ -142,7 +146,8 @@ COPY --chown=wasp2:wasp2 tests/shared_data/chr_test.fa \
 COPY --chown=wasp2:wasp2 scripts/container_smoke_test.sh /opt/wasp2/scripts/
 
 # Prevent Python from writing bytecode and ensure output is unbuffered
-ENV PYTHONDONTWRITEBYTECODE=1 \
+ENV WASP2_TEST_EXPORTS=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 # Set working directory for Nextflow

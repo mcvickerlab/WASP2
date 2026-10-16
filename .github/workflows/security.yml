@@ -30,11 +30,23 @@ jobs:
           python-version: "3.12"
       - uses: astral-sh/setup-uv@7eb50e6e20e1e2009087999ba91242e80253875f  # v7
       - name: Resolve auditable dependencies
-        run: uv pip compile pyproject.toml --extra dev --output-file /tmp/wasp2-audit.txt
+        run: |
+          uv pip compile pyproject.toml --extra dev --extra docs --extra plink --extra cyvcf2 --extra export --output-file /tmp/wasp2-audit.txt
+          python -c 'import tomllib; print("\n".join(tomllib.load(open("pyproject.toml", "rb"))["build-system"]["requires"]))' > /tmp/wasp2-build-audit.in
+          uv pip compile /tmp/wasp2-build-audit.in --output-file /tmp/wasp2-build-audit.txt
       - name: Audit Python dependencies
-        run: uvx pip-audit==2.10.1 --requirement /tmp/wasp2-audit.txt
+        run: |
+          uvx pip-audit==2.10.1 --requirement /tmp/wasp2-audit.txt
+          uvx pip-audit==2.10.1 --requirement /tmp/wasp2-build-audit.txt
       - name: Run Bandit
         run: uvx --from 'bandit[toml]==1.9.4' bandit -c pyproject.toml -r src
+      - name: Preserve resolved audit inputs
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: python-audit-requirements
+          path: /tmp/wasp2*-audit.txt
+          if-no-files-found: error
 
   rust:
     name: Rust audit

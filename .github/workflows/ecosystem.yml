@@ -80,7 +80,7 @@ jobs:
           python-version: "3.11"
       - name: Install single-cell stub dependencies
         if: matrix.pipeline == 'nf-scatac'
-        run: python -m pip install "pandas>=1.5,<3.0" "scipy>=1.10" "anndata>=0.8,<0.12"
+        run: python -m pip install "pandas>=1.5,<3.0" "scipy>=1.13.1" "anndata>=0.8,<0.12"
       - name: Run pipeline compatibility test
         run: |
           test_file=tests/main.nf.test

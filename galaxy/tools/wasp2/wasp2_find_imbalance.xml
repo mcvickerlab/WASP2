@@ -69,6 +69,8 @@
             <param name="min_count" value="10"/>
             <output name="output_results" ftype="tabular">
                 <assert_contents>
+                    <has_n_lines n="11"/>
+                    <has_text text="chr_test_10800&#9;18&#9;15&#9;33&#9;1&#9;"/>
                     <has_text text="pval"/>
                 </assert_contents>
             </output>

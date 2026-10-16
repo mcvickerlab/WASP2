@@ -67,3 +67,16 @@ CLI Entry Point
    :members:
    :undoc-members:
    :show-inheritance:
+
+Variant File Interface
+----------------------
+
+Install ``wasp2[plink]`` for PGEN input or ``wasp2[cyvcf2]`` for the optional
+VCF reader. Standard VCF conversion uses the native backend. BED exports keep
+numeric genotype indices and their phase separators; the native mapping stage
+resolves those indices to the corresponding allele sequences.
+
+.. automodule:: wasp2.io.variant_source
+   :members:
+   :no-undoc-members:
+   :show-inheritance:

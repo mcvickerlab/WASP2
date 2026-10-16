@@ -41,7 +41,9 @@ WASP2 is a hybrid Python/Rust project. You'll need both toolchains to build from
 | Python | 3.10+ | 3.10, 3.11, 3.12, 3.13 tested (conda env uses 3.11) |
 | Rust | 1.88+ | Edition 2021 |
 | Git | 2.0+ | For version control |
-| C compiler | gcc/clang | Required for native extensions |
+| C/C++ compilers | gcc/g++ or clang | Required for native extensions |
+| libclang | System package | Required by bindgen |
+| CMake | 3.14+ | Installed by isolated pip builds; needed explicitly for direct Maturin builds |
 
 > **Note:** WASP2 is developed and tested on Linux and macOS. Windows is not officially supported.
 
@@ -66,7 +68,6 @@ WASP2 is a hybrid Python/Rust project. You'll need both toolchains to build from
    ```bash
    python -m venv .venv
    source .venv/bin/activate  # Linux/macOS
-   pip install -e ".[dev,docs]"    # Includes development and documentation tools
    ```
 
 3. **Install the Rust toolchain** (if not already installed):
@@ -76,9 +77,12 @@ WASP2 is a hybrid Python/Rust project. You'll need both toolchains to build from
    source ~/.cargo/env
    ```
 
-4. **Build the Rust extension:**
+4. **Install the package and development tools, then build the Rust extension:**
 
    ```bash
+   pip install -e ".[dev,docs]"
+   pip install "cmake>=3.14"
+
    # Development build (faster compile, debug symbols)
    maturin develop -m rust/Cargo.toml
 

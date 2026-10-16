@@ -15,7 +15,7 @@ bash generate_core_data.sh
 | File | Description | Size |
 |------|-------------|------|
 | `chr_test.fa` + `.fai` | 20kb synthetic reference genome (single contig `chr_test`) | ~20K |
-| `variants.vcf` + `.gz` + `.tbi` | 10 het SNPs across 2 samples (SAMPLE1, SAMPLE2) | ~2K |
+| `variants.vcf` + `.gz` + `.tbi` | 10 het SNPs across 2 samples (sample1, sample2) | ~2K |
 | `annotation.gtf` | 2 genes, 6 exons (INTGENE001 + strand, INTGENE002 - strand) | ~1.5K |
 | `regions.bed` | Exonic regions from GTF | ~300B |
 | `sample{1,2,3}.bam` + `.bai` | BWA-aligned wgsim reads (500 pairs each, seeds 42/43/44) | ~50K each |

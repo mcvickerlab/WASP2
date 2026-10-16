@@ -3,6 +3,13 @@ from pathlib import Path
 
 import pytest
 
+from tests.regression.mapping_fixtures import (
+    iter_fastq,
+    quickbench_indel_variants,
+    write_bed,
+    write_synthetic_bam_indel,
+)
+
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src"
 
@@ -22,17 +29,6 @@ def _parse_total_seqs_from_name(name: str) -> int:
 def test_quickbench_indel_trim_invariants(tmp_path: Path) -> None:
     """INDEL-mode produces N+1 trim-combos for a +2bp insertion and preserves read length."""
     wasp2_rust = pytest.importorskip("wasp2_rust")
-
-    # Skip if benchmarking module not available (not included in release)
-    try:
-        from benchmarking.quickbench.fastq_utils import iter_fastq
-        from benchmarking.quickbench.synthetic_dataset import (
-            quickbench_indel_variants,
-            write_bed,
-            write_synthetic_bam_indel,
-        )
-    except ImportError:
-        pytest.skip("benchmarking module not available (not included in release)")
 
     import pysam
 

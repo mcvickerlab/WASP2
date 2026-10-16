@@ -21,7 +21,7 @@ SANITY_DATA_DIR := tests/sanity/data
 # Sanity test data configuration
 SANITY_VERSION := v1
 SANITY_TARBALL := wasp2-sanity-chr21-$(SANITY_VERSION).tar.xz
-SANITY_RELEASE_URL := https://github.com/mcvickerlab/WASP2/releases/download/v1.3.0/$(SANITY_TARBALL)
+SANITY_RELEASE_URL ?= $(WASP2_SANITY_DATA_URL)
 
 # Local sanity data path (for development). Override by exporting
 # WASP2_SANITY_DATA_DIR or passing LOCAL_SANITY_DATA=... to make.
@@ -33,18 +33,19 @@ LOCAL_SANITY_DATA ?= $(or $(WASP2_SANITY_DATA_DIR),$(CURDIR)/benchmarking/sanity
 
 all: build  ## Build the project (default)
 
-build: rust-build install  ## Build Rust extension and install package
+build: install  ## Build Rust extension and install package
 
 install:  ## Install package in development mode
-	$(PYTHON) -m pip install -e ".[dev]" --no-build-isolation -q
+	$(PYTHON) -m pip install -e ".[dev]" -q
 
 # =============================================================================
 # Rust build targets
 # =============================================================================
 
 rust-build:  ## Build Rust extension with maturin
-	$(MATURIN) build --release -m $(RUST_DIR)/Cargo.toml
-	$(PYTHON) -m pip install $(RUST_DIR)/target/wheels/*.whl --force-reinstall -q
+	set -eu; wheel_dir=$$(mktemp -d); trap 'rm -rf "$$wheel_dir"' EXIT; \
+	$(PYTHON) -m pip wheel --no-deps --wheel-dir "$$wheel_dir" .; \
+	$(PYTHON) -m pip install --force-reinstall --no-deps "$$wheel_dir"/wasp2-*.whl
 
 rust-dev:  ## Build Rust extension in debug mode (faster compile)
 	$(MATURIN) develop -m $(RUST_DIR)/Cargo.toml
@@ -70,8 +71,8 @@ test-quick:  ## Run quick validation tests only
 test-rust:  ## Run Rust-specific tests
 	$(PYTEST) $(TESTS_DIR) -v --tb=short -m "rust"
 
-test-mapping-parity:  ## Run mapping parity tests against legacy and unified paths
-	$(PYTEST) $(TESTS_DIR)/regression/test_mapping_stage_parity.py -v --tb=short
+test-mapping-parity:  ## Run mapping regression tests
+	$(PYTEST) $(TESTS_DIR)/mapping/ $(TESTS_DIR)/regression/test_quickbench*.py -v --tb=short
 
 test-integration:  ## Run integration tests
 	$(PYTEST) $(TESTS_DIR) -v --tb=short -m "integration"
@@ -87,14 +88,16 @@ test-all:  ## Run all tests including sanity and slow tests
 # Sanity data management
 # =============================================================================
 
-download-sanity-data:  ## Download sanity test data from GitHub release
+download-sanity-data:  ## Download a configured sanity archive (WASP2_SANITY_DATA_URL and SHA256)
+	@test -n "$(SANITY_RELEASE_URL)" -a -n "$(WASP2_SANITY_DATA_SHA256)" || { echo "Set WASP2_SANITY_DATA_URL and WASP2_SANITY_DATA_SHA256, or use make sanity-data-local" >&2; exit 1; }
 	@echo "Downloading sanity data from $(SANITY_RELEASE_URL)..."
 	@mkdir -p $(SANITY_DATA_DIR)
 	@if command -v wget > /dev/null; then \
 		wget -q -O $(SANITY_DATA_DIR)/$(SANITY_TARBALL) $(SANITY_RELEASE_URL); \
 	else \
-		curl -sL -o $(SANITY_DATA_DIR)/$(SANITY_TARBALL) $(SANITY_RELEASE_URL); \
+		curl --fail --show-error -sL -o $(SANITY_DATA_DIR)/$(SANITY_TARBALL) $(SANITY_RELEASE_URL); \
 	fi
+	@$(PYTHON) -c 'import hashlib, pathlib; p = pathlib.Path("$(SANITY_DATA_DIR)/$(SANITY_TARBALL)"); assert hashlib.sha256(p.read_bytes()).hexdigest() == "$(WASP2_SANITY_DATA_SHA256)", "Sanity archive checksum mismatch"'
 	@echo "Extracting..."
 	@cd $(SANITY_DATA_DIR) && tar -xJf $(SANITY_TARBALL) --strip-components=1
 	@rm -f $(SANITY_DATA_DIR)/$(SANITY_TARBALL)

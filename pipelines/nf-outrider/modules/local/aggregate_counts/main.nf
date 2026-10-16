@@ -2,7 +2,7 @@ process AGGREGATE_COUNTS {
     tag "$meta.id"
     label 'process_low'
 
-    conda "${moduleDir}/../../../environment.yml"
+    conda "${moduleDir}/../../../../nf-modules/modules/wasp2/analyze/environment.yml"
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
         'docker://ghcr.io/mcvickerlab/wasp2:1.5.0' :
         'ghcr.io/mcvickerlab/wasp2:1.5.0' }"

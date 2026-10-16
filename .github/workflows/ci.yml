@@ -62,6 +62,9 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
+        include:
+          - python-version: "3.11"
+            minimum-dependencies: true
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
@@ -82,7 +85,7 @@ jobs:
             libclang-dev \
             samtools \
             bcftools \
-            bedtools
+            bedtools bwa
 
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
@@ -109,7 +112,7 @@ jobs:
           source .venv/bin/activate
           uv pip install maturin
           maturin develop --release
-          uv pip install -e ".[dev]" --no-build-isolation
+          uv pip install -e ".[dev,plink,cyvcf2,export]"
 
       - name: Verify Rust extension loads
         run: |
@@ -127,6 +130,13 @@ jobs:
             -m "not benchmark and not sanity" \
             --ignore=tests/benchmarks \
             --ignore=tests/sanity
+
+      - name: Check minimum supported scientific dependencies
+        if: matrix.minimum-dependencies == true
+        run: |
+          uv pip install --python .venv/bin/python "numpy==1.26.4" "pandas==1.5.3" "polars==1.0.0" "scipy==1.13.1"
+          source .venv/bin/activate
+          pytest tests/counting tests/analysis tests/test_rust_python_counting_parity.py -q --tb=short
 
       - name: Upload Python test results
         if: always()
