@@ -5,7 +5,14 @@ Overview
 --------
 
 ``wasp2-analyze`` runs allelic imbalance analysis on bulk or single-cell count
-outputs.
+outputs. The Python CLI calls Rust for bulk inference. Single-cell imbalance
+and differential inference currently run in Python/SciPy; single-cell counting
+uses Rust.
+
+Numerical compatibility retains the archived statistical procedures with wide
+counts and consistent precision. Untouched legacy file readers and explicitly
+widened references are evaluated separately; the latter do not claim to reproduce
+historical UInt16 overflow or mixed scalar/array precision.
 
 Commands:
 
@@ -171,16 +178,14 @@ sets the reference orientation; the first SNP is not symmetrized.
 - Beta-binomial LRT: :math:`\rho` is held at its **null-model MLE** while
   maximizing the alternative likelihood over :math:`\mu` (profile likelihood,
   df = 1). :math:`\rho` is not jointly re-estimated under :math:`H_1`.
-- Scalar dispersion is fit on :math:`(0,1)` with boundary values clamped for
-  numerical stability. The linear predictor retains the :math:`\pm 10` guard. The
-  linear model uses raw-depth standardization,
-  :math:`\rho(N)=\operatorname{expit}(d_1 + d_2(N-c)/s)`, and persists the fitted
-  center :math:`c` and positive scale :math:`s` with :math:`d_1` and :math:`d_2`.
-- FDR correction uses :func:`scipy.stats.false_discovery_control` with
-  ``method='bh'`` (Benjamini–Hochberg). ``scipy`` raises on NaN p-values,
-  but a hand-written BH loop using ``np.minimum.accumulate`` silently
-  propagates NaN through the cumulative minimum — always drop or impute
-  NaN p-values before BH correction.
+- Scalar dispersion is fit on :math:`(0,1)`; exact endpoints receive numerical
+  regularization. The linear fit uses pseudocounted depth and a :math:`\pm 10`
+  predictor guard during fitting. Stored coefficients preserve that predictor
+  using :math:`\rho(N)=\operatorname{expit}(d_1+d_2(N-c)/s)` with raw depth
+  :math:`N`, center :math:`c=-2\,\mathrm{pseudocount}` and scale :math:`s=1`.
+- Both backends use Benjamini–Hochberg FDR correction. Bulk uses the Rust
+  implementation; single-cell analysis uses
+  :func:`scipy.stats.false_discovery_control` with ``method='bh'``.
 
 See the upstream mapping-filter docs (:doc:`/methods/mapping_filter`) for the
 WASP2 canonical filter contract that applies to both remapping and counting

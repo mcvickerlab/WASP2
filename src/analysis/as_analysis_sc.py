@@ -126,7 +126,7 @@ def get_imbalance_sc(
     n_counts = ref_counts + alt_counts
 
     # Calculate dispersion across dataset
-    def opt_disp(rho: float, ref_data: NDArray[np.uint16], n_data: NDArray[np.uint16]) -> float:
+    def opt_disp(rho: float, ref_data: NDArray[np.uint64], n_data: NDArray[np.uint64]) -> float:
         rho_safe = float(clamp_rho(rho))  # Prevent division by zero
         return float(
             -np.sum(

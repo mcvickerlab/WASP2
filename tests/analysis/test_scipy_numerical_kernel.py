@@ -135,3 +135,117 @@ def test_many_high_depth_unphased_observations_remain_finite(tmp_path):
     for p1, p2 in zip(np.exp(forward[1:]), np.exp(reverse[1:]), strict=True):
         product = 0.5 * (product * p1) + 0.5 * (product * p2)
     assert product == 0.0
+
+
+def decimal_beta_binomial_logpmf(k, n, alpha, beta):
+    """Independent rising-factorial PMF; no SciPy or gamma/beta function reuse."""
+    from decimal import Decimal, localcontext
+    from math import comb
+
+    with localcontext() as context:
+        context.prec = 70
+        a, b = Decimal(str(alpha)), Decimal(str(beta))
+        value = Decimal(comb(n, k))
+        for i in range(k):
+            value *= a + i
+        for i in range(n - k):
+            value *= b + i
+        for i in range(n):
+            value /= a + b + i
+        return float(value.ln())
+
+
+@pytest.mark.rust
+@pytest.mark.parametrize("ref_count,total", [(0, 0), (0, 14), (4, 8), (7, 14), (14, 14)])
+def test_likelihood_precision_against_independent_decimal(tmp_path, ref_count, total):
+    import wasp2_rust
+    from analysis.as_analysis import opt_prob
+
+    rho, alpha = 0.1, 4.5
+    expected = decimal_beta_binomial_logpmf(ref_count, total, alpha, alpha)
+    vector = opt_prob(
+        0.5, rho, np.array([ref_count], dtype=np.uint64), np.array([total], dtype=np.uint64)
+    )
+    scalar = opt_prob(0.5, rho, np.uint64(ref_count), np.uint64(total))
+    assert float(np.asarray(vector).item()) == scalar
+    assert scalar == pytest.approx(-expected, abs=1e-12, rel=1e-12)
+    path = tmp_path / "counts.tsv"
+    pd.DataFrame(
+        {
+            "chrom": ["chr1"],
+            "pos": [101],
+            "ref": ["A"],
+            "alt": ["G"],
+            "region": ["peak"],
+            "ref_count": [ref_count],
+            "alt_count": [total - ref_count],
+        }
+    ).to_csv(path, sep="\t", index=False)
+    result = wasp2_rust.analyze_imbalance_run(
+        str(path), method="single", min_count=0, pseudocount=0, region_col="region", rho=rho
+    )["results"][0]
+    assert result["null_ll"] == pytest.approx(expected, abs=1e-12, rel=1e-12)
+    if 2 * ref_count == total:
+        assert result["alt_ll"] == pytest.approx(result["null_ll"], abs=1e-12, rel=1e-12)
+        assert result["pval"] == pytest.approx(1.0, abs=1e-12)
+
+
+@pytest.mark.parametrize("first_ref,symmetric", [(3, True), (4, False)])
+def test_unphased_anchor_symmetry_is_conditional(first_ref, symmetric):
+    from analysis.as_analysis import opt_unphased_dp
+
+    rho = 0.1
+    ref = np.array([first_ref, 1, 0, 0, 0], dtype=np.uint64)
+    depth = np.array([6, 20, 0, 0, 1], dtype=np.uint64)
+    values = []
+    for mu in (0.2, 0.8):
+        expected_first = decimal_beta_binomial_logpmf(
+            int(ref[0]), int(depth[0]), mu * 9, (1 - mu) * 9
+        )
+        rest = [
+            np.logaddexp(
+                decimal_beta_binomial_logpmf(int(k), int(n), mu * 9, (1 - mu) * 9),
+                decimal_beta_binomial_logpmf(int(k), int(n), (1 - mu) * 9, mu * 9),
+            )
+            - np.log(2)
+            for k, n in zip(ref[1:], depth[1:], strict=True)
+        ]
+        expected = -expected_first - sum(rest)
+        actual = opt_unphased_dp(mu, rho, ref[:1], depth[:1], ref[1:], depth[1:])
+        assert actual == pytest.approx(expected, abs=1e-12, rel=1e-12)
+        values.append(actual)
+    if symmetric:
+        assert values[0] == pytest.approx(values[1], abs=1e-12, rel=1e-12)
+    else:
+        assert abs(values[0] - values[1]) > 1.0
+
+
+@pytest.mark.skipif(
+    (np.__version__, scipy.__version__) != ("1.26.4", "1.13.1"),
+    reason="Historical dtype dispatch reproduction uses pinned NumPy/SciPy",
+)
+def test_untouched_archive_balanced_precision_defect_is_reported(tmp_path):
+    from scripts.compare_archive_analysis import load_archive
+
+    path = tmp_path / "balanced.tsv"
+    pd.DataFrame(
+        {
+            "chrom": ["chr1"],
+            "pos": [101],
+            "ref": ["A"],
+            "alt": ["G"],
+            "region": ["peak"],
+            "ref_count": [7],
+            "alt_count": [7],
+            "other_count": [0],
+        }
+    ).to_csv(path, sep="\t", index=False)
+    narrow = load_archive()["as_analysis"].get_imbalance(
+        str(path), region_col="region", min_count=0, pseudocount=0
+    )
+    wide = load_archive(widen_bulk_csv_counts=True)["as_analysis"].get_imbalance(
+        str(path), region_col="region", min_count=0, pseudocount=0
+    )
+    assert float(narrow.pval.iloc[0]) < 0.9999
+    assert float(wide.pval.iloc[0]) == 1.0
+    assert compare_frames(narrow, wide)["status"] == "FAIL"

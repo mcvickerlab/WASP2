@@ -56,6 +56,11 @@ WASP2 installs three command-line entry points:
 - `wasp2-count`
 - `wasp2-analyze`
 
+The Python CLI coordinates compiled Rust counting and bulk statistical inference.
+Single-cell counting uses Rust; single-cell imbalance and differential inference
+currently use Python/SciPy. A Python command entry point does not change which
+backend performs the calculations.
+
 ## Quick Start
 
 > **Prerequisite — normalize your VCF first.** WASP2's allelic-imbalance model is biallelic.

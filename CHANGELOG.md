@@ -5,6 +5,12 @@ All notable changes to WASP2 will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- Compare validation count columns exactly before floating-point conversion,
+  including UInt64 values above 2**53. Distinguish archived narrow CSV input
+  from explicitly widened reference counts; retain strict legacy discrepancies.
+- Document Rust counting/bulk inference and Python/SciPy single-cell inference,
+  and correct the single-cell AnnData axes. Precision regressions cover balanced
+  likelihoods, overflow and conditional unphased symmetry.
 - Single-cell sparse counts and totals use UInt64 so H5AD output preserves values
   above 65,535. Metadata conversion no longer requires an undeclared PyArrow install.
 - Automatic single-sample selection now applies the same heterozygote filtering
@@ -24,8 +30,8 @@ All notable changes to WASP2 will be documented in this file.
   checks, parses numeric first alleles consistently, and rejects malformed mixed
   phased input instead of silently changing a region's likelihood. Interior
   dispersion values are no longer clipped to the endpoint regularization range.
-- Full 32-run public ATAC comparisons execute archived Python in pinned Linux
-  CI, including CLI inference and donor routes. Heterogeneous donor checks cover
+- Full 32-run public ATAC comparisons execute archived Python on wide-integer
+  DataFrames in pinned Linux CI; narrow CSV precision is checked separately, including CLI inference and donor routes. Heterogeneous donor checks cover
   both dispersion models, phasing modes and pseudocounts with independent fits.
 - Container checks exercise reordered ATAC headers, region grouping, phased
   likelihoods and raw counts. Images carry package-version and source-revision

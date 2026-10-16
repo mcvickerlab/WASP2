@@ -4,7 +4,15 @@ Single-Cell Analysis
 Overview
 --------
 
-WASP2 provides specialized tools for allele-specific analysis in single-cell RNA-seq (scRNA-seq) data. This guide covers the barcode file format requirements and single-cell-specific workflows.
+WASP2 supports barcode-based allele counting and group-level imbalance analysis.
+The validated workflow is scATAC-seq. Rust performs allele counting; Python/SciPy
+performs single-cell imbalance and differential inference through the Python CLI.
+The current counter does not implement UMI-aware molecule counting for scRNA-seq.
+
+Counting uses wide integer storage and inference uses wide count sums. Statistical
+compatibility follows the archived likelihood and testing procedures with consistent
+precision; it does not reproduce historical UInt16 overflow or mixed-precision
+rounding. The original and explicitly widened archive references are tested separately.
 
 Barcode File Format
 -------------------
@@ -300,12 +308,14 @@ The single-cell counting module outputs an AnnData (``.h5ad``) file containing:
 
 **Observations (obs):**
 
-* SNP information (chrom, pos, ref, alt)
-* Aggregate counts per SNP
+* Cell barcodes and cell-level annotations
 
 **Variables (var):**
 
-* Cell barcodes
+* SNP information (chrom, pos, ref, alt)
+* Aggregate counts per SNP
+
+Count layers have shape ``cells × SNPs``.
 
 **Unstructured (uns):**
 

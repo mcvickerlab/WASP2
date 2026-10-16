@@ -1,6 +1,7 @@
 """Production-code parity with outputs frozen from unmodified Python 41354fc.
 
-The fixture is independent of Rust and does not need archived git objects in CI.
+Frozen fixtures are independent of Rust. Live reference tests also require the
+pinned archived git objects.
 These tests cover statistical compatibility on synthetic counts, not calibration.
 """
 
