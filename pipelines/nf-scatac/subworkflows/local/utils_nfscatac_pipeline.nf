@@ -110,10 +110,10 @@ workflow PIPELINE_COMPLETION {
     Output: ${outdir}
 
     Results:
-      - allele_counts/: Per-cell allele counts at het SNPs
+      - fragment_coverage/: Per-cell fragment overlap coverage
       - anndata/: AnnData H5AD files for scverse ecosystem
       - cell_qc/: Cell QC metrics
-      - imbalance/: Allelic imbalance analysis results (pseudo-bulk)
+      - pseudobulk/: Aggregated fragment coverage (not allele inference)
     """.stripIndent()
 }
 
@@ -155,6 +155,7 @@ def helpMessage() {
     Input priority: At least one of fragments, cellranger_dir, or bam is required.
     When BAM is provided, true allele-specific counting is performed with ref/alt/hap layers.
     When only fragments are provided, overlap counting is performed (total counts only).
+    No allelic imbalance inference is run; BAM-to-inference aggregation is not implemented.
 
     Profiles:
         -profile docker        Run with Docker
@@ -165,12 +166,11 @@ def helpMessage() {
 
     Output:
         results/
-        ├── allele_counts/      # Per-cell allele counts
+        ├── fragment_coverage/  # Per-cell fragment overlap coverage
         ├── anndata/            # AnnData H5AD files (with ref/alt/hap layers if BAM provided)
         ├── zarr/               # Zarr files (if --create_zarr)
         ├── cell_qc/            # Cell QC metrics
-        ├── pseudobulk/         # Pseudo-bulk aggregated counts
-        ├── imbalance/          # Allelic imbalance results
+        ├── pseudobulk/         # Aggregated fragment coverage
         └── pipeline_info/      # Execution reports
     """.stripIndent()
 }

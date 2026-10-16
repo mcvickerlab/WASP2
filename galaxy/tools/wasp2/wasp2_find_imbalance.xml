@@ -27,7 +27,7 @@
                label="Allele counts file"
                help="Output from 'WASP2 Count Variants'"/>
 
-        <param argument="--min" name="min_count" type="integer" value="10" min="1"
+        <param argument="--min" name="min_count" type="integer" value="10" min="0"
                label="Minimum allele count"
                help="Minimum total read count at a variant to test for imbalance"/>
 
@@ -111,7 +111,7 @@ WASP2 uses a beta-binomial model to test for allelic imbalance:
 
 **Usage Notes**
 
-For single-cell data, use "WASP2 Find Imbalance SC" with barcode groupings.
+Single-cell analysis with barcode groupings is available through the WASP2 command line; no single-cell Galaxy wrapper is included.
 
 For comparing imbalance between conditions/cell types, use "WASP2 Compare Imbalance".
 

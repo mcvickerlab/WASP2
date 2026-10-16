@@ -193,7 +193,12 @@ jobs:
           python -m twine check dist/*
           uv venv .sdist-test
           uv pip install --python .sdist-test/bin/python dist/*.tar.gz
-          .sdist-test/bin/python -c "import wasp2, wasp2_rust; print(wasp2.__version__)"
+          SDIST_PYTHON="$GITHUB_WORKSPACE/.sdist-test/bin/python"
+          cd /tmp
+          "$SDIST_PYTHON" -c "import wasp2, wasp2_rust; print(wasp2.__version__)"
+          "$GITHUB_WORKSPACE/.sdist-test/bin/wasp2-count" --help
+          "$GITHUB_WORKSPACE/.sdist-test/bin/wasp2-map" --help
+          "$GITHUB_WORKSPACE/.sdist-test/bin/wasp2-analyze" --help
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
         with:
           name: source-distribution
@@ -309,9 +314,11 @@ jobs:
         with:
           persist-credentials: false
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
-      - uses: eWaterCycle/setup-singularity@931d4e31109e875b13309ae1d07c70ca8fbc8537  # v7
+      - uses: eWaterCycle/setup-apptainer@3f706d898c9db585b1d741b4692e66755f3a1b40
         with:
-          singularity-version: 3.11.4
+          apptainer-version: 1.4.5
+      - name: Verify container runtime
+        run: apptainer --version
       - name: Build local Docker archive
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
         with:
@@ -328,8 +335,8 @@ jobs:
         env:
           RELEASE_VERSION: ${{ needs.validate.outputs.version }}
         run: |
-          singularity build "wasp2_${RELEASE_VERSION}.sif" "docker-archive://${RUNNER_TEMP}/wasp2-docker.tar"
-          singularity exec "wasp2_${RELEASE_VERSION}.sif" /opt/wasp2/scripts/container_smoke_test.sh
+          apptainer build "wasp2_${RELEASE_VERSION}.sif" "docker-archive://${RUNNER_TEMP}/wasp2-docker.tar"
+          apptainer exec "wasp2_${RELEASE_VERSION}.sif" /opt/wasp2/scripts/container_smoke_test.sh
 
   publish-pypi:
     name: Publish PyPI
@@ -418,17 +425,19 @@ jobs:
       id-token: write  # Authenticate Singularity provenance attestations.
       attestations: write  # Publish Singularity provenance attestations.
     steps:
-      - uses: eWaterCycle/setup-singularity@931d4e31109e875b13309ae1d07c70ca8fbc8537  # v7
+      - uses: eWaterCycle/setup-apptainer@3f706d898c9db585b1d741b4692e66755f3a1b40
         with:
-          singularity-version: 3.11.4
+          apptainer-version: 1.4.5
+      - name: Verify container runtime
+        run: apptainer --version
       - name: Build from released image
         env:
           RELEASE_VERSION: ${{ needs.validate.outputs.version }}
-        run: singularity build "wasp2_${RELEASE_VERSION}.sif" "docker://${IMAGE_NAME}:${RELEASE_VERSION}"
+        run: apptainer build "wasp2_${RELEASE_VERSION}.sif" "docker://${IMAGE_NAME}:${RELEASE_VERSION}"
       - name: Test Singularity artifact
         env:
           RELEASE_VERSION: ${{ needs.validate.outputs.version }}
-        run: singularity exec "wasp2_${RELEASE_VERSION}.sif" wasp2-count count-cohort --help
+        run: apptainer exec "wasp2_${RELEASE_VERSION}.sif" wasp2-count count-cohort --help
       - uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45  # v2
         with:
           subject-path: "wasp2_${{ needs.validate.outputs.version }}.sif"
@@ -463,7 +472,11 @@ jobs:
           name: singularity-artifact
           path: release-assets
       - name: Generate release checksums
-        run: sha256sum release-assets/* > release-assets/SHA256SUMS
+        run: |
+          cd release-assets
+          find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > "$RUNNER_TEMP/SHA256SUMS"
+          mv "$RUNNER_TEMP/SHA256SUMS" SHA256SUMS
+          sha256sum --check SHA256SUMS
       - uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b  # v2
         with:
           files: release-assets/*

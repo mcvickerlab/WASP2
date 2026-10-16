@@ -55,8 +55,8 @@ nextflow_pipeline {
                 // Header validation (first line must match exactly)
                 { assert path("${outputDir}/results/counts/SAMPLE1_counts.tsv").readLines()[0] == "chrom\tpos\tref\talt\tregion\tref_count\talt_count\tother_count\tN" },
                 { assert path("${outputDir}/results/counts/SAMPLE2_counts.tsv").readLines()[0] == "chrom\tpos\tref\talt\tregion\tref_count\talt_count\tother_count\tN" },
-                { assert path("${outputDir}/results/analysis/SAMPLE1_ai_results.tsv").readLines()[0] == "region\tsnp_count\tref_sum\talt_sum\tmu\tnull_ll\talt_ll\tLRT\tpvalue\tfdr" },
-                { assert path("${outputDir}/results/analysis/SAMPLE2_ai_results.tsv").readLines()[0] == "region\tsnp_count\tref_sum\talt_sum\tmu\tnull_ll\talt_ll\tLRT\tpvalue\tfdr" }
+                { assert path("${outputDir}/results/analysis/SAMPLE1_ai_results.tsv").readLines()[0] == "region\tref_count\talt_count\tN\tsnp_count\tnull_ll\talt_ll\tmu\tlrt\tpval\tfdr_pval" },
+                { assert path("${outputDir}/results/analysis/SAMPLE2_ai_results.tsv").readLines()[0] == "region\tref_count\talt_count\tN\tsnp_count\tnull_ll\talt_ll\tmu\tlrt\tpval\tfdr_pval" }
             )
         }
     }
@@ -219,7 +219,7 @@ nextflow_pipeline {
 
                 // Header validation
                 { assert path("${outputDir}/results_single/counts/SAMPLE1_counts.tsv").readLines()[0] == "chrom\tpos\tref\talt\tregion\tref_count\talt_count\tother_count\tN" },
-                { assert path("${outputDir}/results_single/analysis/SAMPLE1_ai_results.tsv").readLines()[0] == "region\tsnp_count\tref_sum\talt_sum\tmu\tnull_ll\talt_ll\tLRT\tpvalue\tfdr" }
+                { assert path("${outputDir}/results_single/analysis/SAMPLE1_ai_results.tsv").readLines()[0] == "region\tref_count\talt_count\tN\tsnp_count\tnull_ll\talt_ll\tmu\tlrt\tpval\tfdr_pval" }
             )
         }
     }
@@ -255,7 +255,7 @@ nextflow_pipeline {
 
                 // Header validation
                 { assert path("${outputDir}/results_singleend/counts/SAMPLE_SE_counts.tsv").readLines()[0] == "chrom\tpos\tref\talt\tregion\tref_count\talt_count\tother_count\tN" },
-                { assert path("${outputDir}/results_singleend/analysis/SAMPLE_SE_ai_results.tsv").readLines()[0] == "region\tsnp_count\tref_sum\talt_sum\tmu\tnull_ll\talt_ll\tLRT\tpvalue\tfdr" }
+                { assert path("${outputDir}/results_singleend/analysis/SAMPLE_SE_ai_results.tsv").readLines()[0] == "region\tref_count\talt_count\tN\tsnp_count\tnull_ll\talt_ll\tmu\tlrt\tpval\tfdr_pval" }
             )
         }
     }
@@ -293,8 +293,8 @@ nextflow_pipeline {
                 // Header validation
                 { assert path("${outputDir}/results_no_gtf/counts/SAMPLE1_counts.tsv").readLines()[0] == "chrom\tpos\tref\talt\tregion\tref_count\talt_count\tother_count\tN" },
                 { assert path("${outputDir}/results_no_gtf/counts/SAMPLE2_counts.tsv").readLines()[0] == "chrom\tpos\tref\talt\tregion\tref_count\talt_count\tother_count\tN" },
-                { assert path("${outputDir}/results_no_gtf/analysis/SAMPLE1_ai_results.tsv").readLines()[0] == "region\tsnp_count\tref_sum\talt_sum\tmu\tnull_ll\talt_ll\tLRT\tpvalue\tfdr" },
-                { assert path("${outputDir}/results_no_gtf/analysis/SAMPLE2_ai_results.tsv").readLines()[0] == "region\tsnp_count\tref_sum\talt_sum\tmu\tnull_ll\talt_ll\tLRT\tpvalue\tfdr" }
+                { assert path("${outputDir}/results_no_gtf/analysis/SAMPLE1_ai_results.tsv").readLines()[0] == "region\tref_count\talt_count\tN\tsnp_count\tnull_ll\talt_ll\tmu\tlrt\tpval\tfdr_pval" },
+                { assert path("${outputDir}/results_no_gtf/analysis/SAMPLE2_ai_results.tsv").readLines()[0] == "region\tref_count\talt_count\tN\tsnp_count\tnull_ll\talt_ll\tmu\tlrt\tpval\tfdr_pval" }
             )
         }
     }

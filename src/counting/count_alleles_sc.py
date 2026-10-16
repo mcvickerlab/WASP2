@@ -20,7 +20,7 @@ from .count_alleles import find_read_aln_pos
 
 logger = logging.getLogger(__name__)
 
-# Try to import the Rust single-cell counter (optional; Python fallback always available)
+# The normal counting path requires Rust; Python is an explicit reference path.
 try:
     from wasp2_rust import BamCounterSC as _RustSC
 
@@ -34,11 +34,11 @@ def _sparse_from_counts(
     shape: tuple[int, int],
 ) -> csr_matrix:
     if not counts:
-        return csr_matrix(shape, dtype=np.uint16)
+        return csr_matrix(shape, dtype=np.uint64)
     return csr_matrix(
         (list(counts.values()), list(zip(*counts.keys()))),
         shape=shape,
-        dtype=np.uint16,
+        dtype=np.uint64,
     )
 
 
@@ -112,14 +112,23 @@ def make_count_matrix(
     include_features : list[str] | None, optional
         Feature columns to include, by default None.
     use_rust : bool, optional
-        Use the Rust per-cell counter when available, by default True. Falls back
-        to the pure-Python ``count_bc_snp_alleles`` if the extension is missing.
+        Use the Rust per-cell counter, by default True. Raises ImportError when
+        the native extension is unavailable. Set False explicitly to use the
+        Python reference counter.
 
     Returns
     -------
     ad.AnnData
         AnnData object with count matrices in layers (ref, alt, other).
     """
+    if use_rust and not RUST_SC_AVAILABLE:
+        raise ImportError(
+            "Single-cell counting requires the wasp2_rust native extension. "
+            "Reinstall WASP2 using a compatible wheel or build the extension with "
+            "`maturin develop --release` from the source checkout. "
+            "The Python reference counter requires explicit use_rust=False."
+        )
+
     chrom_list = df.get_column("chrom").unique(maintain_order=True)
 
     # Add genotypes annotations
@@ -136,9 +145,7 @@ def make_count_matrix(
 
     sc_counts = CountStatsSC()  # Class that holds total count data
 
-    rust_path = use_rust and RUST_SC_AVAILABLE
-
-    if rust_path:
+    if use_rust:
         start = timeit.default_timer()
         count_bc_snp_alleles_rust(
             bam_file=bam_file,
@@ -189,7 +196,7 @@ def make_count_matrix(
         layers={"ref": sparse_ref, "alt": sparse_alt, "other": sparse_other},
     )
 
-    adata.obs = snp_df.to_pandas()
+    adata.obs = pd.DataFrame(snp_df.to_dict(as_series=False))
     adata.obs["ref_count"] = adata.layers["ref"].sum(axis=1).T.A1
     adata.obs["alt_count"] = adata.layers["alt"].sum(axis=1).T.A1
 
@@ -212,7 +219,7 @@ def make_count_matrix(
         )
         if "region" not in feature_df.columns:
             feature_df = feature_df.with_columns(pl.col(feature_cols[0]).alias("region"))
-        adata.uns["feature"] = feature_df.to_pandas()
+        adata.uns["feature"] = pd.DataFrame(feature_df.to_dict(as_series=False))
 
         # region_snp_dict = dict(
         #     df.join(snp_df, on=["chrom", "pos", "ref", "alt"], how="left"

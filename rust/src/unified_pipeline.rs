@@ -657,8 +657,7 @@ fn process_pair(
         // Invariant: total_seqs > 0 guarantees at least one output.
         // If violated, log and fall back rather than propagate empty NeedsRemap.
         eprintln!(
-            "[WARN] process_pair: outputs empty despite total_seqs={}; treating as KeepAsIs",
-            total_seqs
+            "[WARN] process_pair: outputs empty despite total_seqs={total_seqs}; treating as KeepAsIs"
         );
         return ProcessPairResult::KeepAsIs;
     }
@@ -1083,7 +1082,7 @@ pub fn unified_make_reads(
 
     // Phase 1: Build variant store
     let t0 = Instant::now();
-    eprintln!("Building variant store from {}...", bed_path);
+    eprintln!("Building variant store from {bed_path}...");
     let store = build_variant_store(bed_path)?;
     stats.tree_build_ms = t0.elapsed().as_millis() as u64;
     eprintln!(
@@ -1104,7 +1103,7 @@ pub fn unified_make_reads(
     // Spawn writer thread (with optional compression)
     let r1_owned = r1_path.to_string();
     let r2_owned = r2_path.to_string();
-    let sidecar_owned = format!("{}.expected_positions.tsv", r1_owned);
+    let sidecar_owned = format!("{r1_owned}.expected_positions.tsv");
     let compression_threads = config.compression_threads;
     let compress = config.compress_output;
     let writer_handle = thread::spawn(move || {
@@ -1684,12 +1683,9 @@ pub fn unified_make_reads_parallel(
     let enable_timing = std::env::var_os("WASP2_TIMING").is_some();
 
     // Check BAM index exists - fall back to sequential if not
-    let bai_path = format!("{}.bai", bam_path);
+    let bai_path = format!("{bam_path}.bai");
     if !std::path::Path::new(&bai_path).exists() {
-        eprintln!(
-            "BAM index not found ({}), falling back to sequential processing",
-            bai_path
-        );
+        eprintln!("BAM index not found ({bai_path}), falling back to sequential processing");
         return unified_make_reads(bam_path, bed_path, r1_path, r2_path, config);
     }
 
@@ -1702,7 +1698,7 @@ pub fn unified_make_reads_parallel(
 
     // Phase 1: Build variant store (shared, read-only)
     let t0 = Instant::now();
-    eprintln!("Building variant store from {}...", bed_path);
+    eprintln!("Building variant store from {bed_path}...");
     let store = Arc::new(build_variant_store(bed_path)?);
     let tree_build_ms = t0.elapsed().as_millis() as u64;
     eprintln!(
@@ -1735,7 +1731,7 @@ pub fn unified_make_reads_parallel(
 
     let r1_owned = r1_path.to_string();
     let r2_owned = r2_path.to_string();
-    let sidecar_owned = format!("{}.expected_positions.tsv", r1_owned);
+    let sidecar_owned = format!("{r1_owned}.expected_positions.tsv");
     let compression_threads = config.compression_threads;
     let compress = config.compress_output;
     let writer_handle = thread::spawn(move || {
@@ -1784,7 +1780,7 @@ pub fn unified_make_reads_parallel(
                 final_stats = final_stats.merge(stats);
             }
             Err(e) => {
-                eprintln!("Warning: Chromosome processing failed: {}", e);
+                eprintln!("Warning: Chromosome processing failed: {e}");
             }
         }
     }

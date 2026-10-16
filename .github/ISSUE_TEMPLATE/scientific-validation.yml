@@ -1,7 +1,7 @@
 name: "Scientific Validation"
 description: "Report scientific accuracy concerns (for bioinformaticians/scientists)"
 title: "[SCIENCE] "
-labels: ["scientific-accuracy", "audit", "needs-domain-expert"]
+labels: ["scientific-accuracy", "needs-domain-expert"]
 body:
   - type: markdown
     attributes:

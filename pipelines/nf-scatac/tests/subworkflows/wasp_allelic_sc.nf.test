@@ -1,0 +1,36 @@
+nextflow_workflow {
+    name "Test single-cell coverage inference boundary"
+    script "../../subworkflows/local/wasp_allelic_sc/main.nf"
+    workflow "WASP_ALLELIC_SC"
+
+    tag "correctness_regression"
+
+    test("Fragment coverage never invokes allelic imbalance inference") {
+        options "-stub"
+        when {
+            params {
+                skip_anndata = true
+                skip_pseudobulk = false
+            }
+            workflow {
+                """
+                def inputs = ['fragments.tsv.gz', 'fragments.tsv.gz.tbi', 'NO_FILE_BARCODES', 'NO_FILE_PEAKS', 'NO_FILE_BAM', 'NO_FILE_BAI', 'variants.vcf.gz', 'variants.vcf.gz.tbi'].collect { name ->
+                    def item = file("${workDir}/" + name)
+                    item.text = ''
+                    item
+                }
+                input[0] = Channel.of([[id:'coverage_only'], *inputs[0..5]])
+                input[1] = Channel.of([[id:'variants'], *inputs[6..7]])
+                """
+            }
+        }
+        then {
+            assert workflow.success
+            assert workflow.out.imbalance.size() == 0
+            assert workflow.out.pseudobulk.size() == 1
+            assert path(workflow.out.pseudobulk[0][1]).getFileName().toString().endsWith('_pseudobulk_coverage.tsv')
+            assert path(workflow.out.pseudobulk[0][1]).readLines()[0] == 'chrom\tpos\tref\talt\toverlap_count\tn_cells'
+            assert !workflow.trace.tasks()*.name.any { it.contains('ANALYZE_IMBALANCE') }
+        }
+    }
+}

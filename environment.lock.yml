@@ -19,7 +19,7 @@ dependencies:
   # Data processing
   - numpy>=1.21,<2.0
   - pandas>=1.5,<3.0
-  - polars>=0.19
+  - polars>=0.19,<2.0
   - scipy>=1.10
 
   # Bioinformatics (bioconda)
@@ -34,7 +34,7 @@ dependencies:
   - bwa>=0.7
   - anndata>=0.8,<0.12
   - scanpy>=1.10
-  - numba>=0.59
+  - numba>=0.59,<0.63
   - plink2
   - pgenlib>=0.90
 

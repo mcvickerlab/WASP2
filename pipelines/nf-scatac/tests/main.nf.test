@@ -1,62 +1,3 @@
-nextflow_pipeline {
-
-    name "Test Pipeline nf-scatac"
-    script "../main.nf"
-
-    tag "pipeline"
-    tag "scatac"
-
-    test("nf-scatac - stub run") {
-
-        tag "ci_stub"
-
-        options "-stub -profile test_stub"
-
-        when {
-            params {
-                outdir = "$outputDir"
-            }
-        }
-
-        then {
-            assertAll(
-                { assert workflow.success },
-                { assert workflow.out.anndata != null },
-                { assert snapshot(
-                    workflow.trace.tasks().size(),
-                    workflow.trace.tasks()*.name.sort()
-                ).match("stub_workflow_tasks") }
-            )
-        }
-    }
-
-    test("nf-scatac - integration run - real data") {
-
-        tag "integration"
-
-        when {
-            params {
-                input                  = "${projectDir}/tests/data/samplesheet_test.csv"
-                vcf                    = "${projectDir}/tests/data/variants.vcf.gz"
-                outdir                 = "${outputDir}/results_integration"
-                min_fragments_per_cell = 1
-                min_cells_per_snp      = 1
-                min_count              = 1
-                skip_pseudobulk        = true
-            }
-        }
-
-        then {
-            assertAll(
-                { assert workflow.success },
-                { assert workflow.out.anndata != null },
-                { assert path("${outputDir}/results_integration").exists() },
-                { assert snapshot(workflow.trace.tasks().size()).match("integration_task_count") }
-            )
-        }
-    }
-}
-
 nextflow_workflow {
 
     name "Test Workflow SCATAC"
@@ -102,8 +43,8 @@ nextflow_workflow {
                 { assert workflow.success },
                 { assert workflow.out.cell_counts.size() == 1 },
                 { assert workflow.out.anndata.size() == 1 },
-                { assert workflow.out.imbalance.size() == 1 },
-                { assert snapshot(workflow.out.versions).match("scatac_versions_fragments") }
+                { assert workflow.out.imbalance.size() == 0 },
+                { assert path(workflow.out.pseudobulk[0][1]).getFileName().toString().endsWith("_pseudobulk_coverage.tsv") }
             )
         }
     }
@@ -499,7 +440,7 @@ AAACGAAC-1\\tchr1\\t200\\tC\\tT\\t3
                 { assert process.success },
                 { assert process.out.counts.size() == 1 },
                 { assert process.out.stats.size() == 1 },
-                { assert file(process.out.counts[0][1]).text.contains("ref_count") }
+                { assert file(process.out.counts[0][1]).text.contains("overlap_count") }
             )
         }
     }

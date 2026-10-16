@@ -192,10 +192,7 @@ fn vcf_to_bed_from_reader<R: BufRead>(
     }
 
     writer.flush()?;
-    eprintln!(
-        "  Processed {} records, wrote {} variants to BED",
-        total_records, variant_count
-    );
+    eprintln!("  Processed {total_records} records, wrote {variant_count} variants to BED");
 
     Ok(variant_count)
 }
@@ -269,11 +266,7 @@ fn process_vcf_record<W: Write>(
                 }
             }
 
-            writeln!(
-                writer,
-                "{}\t{}\t{}\t{}\t{}",
-                chrom, pos0, end, ref_allele, alt_allele
-            )?;
+            writeln!(writer, "{chrom}\t{pos0}\t{end}\t{ref_allele}\t{alt_allele}")?;
             written += 1;
         }
         return Ok(Some(written));
@@ -342,15 +335,10 @@ fn process_vcf_record<W: Write>(
             if config.include_genotypes {
                 writeln!(
                     writer,
-                    "{}\t{}\t{}\t{}\t{}\t{}",
-                    chrom, pos0, end, ref_allele, alt_allele, gt_string
+                    "{chrom}\t{pos0}\t{end}\t{ref_allele}\t{alt_allele}\t{gt_string}"
                 )?;
             } else {
-                writeln!(
-                    writer,
-                    "{}\t{}\t{}\t{}\t{}",
-                    chrom, pos0, end, ref_allele, alt_allele
-                )?;
+                writeln!(writer, "{chrom}\t{pos0}\t{end}\t{ref_allele}\t{alt_allele}")?;
             }
 
             written += 1;
@@ -383,7 +371,7 @@ fn get_genotype_indices(
 
     // Convert value to string via Debug format and extract genotype
     // Note: noodles Value doesn't implement Display; Debug gives e.g. String("0|1")
-    let gt_string = format!("{:?}", gt_value);
+    let gt_string = format!("{gt_value:?}");
     let gt_clean = extract_genotype_string(&gt_string);
 
     // Check for missing genotype

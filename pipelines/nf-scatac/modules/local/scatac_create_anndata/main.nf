@@ -1,7 +1,7 @@
 /*
- * SCATAC_CREATE_ANNDATA - Convert allele counts to AnnData H5AD format
+ * SCATAC_CREATE_ANNDATA - Convert fragment overlap coverage to AnnData H5AD format
  *
- * Creates AnnData object with per-cell allele counts at heterozygous SNPs.
+ * Creates AnnData object with per-cell fragment overlap coverage at heterozygous SNPs.
  * Outputs:
  *   - H5AD file with sparse matrix (X=total overlap counts per cell/SNP)
  *   - Cell metadata (obs) with QC metrics
@@ -45,7 +45,7 @@ import pandas as pd
 from scipy import sparse
 import anndata as ad
 
-# Read allele counts TSV
+# Read fragment overlap coverage TSV
 df = pd.read_csv("${counts}", sep='\\t')
 
 # Validate required columns
@@ -58,7 +58,7 @@ if missing:
 
 # Handle empty input (early return pattern)
 if df.empty:
-    ad.AnnData(X=sparse.csr_matrix((0, 0))).write_h5ad("${prefix}_allelic.h5ad")
+    ad.AnnData(X=sparse.csr_matrix((0, 0))).write_h5ad("${prefix}_coverage.h5ad")
     pd.DataFrame(columns=['barcode', 'n_snps', 'total_counts']).to_csv(
         "${prefix}_cell_qc.tsv", sep='\\t', index=False)
     print("Created empty AnnData (no data)")
@@ -89,12 +89,12 @@ else:
     # Create and write AnnData
     adata = ad.AnnData(X=X, obs=cell_stats, var=var,
                        uns={'sample_id': '${meta.id}', 'pipeline': 'nf-scatac',
-                            'data_type': 'scATAC_allelic_counts'})
-    adata.write_h5ad("${prefix}_allelic.h5ad")
+                            'data_type': 'scATAC_fragment_coverage'})
+    adata.write_h5ad("${prefix}_coverage.h5ad")
     cell_stats.reset_index().to_csv("${prefix}_cell_qc.tsv", sep='\\t', index=False)
 
     if ${zarr_flag}:
-        adata.write_zarr("${prefix}_allelic.zarr")
+        adata.write_zarr("${prefix}_coverage.zarr")
 
     print(f"Created AnnData: {len(barcodes)} cells x {len(snp_ids)} SNPs")
 PYEOF
@@ -121,7 +121,7 @@ adata = ad.AnnData(
     obs=pd.DataFrame({'n_snps': [2, 2], 'total_counts': [8, 10]}, index=['AAACGAAC-1', 'AAACGAAT-1']),
     var=pd.DataFrame({'chrom': ['chr1', 'chr1'], 'pos': [100, 200]}, index=['chr1:100:A>G', 'chr1:200:C>T'])
 )
-adata.write_h5ad("${prefix}_allelic.h5ad")
+adata.write_h5ad("${prefix}_coverage.h5ad")
 
 pd.DataFrame({
     'barcode': ['AAACGAAC-1', 'AAACGAAT-1'],
@@ -131,8 +131,8 @@ pd.DataFrame({
 PYEOF
 
     if [ "${create_zarr}" == "true" ]; then
-        mkdir -p ${prefix}_allelic.zarr
-        touch ${prefix}_allelic.zarr/.zgroup
+        mkdir -p ${prefix}_coverage.zarr
+        touch ${prefix}_coverage.zarr/.zgroup
     fi
 
     cat <<-END_VERSIONS > versions.yml

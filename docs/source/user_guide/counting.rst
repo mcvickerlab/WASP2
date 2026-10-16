@@ -41,7 +41,9 @@ Supported region files:
 * GFF3
 
 For GTF/GFF3 inputs, WASP2 derives interval annotations from feature rows and
-defaults to ``gene`` features when present.
+selects ``exon``, then ``transcript``, then ``gene`` features by default.
+Use ``--gene_feature`` to select explicitly. Feature and parent identifiers must
+be present and nonempty on every selected annotation row.
 
 Useful options:
 
@@ -130,9 +132,16 @@ Important points:
 The output is an AnnData ``.h5ad`` file with:
 
 * sparse count layers for ``ref``, ``alt``, and ``other``
-* variant metadata in ``adata.obs``
-* barcode names in ``adata.var_names``
+* variant metadata and selected sample genotypes in ``adata.var``
+* cell barcode names in ``adata.obs_names``
+* count layers shaped ``cells × SNPs``
 * feature-to-variant mapping in ``adata.uns["feature"]`` when annotations are used
+
+For downstream single-cell analysis, automatic or requested phased inference
+uses the archived selection rule: the retained genotype set must be exactly
+``{0|1, 1|0}``. Mixed phased/unphased genotypes or a single observed phase
+orientation select unphased inference with a warning. Explicit ``--unphased``
+always selects unphased inference.
 
 Examples
 --------

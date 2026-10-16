@@ -270,7 +270,7 @@ pub fn filter_bam_by_variants(
 
     // Phase 1: Build variant store (reuse from bam_intersect)
     let t0 = Instant::now();
-    eprintln!("Phase 1: Building variant store from {}...", bed_path);
+    eprintln!("Phase 1: Building variant store from {bed_path}...");
     let store = build_variant_store(bed_path)?;
     stats.phase1_ms = t0.elapsed().as_millis() as u64;
     eprintln!(

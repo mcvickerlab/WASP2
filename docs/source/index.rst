@@ -5,7 +5,7 @@ WASP2: Allele-Specific Analysis
    :target: https://pypi.org/project/wasp2/
    :alt: PyPI
 
-.. image:: https://github.com/mcvickerlab/WASP2/workflows/WASP2%20Tests/badge.svg
+.. image:: https://github.com/mcvickerlab/WASP2/actions/workflows/ci.yml/badge.svg
    :target: https://github.com/mcvickerlab/WASP2/actions
    :alt: Tests
 
@@ -19,8 +19,8 @@ Features
 * **Allele Counting**: Count allele-specific reads from BAM files
 * **Statistical Analysis**: Beta-binomial likelihood-ratio tests for allelic
   imbalance
-* **Single-Cell Support**: Specialized tools for single-cell RNA-seq and
-  scATAC-seq
+* **Single-Cell Support**: Barcode-aware counting and group-level scATAC-seq
+  inference
 * **Rust-Accelerated**: Rust-backed BAM filtering and counting for large
   cohorts
 
@@ -37,7 +37,7 @@ Count alleles from a BAM file:
 
 .. code-block:: bash
 
-   wasp2-count count-variants sample.bam variants.vcf
+   wasp2-count count-variants sample.bam variants.vcf --out_file counts.tsv
 
 Analyze allelic imbalance:
 

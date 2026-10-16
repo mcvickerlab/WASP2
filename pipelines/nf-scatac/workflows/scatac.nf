@@ -2,7 +2,7 @@
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     SCATAC WORKFLOW - Single-Cell ATAC-seq Allelic Imbalance
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    Allelic imbalance analysis on scATAC-seq data using WASP2.
+    BAM allele counting or fragment coverage on scATAC-seq data using WASP2.
 
     Supports two input modes:
     1. BAM input: True allele-specific counting with ref/alt/hap layers
@@ -49,7 +49,7 @@ workflow SCATAC {
             [ [id: 'variants'], vcf, idx ]
         }
 
-    // Run WASP2 single-cell allelic imbalance analysis
+    // Run WASP2 single-cell counting and coverage aggregation
     // Includes: counting, AnnData creation, pseudo-bulk aggregation, statistical analysis
     WASP_ALLELIC_SC ( samplesheet, ch_vcf )
     ch_versions = ch_versions.mix(WASP_ALLELIC_SC.out.versions)

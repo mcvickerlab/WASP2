@@ -19,6 +19,10 @@
 
 ## Installation
 
+Published packages and container tags may lag behind `dev`. This branch targets
+the unreleased 1.5.0 version. To test development fixes, install from `dev`
+using the [source installation instructions](https://mcvickerlab.github.io/WASP2/installation.html#development-installation).
+
 ### Bioconda
 
 ```bash
@@ -36,15 +40,18 @@ The PyPI package does not install external tools such as `samtools`,
 
 ### Docker
 
+Choose an existing tag from the [container registry](https://github.com/mcvickerlab/WASP2/pkgs/container/wasp2)
+and replace `PUBLISHED_TAG` below. A matching source version does not imply a published image.
+
 ```bash
-docker pull ghcr.io/mcvickerlab/wasp2:1.5.0
-docker run --rm ghcr.io/mcvickerlab/wasp2:1.5.0 wasp2-count --help
+docker pull ghcr.io/mcvickerlab/wasp2:PUBLISHED_TAG
+docker run --rm ghcr.io/mcvickerlab/wasp2:PUBLISHED_TAG wasp2-count --help
 ```
 
 ### Singularity/Apptainer
 
 ```bash
-singularity pull wasp2.sif docker://ghcr.io/mcvickerlab/wasp2:1.5.0
+singularity pull wasp2.sif docker://ghcr.io/mcvickerlab/wasp2:PUBLISHED_TAG
 singularity exec wasp2.sif wasp2-count --help
 ```
 
@@ -55,6 +62,11 @@ WASP2 installs three command-line entry points:
 - `wasp2-map`
 - `wasp2-count`
 - `wasp2-analyze`
+
+The Python CLI coordinates compiled Rust counting and bulk statistical inference.
+Single-cell counting uses Rust; single-cell imbalance and differential inference
+currently use Python/SciPy. A Python command entry point does not change which
+backend performs the calculations.
 
 ## Quick Start
 
@@ -177,15 +189,21 @@ Valid interior dispersion values are retained without clipping. Exact rho
 endpoints and probability-product underflow use documented finite extensions
 because archived Python is undefined there.
 
-## Single-Cell Example
+## Single-Cell ATAC-seq Example
+
+Counting uses a one-column barcode whitelist; analysis uses a separate
+two-column barcode-to-group mapping. Single-cell phased inference is selected
+only when the retained genotype set is exactly `{0|1, 1|0}`. Mixed phasing
+or a single observed orientation selects unphased inference with a warning,
+including when `--phased` was requested.
 
 ```bash
 wasp2-count count-variants-sc \
-  cellranger.bam \
+  sc_atac.bam \
   variants.vcf.gz \
   barcodes.tsv \
   --samples sample1 \
-  --feature genes.gtf \
+  --feature peaks.bed \
   --out_file allele_counts.h5ad
 
 wasp2-analyze find-imbalance-sc \

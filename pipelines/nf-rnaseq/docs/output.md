@@ -80,27 +80,25 @@ Statistical test results for allelic imbalance.
 |--------|-------------|
 | `region` | Gene/region identifier |
 | `snp_count` | Number of heterozygous SNPs in region |
-| `ref_sum` | Total reference allele counts |
-| `alt_sum` | Total alternate allele counts |
-| `mu` | Estimated mean allelic ratio |
+| `ref_count` | Total reference allele counts |
+| `alt_count` | Total alternate allele counts |
+| `N` | Total reference + alternate reads |
+| `mu` | Fitted allelic proportion anchored to the first SNP |
 | `null_ll` | Null hypothesis log-likelihood |
 | `alt_ll` | Alternative hypothesis log-likelihood |
-| `LRT` | Likelihood ratio test statistic |
-| `pvalue` | P-value from chi-squared test |
-| `fdr` | Benjamini-Hochberg FDR-adjusted p-value |
+| `lrt` | Likelihood ratio test statistic |
+| `pval` | P-value from chi-squared test |
+| `fdr_pval` | Benjamini-Hochberg FDR-adjusted p-value |
 
 **Example:**
 ```tsv
-region	snp_count	ref_sum	alt_sum	mu	null_ll	alt_ll	LRT	pvalue	fdr
-ENSG00000001	5	125	180	0.41	-450.2	-445.8	8.8	0.003	0.015
-ENSG00000002	3	45	48	0.48	-120.5	-120.4	0.2	0.65	0.85
-ENSG00000003	8	210	95	0.69	-380.1	-360.2	39.8	2.7e-10	5.4e-09
+region	ref_count	alt_count	N	snp_count	null_ll	alt_ll	mu	lrt	pval	fdr_pval
+ENSG00000001	125	180	305	5	-450.2	-445.8	0.41	8.8	0.003	0.015
+ENSG00000002	45	48	93	3	-120.5	-120.4	0.48	0.2	0.65	0.85
 ```
 
 **Interpreting Results:**
-- **mu < 0.5**: Reference allele underexpressed
-- **mu > 0.5**: Reference allele overexpressed
-- **mu ≈ 0.5**: Balanced expression
+The `mu` orientation is anchored to the first SNP. A value below or above 0.5 does not by itself establish reference-allele underexpression or overexpression across a gene. Values near 0.5 indicate balance in the fitted model.
 - **FDR < 0.05**: Significant allelic imbalance
 
 ### `pipeline_info/`
@@ -208,8 +206,8 @@ library(tidyverse)
 results <- read_tsv("results/analysis/SAMPLE1_ai_results.tsv")
 
 # Volcano plot
-ggplot(results, aes(x = log2(mu/(1-mu)), y = -log10(pvalue))) +
-    geom_point(aes(color = fdr < 0.05)) +
+ggplot(results, aes(x = log2(mu/(1-mu)), y = -log10(pval))) +
+    geom_point(aes(color = fdr_pval < 0.05)) +
     geom_hline(yintercept = -log10(0.05), linetype = "dashed") +
     labs(x = "log2(Allelic Ratio)", y = "-log10(P-value)")
 ```

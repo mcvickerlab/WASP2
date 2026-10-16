@@ -81,7 +81,7 @@
                 "min_count": {
                     "type": "integer",
                     "default": 10,
-                    "minimum": 1,
+                    "minimum": 0,
                     "description": "Minimum allele count for imbalance testing.",
                     "help_text": "Variants with fewer than this many total reads will be excluded from statistical testing.",
                     "fa_icon": "fas fa-sort-numeric-up"

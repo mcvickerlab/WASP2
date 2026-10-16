@@ -2,15 +2,14 @@
 
 ## Introduction
 
-**nf-scatac** is a Nextflow DSL2 pipeline for single-cell ATAC-seq allelic imbalance (AI) analysis. It processes 10x Genomics scATAC-seq data (fragments files or CellRanger ATAC output) and uses WASP2 for per-cell allele counting and statistical testing to identify regions with significant allelic imbalance.
+**nf-scatac** is a Nextflow DSL2 workflow for single-cell ATAC-seq counting and coverage. BAM inputs support allele counting; fragment inputs support overlap coverage only. Fragment coordinates cannot identify observed alleles. Statistical inference is not run for either path; BAM-to-inference aggregation remains unimplemented. See the [output documentation](output.md) and use the WASP2 single-cell CLI separately for inference on validated BAM-derived counts.
 
 ## Pipeline Summary
 
 1. Input validation (samplesheet, VCF)
 2. VCF to BED conversion for SNP positions
-3. Per-cell allele counting at heterozygous SNPs
-4. Allelic imbalance statistical analysis
-5. Results aggregation
+3. BAM allele counting or fragment overlap coverage at heterozygous SNPs
+4. AnnData conversion and optional fragment coverage aggregation
 
 ## Quick Start
 
@@ -60,13 +59,17 @@ GM12878_cellranger,,/data/cellranger_atac/GM12878,CB,10x-atac-v2
 
 ## Optional Parameters
 
-### WASP2 Options
+### Coverage options
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `--wasp_min_count` | 10 | Minimum allele count for AI analysis |
-| `--wasp_pseudocount` | 1 | Pseudocount for beta-binomial model |
-| `--wasp_phased` | false | Use phased haplotype model |
+| `--min_fragments_per_cell` | 1000 | Minimum overlap total per cell for the fragment path |
+| `--min_cells_per_snp` | 3 | Minimum covered cells per SNP in aggregated fragment coverage |
+| `--skip_pseudobulk` | false | Skip fragment coverage aggregation |
+| `--skip_anndata` | false | Skip AnnData output |
+| `--create_zarr` | false | Also write Zarr output |
+
+The legacy `--min_count` and `--pseudocount` parameters do not run inference in this workflow.
 
 ### Single-Cell Options
 
@@ -114,27 +117,17 @@ nextflow run nf-scatac -profile test_real,singularity
 
 ## Example Commands
 
-### Full Single-Cell Analysis
+### Cell-level counting and coverage
 
 ```bash
-nextflow run nf-scatac \
+nextflow run pipelines/nf-scatac \
     --input samplesheet.csv \
     --vcf phased_variants.vcf.gz \
-    --wasp_min_count 10 \
     --outdir results \
     -profile docker
 ```
 
-### Using Phased Haplotype Model
-
-```bash
-nextflow run nf-scatac \
-    --input samplesheet.csv \
-    --vcf phased_variants.vcf.gz \
-    --wasp_phased true \
-    --outdir results \
-    -profile singularity
-```
+Use `--skip_pseudobulk` to omit fragment coverage aggregation. Phase information is used for BAM haplotype layers; no phased or unphased inference is performed by this workflow.
 
 ## Supported Chemistries
 
@@ -144,15 +137,9 @@ nextflow run nf-scatac \
 | `10x-atac-v2` | 10x Genomics Single Cell ATAC v2 (default) |
 | `custom` | Custom scATAC-seq library prep |
 
-## Resource Requirements
+## Resources
 
-Typical resource usage per sample (5000 cells):
-
-| Process | CPUs | Memory | Time |
-|---------|------|--------|------|
-| VCF to BED conversion | 2 | 4 GB | 2-5 min |
-| Per-cell allele counting | 4 | 8 GB | 15-30 min |
-| Imbalance analysis | 2 | 4 GB | 5-10 min |
+Configure `--max_cpus`, `--max_memory`, and `--max_time` for the input size and execution environment. Check the execution report for observed resource use.
 
 ## Troubleshooting
 

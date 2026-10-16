@@ -151,7 +151,7 @@ pub fn build_variant_store(bed_path: &str) -> Result<VariantStore> {
         .map(|(chrom, intervals)| {
             let interval_count = intervals.len();
             let tree = COITree::new(&intervals);
-            eprintln!("    {}: {} variants", chrom, interval_count);
+            eprintln!("    {chrom}: {interval_count} variants");
             (chrom, tree)
         })
         .collect();
@@ -296,8 +296,7 @@ pub fn intersect_bam_with_store(
     writer.flush()?;
 
     eprintln!(
-        "  Processed {} reads, {} with overlaps, {} total intersections",
-        read_count, reads_with_overlaps, intersection_count
+        "  Processed {read_count} reads, {reads_with_overlaps} with overlaps, {intersection_count} total intersections"
     );
 
     Ok(intersection_count)
@@ -319,7 +318,7 @@ pub fn intersect_bam_with_variants(
     bed_path: &str,
     out_path: &str,
 ) -> Result<usize> {
-    eprintln!("Building variant store from {}...", bed_path);
+    eprintln!("Building variant store from {bed_path}...");
     let store = build_variant_store(bed_path)?;
     eprintln!(
         "  {} chromosomes, {} total variants",
@@ -329,7 +328,7 @@ pub fn intersect_bam_with_variants(
 
     eprintln!("Intersecting reads with variants...");
     let count = intersect_bam_with_store(bam_path, &store, out_path)?;
-    eprintln!("  {} intersections found", count);
+    eprintln!("  {count} intersections found");
 
     Ok(count)
 }
@@ -532,7 +531,7 @@ pub fn intersect_bam_with_store_multi(
 
             // Write all sample genotypes
             for gt in &info.sample_genotypes {
-                write!(writer, "\t{}", gt).ok();
+                write!(writer, "\t{gt}").ok();
             }
             writeln!(writer).ok();
 
@@ -557,10 +556,7 @@ pub fn intersect_bam_with_variants_multi(
     out_path: &str,
     num_samples: usize,
 ) -> Result<usize> {
-    eprintln!(
-        "Building multi-sample variant store from {} ({} samples)...",
-        bed_path, num_samples
-    );
+    eprintln!("Building multi-sample variant store from {bed_path} ({num_samples} samples)...");
     let store = build_variant_store_multi(bed_path, num_samples)?;
     eprintln!(
         "  {} chromosomes, {} total variants",
@@ -570,7 +566,7 @@ pub fn intersect_bam_with_variants_multi(
 
     eprintln!("Intersecting reads with variants (multi-sample)...");
     let count = intersect_bam_with_store_multi(bam_path, &store, out_path)?;
-    eprintln!("  {} intersections found", count);
+    eprintln!("  {count} intersections found");
 
     Ok(count)
 }

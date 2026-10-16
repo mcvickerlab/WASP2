@@ -39,8 +39,8 @@ process WASP2_FIND_IMBALANCE {
     stub:
     def prefix = task.ext.prefix ?: "${meta.id}"
     """
-    echo -e "region\\tref_count\\talt_count\\tpval\\tfdr_pval\\tlog2_ratio" > ${prefix}_ai_results.tsv
-    echo -e "peak_1\\t10\\t8\\t0.05\\t0.1\\t0.322" >> ${prefix}_ai_results.tsv
+    echo -e "region\\tref_count\\talt_count\\tN\\tsnp_count\\tnull_ll\\talt_ll\\tmu\\tlrt\\tpval\\tfdr_pval" > ${prefix}_ai_results.tsv
+    echo -e "peak_1\\t10\\t8\\t18\\t1\\t-2.5\\t-2.4\\t0.55\\t0.2\\t0.655\\t0.655" >> ${prefix}_ai_results.tsv
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":

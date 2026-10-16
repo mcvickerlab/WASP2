@@ -117,7 +117,7 @@ nextflow run pipelines/nf-rnaseq -profile docker \
     --vcf het_snps.vcf.gz \
     --star_index /ref/star_index \
     --min_count 20 \
-    --pseudocount 0.5
+    --pseudocount 0
 ```
 
 ### Resume Failed Run

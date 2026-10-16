@@ -1,7 +1,8 @@
 """Repeat the full 32-run real ATAC matrix against executed archived Python.
 
 Count tables are frozen measurements from public reads, not Rust-generated
-expectations. Linux Python 3.11 CI pins the original numerical environment.
+expectations. DataFrame, untouched CSV and widened CSV references are distinct;
+legacy precision differences are recorded separately from wide-input parity. Linux Python 3.11 CI pins the original numerical environment.
 """
 
 import contextlib
@@ -18,7 +19,12 @@ import pandas as pd
 import pytest
 import scipy
 from scipy.special import expit
-from scripts.compare_archive_analysis import adapt_linear_reference, compare_frames, load_archive
+from scripts.compare_archive_analysis import (
+    adapt_linear_reference,
+    classify_reference_differences,
+    compare_frames,
+    load_archive,
+)
 
 from analysis.run_analysis_per_donor import run_per_donor_analysis
 
@@ -35,7 +41,7 @@ METADATA = json.loads((FIXTURES / "metadata.json").read_text())
 @pytest.mark.parametrize("model", ["single", "linear"])
 @pytest.mark.parametrize("phased", [False, True])
 @pytest.mark.parametrize("pc", [0, 1])
-def test_full_public_atac_matrix(tmp_path, unit, model, phased, pc):
+def test_full_public_atac_matrix(tmp_path, unit, model, phased, pc, record_property):
     import wasp2_rust
 
     source = METADATA["counts"][unit]
@@ -77,6 +83,35 @@ def test_full_public_atac_matrix(tmp_path, unit, model, phased, pc):
     output = wasp2_rust.analyze_imbalance_run(
         str(path), method=model, phased=phased, region_col=region, pseudocount=pc
     )
+    # DataFrame input uses inferred wide counts. Also execute the original CSV
+    # reader and a separately labeled adapter changing only its count dtypes.
+    csv_results = {}
+    for wide in (False, True):
+        csv_modules = load_archive(METADATA["archive_commit"], widen_bulk_csv_counts=wide)
+        if model == "linear":
+            adapt_linear_reference(csv_modules)
+            if phased:
+                original_parse_csv = csv_modules["as_analysis"].parse_opt
+                csv_modules["as_analysis"].parse_opt = (
+                    lambda df, disp=None, phased=False, _parse=original_parse_csv: _parse(
+                        df, disp=disp, phased=True
+                    )
+                )
+        with contextlib.redirect_stdout(io.StringIO()):
+            csv_results[wide] = (
+                csv_modules["as_analysis"]
+                .get_imbalance(
+                    str(path), method=model, phased=phased, region_col=region, pseudocount=pc
+                )
+                .rename(columns={"variant": "region"})
+            )
+    classification = classify_reference_differences(
+        csv_results[False], csv_results[True], pd.DataFrame(output["results"])
+    )
+    record_property("csv_reference_comparisons", json.dumps(classification))
+    assert classification["widened_comparison"]["status"] == "PASS", classification
+    assert classification["unexplained_rows"] == 0, classification
+    # A legacy FAIL remains a FAIL in the diagnostic; it is not reported as parity.
     comparison = compare_frames(expected, pd.DataFrame(output["results"]))
     assert comparison["status"] == "PASS", json.dumps(
         {

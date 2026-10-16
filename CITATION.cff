@@ -2,7 +2,7 @@
 # CITATION.cff - Citation File Format metadata for WASP2
 # Specification: https://citation-file-format.github.io/
 # Validates with: cffconvert --validate
-# Update when: version changes in pyproject.toml, authors change, or paper is published
+# Update when: version changes in rust/Cargo.toml, authors change, or paper is published
 cff-version: 1.2.0
 
 title: "WASP2"
@@ -23,7 +23,6 @@ authors:
     affiliation: "Salk Institute for Biological Studies"
 
 version: "1.5.0"
-date-released: "2026-07-21"
 license: MIT
 
 repository-code: "https://github.com/mcvickerlab/WASP2"

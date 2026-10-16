@@ -57,4 +57,28 @@ nextflow_process {
             assert process.out.versions
         }
     }
+    test("Preserves peak membership and zero pseudocount in actual analysis") {
+        tag "correctness_regression"
+        when {
+            process {
+                """
+                def counts_file = file("${workDir}/peak_counts.tsv")
+                counts_file.text = '''chrom\tpos\tref\talt\tGT\tregion\tref_count\talt_count\tother_count\nchr1\t100\tA\tG\t0|1\tpeak_shared\t5\t3\t0\nchr1\t120\tC\tT\t0|1\tpeak_shared\t4\t6\t0\n'''
+                input[0] = [[id:'peak_test'], counts_file]
+                input[1] = 0
+                input[2] = 0
+                """
+            }
+        }
+        then {
+            assert process.success
+            def rows = path(process.out.results[0][1]).readLines()
+            assert rows.size() == 2
+            def result = [rows[0].split('\t'), rows[1].split('\t')].transpose().collectEntries()
+            assert result.region == 'peak_shared'
+            assert result.snp_count == '2'
+            assert result.N == '18'
+        }
+    }
+
 }

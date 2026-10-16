@@ -8,7 +8,7 @@
                             "id": "test_phased",
                             "phased": true
                         },
-                        "test_phased.stats.tsv:md5,7c26e78eb635001b288dec206c4f980f"
+                        "test_phased.stats.tsv:md5,351e14240535962ec58c2cb8424dd122"
                     ]
                 ],
                 "1": [
@@ -20,7 +20,7 @@
                             "id": "test_phased",
                             "phased": true
                         },
-                        "test_phased.stats.tsv:md5,7c26e78eb635001b288dec206c4f980f"
+                        "test_phased.stats.tsv:md5,351e14240535962ec58c2cb8424dd122"
                     ]
                 ],
                 "versions": [

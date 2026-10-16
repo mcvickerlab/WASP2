@@ -1,17 +1,19 @@
 # nf-scatac
 
-Single-Cell ATAC-seq Allelic Imbalance Pipeline
+Single-cell ATAC-seq counting and coverage workflow
+
+Fragment files contain coordinates, not observed alleles. Their coverage cannot support allelic imbalance testing. This workflow does not run statistical inference: BAM-to-inference aggregation is also not yet implemented. Use the WASP2 single-cell analysis CLI on validated BAM-derived allele counts for downstream testing.
 
 ## Features
 
 - **10x Genomics scATAC fragment support** - Direct input from CellRanger ATAC output
-- **Allelic imbalance analysis** - At heterozygous SNPs using WASP2
+- **BAM allele counting** - Reference and alternate counts at heterozygous SNPs
 - **Cell barcode filtering** - Optional whitelist for quality-filtered cells
 - **Peak region filtering** - Restrict analysis to accessible regions
 - **AnnData/H5AD output** - For scverse ecosystem (Scanpy, ArchR, Signac)
 - **Zarr output** - For GenVarLoader integration
-- **Pseudo-bulk aggregation** - Sample-level aggregation for statistical power
-- **nf-core compliant** - Subworkflow architecture (Issue #57)
+- **Coverage aggregation** - Sample-level fragment overlap totals, without allele inference
+- **Nextflow DSL2** - Reusable modules and subworkflows
 
 ## Architecture
 
@@ -31,7 +33,7 @@ nf-scatac/
 ├── modules/
 │   └── local/
 │       ├── scatac_add_haplotype_layers/  # Hap1/hap2 layer creation from phased VCF
-│       ├── scatac_count_alleles/         # Per-cell allele counting (fragment-based)
+│       ├── scatac_count_alleles/         # Per-cell fragment overlap coverage
 │       ├── scatac_create_anndata/        # AnnData H5AD output
 │       └── scatac_pseudobulk/            # Pseudo-bulk aggregation
 ├── conf/
@@ -90,13 +92,13 @@ NA12878_bam,,,/path/to/possorted_bam.bam,CB,10x-atac-v2,/path/to/barcodes.txt,
 ### Processing Options
 - `--min_fragments_per_cell` - Minimum fragments per cell to include [default: 1000]
 - `--min_cells_per_snp` - Minimum cells per SNP for pseudo-bulk [default: 3]
-- `--min_count` - Minimum count for imbalance testing [default: 10]
+- `--min_count` - Reserved bulk-analysis threshold; not used by this workflow
 
 ### Output Options
 - `--outdir` - Output directory [default: ./results]
 - `--create_zarr` - Also output Zarr format for GenVarLoader [default: false]
 - `--skip_anndata` - Skip AnnData H5AD creation [default: false]
-- `--skip_pseudobulk` - Skip pseudo-bulk aggregation and analysis [default: false]
+- `--skip_pseudobulk` - Skip fragment coverage aggregation [default: false]
 
 ## Single-Cell Meta Map
 
@@ -116,23 +118,23 @@ The pipeline propagates scATAC-specific metadata through all stages:
 
 ### WASP_ALLELIC_SC
 
-Single-cell WASP2 allelic imbalance analysis:
+Single-cell counting and coverage aggregation:
 
 ```groovy
 include { WASP_ALLELIC_SC } from './subworkflows/local/wasp_allelic_sc/main'
 
 WASP_ALLELIC_SC (
-    ch_fragments,   // [ val(meta), path(fragments), path(tbi), path(barcodes), path(peaks) ]
+    ch_input,       // [ meta, fragments, tbi, barcodes, peaks, bam, bai ]
     ch_vcf          // [ val(meta), path(vcf), path(tbi) ]
 )
 
 // Outputs:
-// - cell_counts: Per-cell allele counts at SNPs
+// - cell_counts: Per-cell fragment overlap coverage at SNPs
 // - anndata: AnnData H5AD files
 // - zarr: Zarr directories (if enabled)
 // - cell_qc: Cell QC metrics
-// - pseudobulk: Aggregated counts
-// - imbalance: Allelic imbalance results
+// - pseudobulk: Aggregated fragment coverage
+// - imbalance: Empty (inference is not implemented)
 ```
 
 ### GENERATE_FRAGMENTS
@@ -188,21 +190,21 @@ or through environment variables consumed by `conf/test_real.config` and
 
 ```
 results/
-├── allele_counts/           # Per-cell allele counts at het SNPs
-│   └── {sample}_allele_counts.tsv
+├── fragment_coverage/      # Per-cell fragment overlap coverage
+│   └── {sample}_fragment_coverage.tsv
 ├── count_stats/             # Counting statistics
 │   └── {sample}_count_stats.tsv
 ├── anndata/                 # AnnData H5AD files for scverse
-│   └── {sample}_allelic.h5ad
+│   ├── {sample}_coverage.h5ad          # Fragment input
+│   └── {sample}_with_haplotypes.h5ad   # BAM input
 ├── zarr/                    # Zarr directories (if --create_zarr)
-│   └── {sample}_allelic.zarr/
+│   ├── {sample}_coverage.zarr/         # Fragment input
+│   └── {sample}_with_haplotypes.zarr/  # BAM input
 ├── cell_qc/                 # Cell QC metrics
 │   └── {sample}_cell_qc.tsv
-├── pseudobulk/              # Pseudo-bulk aggregated counts
-│   ├── {sample}_pseudobulk_counts.tsv
+├── pseudobulk/              # Aggregated fragment coverage
+│   ├── {sample}_pseudobulk_coverage.tsv
 │   └── {sample}_aggregation_stats.tsv
-├── imbalance/               # Allelic imbalance analysis
-│   └── {sample}_ai_results.tsv
 ├── variants/                # Processed variant BED
 │   └── variants.variants.bed
 └── pipeline_info/           # Execution reports
@@ -244,7 +246,7 @@ The H5AD file contains different layers depending on input type:
 - **uns**: Unstructured metadata
   - `sample_id`: Sample identifier
   - `pipeline`: 'nf-scatac'
-  - `data_type`: 'scATAC_allelic_counts' or 'scATAC_allelic_counts_phased'
+  - `data_type`: 'scATAC_fragment_coverage' for fragment input; 'scATAC_allelic_counts_phased' for phased BAM input
   - `phased_snps`: Number of phased SNPs (BAM input only)
   - `phasing_rate`: Fraction of SNPs with phasing info (BAM input only)
 

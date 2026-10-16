@@ -28,7 +28,7 @@ dependencies:
   - bwa>=0.7
   - anndata>=0.8,<0.12
   - scanpy>=1.10
-  - numba>=0.59
+  - numba>=0.59,<0.63
   - plink2
   - pgenlib>=0.90
 
@@ -44,7 +44,8 @@ dependencies:
   - ruff>=0.9
 
   # Rust build (PyO3)
-  - rust>=1.70
+  - rust>=1.88
+  - cmake>=3.14
   - libclang
   - clang
 

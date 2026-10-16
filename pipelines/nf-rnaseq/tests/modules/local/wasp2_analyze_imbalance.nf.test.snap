@@ -8,7 +8,7 @@
                             "id": "test_sample",
                             "single_end": false
                         },
-                        "test_sample_ai_results.tsv:md5,c4148ccd0d9ff199b9161514a575a2cf"
+                        "test_sample_ai_results.tsv:md5,351e14240535962ec58c2cb8424dd122"
                     ]
                 ],
                 "1": [
@@ -20,7 +20,7 @@
                             "id": "test_sample",
                             "single_end": false
                         },
-                        "test_sample_ai_results.tsv:md5,c4148ccd0d9ff199b9161514a575a2cf"
+                        "test_sample_ai_results.tsv:md5,351e14240535962ec58c2cb8424dd122"
                     ]
                 ],
                 "versions": [

@@ -1,8 +1,8 @@
 name: wasp_allelic_sc
 description: |
-  WASP2 single-cell allelic imbalance analysis for scATAC-seq data.
-  Converts VCF to BED, counts alleles per cell from fragments,
-  aggregates to pseudo-bulk, and analyzes allelic imbalance.
+  Single-cell BAM allele counting or fragment overlap coverage.
+  Fragment coverage is aggregated without allele inference; downstream
+  BAM-to-inference aggregation is not implemented.
 keywords:
   - wasp2
   - scatac
@@ -13,7 +13,6 @@ keywords:
 components:
   - wasp2/vcf_to_bed
   - local/scatac_count_alleles
-  - wasp2/analyze_imbalance
 
 input:
   - ch_fragments:
@@ -33,7 +32,7 @@ output:
         Structure: [ val(meta), path(counts.tsv) ]
   - imbalance:
       description: |
-        Allelic imbalance analysis results (uses pseudo-bulk aggregation internally).
+        Empty channel; this workflow does not run allelic imbalance inference.
         Structure: [ val(meta), path(results.tsv) ]
   - versions:
       description: |

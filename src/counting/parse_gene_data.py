@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import logging
+import re
 from pathlib import Path
 from typing import NamedTuple
 
 import polars as pl
-
-logger = logging.getLogger(__name__)
 
 
 class ParsedGeneData(NamedTuple):
@@ -60,6 +58,12 @@ class WaspGeneData:
                 setattr(self, key, getattr(data, key))
 
 
+def _attribute_values(attribute: str) -> pl.Expr:
+    """Extract an exact GTF/GFF3 attribute key, including the final attribute."""
+    pattern = rf"(?:^|;)\s*{re.escape(attribute)}(?:=|\s+)\s*([^;]*)"
+    return pl.col("attribute").str.extract(pattern).str.strip_chars(" \t\"'")
+
+
 def parse_gene_file(
     gene_file: str | Path,
     feature: str | None = None,
@@ -73,7 +77,7 @@ def parse_gene_file(
     gene_file : str | Path
         Path to GTF/GFF3 file.
     feature : str | None, optional
-        Feature type to extract (auto-detected if None).
+        Feature type to extract (exon, then transcript, then gene if None).
     attribute : str | None, optional
         Attribute for region names (auto-detected if None).
     parent_attribute : str | None, optional
@@ -102,61 +106,59 @@ def parse_gene_file(
         gene_file, separator="\t", comment_prefix="#", has_header=False, new_columns=gtf_cols
     )
 
-    # Check if we need to preparse feature
     if feature is None:
-        feature_list = df.select(pl.col("feature").unique()).to_series()
+        features = df.get_column("feature")
+        feature = next((name for name in ("exon", "transcript", "gene") if name in features), None)
+    if feature is None:
+        raise ValueError("Could not determine feature type: expected exon, transcript or gene")
 
-        if "gene" in feature_list:
-            feature = "gene"
-        elif "transcript" in feature_list:
-            feature = "transcript"
-        elif "exon" in feature_list:
-            feature = "exon"
-        else:
-            logger.warning("exon, gene or transcript not found in feature list: %s", feature_list)
-
-    assert feature is not None, "Could not determine feature type from gene file"
-
-    # feature filter
     df = df.filter(pl.col("feature") == feature)
+    if df.is_empty():
+        raise ValueError(f"No {feature!r} features found in {gene_file}")
 
-    # Parse attributes
+    def has_attribute(name: str, *, every_row: bool = True) -> bool:
+        present = _attribute_values(name).is_not_null()
+        return bool(df.select(present.all() if every_row else present.any()).item())
+
     if attribute is None:
-        if df.get_column("attribute").str.contains(f"{feature}_id").any():
-            attribute = f"{feature}_id"
-        elif df.get_column("attribute").str.contains("ID").any():
-            attribute = "ID"
-        elif df.get_column("attribute").str.contains("Name").any():
-            attribute = "Name"
-        else:
-            logger.warning("No 'ID', '%s_id' or 'Name' attribute found. Please include ID", feature)
+        candidates = (f"{feature}_id", "ID", "Name")
+        attribute = next((name for name in candidates if has_attribute(name)), None)
+        if attribute is None:
+            # If no complete key exists, report which records lack the preferred ID.
+            attribute = next(
+                (name for name in candidates if has_attribute(name, every_row=False)), None
+            )
+    if attribute is None:
+        raise ValueError(
+            f"No feature identifier found for {feature!r} in {gene_file}; "
+            f"expected {feature}_id, ID or Name. Specify --gene_attribute."
+        )
 
-    # Parse parent attributes
     if parent_attribute is None:
-        if df.get_column("attribute").str.contains("Parent").any():
-            parent_attribute = "Parent"
-        elif df.get_column("attribute").str.contains("transcript_id").any():
-            parent_attribute = "transcript_id"
-        elif df.get_column("attribute").str.contains("gene_id").any():
-            parent_attribute = "gene_id"
-        else:
-            parent_attribute = attribute
+        parent_attribute = next(
+            (name for name in ("Parent", "transcript_id", "gene_id") if has_attribute(name)),
+            attribute,
+        )
+    parent_col = f"groupby_{attribute}" if parent_attribute == attribute else parent_attribute
 
-    assert attribute is not None, "Could not determine attribute from gene file"
-    assert parent_attribute is not None, "Could not determine parent_attribute from gene file"
-    if parent_attribute == attribute:
-        parent_col = f"groupby_{attribute}"
-    else:
-        parent_col = parent_attribute
-
-    # Extract relevant attributes
-    attr_regex = rf"{attribute}[=\s]\"?\'?(.*?)\"?\'?;"
-    parent_regex = rf"{parent_attribute}[=\s]\"?\'?(.*?)\"?\'?;"
+    # Validate before writing a BED so missing IDs cannot reach interval intersection.
+    for name in dict.fromkeys((attribute, parent_attribute)):
+        invalid = df.filter(_attribute_values(name).is_null() | (_attribute_values(name) == ""))
+        if not invalid.is_empty():
+            examples = ", ".join(
+                f"{row['seqname']}:{row['start']}-{row['end']}"
+                for row in invalid.head(3).iter_rows(named=True)
+            )
+            raise ValueError(
+                f"Missing or empty annotation attribute {name!r} on {invalid.height} "
+                f"{feature!r} record(s) in {gene_file}: {examples}. "
+                "Provide complete identifiers or select --gene_attribute/--gene_parent."
+            )
 
     df = df.with_columns(
         pl.col("start").sub(1),
-        pl.col("attribute").str.extract(attr_regex).alias(attribute),
-        pl.col("attribute").str.extract(parent_regex).alias(parent_col),
+        _attribute_values(attribute).alias(attribute),
+        _attribute_values(parent_attribute).alias(parent_col),
     ).select(["seqname", "start", "end", attribute, parent_col])
 
     return ParsedGeneData(df, feature, attribute, parent_col)

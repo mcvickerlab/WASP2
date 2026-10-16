@@ -21,8 +21,8 @@ process WASP2_ANALYZE {
     def args = task.ext.args ?: ''
     // Sanitize inputs to prevent shell injection
     def prefix = (task.ext.prefix ?: "${meta.id}").replaceAll(/[^a-zA-Z0-9._-]/, '_')
-    def min_count = task.ext.min_count ?: 10
-    def pseudocount = task.ext.pseudocount ?: 1
+    def min_count = task.ext.min_count != null ? task.ext.min_count : 10
+    def pseudocount = task.ext.pseudocount != null ? task.ext.pseudocount : 1
     def phased_arg = meta.phased ? '--phased' : ''
     """
     set -euo pipefail
@@ -60,7 +60,7 @@ process WASP2_ANALYZE {
     def prefix = (task.ext.prefix ?: "${meta.id}").replaceAll(/[^a-zA-Z0-9._-]/, '_')
     """
     cat <<-END_HEADER > ${prefix}.stats.tsv
-    region	ref_count	alt_count	ratio	log2fc	pval	fdr_pval	dispersion
+    region	ref_count	alt_count	N	snp_count	null_ll	alt_ll	mu	lrt	pval	fdr_pval
     END_HEADER
 
     cat <<-END_VERSIONS > versions.yml

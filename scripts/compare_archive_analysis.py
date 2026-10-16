@@ -9,6 +9,7 @@ cell-by-SNP layout. This is a compatibility check, not statistical calibration.
 
 from __future__ import annotations
 
+import ast
 import contextlib
 import io
 import subprocess
@@ -27,11 +28,30 @@ from scipy.special import expit
 ROOT = Path(__file__).resolve().parents[1]
 ARCHIVE_REF = "41354fc"
 STAT_COLUMNS = ["null_ll", "alt_ll", "mu", "lrt", "pval", "fdr_pval"]
-COUNT_COLUMNS = ["ref_count", "alt_count", "N", "snp_count", "num_snps"]
+COUNT_COLUMNS = [
+    "ref_count",
+    "alt_count",
+    "N",
+    "snp_count",
+    "num_snps",
+    "num_snps_group1",
+    "num_snps_group2",
+]
 
 
-def load_archive(ref: str = ARCHIVE_REF) -> dict[str, types.ModuleType]:
-    """Load unmodified historical modules, restoring their legacy import names."""
+def load_archive(
+    ref: str = ARCHIVE_REF,
+    *,
+    widen_single_cell_sums: bool = False,
+    widen_bulk_csv_counts: bool = False,
+) -> dict[str, types.ModuleType]:
+    """Load historical modules with separately selectable count-width adapters.
+
+    The explicit dtype repair prevents count overflow and SciPy float32 dispatch.
+    Single-cell changes only sum accumulator keywords; bulk CSV changes only
+    the three count-column reader dtypes. Neither changes statistical algorithms.
+    The default executes the unmodified archive.
+    """
     names = ["as_analysis", "as_analysis_sc", "compare_ai"]
     saved = {name: sys.modules.get(name) for name in names}
     modules = {}
@@ -43,7 +63,60 @@ def load_archive(ref: str = ARCHIVE_REF) -> dict[str, types.ModuleType]:
             module = types.ModuleType(f"archive_{name}")
             modules[name] = module
             sys.modules[name] = module
-            exec(compile(source, f"{ref}:src/analysis/{name}.py", "exec"), module.__dict__)
+            tree = ast.parse(source)
+            if widen_bulk_csv_counts and name == "as_analysis":
+                changed = set()
+                function = next(
+                    node
+                    for node in tree.body
+                    if isinstance(node, ast.FunctionDef) and node.name == "get_imbalance"
+                )
+                for node in ast.walk(function):
+                    if not (
+                        isinstance(node, ast.Call)
+                        and isinstance(node.func, ast.Attribute)
+                        and isinstance(node.func.value, ast.Name)
+                        and node.func.value.id == "pd"
+                        and node.func.attr == "read_csv"
+                    ):
+                        continue
+                    for keyword in node.keywords:
+                        if keyword.arg != "dtype" or not isinstance(keyword.value, ast.Dict):
+                            continue
+                        for key, value in zip(
+                            keyword.value.keys, keyword.value.values, strict=True
+                        ):
+                            if (
+                                isinstance(key, ast.Constant)
+                                and key.value in {"ref_count", "alt_count", "other_count"}
+                                and isinstance(value, ast.Attribute)
+                                and isinstance(value.value, ast.Name)
+                                and value.value.id == "np"
+                                and value.attr == "uint16"
+                            ):
+                                value.attr = "uint64"
+                                changed.add(key.value)
+                if changed != {"ref_count", "alt_count", "other_count"}:
+                    raise ValueError("Cannot locate the three archived bulk CSV count dtypes")
+            if widen_single_cell_sums and name in {"as_analysis_sc", "compare_ai"}:
+                for node in ast.walk(tree):
+                    if not (
+                        isinstance(node, ast.Call)
+                        and isinstance(node.func, ast.Attribute)
+                        and node.func.attr == "sum"
+                    ):
+                        continue
+                    for keyword in node.keywords:
+                        value = keyword.value
+                        if (
+                            keyword.arg == "dtype"
+                            and isinstance(value, ast.Attribute)
+                            and isinstance(value.value, ast.Name)
+                            and value.value.id == "np"
+                            and value.attr == "uint16"
+                        ):
+                            value.attr = "uint64"
+            exec(compile(tree, f"{ref}:src/analysis/{name}.py", "exec"), module.__dict__)
     finally:
         for name, module in saved.items():
             if module is None:
@@ -219,12 +292,24 @@ def compare_frames(expected: pd.DataFrame, observed: pd.DataFrame, key: str = "r
         if column not in observed:
             failures.append(f"missing {column}")
             continue
-        left = expected[column].to_numpy(dtype=float)
-        right = observed[column].to_numpy(dtype=float)
-        deltas[column] = float(np.max(np.abs(left - right))) if len(left) else 0.0
         if column in COUNT_COLUMNS:
-            equal = np.array_equal(left, right)
+            # Python integers retain UInt64 values and signed/unsigned differences.
+            # Casting first to float64 hides one-count changes above 2**53.
+            left_counts = expected[column].tolist()
+            right_counts = observed[column].tolist()
+            valid = all(
+                pd.notna(a) and pd.notna(b) for a, b in zip(left_counts, right_counts, strict=True)
+            )
+            equal = valid and left_counts == right_counts
+            deltas[column] = (
+                max((abs(a - b) for a, b in zip(left_counts, right_counts, strict=True)), default=0)
+                if valid
+                else float("nan")
+            )
         else:
+            left = expected[column].to_numpy(dtype=float)
+            right = observed[column].to_numpy(dtype=float)
+            deltas[column] = float(np.max(np.abs(left - right))) if len(left) else 0.0
             equal = (
                 np.all(np.isfinite(left))
                 and np.all(np.isfinite(right))
@@ -239,6 +324,81 @@ def compare_frames(expected: pd.DataFrame, observed: pd.DataFrame, key: str = "r
         "status": "FAIL" if failures else "PASS",
         "failures": failures,
         "max_absolute_differences": deltas,
+    }
+
+
+def classify_reference_differences(
+    legacy: pd.DataFrame, widened: pd.DataFrame, observed: pd.DataFrame, key: str = "region"
+) -> dict:
+    """Retain strict failures and localize changes caused by a count-width adapter.
+
+    A complementary estimate is only a candidate: equivalence requires a separate
+    check of the actual anchored objective. This helper never alters an output.
+    """
+    strict = compare_frames(legacy, observed, key)
+    corrected = compare_frames(widened, observed, key)
+    frames = [
+        frame.set_index(key, drop=False).rename_axis(None) for frame in (legacy, widened, observed)
+    ]
+    if any(not frame.index.is_unique for frame in frames):
+        raise ValueError("Reference classification requires unique result identities")
+    rows = []
+    for identity in sorted(set().union(*(frame.index for frame in frames))):
+        present = [identity in frame.index for frame in frames]
+        if not all(present):
+            rows.append(
+                {
+                    "identity": identity,
+                    "stage": "tested_identity",
+                    "present": present,
+                    "reference_width_explains": present[1:] == [True, True]
+                    and corrected["status"] == "PASS",
+                }
+            )
+            continue
+        parts = [frame.loc[[identity]] for frame in frames]
+        comparison = compare_frames(parts[0], parts[2], key)
+        if comparison["status"] == "PASS":
+            continue
+        fields = comparison.get("failures", [])
+        stages = []
+        if any(field in COUNT_COLUMNS for field in fields):
+            stages.append("count_precision")
+        if any(field in fields for field in ("null_ll", "alt_ll", "lrt")):
+            stages.append("likelihood_precision")
+        effects = [field for field in ("mu", "mu1", "mu2", "combined_mu") if field in fields]
+        if effects:
+            stages.append("effect_estimate_precision")
+        if "pval" in fields:
+            stages.append("p_value_precision")
+        if "fdr_pval" in fields or any(field.startswith("significance at") for field in fields):
+            stages.append("multiple_testing")
+        candidates = [
+            field
+            for field in effects
+            if np.isclose(
+                float(parts[0][field].iloc[0]) + float(parts[2][field].iloc[0]),
+                1.0,
+                rtol=5e-5,
+                atol=5e-5,
+            )
+        ]
+        rows.append(
+            {
+                "identity": identity,
+                "stages": stages,
+                "fields": fields,
+                "complementary_estimate_candidates": candidates,
+                "reference_width_explains": compare_frames(parts[1], parts[2], key)["status"]
+                == "PASS",
+                "max_absolute_differences": comparison["max_absolute_differences"],
+            }
+        )
+    return {
+        "legacy_strict_comparison": strict,
+        "widened_comparison": corrected,
+        "mismatched_rows": rows,
+        "unexplained_rows": sum(not row["reference_width_explains"] for row in rows),
     }
 
 

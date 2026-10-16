@@ -54,7 +54,7 @@ impl BamCounterSC {
     fn new(bam_path: String) -> PyResult<Self> {
         if !Path::new(&bam_path).exists() {
             return Err(PyErr::new::<pyo3::exceptions::PyFileNotFoundError, _>(
-                format!("BAM file not found: {}", bam_path),
+                format!("BAM file not found: {bam_path}"),
             ));
         }
 
@@ -92,14 +92,12 @@ impl BamCounterSC {
 
             if ref_allele.is_empty() {
                 return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                    "Empty ref_allele for variant at {}:{}",
-                    chrom, pos
+                    "Empty ref_allele for variant at {chrom}:{pos}"
                 )));
             }
             if alt_allele.is_empty() {
                 return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                    "Empty alt_allele for variant at {}:{}",
-                    chrom, pos
+                    "Empty alt_allele for variant at {chrom}:{pos}"
                 )));
             }
 
@@ -144,8 +142,7 @@ impl BamCounterSC {
                 .build()
                 .map_err(|e| {
                     PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
-                        "Failed to create thread pool: {}",
-                        e
+                        "Failed to create thread pool: {e}"
                     ))
                 })?
                 .install(|| {
@@ -225,7 +222,7 @@ impl BamCounterSC {
         min_qual: u8,
     ) -> PyResult<FxHashMap<(u32, usize), (u32, u32, u32)>> {
         let mut bam = bam::IndexedReader::from_path(&self.bam_path).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("Failed to open BAM: {}", e))
+            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("Failed to open BAM: {e}"))
         })?;
 
         // Multithreaded BGZF decode. Defaults to 2 background decode threads, which
@@ -265,10 +262,7 @@ impl BamCounterSC {
             let start = (region.pos.saturating_sub(1)) as i64;
             let end = region.pos as i64;
             if let Err(e) = bam.fetch((chrom, start, end)) {
-                eprintln!(
-                    "[WARN] Failed to fetch {}:{}-{}: {}. Skipping variant.",
-                    chrom, start, end, e
-                );
+                eprintln!("[WARN] Failed to fetch {chrom}:{start}-{end}: {e}. Skipping variant.");
                 continue;
             }
 
@@ -281,7 +275,7 @@ impl BamCounterSC {
                     Err(e) => {
                         skipped_records += 1;
                         if skipped_records <= MAX_SKIP_WARNINGS {
-                            eprintln!("[WARN] Skipped corrupted BAM record on {}: {}", chrom, e);
+                            eprintln!("[WARN] Skipped corrupted BAM record on {chrom}: {e}");
                         }
                         continue;
                     }

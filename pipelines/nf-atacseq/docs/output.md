@@ -87,11 +87,14 @@ Allelic imbalance statistical results:
 | region | Peak/region ID |
 | ref_count | Total reference reads |
 | alt_count | Total alternate reads |
-| total_count | Total reads |
-| pval | Beta-binomial p-value |
+| N | Total reference + alternate reads |
+| snp_count | Number of SNPs in region |
+| null_ll | Null log-likelihood |
+| alt_ll | Alternative log-likelihood |
+| mu | Fitted allelic proportion anchored to the first SNP |
+| lrt | Likelihood-ratio statistic |
+| pval | Chi-square likelihood-ratio p-value (one degree of freedom) |
 | fdr_pval | FDR-corrected p-value |
-| log2_ratio | log2(ref/alt) ratio |
-| dispersion | Estimated dispersion |
 
 ### MultiQC
 
@@ -111,7 +114,7 @@ Allelic imbalance statistical results:
 
 Regions with significant allelic imbalance (AI) have:
 - `fdr_pval < 0.05`: Statistically significant after FDR correction
-- `|log2_ratio| > 0.5`: At least 1.4-fold difference between alleles
+The fitted `mu` describes the model orientation anchored to the first SNP; it does not establish a shared reference/alternate direction across a multi-SNP region.
 
 ### WASP Filtering Statistics
 
@@ -135,13 +138,14 @@ Check the MultiQC report for:
 
 ```r
 library(readr)
+library(dplyr)
 
 # Load allelic imbalance results
 ai_results <- read_tsv("results/analysis/sample_ai_results.tsv")
 
 # Filter significant regions
 sig_ai <- ai_results %>%
-  filter(fdr_pval < 0.05, abs(log2_ratio) > 0.5)
+  filter(fdr_pval < 0.05)
 ```
 
 ### Loading Results in Python
@@ -157,8 +161,7 @@ ai_results = pd.read_csv("results/analysis/sample_ai_results.tsv", sep="\t")
 
 # Filter significant
 sig_ai = ai_results[
-    (ai_results['fdr_pval'] < 0.05) &
-    (abs(ai_results['log2_ratio']) > 0.5)
+    ai_results['fdr_pval'] < 0.05
 ]
 ```
 

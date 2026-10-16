@@ -233,7 +233,7 @@ fn clamp_rho(rho: f64) -> f64 {
 ///
 /// Python keeps columns: chrom, pos, ref_count, alt_count, N, region (+ GT if phased)
 /// and removes exact duplicate rows. This ensures parity with Python's behavior.
-fn deduplicate_variants(variants: Vec<VariantCounts>, phased: bool) -> Vec<VariantCounts> {
+fn deduplicate_variants(variants: Vec<VariantCounts>, phased: bool) -> Result<Vec<VariantCounts>> {
     let mut seen: HashSet<DedupeKey> = HashSet::new();
     let mut result = Vec::with_capacity(variants.len());
 
@@ -244,14 +244,14 @@ fn deduplicate_variants(variants: Vec<VariantCounts>, phased: bool) -> Vec<Varia
             region: v.region.clone(),
             ref_count: v.ref_count,
             alt_count: v.alt_count,
-            n: v.ref_count + v.alt_count,
+            n: checked_depth(&v)?,
             gt: if phased { v.gt } else { None },
         };
         if seen.insert(key) {
             result.push(v);
         }
     }
-    result
+    Ok(result)
 }
 
 fn effective_phased(variants: &[VariantCounts], requested_phased: bool) -> Result<bool> {
@@ -885,7 +885,7 @@ fn single_model_with_dispersion(
     let DispersionParameters::Single { rho: disp } = parameters else {
         unreachable!("single fit returned linear parameters")
     };
-    eprintln!("  Dispersion: {:.6}", disp);
+    eprintln!("  Dispersion: {disp:.6}");
     let results = test_fixed_dispersion(variants, phased, parameters, false, 0)?;
     Ok((results, disp))
 }
@@ -914,7 +914,7 @@ pub fn linear_model_with_dispersion(
     let DispersionParameters::Linear { d1, d2, .. } = parameters else {
         unreachable!("linear fit returned scalar parameters")
     };
-    eprintln!("  d1 = {:.6}, d2 = {:.6}", d1, d2);
+    eprintln!("  d1 = {d1:.6}, d2 = {d2:.6}");
     let results = test_fixed_dispersion(variants, phased, parameters, false, 0)?;
     Ok((results, d1, d2))
 }
@@ -934,10 +934,7 @@ fn fit_dispersion_parameters(
     }
 
     let ref_counts: Vec<u32> = variants.iter().map(|variant| variant.ref_count).collect();
-    let n_array: Vec<u32> = variants
-        .iter()
-        .map(|variant| variant.ref_count + variant.alt_count)
-        .collect();
+    let n_array: Vec<u32> = variants.iter().map(checked_depth).collect::<Result<_>>()?;
     match method {
         AnalysisMethod::Single => Ok(DispersionParameters::Single {
             rho: optimize_dispersion(&ref_counts, &n_array)?,
@@ -957,6 +954,26 @@ fn fit_dispersion_parameters(
             })
         }
     }
+}
+
+fn checked_depth(variant: &VariantCounts) -> Result<u32> {
+    variant
+        .ref_count
+        .checked_add(variant.alt_count)
+        .with_context(|| {
+            format!(
+                "read depth exceeds UInt32 at {}:{} (region {})",
+                variant.chrom, variant.pos, variant.region
+            )
+        })
+}
+
+fn checked_region_sum(mut values: impl Iterator<Item = u32>, region: &str) -> Result<u32> {
+    values.try_fold(0_u32, |total, count| {
+        total
+            .checked_add(count)
+            .with_context(|| format!("aggregated read counts exceed UInt32 for region {region}"))
+    })
 }
 
 fn raw_depth(variant: &VariantCounts, pseudocount: u32) -> Result<u32> {
@@ -986,10 +1003,7 @@ fn test_fixed_dispersion(
     }
 
     let ref_counts: Vec<u32> = variants.iter().map(|variant| variant.ref_count).collect();
-    let n_array: Vec<u32> = variants
-        .iter()
-        .map(|variant| variant.ref_count + variant.alt_count)
-        .collect();
+    let n_array: Vec<u32> = variants.iter().map(checked_depth).collect::<Result<_>>()?;
     let raw_depths: Vec<u32> = variants
         .iter()
         .map(|variant| raw_depth(variant, pseudocount))
@@ -1005,6 +1019,10 @@ fn test_fixed_dispersion(
             .entry(variant.region.clone())
             .or_default()
             .push(i);
+    }
+
+    for (region, indices) in &region_map {
+        checked_region_sum(indices.iter().map(|&i| n_array[i]), region)?;
     }
 
     eprintln!(
@@ -1064,9 +1082,10 @@ fn test_fixed_dispersion(
             let chi2 = ChiSquared::new(1.0).context("Failed to create chi-squared distribution")?;
             let pval = chi2.sf(lrt);
 
-            let total_ref: u32 = region_ref.iter().sum();
-            let total_alt: u32 = indices.iter().map(|&i| variants[i].alt_count).sum();
-            let total_n = total_ref + total_alt;
+            let total_ref = checked_region_sum(region_ref.iter().copied(), region)?;
+            let total_alt =
+                checked_region_sum(indices.iter().map(|&i| variants[i].alt_count), region)?;
+            let total_n = checked_region_sum([total_ref, total_alt].into_iter(), region)?;
 
             Ok(ImbalanceResult {
                 region: region.clone(),
@@ -1106,18 +1125,31 @@ fn prepare_analysis(
     variants: Vec<VariantCounts>,
     config: &AnalysisConfig,
 ) -> Result<PreparedAnalysis> {
-    let filtered: Vec<VariantCounts> = variants
-        .into_iter()
-        .map(|mut v| {
-            v.ref_count += config.pseudocount;
-            v.alt_count += config.pseudocount;
-            v
-        })
-        .filter(|v| {
-            let n = v.ref_count + v.alt_count;
-            n >= config.min_count + (2 * config.pseudocount)
-        })
-        .collect();
+    let threshold = config
+        .pseudocount
+        .checked_mul(2)
+        .and_then(|offset| config.min_count.checked_add(offset))
+        .context("minimum count plus pseudocounts exceeds UInt32")?;
+    let mut filtered = Vec::with_capacity(variants.len());
+    for mut variant in variants {
+        let context = || {
+            format!(
+                "pseudocounted allele count exceeds UInt32 at {}:{} (region {})",
+                variant.chrom, variant.pos, variant.region
+            )
+        };
+        variant.ref_count = variant
+            .ref_count
+            .checked_add(config.pseudocount)
+            .with_context(context)?;
+        variant.alt_count = variant
+            .alt_count
+            .checked_add(config.pseudocount)
+            .with_context(context)?;
+        if checked_depth(&variant)? >= threshold {
+            filtered.push(variant);
+        }
+    }
 
     eprintln!("Processing {} variants after filtering", filtered.len());
 
@@ -1126,7 +1158,7 @@ fn prepare_analysis(
     // Deduplicate variants for Python parity.
     // Python's get_imbalance() does: df[keep_cols].drop_duplicates()
     let before = filtered.len();
-    let deduped = deduplicate_variants(filtered, phased);
+    let deduped = deduplicate_variants(filtered, phased)?;
     if deduped.len() < before {
         eprintln!(
             "Deduplicated {} → {} variants ({} duplicates removed)",
@@ -1141,22 +1173,34 @@ fn prepare_analysis(
     })
 }
 
-fn remove_result_pseudocounts(results: &mut [ImbalanceResult], pseudocount: u32) {
+fn remove_result_pseudocounts(results: &mut [ImbalanceResult], pseudocount: u32) -> Result<()> {
     for result in results {
-        let region_pseudocount = pseudocount.saturating_mul(result.snp_count as u32);
-        if result.ref_count < region_pseudocount
-            || result.alt_count < region_pseudocount
-            || result.n < 2 * region_pseudocount
-        {
-            eprintln!(
-                "[WARN] Counts smaller than pseudocount for region {}: ref={}, alt={}, n={}, pc={}",
-                result.region, result.ref_count, result.alt_count, result.n, region_pseudocount
-            );
-        }
-        result.ref_count = result.ref_count.saturating_sub(region_pseudocount);
-        result.alt_count = result.alt_count.saturating_sub(region_pseudocount);
-        result.n = result.n.saturating_sub(2 * region_pseudocount);
+        let region_pseudocount = u32::try_from(result.snp_count)
+            .ok()
+            .and_then(|count| pseudocount.checked_mul(count))
+            .with_context(|| {
+                format!(
+                    "regional pseudocount exceeds UInt32 for region {}",
+                    result.region
+                )
+            })?;
+        let total_pseudocount = region_pseudocount
+            .checked_mul(2)
+            .context("regional depth pseudocount exceeds UInt32")?;
+        result.ref_count = result
+            .ref_count
+            .checked_sub(region_pseudocount)
+            .context("regional reference count is smaller than its pseudocount")?;
+        result.alt_count = result
+            .alt_count
+            .checked_sub(region_pseudocount)
+            .context("regional alternate count is smaller than its pseudocount")?;
+        result.n = result
+            .n
+            .checked_sub(total_pseudocount)
+            .context("regional depth is smaller than its pseudocount")?;
     }
+    Ok(())
 }
 
 fn analyze_prepared(
@@ -1173,7 +1217,7 @@ fn analyze_prepared(
         exact_snv_pvalues,
         config.pseudocount,
     )?;
-    remove_result_pseudocounts(&mut results, config.pseudocount);
+    remove_result_pseudocounts(&mut results, config.pseudocount)?;
 
     Ok(AnalysisOutput {
         results,
@@ -1207,7 +1251,7 @@ pub fn fit_imbalance_dispersion(
     let parameters =
         fit_dispersion_parameters(&prepared.variants, config.method, config.pseudocount)?;
     match parameters {
-        DispersionParameters::Single { rho } => eprintln!("  Dispersion: {:.6}", rho),
+        DispersionParameters::Single { rho } => eprintln!("  Dispersion: {rho:.6}"),
         DispersionParameters::Linear {
             d1,
             d2,
@@ -1215,8 +1259,7 @@ pub fn fit_imbalance_dispersion(
             depth_scale,
         } => {
             eprintln!(
-                "  d1 = {:.6}, d2 = {:.6}, depth center = {:.6}, depth scale = {:.6}",
-                d1, d2, depth_center, depth_scale
+                "  d1 = {d1:.6}, d2 = {d2:.6}, depth center = {depth_center:.6}, depth scale = {depth_scale:.6}"
             )
         }
     }
@@ -1263,7 +1306,7 @@ pub fn analyze_imbalance_detailed(
     let parameters =
         fit_dispersion_parameters(&prepared.variants, config.method, config.pseudocount)?;
     match parameters {
-        DispersionParameters::Single { rho } => eprintln!("  Dispersion: {:.6}", rho),
+        DispersionParameters::Single { rho } => eprintln!("  Dispersion: {rho:.6}"),
         DispersionParameters::Linear {
             d1,
             d2,
@@ -1271,8 +1314,7 @@ pub fn analyze_imbalance_detailed(
             depth_scale,
         } => {
             eprintln!(
-                "  d1 = {:.6}, d2 = {:.6}, depth center = {:.6}, depth scale = {:.6}",
-                d1, d2, depth_center, depth_scale
+                "  d1 = {d1:.6}, d2 = {d2:.6}, depth center = {depth_center:.6}, depth scale = {depth_scale:.6}"
             )
         }
     }
@@ -1326,11 +1368,7 @@ mod tests {
         // Test values very close to boundaries
         for rho in [1e-15, 1e-12, 1e-10, 0.999999999, 0.9999999999999] {
             let result = opt_prob(0.5, rho, 10, 20).unwrap();
-            assert!(
-                result.is_finite(),
-                "rho={} should produce finite result",
-                rho
-            );
+            assert!(result.is_finite(), "rho={rho} should produce finite result");
         }
     }
 
@@ -1524,9 +1562,7 @@ mod tests {
         let expected = opt_prob(0.5, 0.1, 10, 20).unwrap();
         assert!(
             (result - expected).abs() < 1e-10,
-            "Single position: result={}, expected={}",
-            result,
-            expected
+            "Single position: result={result}, expected={expected}"
         );
     }
 
@@ -1581,6 +1617,53 @@ mod tests {
             gt,
             raw_gt: gt.map(|g| if g == 0 { "0|1" } else { "1|0" }.to_string()),
         }
+    }
+
+    #[test]
+    fn test_prepare_analysis_rejects_overflow_without_wrapping() {
+        for (reference, alternate, pseudocount, minimum) in [
+            (u32::MAX, 0, 1, 0),
+            (u32::MAX, 1, 0, 0),
+            (1, 1, u32::MAX, 0),
+            (1, 1, 1, u32::MAX),
+        ] {
+            let config = AnalysisConfig {
+                min_count: minimum,
+                pseudocount,
+                ..AnalysisConfig::default()
+            };
+            let error = prepare_analysis(vec![vc_peak(1, reference, alternate, None)], &config)
+                .err()
+                .unwrap();
+            assert!(error.to_string().contains("UInt32"), "{error}");
+        }
+        let config = AnalysisConfig {
+            min_count: 0,
+            pseudocount: 0,
+            ..AnalysisConfig::default()
+        };
+        let prepared = prepare_analysis(vec![vc_peak(1, u32::MAX - 1, 1, None)], &config).unwrap();
+        assert_eq!(checked_depth(&prepared.variants[0]).unwrap(), u32::MAX);
+    }
+
+    #[test]
+    fn test_region_depth_overflow_is_rejected_before_inference() {
+        let error = test_fixed_dispersion(
+            vec![
+                vc_peak(1, u32::MAX / 2, 0, None),
+                vc_peak(2, u32::MAX / 2, 2, None),
+            ],
+            false,
+            DispersionParameters::Single { rho: 0.1 },
+            false,
+            0,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("region peak1"), "{error}");
+        assert_eq!(
+            checked_region_sum([u32::MAX - 1, 1].into_iter(), "peak1").unwrap(),
+            u32::MAX
+        );
     }
 
     fn assert_result_close(a: &ImbalanceResult, b: &ImbalanceResult) {
