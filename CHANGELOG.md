@@ -5,6 +5,7 @@ All notable changes to WASP2 will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- Reserve macOS extension header space for Conda library-path relocation.
 - Refresh maintained CI actions and remove unused Python build helpers from runtime images.
 - Refresh Rust HTSlib wrapper/binding patch releases and collect independent runtime
   scans and SIF checks when a build-image security gate fails.

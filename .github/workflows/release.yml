@@ -176,6 +176,23 @@ jobs:
           target: ${{ matrix.target }}
           args: --release --locked --out dist -m rust/Cargo.toml -i python${{ matrix.python }}
           sccache: false
+      - name: Verify macOS wheel relocation
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess, tempfile, zipfile
+          wheels = list(Path("dist").glob("*.whl"))
+          assert len(wheels) == 1
+          with tempfile.TemporaryDirectory() as directory, zipfile.ZipFile(wheels[0]) as archive:
+              extensions = [name for name in archive.namelist() if name.endswith(".so")]
+              assert len(extensions) == 1
+              library = Path(directory) / Path(extensions[0]).name
+              library.write_bytes(archive.read(extensions[0]))
+              rpath = "@loader_path/" + "/".join(["relocation_prefix" * 5] * 6)
+              subprocess.run(["xcrun", "install_name_tool", "-add_rpath", rpath, str(library)], check=True)
+              commands = subprocess.check_output(["xcrun", "otool", "-l", str(library)], text=True)
+              assert rpath in commands
+          PY
       - name: Install and test exact wheel
         env:
           PYTHON_VERSION: ${{ matrix.python }}
