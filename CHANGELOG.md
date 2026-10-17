@@ -5,6 +5,8 @@ All notable changes to WASP2 will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- Refresh Rust HTSlib wrapper/binding patch releases and collect independent runtime
+  scans and SIF checks when a build-image security gate fails.
 - Resolve numeric mapping genotypes to allele sequences and label swapped FASTQs
   with the number of pairs actually written, preserving valid remapped reads.
 - Preserve PGEN sample order and phase during BED export and accept the common

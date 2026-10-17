@@ -461,6 +461,7 @@ jobs:
           persist-credentials: false
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
       - name: Build local release image
+        id: build_image
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
         with:
           context: .
@@ -473,6 +474,7 @@ jobs:
           cache-from: type=gha,scope=release-${{ matrix.tag }}
           cache-to: type=gha,mode=max,scope=release-${{ matrix.tag }}
       - name: Smoke-test local release image
+        id: smoke
         env:
           IMAGE: wasp2:release-smoke-${{ matrix.tag }}
           PLATFORM: ${{ matrix.platform }}
@@ -507,7 +509,10 @@ jobs:
           name: builder-scan-${{ matrix.tag }}
           path: builder-${{ matrix.tag }}-vulnerabilities.json
           if-no-files-found: warn
+      # Collect runtime evidence even when the build-image scan fails; both scans remain gates.
       - name: Inventory runtime image
+        id: inventory
+        if: ${{ !cancelled() && steps.build_image.outcome == 'success' }}
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
         with:
           image: wasp2:release-smoke-${{ matrix.tag }}
@@ -515,13 +520,17 @@ jobs:
           output-file: container-${{ matrix.tag }}.cdx.json
           upload-artifact: false
       - name: Verify image inventory
+        if: ${{ !cancelled() && steps.inventory.outcome == 'success' }}
         run: python3 scripts/check_sbom.py container-${{ matrix.tag }}.cdx.json wasp2 numpy scipy samtools bcftools bedtools
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+      - if: ${{ !cancelled() && steps.inventory.outcome == 'success' }}
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
           name: release-container-sbom-${{ matrix.tag }}
           path: container-${{ matrix.tag }}.cdx.json
           if-no-files-found: error
       - name: Scan runtime image vulnerabilities
+        id: runtime_scan
+        if: ${{ !cancelled() && steps.build_image.outcome == 'success' }}
         uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1  # 0.35.0
         with:
           image-ref: wasp2:release-smoke-${{ matrix.tag }}
@@ -531,17 +540,20 @@ jobs:
           severity: CRITICAL,HIGH
           exit-code: '1'
       - name: Preserve container scan
-        if: always()
+        if: ${{ !cancelled() && steps.runtime_scan.outcome != 'skipped' }}
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
           name: release-container-scan-${{ matrix.tag }}
           path: container-${{ matrix.tag }}-vulnerabilities.json
           if-no-files-found: error
       - name: Save tested image
+        id: save_image
+        if: ${{ !cancelled() && steps.smoke.outcome == 'success' }}
         env:
           IMAGE: wasp2:release-smoke-${{ matrix.tag }}
         run: docker save "$IMAGE" | gzip > "${RUNNER_TEMP}/image-${{ matrix.tag }}.tar.gz"
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+      - if: ${{ !cancelled() && steps.save_image.outcome == 'success' }}
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
           name: tested-image-${{ matrix.tag }}
           path: ${{ runner.temp }}/image-${{ matrix.tag }}.tar.gz
@@ -550,6 +562,8 @@ jobs:
   singularity-smoke:
     name: Singularity smoke
     needs: [validate, package, container-smoke]
+    # Test conversion independently; publication still requires successful container security gates.
+    if: ${{ !cancelled() && needs.validate.result == 'success' && needs.package.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:

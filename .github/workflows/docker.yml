@@ -42,6 +42,7 @@ jobs:
               print("value=" + tomllib.load(handle)["package"]["version"])
           PY
       - name: Build local test image
+        id: build_image
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
         with:
           context: .
@@ -54,6 +55,7 @@ jobs:
           cache-from: type=gha,scope=container-${{ strategy.job-index }}
           cache-to: type=gha,mode=max,scope=container-${{ strategy.job-index }}
       - name: Smoke-test image
+        id: smoke
         env:
           PLATFORM: ${{ matrix.platform }}
           EXPECTED_VERSION: ${{ steps.version.outputs.value }}
@@ -87,7 +89,10 @@ jobs:
           name: builder-scan-${{ strategy.job-index }}
           path: builder-vulnerabilities.json
           if-no-files-found: warn
+      # Collect runtime evidence even when the build-image scan fails; both scans remain gates.
       - name: Inventory runtime image
+        id: inventory
+        if: ${{ !cancelled() && steps.build_image.outcome == 'success' }}
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
         with:
           image: wasp2:ci
@@ -95,13 +100,17 @@ jobs:
           output-file: container-sbom.cdx.json
           upload-artifact: false
       - name: Verify image inventory
+        if: ${{ !cancelled() && steps.inventory.outcome == 'success' }}
         run: python3 scripts/check_sbom.py container-sbom.cdx.json wasp2 numpy scipy samtools bcftools bedtools
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+      - if: ${{ !cancelled() && steps.inventory.outcome == 'success' }}
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
           name: container-sbom-${{ strategy.job-index }}
           path: container-sbom.cdx.json
           if-no-files-found: error
       - name: Scan runtime image vulnerabilities
+        id: runtime_scan
+        if: ${{ !cancelled() && steps.build_image.outcome == 'success' }}
         uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1  # 0.35.0
         with:
           image-ref: wasp2:ci
@@ -111,7 +120,7 @@ jobs:
           severity: CRITICAL,HIGH
           exit-code: '1'
       - name: Preserve container scan
-        if: always()
+        if: ${{ !cancelled() && steps.runtime_scan.outcome != 'skipped' }}
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
           name: container-scan-${{ strategy.job-index }}
