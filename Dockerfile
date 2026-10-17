@@ -112,6 +112,8 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
 COPY --from=rust-builder /wheels/*.whl /tmp/
 RUN --mount=type=cache,target=/root/.cache/pip \
     for wheel in /tmp/*.whl; do pip install "${wheel}[export]" || exit; done \
+    # Runtime dependencies do not require setuptools or its vendored build helpers.
+    && pip uninstall -y setuptools \
     && rm -rf /tmp/*.whl \
     && apt-get purge -y --auto-remove g++ zlib1g-dev \
     && rm -rf /var/lib/apt/lists/* \

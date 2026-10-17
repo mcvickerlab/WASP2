@@ -26,11 +26,11 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.12"
       - name: Validate synchronized metadata
@@ -79,17 +79,17 @@ jobs:
           - {runner: ubuntu-24.04-arm, arch: aarch64, python: "3.12"}
           - {runner: ubuntu-24.04-arm, arch: aarch64, python: "3.13"}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: ${{ matrix.python }}
-      - uses: astral-sh/setup-uv@7eb50e6e20e1e2009087999ba91242e80253875f  # v7
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
         with:
           enable-cache: false
       - name: Build wheel
-        uses: PyO3/maturin-action@3b5f400f9576c9934eaeed862ce6281fef121b67  # v1
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b  # v1.51.0
         with:
           target: ${{ matrix.arch }}
           args: --release --locked --out dist -m rust/Cargo.toml -i python${{ matrix.python }}
@@ -114,7 +114,7 @@ jobs:
           export PATH="$GITHUB_WORKSPACE/.wheel-test/bin:$PATH"
           WASP2_TEST_EXPORTS=1 bash "$GITHUB_WORKSPACE/scripts/container_smoke_test.sh"
       - name: Inventory installed wheel environment
-        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c  # v0.24.3
         with:
           path: ./.wheel-test
           format: cyclonedx-json
@@ -122,12 +122,12 @@ jobs:
           upload-artifact: false
       - name: Verify runtime inventory
         run: python scripts/check_sbom.py runtime-linux-${{ matrix.arch }}-py${{ matrix.python }}.cdx.json wasp2 numpy scipy
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: runtime-sbom-linux-${{ matrix.arch }}-py${{ matrix.python }}
           path: runtime-linux-${{ matrix.arch }}-py${{ matrix.python }}.cdx.json
           if-no-files-found: error
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: wheel-linux-${{ matrix.arch }}-py${{ matrix.python }}
           path: dist/*.whl
@@ -151,13 +151,13 @@ jobs:
           - {runner: macos-15, arch: arm64, target: aarch64-apple-darwin, deployment: "11.0", python: "3.12"}
           - {runner: macos-15, arch: arm64, target: aarch64-apple-darwin, deployment: "11.0", python: "3.13"}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: ${{ matrix.python }}
-      - uses: astral-sh/setup-uv@7eb50e6e20e1e2009087999ba91242e80253875f  # v7
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
         with:
           enable-cache: false
       - name: Install htslib
@@ -171,7 +171,7 @@ jobs:
           echo "CPATH=$(brew --prefix htslib)/include" >> "$GITHUB_ENV"
           echo "LIBCLANG_PATH=$(brew --prefix llvm@19)/lib" >> "$GITHUB_ENV"
       - name: Build wheel
-        uses: PyO3/maturin-action@3b5f400f9576c9934eaeed862ce6281fef121b67  # v1
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b  # v1.51.0
         with:
           target: ${{ matrix.target }}
           args: --release --locked --out dist -m rust/Cargo.toml -i python${{ matrix.python }}
@@ -190,7 +190,7 @@ jobs:
           export PATH="$GITHUB_WORKSPACE/.wheel-test/bin:$PATH"
           WASP2_TEST_EXPORTS=1 bash "$GITHUB_WORKSPACE/scripts/container_smoke_test.sh"
       - name: Inventory installed wheel environment
-        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c  # v0.24.3
         with:
           path: ./.wheel-test
           format: cyclonedx-json
@@ -198,12 +198,12 @@ jobs:
           upload-artifact: false
       - name: Verify runtime inventory
         run: python scripts/check_sbom.py runtime-macos-${{ matrix.arch }}-py${{ matrix.python }}.cdx.json wasp2 numpy scipy
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: runtime-sbom-macos-${{ matrix.arch }}-py${{ matrix.python }}
           path: runtime-macos-${{ matrix.arch }}-py${{ matrix.python }}.cdx.json
           if-no-files-found: error
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: wheel-macos-${{ matrix.arch }}-py${{ matrix.python }}
           path: dist/*.whl
@@ -215,14 +215,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.12"
       - uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7  # stable
-      - uses: astral-sh/setup-uv@7eb50e6e20e1e2009087999ba91242e80253875f  # v7
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
         with:
           enable-cache: false
       - name: Install system dependencies
@@ -242,7 +242,7 @@ jobs:
           "$GITHUB_WORKSPACE/.sdist-test/bin/wasp2-analyze" --help
           export PATH="$GITHUB_WORKSPACE/.sdist-test/bin:$PATH"
           bash "$GITHUB_WORKSPACE/scripts/container_smoke_test.sh"
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: source-distribution
           path: dist/*.tar.gz
@@ -266,7 +266,7 @@ jobs:
           - {platform: osx-arm64, runner: macos-15, environment: default}
           - {platform: osx-arm64, runner: macos-15, environment: dev}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
       - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94  # v0.11.2
@@ -302,21 +302,21 @@ jobs:
           - {platform: osx-arm64, runner: macos-15, deployment: "11.0", python: "3.11"}
           - {platform: osx-arm64, runner: macos-15, deployment: "11.0", python: "3.12"}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           repository: Jaureguy760/bioconda-recipes
           ref: 63b7dde03e1898a3aa52cb52943ae9e02d191ebe
           sparse-checkout: recipes/wasp2
           path: candidate-bioconda
           persist-credentials: false
-      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
           name: source-distribution
           path: candidate-source
-      - uses: mamba-org/setup-micromamba@add3a49764cedee8ee24e82dfde87f5bc2914462
+      - uses: mamba-org/setup-micromamba@f457c30a868e4760d3a6fcea5f25dc655b8edf39  # v3.2.1
         with:
           environment-name: conda-build
           create-args: conda-build
@@ -368,7 +368,7 @@ jobs:
           CONDA_CHANNEL_PRIORITY: strict
           PYTHON_VERSION: ${{ matrix.python }}
         run: conda-build candidate-recipe --python "$PYTHON_VERSION" --variant-config-files candidate-variants.yaml --override-channels -c conda-forge -c bioconda --no-anaconda-upload
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: conda-${{ matrix.platform }}-py${{ matrix.python }}
           path: ${{ runner.temp }}/conda-build/${{ matrix.platform }}/wasp2-*.conda
@@ -383,22 +383,22 @@ jobs:
       id-token: write  # Authenticate package provenance attestations.
       attestations: write  # Publish package provenance attestations.
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
           path: packages
           pattern: "wheel-*"
           merge-multiple: true
-      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
           name: source-distribution
           path: packages
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.12"
-      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
           pattern: runtime-sbom-*
           merge-multiple: true
@@ -415,7 +415,7 @@ jobs:
           mkdir sbom-source
           tar -xzf packages/wasp2-*.tar.gz -C sbom-source
       - name: Generate source dependency SBOM
-        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610  # v0
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c  # v0.24.3
         with:
           path: ./sbom-source
           format: cyclonedx-json
@@ -425,15 +425,15 @@ jobs:
         run: python scripts/check_sbom.py wasp2-source.cdx.json wasp2 rust-htslib
       - name: Attest package provenance
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45  # v2
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6  # v4.2.2
         with:
           subject-path: "packages/*"
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: release-packages
           path: packages/*
           if-no-files-found: error
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: release-metadata
           path: |
@@ -456,13 +456,13 @@ jobs:
           - {runner: ubuntu-24.04, platform: linux/amd64, tag: amd64}
           - {runner: ubuntu-24.04-arm, platform: linux/arm64, tag: arm64}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
       - name: Build local release image
         id: build_image
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7.4.0
         with:
           context: .
           load: true
@@ -485,7 +485,7 @@ jobs:
           test "$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$IMAGE")" = "$EXPECTED_REVISION"
           docker run --rm --platform "$PLATFORM" -e EXPECTED_WASP2_VERSION="$EXPECTED_VERSION" "$IMAGE" /opt/wasp2/scripts/container_smoke_test.sh
       - name: Build dependency image for scanning
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7.4.0
         with:
           context: .
           target: rust-builder
@@ -494,7 +494,7 @@ jobs:
           tags: wasp2:builder-scan
           cache-from: type=gha,scope=release-${{ matrix.tag }}
       - name: Scan build dependency vulnerabilities
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
         with:
           image-ref: wasp2:builder-scan
           version: v0.76.0
@@ -504,7 +504,7 @@ jobs:
           exit-code: '1'
       - name: Preserve build dependency scan
         if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: builder-scan-${{ matrix.tag }}
           path: builder-${{ matrix.tag }}-vulnerabilities.json
@@ -513,7 +513,7 @@ jobs:
       - name: Inventory runtime image
         id: inventory
         if: ${{ !cancelled() && steps.build_image.outcome == 'success' }}
-        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c  # v0.24.3
         with:
           image: wasp2:release-smoke-${{ matrix.tag }}
           format: cyclonedx-json
@@ -523,7 +523,7 @@ jobs:
         if: ${{ !cancelled() && steps.inventory.outcome == 'success' }}
         run: python3 scripts/check_sbom.py container-${{ matrix.tag }}.cdx.json wasp2 numpy scipy samtools bcftools bedtools
       - if: ${{ !cancelled() && steps.inventory.outcome == 'success' }}
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: release-container-sbom-${{ matrix.tag }}
           path: container-${{ matrix.tag }}.cdx.json
@@ -531,7 +531,7 @@ jobs:
       - name: Scan runtime image vulnerabilities
         id: runtime_scan
         if: ${{ !cancelled() && steps.build_image.outcome == 'success' }}
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1  # 0.35.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
         with:
           image-ref: wasp2:release-smoke-${{ matrix.tag }}
           format: json
@@ -541,7 +541,7 @@ jobs:
           exit-code: '1'
       - name: Preserve container scan
         if: ${{ !cancelled() && steps.runtime_scan.outcome != 'skipped' }}
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: release-container-scan-${{ matrix.tag }}
           path: container-${{ matrix.tag }}-vulnerabilities.json
@@ -553,7 +553,7 @@ jobs:
           IMAGE: wasp2:release-smoke-${{ matrix.tag }}
         run: docker save "$IMAGE" | gzip > "${RUNNER_TEMP}/image-${{ matrix.tag }}.tar.gz"
       - if: ${{ !cancelled() && steps.save_image.outcome == 'success' }}
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: tested-image-${{ matrix.tag }}
           path: ${{ runner.temp }}/image-${{ matrix.tag }}.tar.gz
@@ -569,16 +569,16 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
       - uses: eWaterCycle/setup-apptainer@3f706d898c9db585b1d741b4692e66755f3a1b40
         with:
           apptainer-version: 1.4.5
       - name: Verify container runtime
         run: apptainer --version
-      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
           name: tested-image-amd64
           path: ${{ runner.temp }}/tested-image
@@ -595,7 +595,7 @@ jobs:
               Singularity.def > "$RUNNER_TEMP/Singularity.candidate.def"
           apptainer build "wasp2_definition_${RELEASE_VERSION}.sif" "$RUNNER_TEMP/Singularity.candidate.def"
           apptainer test "wasp2_definition_${RELEASE_VERSION}.sif"
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: candidate-sif
           path: wasp2_${{ needs.validate.outputs.version }}.sif
@@ -612,13 +612,13 @@ jobs:
     permissions:
       id-token: write  # Authenticate to PyPI using trusted publishing.
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.12"
-      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
           name: release-packages
           path: packages
@@ -627,7 +627,7 @@ jobs:
         env:
           RELEASE_VERSION: ${{ needs.validate.outputs.version }}
         run: python scripts/prepare_pypi_upload.py packages upload "$RELEASE_VERSION"
-      - uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e  # release/v1
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33  # v1.14.2
         if: steps.upload.outputs.count != '0'
         with:
           packages-dir: upload/
@@ -644,22 +644,22 @@ jobs:
       id-token: write  # Authenticate container provenance attestations.
       attestations: write  # Publish container provenance attestations.
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-      - uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392  # v3
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
-      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1  # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f  # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
           pattern: tested-image-*
           merge-multiple: true
           path: ${{ runner.temp }}/tested-images
-      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
           pattern: release-container-sbom-*
           merge-multiple: true
@@ -682,21 +682,21 @@ jobs:
           test -n "$DIGEST"
           echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
       - name: Attest amd64 dependency inventory
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26  # v4.1.0
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6  # v4.2.2
         with:
           subject-name: ${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.image.outputs.amd64_digest }}
           sbom-path: container-sboms/container-amd64.cdx.json
           push-to-registry: true
       - name: Attest arm64 dependency inventory
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26  # v4.1.0
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6  # v4.2.2
         with:
           subject-name: ${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.image.outputs.arm64_digest }}
           sbom-path: container-sboms/container-arm64.cdx.json
           push-to-registry: true
       - name: Attest container provenance
-        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45  # v2
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6  # v4.2.2
         with:
           subject-name: ${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.image.outputs.digest }}
@@ -705,7 +705,7 @@ jobs:
         env:
           CONTAINER_DIGEST: ${{ steps.image.outputs.digest }}
         run: printf '%s\n' "$CONTAINER_DIGEST" > container-digest.txt
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: container-metadata
           path: container-digest.txt
@@ -725,7 +725,7 @@ jobs:
           apptainer-version: 1.4.5
       - name: Verify container runtime
         run: apptainer --version
-      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
           name: container-metadata
       - name: Build from tested candidate digest
@@ -738,10 +738,10 @@ jobs:
         env:
           RELEASE_VERSION: ${{ needs.validate.outputs.version }}
         run: apptainer exec --env EXPECTED_WASP2_VERSION="$RELEASE_VERSION" "wasp2_${RELEASE_VERSION}.sif" /opt/wasp2/scripts/container_smoke_test.sh
-      - uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45  # v2
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6  # v4.2.2
         with:
           subject-path: "wasp2_${{ needs.validate.outputs.version }}.sif"
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: singularity-artifact
           path: "wasp2_${{ needs.validate.outputs.version }}.sif"
@@ -756,11 +756,11 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
           name: container-metadata
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
-      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f  # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -787,33 +787,33 @@ jobs:
     permissions:
       contents: write  # Create the GitHub release and upload its assets.
     steps:
-      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
           name: release-packages
           path: release-assets
-      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
           name: release-metadata
           path: release-assets
-      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
           name: container-metadata
           path: release-assets
-      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
           name: singularity-artifact
           path: release-assets
-      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
           pattern: release-container-sbom-*
           merge-multiple: true
           path: release-assets
-      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
           pattern: release-container-scan-*
           merge-multiple: true
           path: release-assets
-      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
           pattern: builder-scan-*
           merge-multiple: true
@@ -838,7 +838,7 @@ jobs:
           find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > "$RUNNER_TEMP/SHA256SUMS"
           mv "$RUNNER_TEMP/SHA256SUMS" SHA256SUMS
           sha256sum --check SHA256SUMS
-      - uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b  # v2
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64  # v3.0.3
         with:
           files: release-assets/*
           generate_release_notes: true

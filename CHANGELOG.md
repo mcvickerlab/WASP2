@@ -5,6 +5,7 @@ All notable changes to WASP2 will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- Refresh maintained CI actions and remove unused Python build helpers from runtime images.
 - Refresh Rust HTSlib wrapper/binding patch releases and collect independent runtime
   scans and SIF checks when a build-image security gate fails.
 - Resolve numeric mapping genotypes to allele sequences and label swapped FASTQs
