@@ -73,7 +73,7 @@ abstract: >-
 #   doi: "10.XXXX/XXXXX"
 
 # Zenodo Software DOI - uncomment when a versioned software release is archived
-# (Note: .zenodo.json in this repo is for the test dataset, not the software itself)
+# Root .zenodo.json describes the software release.
 # identifiers:
 #   - type: doi
 #     value: "10.5281/zenodo.XXXXXXX"

@@ -39,8 +39,8 @@ fn interval_index(interval: &impl GenericInterval<u32>) -> u32 {
 use crate::bam_intersect::{build_variant_store, VariantStore};
 use crate::bam_remapper::{
     apply_trim_combination, calculate_indel_delta, classify_variant_location,
-    generate_haplotype_seqs_view_with_buffers, generate_trim_combinations, IndelConfig,
-    RemapConfig, VariantLocation, VariantSpanView,
+    generate_haplotype_seqs_view_with_buffers, generate_trim_combinations,
+    genotype_to_alleles_view, IndelConfig, RemapConfig, VariantLocation, VariantSpanView,
 };
 use crate::seq_decode::{copy_qual_into, decode_seq_into};
 
@@ -447,23 +447,6 @@ fn increment_overlap_stats(stats: &mut UnifiedStats, mask: u8) {
         3 => stats.pairs_with_snvs_and_indels += 1,
         _ => {}
     }
-}
-
-/// Convert phased genotype to haplotype alleles (borrowed).
-///
-/// Supports both 0/1 indexing (ref/alt) and direct allele strings.
-fn genotype_to_alleles_view<'a>(
-    genotype: &'a str,
-    ref_allele: &'a str,
-    alt_allele: &'a str,
-) -> Option<(&'a str, &'a str)> {
-    let (left, right) = genotype.split_once('|')?;
-    let to_allele = |s: &'a str| match s {
-        "0" => ref_allele,
-        "1" => alt_allele,
-        _ => s,
-    };
-    Some((to_allele(left), to_allele(right)))
 }
 
 /// Generate haplotype sequences for a read with variants

@@ -9,12 +9,21 @@ branch targets the unreleased 1.5.0 version; installing a published package
 does not necessarily include its changes. Check ``wasp2-count --version``
 and use the source installation below when testing development fixes.
 
+Platforms
+---------
+
+Release wheels are built for Python 3.10–3.13 on Linux x86-64/ARM64 and
+macOS Intel/Apple Silicon. The configured wheel tags target Linux glibc 2.28+,
+macOS 13+ on Intel, and macOS 11+ on Apple Silicon. CI runs on newer operating
+systems; these tag minima do not establish an executed test on every older OS.
+Windows and older CPU instruction sets are not currently certified.
+
 Via Bioconda
 ------------
 
 .. code-block:: bash
 
-   mamba install -c conda-forge -c bioconda wasp2
+   mamba install --strict-channel-priority -c conda-forge -c bioconda wasp2
 
 Bioconda installs WASP2 together with the external command-line dependencies
 required by the workflows, including ``samtools``, ``bcftools``, and
@@ -69,7 +78,7 @@ Development Installation
 
 Source builds require Rust 1.88 or newer, a C/C++ compiler, and libclang.
 The build backend declares CMake as a build dependency. Pixi supplies these
-tools together with the runtime dependencies; published wheels do not need
+tools together with the runtime dependencies (Pixi 0.82 or newer); published wheels do not need
 the compilation toolchain.
 
 .. code-block:: bash
@@ -78,6 +87,18 @@ the compilation toolchain.
    cd WASP2
    pixi install
    pixi run verify
+
+Optional Export Formats
+-----------------------
+
+Zarr and Parquet exports require additional packages:
+
+.. code-block:: bash
+
+   pip install "wasp2[export]"
+
+Source installations can use ``pip install -e ".[export]"``. The Docker
+image includes these dependencies. H5AD export uses the base installation.
 
 Verification
 ------------

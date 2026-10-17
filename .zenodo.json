@@ -1,23 +1,29 @@
 {
-  "title": "WASP2 Sanity Test Dataset - chr21 HG00731",
-  "description": "Real RNA-seq benchmark data for WASP2 CI sanity testing. Contains chr21 subset of HG00731 sample (~855K reads, ~33K het variants) with expected pipeline outputs for reproducibility validation.",
-  "upload_type": "dataset",
+  "title": "WASP2",
+  "description": "Software for allele-specific analysis of next-generation sequencing data, including mapping bias correction, allele counting, and allelic imbalance inference.",
+  "upload_type": "software",
   "access_right": "open",
   "license": "MIT",
   "creators": [
     {
+      "name": "Ho, Aaron"
+    },
+    {
       "name": "Jaureguy, Jeff",
       "affiliation": "UC San Diego"
+    },
+    {
+      "name": "McVicker Lab",
+      "affiliation": "Salk Institute for Biological Studies"
     }
   ],
   "keywords": [
-    "WASP2",
-    "allele-specific expression",
-    "RNA-seq",
     "bioinformatics",
-    "benchmark",
-    "HG00731",
-    "1000 Genomes"
+    "allele-specific analysis",
+    "RNA-seq",
+    "ATAC-seq",
+    "Rust",
+    "Python"
   ],
   "related_identifiers": [
     {
@@ -25,6 +31,5 @@
       "relation": "isSupplementTo",
       "scheme": "url"
     }
-  ],
-  "notes": "This dataset is used for CI sanity testing of the WASP2 Rust-accelerated pipeline. It validates that allele counting, FASTQ generation, and analysis produce consistent results."
+  ]
 }

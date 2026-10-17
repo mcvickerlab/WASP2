@@ -4,7 +4,7 @@ Development Guide
 Setup
 ---------
 
-WASP2 uses Python 3.10–3.13 and Rust 1.88 or newer. Install a C compiler and
+WASP2 uses Python 3.10–3.13 and Rust 1.88 or newer. Install C/C++ compilers, libclang, CMake, and
 the external tools required by the workflows: samtools, bcftools, and bedtools.
 
 .. code-block:: bash
@@ -18,8 +18,11 @@ the external tools required by the workflows: samtools, bcftools, and bedtools.
 
 The ``dev`` extra provides pytest, Ruff, basedpyright, mypy, build, and
 security tools. Documentation dependencies are in the separate ``docs`` extra.
-Alternatively, use the locked Pixi environment with ``pixi install`` and
-``pixi run verify``.
+Alternatively, let Pixi resolve the environment with ``pixi install -e dev``.
+Use ``pixi run -e dev test`` for tests. No reviewed Pixi lockfile is distributed.
+Install Rust 1.88 or newer before the editable pip installation above; pip
+provides its isolated Maturin/CMake build dependencies. Direct Maturin commands
+also require those tools in the active environment.
 
 Checks
 ----------
@@ -80,8 +83,17 @@ Use descriptive titles and explain behavior changes and validation. Required
 checks include Python 3.10–3.13, Rust, lint, documentation, and security checks.
 
 Version metadata comes from ``rust/Cargo.toml`` via maturin. Before a release,
-run ``python scripts/release_version.py --check``, align the changelog and
-release metadata, and verify package/container build results. Promotion to
+run ``python scripts/release_version.py --check``, then finalize the dated
+changelog and citation with ``--check --release``. Development checks allow
+unreleased metadata; publication checks require a matching date and version.
+
+The release candidate workflow tests 16 wheels, an independently installed
+sdist, eight Conda platform/Python combinations, native containers, and SIF
+conversion. Its Conda recipe is pinned to a reviewed preparation commit; update
+that pin when preparing a new recipe. Candidate builds substitute only the
+tested source archive URL and checksum. Submit the published archive checksum
+to Bioconda after PyPI publication; do not submit an unavailable source URL as
+an installable release. Promotion to
 ``master`` and publication are separate release operations; an updated source
 version does not establish that registry packages or images exist.
 

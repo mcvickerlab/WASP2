@@ -3,10 +3,10 @@ name: Container CI
 on:
   push:
     branches: [master, dev]
-    paths: ["Dockerfile", "rust/**", "src/**", "pyproject.toml", "scripts/container_smoke_test.sh", ".github/workflows/docker.yml"]
+    paths: ["Dockerfile", ".dockerignore", "tests/shared_data/**", "rust/**", "src/**", "pyproject.toml", "scripts/container_smoke_test.sh", "scripts/check_sbom.py", ".github/workflows/docker.yml"]
   pull_request:
     branches: [master, dev]
-    paths: ["Dockerfile", "rust/**", "src/**", "pyproject.toml", "scripts/container_smoke_test.sh", ".github/workflows/docker.yml"]
+    paths: ["Dockerfile", ".dockerignore", "tests/shared_data/**", "rust/**", "src/**", "pyproject.toml", "scripts/container_smoke_test.sh", "scripts/check_sbom.py", ".github/workflows/docker.yml"]
   workflow_dispatch:
 
 concurrency:
@@ -28,11 +28,11 @@ jobs:
           - {runner: ubuntu-24.04, platform: linux/amd64}
           - {runner: ubuntu-24.04-arm, platform: linux/arm64}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-      - uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392  # v3
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1  # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
       - name: Read package version
         id: version
         run: |
@@ -42,7 +42,8 @@ jobs:
               print("value=" + tomllib.load(handle)["package"]["version"])
           PY
       - name: Build local test image
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
+        id: build_image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7.4.0
         with:
           context: .
           load: true
@@ -51,9 +52,10 @@ jobs:
           build-args: |
             VERSION=${{ steps.version.outputs.value }}
             REVISION=${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=container-${{ strategy.job-index }}
+          cache-to: type=gha,mode=max,scope=container-${{ strategy.job-index }}
       - name: Smoke-test image
+        id: smoke
         env:
           PLATFORM: ${{ matrix.platform }}
           EXPECTED_VERSION: ${{ steps.version.outputs.value }}
@@ -62,6 +64,68 @@ jobs:
           test "$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' wasp2:ci)" = "$EXPECTED_VERSION"
           test "$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' wasp2:ci)" = "$EXPECTED_REVISION"
           docker run --rm --platform "$PLATFORM" -e EXPECTED_WASP2_VERSION="$EXPECTED_VERSION" wasp2:ci /opt/wasp2/scripts/container_smoke_test.sh
+      - name: Build dependency image for scanning
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7.4.0
+        with:
+          context: .
+          target: rust-builder
+          load: true
+          platforms: ${{ matrix.platform }}
+          tags: wasp2:builder-scan
+          cache-from: type=gha,scope=container-${{ strategy.job-index }}
+      - name: Scan build dependency vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+        with:
+          image-ref: wasp2:builder-scan
+          version: v0.76.0
+          format: json
+          output: builder-vulnerabilities.json
+          severity: CRITICAL,HIGH
+          exit-code: '1'
+      - name: Preserve build dependency scan
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: builder-scan-${{ strategy.job-index }}
+          path: builder-vulnerabilities.json
+          if-no-files-found: warn
+      # Collect runtime evidence even when the build-image scan fails; both scans remain gates.
+      - name: Inventory runtime image
+        id: inventory
+        if: ${{ !cancelled() && steps.build_image.outcome == 'success' }}
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c  # v0.24.3
+        with:
+          image: wasp2:ci
+          format: cyclonedx-json
+          output-file: container-sbom.cdx.json
+          upload-artifact: false
+      - name: Verify image inventory
+        if: ${{ !cancelled() && steps.inventory.outcome == 'success' }}
+        run: python3 scripts/check_sbom.py container-sbom.cdx.json wasp2 numpy scipy samtools bcftools bedtools
+      - if: ${{ !cancelled() && steps.inventory.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: container-sbom-${{ strategy.job-index }}
+          path: container-sbom.cdx.json
+          if-no-files-found: error
+      - name: Scan runtime image vulnerabilities
+        id: runtime_scan
+        if: ${{ !cancelled() && steps.build_image.outcome == 'success' }}
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+        with:
+          image-ref: wasp2:ci
+          format: json
+          output: container-vulnerabilities.json
+          version: v0.76.0
+          severity: CRITICAL,HIGH
+          exit-code: '1'
+      - name: Preserve container scan
+        if: ${{ !cancelled() && steps.runtime_scan.outcome != 'skipped' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: container-scan-${{ strategy.job-index }}
+          path: container-vulnerabilities.json
+          if-no-files-found: error
 
   required:
     name: Required / Container

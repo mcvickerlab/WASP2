@@ -20,20 +20,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.11"
 
       - name: Cache pip dependencies
-        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306  # v5.0.3
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-docs-${{ hashFiles('pyproject.toml') }}
+          key: ${{ runner.os }}-pip-docs-${{ hashFiles('docs/requirements.txt') }}
           restore-keys: ${{ runner.os }}-pip-docs-
 
       - name: Install pandoc
@@ -44,33 +44,29 @@ jobs:
       - name: Install documentation dependencies
         run: |
           pip install --upgrade pip
-          # Install docs extras directly (avoids building the Rust extension)
-          pip install \
-            "sphinx>=7.0" \
-            "pydata-sphinx-theme>=0.15" \
-            "sphinx-autodoc-typehints>=1.25" \
-            "nbsphinx>=0.9" \
-            "myst-parser>=2.0" \
-            "sphinx-copybutton>=0.5" \
-            "sphinx-design>=0.5" \
-            "ipython>=8.0" \
-            "tomli>=2.0; python_version < '3.11'"
-          # Install core Python deps needed by autodoc (Rust ext is mocked in conf.py)
-          pip install \
-            "numpy>=1.21" \
-            "pandas>=1.5,<3.0" \
-            "polars>=0.19" \
-            "scipy>=1.10" \
-            "typer>=0.12" \
-            "rich>=13.0"
+          pip install -r docs/requirements.txt
 
       - name: Build Sphinx documentation
         working-directory: docs
-        run: make html
+        run: make html SPHINXOPTS="-W --keep-going"
+
+      - name: Verify API documentation was imported
+        run: |
+          python - <<'PYDOCS'
+          from pathlib import Path
+          for page, anchors in {
+              "counting": ["counting.count_alleles.make_count_df", "counting.run_counting_cohort.run_count_cohort"],
+              "analysis": ["analysis.as_analysis.get_imbalance"],
+              "mapping": ["mapping.__main__.make_reads"],
+          }.items():
+              html = Path(f"docs/build/html/api/{page}.html").read_text()
+              for anchor in anchors:
+                  assert f'id="{anchor}"' in html, anchor
+          PYDOCS
 
       - name: Upload artifact
         if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
-        uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b  # v4
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9  # v5.0.0
         with:
           path: docs/build/html
 
@@ -89,4 +85,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e  # v4
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346  # v5.0.1

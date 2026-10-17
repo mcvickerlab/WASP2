@@ -40,14 +40,14 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
-    "Typing :: Typed",
 ]
 
 dependencies = [
     "numpy>=1.21.0",
     "pandas>=1.5.0,<3.0.0",
-    "polars>=0.19.0,<2.0",
-    "scipy>=1.10.0",
+    "polars>=1.0.0,<2.0",
+    # Native numerical compatibility is validated against SciPy 1.13.1.
+    "scipy>=1.13.1",
     "pysam>=0.21.0",
     "pybedtools>=0.9.0",
     "anndata>=0.8.0,<0.12.0",
@@ -59,6 +59,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+export = [
+    "zarr>=2.16,<3",
+    "pyarrow>=16.0,<26",
+]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
@@ -129,7 +133,12 @@ module-name = "wasp2_rust"
 python-packages = ["counting", "mapping", "analysis", "wasp2"]
 bindings = "pyo3"
 strip = false
-include = ["LICENSE", "README.md", "rust/licenses/SCIPY-LICENSE.txt", "rust/licenses/NUMPY-LICENSE.txt"]
+include = [
+    "LICENSE", "README.md", "rust/licenses/SCIPY-LICENSE.txt", "rust/licenses/NUMPY-LICENSE.txt",
+    { path = "scripts/container_smoke_test.sh", format = "sdist" },
+    { path = "tests/shared_data/sample1.bam*", format = "sdist" },
+    { path = "tests/shared_data/variants.vcf.gz*", format = "sdist" },
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

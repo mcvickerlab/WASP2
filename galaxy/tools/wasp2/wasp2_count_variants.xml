@@ -73,9 +73,22 @@
             <param name="variants" value="test.vcf"/>
             <output name="output_counts" ftype="tabular">
                 <assert_contents>
+                    <has_n_lines n="11"/>
+                    <has_text text="chr_test&#9;749&#9;750&#9;C&#9;T&#9;4&#9;0&#9;0"/>
                     <has_text text="chrom"/>
                     <has_text text="ref_count"/>
                     <has_text text="alt_count"/>
+                </assert_contents>
+            </output>
+        </test>
+        <test expect_num_outputs="1">
+            <param name="bam" value="mapping.bam"/>
+            <param name="variants" value="mapping.vcf"/>
+            <param name="samples" value="donor.1"/>
+            <output name="output_counts" ftype="tabular">
+                <assert_contents>
+                    <has_n_lines n="2"/>
+                    <has_text text="chr1&#9;110&#9;111&#9;A&#9;C&#9;0|1&#9;1&#9;0&#9;0"/>
                 </assert_contents>
             </output>
         </test>

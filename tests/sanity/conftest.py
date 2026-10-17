@@ -8,6 +8,8 @@ This module provides:
 
 from __future__ import annotations
 
+import hashlib
+import os
 import shutil
 import subprocess
 import tarfile
@@ -22,18 +24,11 @@ if TYPE_CHECKING:
 # Sanity data version and paths
 SANITY_DATA_VERSION = "v1"
 SANITY_TARBALL_NAME = f"wasp2-sanity-chr21-{SANITY_DATA_VERSION}.tar.xz"
-SANITY_DATA_DIR = Path(__file__).parent / "data"
+SANITY_DATA_DIR = Path(os.environ.get("WASP2_SANITY_DATA_DIR", Path(__file__).parent / "data"))
 
-# Data hosting URLs (primary: GitHub Releases, backup: Zenodo)
-# GitHub Releases: Fast, CI-integrated, cached by Actions
-# Zenodo: DOI-backed archival for academic citation
-GITHUB_RELEASE_URL = (
-    f"https://github.com/mcvickerlab/WASP2/releases/download/v1.3.0/{SANITY_TARBALL_NAME}"
-)
-# Zenodo DOI URL for archival citation (update after Zenodo deposit)
-# To activate: replace None with the direct file URL from Zenodo, e.g.:
-#   "https://zenodo.org/records/14538902/files/wasp2-sanity-chr21-v1.tar.xz"
-# See: https://github.com/mcvickerlab/WASP2/issues/246
+# No public archive is currently published. Use a reviewed local dataset or
+# configure an archive URL and its independently verified SHA-256 explicitly.
+GITHUB_RELEASE_URL = os.environ.get("WASP2_SANITY_DATA_URL")
 ZENODO_DOI_URL: str | None = None
 
 # Expected files in sanity dataset
@@ -101,10 +96,18 @@ def download_sanity_data(
     if release_url is not None:
         urls_to_try.append(release_url)
     else:
-        urls_to_try.append(GITHUB_RELEASE_URL)
+        if GITHUB_RELEASE_URL:
+            urls_to_try.append(GITHUB_RELEASE_URL)
         if ZENODO_DOI_URL is not None:
             urls_to_try.append(ZENODO_DOI_URL)
 
+    if not urls_to_try:
+        raise RuntimeError(
+            "No public sanity archive configured. Set WASP2_SANITY_DATA_DIR for local data, or WASP2_SANITY_DATA_URL and WASP2_SANITY_DATA_SHA256."
+        )
+    expected_hash = os.environ.get("WASP2_SANITY_DATA_SHA256")
+    if not expected_hash or len(expected_hash) != 64:
+        raise RuntimeError("Set WASP2_SANITY_DATA_SHA256 to the reviewed archive digest")
     tarball_path = SANITY_DATA_DIR / SANITY_TARBALL_NAME
 
     # Try each URL until one succeeds
@@ -119,7 +122,7 @@ def download_sanity_data(
                 )
             elif shutil.which("curl"):
                 subprocess.run(
-                    ["curl", "-sL", "-o", str(tarball_path), url],
+                    ["curl", "--fail", "--show-error", "-sL", "-o", str(tarball_path), url],
                     check=True,
                     capture_output=True,
                 )
@@ -137,7 +140,10 @@ def download_sanity_data(
             f"Failed to download sanity data from any source. Last error: {last_error}"
         )
 
-    # Extract tarball
+    # Verify before opening the archive; only regular files/directories are allowed.
+    if hashlib.sha256(tarball_path.read_bytes()).hexdigest() != expected_hash:
+        tarball_path.unlink(missing_ok=True)
+        raise RuntimeError("Sanity archive checksum mismatch")
     try:
         with tarfile.open(tarball_path, "r:xz") as tar:
             # Extract to data directory, stripping top-level dir
@@ -146,13 +152,25 @@ def download_sanity_data(
                 parts = Path(member.name).parts
                 if len(parts) > 1:
                     member.name = str(Path(*parts[1:]))
-                    tar.extract(member, SANITY_DATA_DIR)
+                    destination = (SANITY_DATA_DIR / member.name).resolve()
+                    if not destination.is_relative_to(SANITY_DATA_DIR.resolve()):
+                        raise RuntimeError("Sanity archive contains an unsafe path")
+                    if member.isdir():
+                        destination.mkdir(parents=True, exist_ok=True)
+                    elif member.isfile():
+                        destination.parent.mkdir(parents=True, exist_ok=True)
+                        with tar.extractfile(member) as source, destination.open("wb") as target:
+                            shutil.copyfileobj(source, target)
+                    else:
+                        raise RuntimeError("Sanity archive contains a non-regular file")
     except (tarfile.TarError, OSError) as e:
         raise RuntimeError(f"Failed to extract sanity data: {e}") from e
     finally:
         # Clean up tarball
         tarball_path.unlink(missing_ok=True)
 
+    if not is_sanity_data_available():
+        raise RuntimeError("Sanity archive is missing required expected outputs")
     return SANITY_DATA_DIR
 
 
@@ -165,7 +183,7 @@ def sanity_data_dir() -> Path:
     if not is_sanity_data_available():
         pytest.skip(
             "Sanity data not available. Run 'make download-sanity-data' "
-            "or download from GitHub releases."
+            "after configuring a reviewed archive URL and SHA-256."
         )
     return SANITY_DATA_DIR
 

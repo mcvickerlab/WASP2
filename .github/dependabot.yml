@@ -59,3 +59,15 @@ updates:
       - "rust"
     commit-message:
       prefix: "deps(rust)"
+
+  # Keep the tested base-image digests current through normal review.
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    groups:
+      containers:
+        patterns: ["*"]
+    labels: ["dependencies", "containers"]
+    commit-message:
+      prefix: "deps(docker)"

@@ -323,75 +323,27 @@ class TestMappingRegression:
 
 
 class TestFullPipelineIntegration:
-    """End-to-end pipeline integration tests."""
+    """Exercise the supported installed CLI with the shared acceptance suite."""
 
     @pytest.mark.slow
-    def test_full_pipeline_reproducibility(self, tmp_path):
-        """Run full pipeline and verify output matches baseline exactly.
-
-        This is a slow test (20+ seconds) but provides strongest guarantee.
-        """
-        # Create temp output directory
-        temp_baseline = tmp_path / "baseline_test"
-        temp_baseline.mkdir()
-
-        # Run pipeline script
-        script = ROOT / "scripts" / "run_full_pipeline_baseline.sh"
-
-        if not script.exists():
-            pytest.skip("Pipeline script not found")
-
-        # Require external deps that the script needs; skip if unavailable
-        missing = [cmd for cmd in ["bcftools", "bedtools", "samtools"] if shutil.which(cmd) is None]
+    def test_full_pipeline_reproducibility(self):
+        required = [
+            "bcftools",
+            "bedtools",
+            "samtools",
+            "bwa",
+            "wasp2-count",
+            "wasp2-map",
+            "wasp2-analyze",
+        ]
+        missing = [command for command in required if shutil.which(command) is None]
         if missing:
             pytest.skip(f"Pipeline prerequisites missing: {', '.join(missing)}")
-
-        env = dict(subprocess.os.environ)
-        env_prefix = env.get("CONDA_PREFIX_2", env.get("CONDA_PREFIX", ""))
-        env["PYTHONPATH"] = str(ROOT / "src")
-        env["PATH"] = f"{Path(env_prefix) / 'bin'}:{env.get('PATH', '')}"
-        env["LD_LIBRARY_PATH"] = f"{Path(env_prefix) / 'lib'}:{env.get('LD_LIBRARY_PATH', '')}"
-
-        # Ensure test data exists
-        required_files = [
-            ROOT / "test_data" / "CD4_ATACseq_Day1_merged_filtered.sort.bam",
-            ROOT / "test_data" / "filter_chr10.vcf",
-            ROOT / "test_data" / "NA12878_snps_chr10.bed",
-        ]
-        for fpath in required_files:
-            if not fpath.exists():
-                pytest.skip(f"Required test data missing: {fpath}")
-
-        # Run with temp output
         result = subprocess.run(
-            [str(script)],
-            env={**env, "BASELINE_DIR": str(temp_baseline)},
-            cwd=str(ROOT),
+            ["bash", str(ROOT / "scripts" / "smoke_test.sh")],
+            cwd=ROOT,
             capture_output=True,
             text=True,
+            check=False,
         )
-
-        if result.returncode != 0:
-            pytest.fail(f"Pipeline failed:\n{result.stderr}")
-
-        # Compare outputs
-        temp_counts = temp_baseline / "counting" / "counts.tsv"
-        baseline_counts = BASELINE_DIR / "counting" / "counts.tsv"
-
-        if temp_counts.exists() and baseline_counts.exists():
-            assert md5_file(temp_counts) == md5_file(baseline_counts), (
-                "Counting output not reproducible!"
-            )
-
-        temp_analysis = temp_baseline / "analysis" / "ai_results.tsv"
-        baseline_analysis = BASELINE_DIR / "analysis" / "ai_results.tsv"
-
-        if temp_analysis.exists() and baseline_analysis.exists():
-            assert md5_file(temp_analysis) == md5_file(baseline_analysis), (
-                "Analysis output not reproducible!"
-            )
-
-
-if __name__ == "__main__":
-    # Run tests with verbose output
-    pytest.main([__file__, "-v", "--tb=short"])
+        assert result.returncode == 0, result.stdout + result.stderr

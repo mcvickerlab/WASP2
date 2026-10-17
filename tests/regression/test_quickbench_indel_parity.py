@@ -3,6 +3,14 @@ from pathlib import Path
 
 import pytest
 
+from tests.regression.mapping_fixtures import (
+    counter_diff,
+    fastq_counter,
+    quickbench_indel_variants,
+    write_bed,
+    write_synthetic_bam_indel,
+)
+
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src"
 
@@ -15,17 +23,6 @@ for p in (ROOT, SRC):
 def test_quickbench_indel_parity(tmp_path: Path) -> None:
     """Unified make-reads matches the multi-pass path on a simple INDEL dataset (no trim combos)."""
     wasp2_rust = pytest.importorskip("wasp2_rust")
-
-    # Skip if benchmarking module not available (not included in release)
-    try:
-        from benchmarking.quickbench.fastq_utils import counter_diff, fastq_counter
-        from benchmarking.quickbench.synthetic_dataset import (
-            quickbench_indel_variants,
-            write_bed,
-            write_synthetic_bam_indel,
-        )
-    except ImportError:
-        pytest.skip("benchmarking module not available (not included in release)")
 
     from mapping.intersect_variant_data import intersect_reads, process_bam
     from mapping.make_remap_reads import write_remap_bam
@@ -88,6 +85,7 @@ def test_quickbench_indel_parity(tmp_path: Path) -> None:
 
     baseline_counter = fastq_counter(baseline_r1, baseline_r2)
     unified_counter = fastq_counter(unified_r1, unified_r2)
+    assert baseline_counter and unified_counter
     only_baseline, only_unified = counter_diff(baseline_counter, unified_counter)
 
     assert only_baseline == [] and only_unified == [], (

@@ -2,15 +2,21 @@
 # Install: curl -fsSL https://pixi.sh/install.sh | bash && pixi install
 # Run: pixi run wasp2-count --help
 #
-# pixi resolves ALL dependencies (Python, Rust toolchain, htslib, samtools, etc.)
-# in a single lockfile. No system packages required.
+# Pixi resolves Python, Rust, and external tools. The generated pixi.lock is
+# local to the installation; this repository does not distribute a Pixi lock.
 
-[project]
+[workspace]
+requires-pixi = ">=0.82.0"
 name = "wasp2"
 version = "1.5.0"
 description = "Allele-specific analysis of next-generation sequencing data with Rust acceleration"
 channels = ["conda-forge", "bioconda"]
 platforms = ["linux-64", "linux-aarch64", "osx-arm64", "osx-64"]
+
+# Recognize Bioconda distributions when resolving WASP2's PyPI requirements.
+# This avoids a second provider overwriting the same installed Python files.
+[workspace.conda-pypi-map]
+bioconda = { mapping-mode = "overlay", mapping = { pysam = "pysam", pybedtools = "pybedtools", pgenlib = "pgenlib" } }
 
 [dependencies]
 # Core Python
@@ -19,7 +25,7 @@ python = ">=3.10,<3.14"
 # Bioinformatics tools (resolved by conda)
 samtools = ">=1.10"
 bcftools = ">=1.10"
-gsl = "2.7"
+gsl = "==2.7"
 bedtools = ">=2.30"
 htslib = ">=1.10"
 bwa = ">=0.7"
@@ -27,8 +33,8 @@ bwa = ">=0.7"
 # Data processing
 numpy = ">=1.21,<2.0"
 pandas = ">=1.5,<3.0"
-polars = ">=0.19,<2.0"
-scipy = ">=1.10"
+polars = ">=1.0,<2.0"
+scipy = ">=1.13.1"
 pysam = ">=0.21"
 pybedtools = ">=0.9"
 anndata = ">=0.8,<0.12"
@@ -43,8 +49,8 @@ rich = ">=13.0"
 # Rust build toolchain
 rust = ">=1.88"
 cmake = ">=3.14"
-libclang = "*"
-clang = "*"
+libclang = ">=18,<20"
+clang = ">=18,<20"
 pkg-config = "*"
 
 [target.osx-64.dependencies]
@@ -70,9 +76,11 @@ dev = { features = ["dev"], solve-group = "default" }
 verify = "wasp2-count --help && wasp2-map --help && wasp2-analyze --help && python -c 'import wasp2_rust; print(\"OK\")'"
 # Build Rust extension
 build = "maturin develop --release -m rust/Cargo.toml"
+
+[feature.dev.tasks]
 # Run tests
 test = "pytest tests/ -v --tb=short --ignore=tests/benchmarks -m 'not benchmark'"
-test-mapping-parity = "pytest tests/regression/test_mapping_stage_parity.py -v --tb=short"
+test-mapping-parity = "pytest tests/mapping/ tests/regression/test_quickbench*.py -v --tb=short"
 # Run benchmarks
 bench = "pytest tests/benchmarks/ -v --tb=short"
 # Lint

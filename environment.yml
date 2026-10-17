@@ -13,8 +13,8 @@ dependencies:
   # Data processing (aligned with pyproject.toml)
   - numpy>=1.21,<2.0  # <2.0 for ABI compatibility with pysam, pyarrow
   - pandas>=1.5,<3.0
-  - polars>=0.19,<2.0
-  - scipy>=1.10
+  - polars>=1.0,<2.0
+  - scipy>=1.13.1
 
   # Bioinformatics (bioconda)
   - pysam>=0.21
@@ -46,8 +46,8 @@ dependencies:
   # Rust build (PyO3)
   - rust>=1.88
   - cmake>=3.14
-  - libclang
-  - clang
+  - libclang>=18,<20
+  - clang>=18,<20
 
   # Pip-only dependencies
   - pip
