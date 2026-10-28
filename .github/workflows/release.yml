@@ -536,9 +536,21 @@ jobs:
           format: cyclonedx-json
           output-file: container-${{ matrix.tag }}.cdx.json
           upload-artifact: false
+      - name: Inventory linked native libraries
+        id: native_inventory
+        if: ${{ !cancelled() && steps.inventory.outcome == 'success' }}
+        env:
+          IMAGE: wasp2:release-smoke-${{ matrix.tag }}
+          INVENTORY: container-${{ matrix.tag }}.cdx.json
+        run: |
+          docker run --rm "$IMAGE" python /opt/wasp2/scripts/native_sbom.py collect /opt/wasp2/native-sources.json > native-libraries.json
+          python3 scripts/native_sbom.py merge "$INVENTORY" native-libraries.json
+      - name: Check native security baselines
+        if: ${{ !cancelled() && steps.native_inventory.outcome == 'success' }}
+        run: python3 scripts/native_sbom.py check native-libraries.json
       - name: Verify image inventory
         if: ${{ !cancelled() && steps.inventory.outcome == 'success' }}
-        run: python3 scripts/check_sbom.py container-${{ matrix.tag }}.cdx.json wasp2 numpy scipy samtools bcftools bedtools
+        run: python3 scripts/check_sbom.py container-${{ matrix.tag }}.cdx.json wasp2 numpy scipy samtools bcftools bedtools htslib
       - if: ${{ !cancelled() && steps.inventory.outcome == 'success' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:

@@ -270,7 +270,7 @@ WASP2 supports indel mode with configurable parameters:
 .. code-block:: bash
 
    wasp2-map make-reads sample.bam variants.vcf \
-     --include-indels --max-indel-len 10
+     --indels --max-indel-len 10
 
 Structural Variants
 ^^^^^^^^^^^^^^^^^^^
