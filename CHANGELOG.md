@@ -5,6 +5,10 @@ All notable changes to WASP2 will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- Build standalone HTS tools from verified patched sources and enforce security
+  baselines for independently inventoried embedded native libraries.
+- Prevent optional Parquet validation from hanging during Python 3.13 shutdown
+  by using Arrow's native local filesystem for the read-back check.
 - Reserve macOS extension header space for Conda library-path relocation.
 - Refresh maintained CI actions and remove unused Python build helpers from runtime images.
 - Refresh Rust HTSlib wrapper/binding patch releases and collect independent runtime

@@ -421,13 +421,20 @@ assert np.array_equal(data.layers["alt"].toarray(), [[0], [1]])
 assert np.array_equal(data.X.toarray(), [[1], [1]])
 assert "feature" in data.uns
 if os.environ.get("WASP2_TEST_EXPORTS") == "1":
+    import pyarrow.fs as pafs
+
     data.write_zarr(root / "cells.zarr")
     reopened = ad.read_zarr(root / "cells.zarr")
     assert reopened.shape == data.shape
     assert np.array_equal(reopened.X.toarray(), data.X.toarray())
     frame = pd.read_csv(root / "phased.tsv", sep="\t")
     frame.to_parquet(root / "results.parquet", index=False)
-    pd.testing.assert_frame_equal(pd.read_parquet(root / "results.parquet"), frame)
+    # Native Arrow handles avoid Python-file callbacks during interpreter shutdown.
+    # https://github.com/apache/arrow/issues/50482
+    restored = pd.read_parquet(
+        root / "results.parquet", engine="pyarrow", filesystem=pafs.LocalFileSystem()
+    )
+    pd.testing.assert_frame_equal(restored, frame)
     print("  PASS: Zarr and Parquet export round trips")
 print("  PASS: exact single-cell counts, barcodes, axes and feature metadata")
 PYSC

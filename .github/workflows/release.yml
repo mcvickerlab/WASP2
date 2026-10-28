@@ -106,6 +106,10 @@ jobs:
         run: |
           uv venv .wheel-test --python "$PYTHON_VERSION"
           for wheel in dist/*.whl; do uv pip install --python .wheel-test/bin/python "${wheel}[export,plink,cyvcf2]"; done
+          if [[ "$PYTHON_VERSION" == "3.13" ]]; then
+            uv pip install --python .wheel-test/bin/python pytest
+            .wheel-test/bin/python -m pytest tests/test_release_packaging.py::test_export_verification_process_exits -q
+          fi
           cd /tmp
           "$GITHUB_WORKSPACE/.wheel-test/bin/python" -c "import wasp2, wasp2_rust; print(wasp2.__version__, wasp2_rust.__file__)"
           "$GITHUB_WORKSPACE/.wheel-test/bin/wasp2-count" count-cohort --help

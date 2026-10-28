@@ -4,6 +4,9 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from urllib.error import HTTPError
@@ -11,6 +14,40 @@ from urllib.error import HTTPError
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_export_verification_process_exits(tmp_path):
+    """Export assertions must also finish normal threaded-library teardown."""
+    pytest.importorskip("pyarrow")
+    ad = pytest.importorskip("anndata")
+    np = pytest.importorskip("numpy")
+    pd = pytest.importorskip("pandas")
+    sparse = pytest.importorskip("scipy.sparse")
+    data = ad.AnnData(
+        sparse.csr_matrix([[1], [1]]),
+        obs=pd.DataFrame(index=["cellA-1", "cellB-1"]),
+    )
+    data.layers["ref"] = sparse.csr_matrix(np.array([[1], [0]]))
+    data.layers["alt"] = sparse.csr_matrix(np.array([[0], [1]]))
+    data.uns["feature"] = {"region": ["peak1"]}
+    data.write_h5ad(tmp_path / "cells.h5ad")
+    pd.DataFrame({"region": ["peak1"], "ref_count": [1], "pval": [0.5]}).to_csv(
+        tmp_path / "phased.tsv", sep="\t", index=False
+    )
+    script = (ROOT / "scripts/container_smoke_test.sh").read_text()
+    verifier = script.split("<<'PYSC'\n", 1)[1].split("\nPYSC", 1)[0]
+    for _ in range(20):
+        completed = subprocess.run(
+            [sys.executable, "-u", "-", str(tmp_path)],
+            input=verifier,
+            text=True,
+            capture_output=True,
+            timeout=30,
+            env={**os.environ, "WASP2_TEST_EXPORTS": "1"},
+        )
+        assert completed.returncode == 0, completed.stdout + completed.stderr
+        assert "PASS: Zarr and Parquet export round trips" in completed.stdout
+        assert "PASS: exact single-cell counts" in completed.stdout
 
 
 def load_script(name):
