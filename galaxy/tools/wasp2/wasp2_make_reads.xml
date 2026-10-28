@@ -60,9 +60,16 @@
 
     <tests>
         <test expect_num_outputs="5">
-            <param name="bam" value="test.bam"/>
-            <param name="variants" value="test.vcf"/>
-            <param name="samples" value="SAMPLE1"/>
+            <param name="bam" value="mapping.bam"/>
+            <param name="variants" value="mapping.vcf"/>
+            <param name="samples" value="donor.1"/>
+            <output name="to_remap_fq1" ftype="fastqsanger">
+                <assert_contents>
+                    <has_n_lines n="4"/>
+                    <has_text text="@pairR_WASP_100_200_1_1/1"/>
+                    <has_text text="AAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"/>
+                </assert_contents>
+            </output>
             <output name="wasp_json" ftype="json">
                 <assert_contents>
                     <has_text text="keep_bam"/>

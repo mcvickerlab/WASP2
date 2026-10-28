@@ -23,6 +23,32 @@ use std::path::Path;
 
 use crate::seq_decode::{copy_qual_into, decode_seq_into};
 
+/// Resolve numeric VCF genotypes or translated nucleotide genotypes at the
+/// mapping boundary. Counting retains numeric genotypes for its phase tests.
+pub(crate) fn genotype_to_alleles_view<'a>(
+    genotype: &'a str,
+    ref_allele: &'a str,
+    alt_allele: &'a str,
+) -> Option<(&'a str, &'a str)> {
+    let (left, right) = genotype.split_once('|')?;
+    let resolve = |allele: &'a str| -> Option<&'a str> {
+        if allele.is_empty() || allele == "." {
+            return None;
+        }
+        if allele.bytes().all(|base| base.is_ascii_digit()) {
+            let index = allele.parse::<usize>().ok()?;
+            if index == 0 {
+                Some(ref_allele)
+            } else {
+                alt_allele.split(',').nth(index - 1)
+            }
+        } else {
+            Some(allele)
+        }
+    };
+    Some((resolve(left)?, resolve(right)?))
+}
+
 // ============================================================================
 // Data Structures
 // ============================================================================
@@ -272,12 +298,11 @@ pub fn parse_intersect_bed<P: AsRef<Path>>(
             .context("Failed to parse mate number")?;
 
         // Parse phased genotype
-        let gt_parts: Vec<&str> = genotype.split('|').collect();
-        if gt_parts.len() != 2 {
-            continue; // Skip unphased or malformed genotypes
-        }
-        let hap1 = gt_parts[0].to_string();
-        let hap2 = gt_parts[1].to_string();
+        let Some((hap1, hap2)) = genotype_to_alleles_view(genotype, fields[9], fields[10]) else {
+            continue; // Skip unphased or missing genotypes.
+        };
+        let hap1 = hap1.to_string();
+        let hap2 = hap2.to_string();
 
         let span = VariantSpan {
             chrom,
@@ -380,12 +405,11 @@ pub fn parse_intersect_bed_by_chrom<P: AsRef<Path>>(
             .parse::<u8>()
             .context("Failed to parse mate number")?;
 
-        let gt_parts: Vec<&str> = genotype.split('|').collect();
-        if gt_parts.len() != 2 {
-            continue;
-        }
-        let hap1 = gt_parts[0].to_string();
-        let hap2 = gt_parts[1].to_string();
+        let Some((hap1, hap2)) = genotype_to_alleles_view(genotype, fields[9], fields[10]) else {
+            continue; // Skip unphased or missing genotypes.
+        };
+        let hap1 = hap1.to_string();
+        let hap2 = hap2.to_string();
 
         let span = VariantSpan {
             chrom: chrom.clone(),
@@ -581,21 +605,23 @@ fn process_read_pair(
     // Only keep pairs where at least one read differs from original
     let mut haplotype_reads = Vec::new();
 
-    for (hap_idx, ((r1_seq, r1_qual), (r2_seq, r2_qual))) in
-        r1_haps.iter().zip(r2_haps.iter()).enumerate()
+    let changed_pairs: Vec<_> = r1_haps
+        .iter()
+        .zip(r2_haps.iter())
+        .enumerate()
+        .filter(|(_, ((r1_seq, _), (r2_seq, _)))| r1_seq != &r1_original || r2_seq != &r2_original)
+        .collect();
+    let total_seqs = changed_pairs.len();
+    for (write_idx, (hap_idx, ((r1_seq, r1_qual), (r2_seq, r2_qual)))) in
+        changed_pairs.into_iter().enumerate()
     {
-        // Skip if both sequences are unchanged
-        if r1_seq == &r1_original && r2_seq == &r2_original {
-            continue;
-        }
-
         stats.haplotypes_generated += 2; // Count both R1 and R2
 
         // Generate WASP names
         let r1_pos = read1.pos() as u32;
         let r2_pos = read2.pos() as u32;
-        let seq_num = hap_idx + 1;
-        let total_seqs = 2; // We're generating 2 haplotypes (hap1, hap2)
+        // The filter expects the number of pairs actually written, as in Python.
+        let seq_num = write_idx + 1;
 
         let base_name = generate_wasp_name(read_name, r1_pos, r2_pos, seq_num, total_seqs);
 
@@ -1969,6 +1995,84 @@ mod tests {
     use super::*;
     use std::io::Write;
     use tempfile::NamedTempFile;
+
+    #[test]
+    fn test_remap_names_count_only_changed_pairs() {
+        for (hap1, expected_pairs) in [("A", 1), ("G", 2)] {
+            let read1 = create_test_record(100, "50M");
+            let read2 = create_test_record(200, "50M");
+            let mut variants = FxHashMap::default();
+            variants.insert(
+                b"test_read".to_vec(),
+                vec![VariantSpan {
+                    chrom: "chr1".into(),
+                    start: 100,
+                    stop: 150,
+                    vcf_start: 110,
+                    vcf_stop: 111,
+                    mate: 1,
+                    hap1: hap1.into(),
+                    hap2: "C".into(),
+                }],
+            );
+            let output = process_read_pair(
+                &read1,
+                &read2,
+                &variants,
+                &RemapConfig::default(),
+                &mut RemapStats::default(),
+            )
+            .unwrap()
+            .unwrap();
+            assert_eq!(output.len(), expected_pairs * 2);
+            for (index, pair) in output.as_chunks::<2>().0.iter().enumerate() {
+                let base = format!("test_read_WASP_100_200_{}_{}", index + 1, expected_pairs);
+                assert_eq!(pair[0].name, format!("{base}/1").as_bytes());
+                assert_eq!(pair[1].name, format!("{base}/2").as_bytes());
+            }
+        }
+    }
+
+    #[test]
+    fn test_numeric_and_translated_genotypes_resolve_identically() {
+        for (genotype, expected) in [
+            ("0|1", Some(("A", "G"))),
+            ("1|0", Some(("G", "A"))),
+            ("A|G", Some(("A", "G"))),
+            ("0/1", None),
+            (".|1", None),
+            ("2|0", None),
+        ] {
+            assert_eq!(genotype_to_alleles_view(genotype, "A", "G"), expected);
+        }
+        assert_eq!(
+            genotype_to_alleles_view("1|2", "A", "C,G"),
+            Some(("C", "G"))
+        );
+        assert_eq!(
+            genotype_to_alleles_view("0|1", "A", "ATT"),
+            Some(("A", "ATT"))
+        );
+    }
+
+    #[test]
+    fn test_both_intersection_parsers_translate_numeric_genotypes() {
+        let mut input = NamedTempFile::new().unwrap();
+        writeln!(
+            input,
+            "chr1\t100\t150\tread/1\t60\t+\tchr1\t110\t111\tA\tG\t1|0"
+        )
+        .unwrap();
+        input.flush().unwrap();
+        let parsed = parse_intersect_bed(input.path()).unwrap();
+        let grouped = parse_intersect_bed_by_chrom(input.path()).unwrap();
+        for spans in [
+            parsed.get(b"read".as_slice()).unwrap(),
+            grouped["chr1"].get(b"read".as_slice()).unwrap(),
+        ] {
+            assert_eq!((spans[0].hap1.as_str(), spans[0].hap2.as_str()), ("G", "A"));
+        }
+    }
 
     #[test]
     fn test_parse_intersect_bed() {

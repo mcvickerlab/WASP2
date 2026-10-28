@@ -1169,6 +1169,16 @@ fn sum_as_string(a: usize, b: usize) -> PyResult<String> {
 #[pymodule]
 fn wasp2_rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
+    // Report the linked C library, independently of the Rust binding version.
+    let native_version = unsafe { rust_htslib::htslib::hts_version() };
+    if native_version.is_null() {
+        return Err(PyRuntimeError::new_err("HTSlib returned no version"));
+    }
+    // SAFETY: HTSlib returns a static, NUL-terminated version string.
+    let native_version = unsafe { std::ffi::CStr::from_ptr(native_version) }
+        .to_str()
+        .map_err(|error| PyRuntimeError::new_err(format!("Invalid HTSlib version: {error}")))?;
+    m.add("__htslib_version__", native_version)?;
 
     // Legacy test function
     m.add_function(wrap_pyfunction!(sum_as_string, m)?)?;

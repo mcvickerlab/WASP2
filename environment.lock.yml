@@ -6,8 +6,8 @@ channels:
   - conda-forge
   - bioconda
 
-# plink2 and all bioconda bio tools only support linux-64 and osx-64
-# (not osx-arm64, linux-aarch64, or win-64)
+# This reviewed runtime lock currently targets Linux and Intel macOS.
+# The separate Pixi manifest also resolves Linux ARM64 and Apple Silicon.
 platforms:
   - linux-64
   - osx-64
@@ -19,8 +19,8 @@ dependencies:
   # Data processing
   - numpy>=1.21,<2.0
   - pandas>=1.5,<3.0
-  - polars>=0.19,<2.0
-  - scipy>=1.10
+  - polars>=1.0,<2.0
+  - scipy>=1.13.1
 
   # Bioinformatics (bioconda)
   - pysam>=0.21

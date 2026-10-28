@@ -302,7 +302,10 @@ def compare_frames(expected: pd.DataFrame, observed: pd.DataFrame, key: str = "r
             )
             equal = valid and left_counts == right_counts
             deltas[column] = (
-                max((abs(a - b) for a, b in zip(left_counts, right_counts, strict=True)), default=0)
+                max(
+                    (abs(int(a) - int(b)) for a, b in zip(left_counts, right_counts, strict=True)),
+                    default=0,
+                )
                 if valid
                 else float("nan")
             )

@@ -5,10 +5,13 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+  pull_request:
+    branches: [master, dev]
+    paths: ["pyproject.toml", "rust/**", "src/**", "Dockerfile", ".dockerignore", "Singularity.def", "pixi.toml", "environment*.yml", "scripts/**", "tests/shared_data/**", ".github/workflows/release.yml"]
 
 concurrency:
   group: release-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -23,15 +26,18 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.12"
       - name: Validate synchronized metadata
         run: python scripts/release_version.py --check
+      - name: Require finalized publication metadata
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: python scripts/release_version.py --check --release
       - name: Read version
         id: version
         run: |
@@ -40,7 +46,7 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
       - name: Validate manual dry-run source
         if: github.event_name == 'workflow_dispatch'
-        run: test "$GITHUB_REF" = refs/heads/master
+        run: test "${GITHUB_REF#refs/heads/}" != "$GITHUB_REF"
       - name: Validate signed release tag
         if: startsWith(github.ref, 'refs/tags/v')
         env:
@@ -73,17 +79,17 @@ jobs:
           - {runner: ubuntu-24.04-arm, arch: aarch64, python: "3.12"}
           - {runner: ubuntu-24.04-arm, arch: aarch64, python: "3.13"}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: ${{ matrix.python }}
-      - uses: astral-sh/setup-uv@7eb50e6e20e1e2009087999ba91242e80253875f  # v7
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
         with:
           enable-cache: false
       - name: Build wheel
-        uses: PyO3/maturin-action@3b5f400f9576c9934eaeed862ce6281fef121b67  # v1
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b  # v1.51.0
         with:
           target: ${{ matrix.arch }}
           args: --release --locked --out dist -m rust/Cargo.toml -i python${{ matrix.python }}
@@ -91,18 +97,41 @@ jobs:
           sccache: false
           before-script-linux: |
             dnf install -y bzip2-devel xz-devel zlib-devel libcurl-devel openssl-devel clang-devel
+      - name: Install acceptance tools (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y samtools bcftools bedtools bwa
       - name: Install and test exact wheel
         env:
           PYTHON_VERSION: ${{ matrix.python }}
         run: |
           uv venv .wheel-test --python "$PYTHON_VERSION"
-          uv pip install --python .wheel-test/bin/python dist/*.whl
+          for wheel in dist/*.whl; do uv pip install --python .wheel-test/bin/python "${wheel}[export,plink,cyvcf2]"; done
+          if [[ "$PYTHON_VERSION" == "3.13" ]]; then
+            uv pip install --python .wheel-test/bin/python pytest
+            .wheel-test/bin/python -m pytest tests/test_release_packaging.py::test_export_verification_process_exits -q
+          fi
           cd /tmp
           "$GITHUB_WORKSPACE/.wheel-test/bin/python" -c "import wasp2, wasp2_rust; print(wasp2.__version__, wasp2_rust.__file__)"
           "$GITHUB_WORKSPACE/.wheel-test/bin/wasp2-count" count-cohort --help
           "$GITHUB_WORKSPACE/.wheel-test/bin/wasp2-map" --help
           "$GITHUB_WORKSPACE/.wheel-test/bin/wasp2-analyze" --help
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
+          export PATH="$GITHUB_WORKSPACE/.wheel-test/bin:$PATH"
+          WASP2_TEST_EXPORTS=1 bash "$GITHUB_WORKSPACE/scripts/container_smoke_test.sh"
+      - name: Inventory installed wheel environment
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c  # v0.24.3
+        with:
+          path: ./.wheel-test
+          format: cyclonedx-json
+          output-file: runtime-linux-${{ matrix.arch }}-py${{ matrix.python }}.cdx.json
+          upload-artifact: false
+      - name: Verify runtime inventory
+        run: python scripts/check_sbom.py runtime-linux-${{ matrix.arch }}-py${{ matrix.python }}.cdx.json wasp2 numpy scipy
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: runtime-sbom-linux-${{ matrix.arch }}-py${{ matrix.python }}
+          path: runtime-linux-${{ matrix.arch }}-py${{ matrix.python }}.cdx.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: wheel-linux-${{ matrix.arch }}-py${{ matrix.python }}
           path: dist/*.whl
@@ -126,43 +155,76 @@ jobs:
           - {runner: macos-15, arch: arm64, target: aarch64-apple-darwin, deployment: "11.0", python: "3.12"}
           - {runner: macos-15, arch: arm64, target: aarch64-apple-darwin, deployment: "11.0", python: "3.13"}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: ${{ matrix.python }}
-      - uses: astral-sh/setup-uv@7eb50e6e20e1e2009087999ba91242e80253875f  # v7
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
         with:
           enable-cache: false
       - name: Install htslib
         env:
           DEPLOYMENT_TARGET: ${{ matrix.deployment }}
         run: |
-          brew install htslib xz bzip2 openssl@3 pkg-config llvm@19
+          brew install htslib xz bzip2 openssl@3 pkg-config llvm@19 samtools bcftools bedtools bwa
           echo "MACOSX_DEPLOYMENT_TARGET=$DEPLOYMENT_TARGET" >> "$GITHUB_ENV"
           echo "PKG_CONFIG_PATH=$(brew --prefix htslib)/lib/pkgconfig:$(brew --prefix openssl@3)/lib/pkgconfig" >> "$GITHUB_ENV"
           echo "LIBRARY_PATH=$(brew --prefix htslib)/lib:$(brew --prefix openssl@3)/lib" >> "$GITHUB_ENV"
           echo "CPATH=$(brew --prefix htslib)/include" >> "$GITHUB_ENV"
           echo "LIBCLANG_PATH=$(brew --prefix llvm@19)/lib" >> "$GITHUB_ENV"
       - name: Build wheel
-        uses: PyO3/maturin-action@3b5f400f9576c9934eaeed862ce6281fef121b67  # v1
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b  # v1.51.0
         with:
           target: ${{ matrix.target }}
           args: --release --locked --out dist -m rust/Cargo.toml -i python${{ matrix.python }}
           sccache: false
+      - name: Verify macOS wheel relocation
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess, tempfile, zipfile
+          wheels = list(Path("dist").glob("*.whl"))
+          assert len(wheels) == 1
+          with tempfile.TemporaryDirectory() as directory, zipfile.ZipFile(wheels[0]) as archive:
+              extensions = [name for name in archive.namelist() if name.endswith(".so")]
+              assert len(extensions) == 1
+              library = Path(directory) / Path(extensions[0]).name
+              library.write_bytes(archive.read(extensions[0]))
+              rpath = "@loader_path/" + "/".join(["relocation_prefix" * 5] * 6)
+              subprocess.run(["xcrun", "install_name_tool", "-add_rpath", rpath, str(library)], check=True)
+              commands = subprocess.check_output(["xcrun", "otool", "-l", str(library)], text=True)
+              assert rpath in commands
+          PY
       - name: Install and test exact wheel
         env:
           PYTHON_VERSION: ${{ matrix.python }}
         run: |
           uv venv .wheel-test --python "$PYTHON_VERSION"
-          uv pip install --python .wheel-test/bin/python dist/*.whl
+          for wheel in dist/*.whl; do uv pip install --python .wheel-test/bin/python "${wheel}[export,plink,cyvcf2]"; done
           cd /tmp
           "$GITHUB_WORKSPACE/.wheel-test/bin/python" -c "import wasp2, wasp2_rust; print(wasp2.__version__, wasp2_rust.__file__)"
           "$GITHUB_WORKSPACE/.wheel-test/bin/wasp2-count" count-cohort --help
           "$GITHUB_WORKSPACE/.wheel-test/bin/wasp2-map" --help
           "$GITHUB_WORKSPACE/.wheel-test/bin/wasp2-analyze" --help
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
+          export PATH="$GITHUB_WORKSPACE/.wheel-test/bin:$PATH"
+          WASP2_TEST_EXPORTS=1 bash "$GITHUB_WORKSPACE/scripts/container_smoke_test.sh"
+      - name: Inventory installed wheel environment
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c  # v0.24.3
+        with:
+          path: ./.wheel-test
+          format: cyclonedx-json
+          output-file: runtime-macos-${{ matrix.arch }}-py${{ matrix.python }}.cdx.json
+          upload-artifact: false
+      - name: Verify runtime inventory
+        run: python scripts/check_sbom.py runtime-macos-${{ matrix.arch }}-py${{ matrix.python }}.cdx.json wasp2 numpy scipy
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: runtime-sbom-macos-${{ matrix.arch }}-py${{ matrix.python }}
+          path: runtime-macos-${{ matrix.arch }}-py${{ matrix.python }}.cdx.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: wheel-macos-${{ matrix.arch }}-py${{ matrix.python }}
           path: dist/*.whl
@@ -174,18 +236,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.12"
       - uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7  # stable
-      - uses: astral-sh/setup-uv@7eb50e6e20e1e2009087999ba91242e80253875f  # v7
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
         with:
           enable-cache: false
       - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libhts-dev libbz2-dev liblzma-dev zlib1g-dev libssl-dev pkg-config libclang-dev
+        run: sudo apt-get update && sudo apt-get install -y libhts-dev libbz2-dev liblzma-dev zlib1g-dev libssl-dev pkg-config libclang-dev samtools bcftools bedtools bwa
       - name: Build and validate sdist
         run: |
           uv pip install --system maturin twine
@@ -199,66 +261,206 @@ jobs:
           "$GITHUB_WORKSPACE/.sdist-test/bin/wasp2-count" --help
           "$GITHUB_WORKSPACE/.sdist-test/bin/wasp2-map" --help
           "$GITHUB_WORKSPACE/.sdist-test/bin/wasp2-analyze" --help
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
+          export PATH="$GITHUB_WORKSPACE/.sdist-test/bin:$PATH"
+          bash "$GITHUB_WORKSPACE/scripts/container_smoke_test.sh"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: source-distribution
           path: dist/*.tar.gz
           if-no-files-found: error
 
+  pixi-candidate:
+    name: Pixi ${{ matrix.platform }} / ${{ matrix.environment }}
+    needs: validate
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {platform: linux-64, runner: ubuntu-24.04, environment: default}
+          - {platform: linux-64, runner: ubuntu-24.04, environment: dev}
+          - {platform: linux-aarch64, runner: ubuntu-24.04-arm, environment: default}
+          - {platform: linux-aarch64, runner: ubuntu-24.04-arm, environment: dev}
+          - {platform: osx-64, runner: macos-15-intel, environment: default}
+          - {platform: osx-64, runner: macos-15-intel, environment: dev}
+          - {platform: osx-arm64, runner: macos-15, environment: default}
+          - {platform: osx-arm64, runner: macos-15, environment: dev}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94  # v0.11.2
+        with:
+          pixi-version: v0.82.0
+          environments: ${{ matrix.environment }}
+          locked: false
+          cache: false
+      - name: Verify installed software
+        env:
+          PIXI_ENVIRONMENT: ${{ matrix.environment }}
+          EXPECTED_WASP2_VERSION: ${{ needs.validate.outputs.version }}
+        run: pixi run -e "$PIXI_ENVIRONMENT" bash scripts/container_smoke_test.sh
+      - name: Verify development parity task
+        if: matrix.environment == 'dev'
+        run: pixi run -e dev test-mapping-parity
+
+  conda-candidate:
+    name: Conda ${{ matrix.platform }} / Python ${{ matrix.python }}
+    needs: [validate, sdist]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {platform: linux-64, runner: ubuntu-24.04, deployment: "2.28", python: "3.11"}
+          - {platform: linux-64, runner: ubuntu-24.04, deployment: "2.28", python: "3.12"}
+          - {platform: linux-aarch64, runner: ubuntu-24.04-arm, deployment: "2.28", python: "3.11"}
+          - {platform: linux-aarch64, runner: ubuntu-24.04-arm, deployment: "2.28", python: "3.12"}
+          - {platform: osx-64, runner: macos-15-intel, deployment: "10.13", python: "3.11"}
+          - {platform: osx-64, runner: macos-15-intel, deployment: "10.13", python: "3.12"}
+          - {platform: osx-arm64, runner: macos-15, deployment: "11.0", python: "3.11"}
+          - {platform: osx-arm64, runner: macos-15, deployment: "11.0", python: "3.12"}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          repository: Jaureguy760/bioconda-recipes
+          ref: 63b7dde03e1898a3aa52cb52943ae9e02d191ebe
+          sparse-checkout: recipes/wasp2
+          path: candidate-bioconda
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          name: source-distribution
+          path: candidate-source
+      - uses: mamba-org/setup-micromamba@f457c30a868e4760d3a6fcea5f25dc655b8edf39  # v3.2.1
+        with:
+          environment-name: conda-build
+          create-args: conda-build
+          condarc: |
+            channels:
+              - conda-forge
+              - bioconda
+            channel_priority: strict
+          init-shell: bash
+          cache-downloads: true
+      - name: Point candidate recipe at the exact tested source archive
+        shell: micromamba-shell {0}
+        env:
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+          DEPLOYMENT_TARGET: ${{ matrix.deployment }}
+        run: |
+          python - <<'PYCONDA'
+          import hashlib, os, re, shutil, subprocess, sys
+          from pathlib import Path
+          import yaml
+          shutil.copytree("candidate-bioconda/recipes/wasp2", "candidate-recipe")
+          archives = list(Path("candidate-source").glob("*.tar.gz"))
+          assert len(archives) == 1
+          source = archives[0].resolve()
+          recipe = Path("candidate-recipe/meta.yaml")
+          text = recipe.read_text()
+          assert f'set version = "{os.environ["RELEASE_VERSION"]}"' in text
+          text = re.sub(r"^  url: .*$", "  url: " + source.as_uri(), text, flags=re.MULTILINE)
+          text = re.sub(r"^  sha256: .*$", "  sha256: " + hashlib.sha256(source.read_bytes()).hexdigest(), text, flags=re.MULTILINE)
+          recipe.write_text(text)
+          mac = sys.platform == "darwin"
+          versions = {
+              "c_compiler": ["clang" if mac else "gcc"],
+              "cxx_compiler": ["clangxx" if mac else "gxx"],
+              "c_compiler_version": ["19" if mac else "14"],
+              "cxx_compiler_version": ["19" if mac else "14"],
+              "c_stdlib": ["macosx_deployment_target" if mac else "sysroot"],
+              "c_stdlib_version": [os.environ["DEPLOYMENT_TARGET"]],
+          }
+          if mac:
+              versions["macosx_deployment_target"] = [os.environ["DEPLOYMENT_TARGET"]]
+              versions["CONDA_BUILD_SYSROOT"] = [subprocess.check_output(["xcrun", "--show-sdk-path"], text=True).strip()]
+          Path("candidate-variants.yaml").write_text(yaml.safe_dump(versions))
+          PYCONDA
+      - name: Build and functionally test Conda package
+        shell: micromamba-shell {0}
+        env:
+          CONDA_BLD_PATH: ${{ runner.temp }}/conda-build
+          CONDA_CHANNEL_PRIORITY: strict
+          PYTHON_VERSION: ${{ matrix.python }}
+        run: conda-build candidate-recipe --python "$PYTHON_VERSION" --variant-config-files candidate-variants.yaml --override-channels -c conda-forge -c bioconda --no-anaconda-upload
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: conda-${{ matrix.platform }}-py${{ matrix.python }}
+          path: ${{ runner.temp }}/conda-build/${{ matrix.platform }}/wasp2-*.conda
+          if-no-files-found: error
+
   package:
     name: Verify release bundle
-    needs: [linux-wheel, macos-wheel, sdist]
+    needs: [linux-wheel, macos-wheel, sdist, conda-candidate, pixi-candidate]
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write  # Authenticate package provenance attestations.
       attestations: write  # Publish package provenance attestations.
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
           path: packages
           pattern: "wheel-*"
           merge-multiple: true
-      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
           name: source-distribution
           path: packages
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.12"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          pattern: runtime-sbom-*
+          merge-multiple: true
+          path: runtime-sboms
       - name: Validate complete package set
         run: |
           test "$(find packages -name '*.whl' -type f | wc -l)" -eq 16
           test "$(find packages -name '*.tar.gz' -type f | wc -l)" -eq 1
           pip install twine
           python -m twine check packages/*
-          sha256sum packages/* > SHA256SUMS.packages
-      - name: Generate package SBOM
-        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610  # v0
+          (cd packages && sha256sum *) > SHA256SUMS.packages
+      - name: Expand source for dependency inventory
+        run: |
+          mkdir sbom-source
+          tar -xzf packages/wasp2-*.tar.gz -C sbom-source
+      - name: Generate source dependency SBOM
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c  # v0.24.3
         with:
-          path: ./packages
+          path: ./sbom-source
           format: cyclonedx-json
-          output-file: ./wasp2-packages.cdx.json
+          output-file: ./wasp2-source.cdx.json
           upload-artifact: false
+      - name: Verify source SBOM contents
+        run: python scripts/check_sbom.py wasp2-source.cdx.json wasp2 rust-htslib
       - name: Attest package provenance
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45  # v2
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6  # v4.2.2
         with:
           subject-path: "packages/*"
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: release-packages
           path: packages/*
           if-no-files-found: error
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: release-metadata
           path: |
-            wasp2-packages.cdx.json
+            wasp2-source.cdx.json
             SHA256SUMS.packages
+            runtime-sboms/*.cdx.json
           if-no-files-found: error
 
   container-smoke:
@@ -275,12 +477,13 @@ jobs:
           - {runner: ubuntu-24.04, platform: linux/amd64, tag: amd64}
           - {runner: ubuntu-24.04-arm, platform: linux/arm64, tag: arm64}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
       - name: Build local release image
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
+        id: build_image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7.4.0
         with:
           context: .
           load: true
@@ -292,6 +495,7 @@ jobs:
           cache-from: type=gha,scope=release-${{ matrix.tag }}
           cache-to: type=gha,mode=max,scope=release-${{ matrix.tag }}
       - name: Smoke-test local release image
+        id: smoke
         env:
           IMAGE: wasp2:release-smoke-${{ matrix.tag }}
           PLATFORM: ${{ matrix.platform }}
@@ -301,47 +505,139 @@ jobs:
           test "$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "$IMAGE")" = "$EXPECTED_VERSION"
           test "$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$IMAGE")" = "$EXPECTED_REVISION"
           docker run --rm --platform "$PLATFORM" -e EXPECTED_WASP2_VERSION="$EXPECTED_VERSION" "$IMAGE" /opt/wasp2/scripts/container_smoke_test.sh
+      - name: Build dependency image for scanning
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7.4.0
+        with:
+          context: .
+          target: rust-builder
+          load: true
+          platforms: ${{ matrix.platform }}
+          tags: wasp2:builder-scan
+          cache-from: type=gha,scope=release-${{ matrix.tag }}
+      - name: Scan build dependency vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+        with:
+          image-ref: wasp2:builder-scan
+          version: v0.76.0
+          format: json
+          output: builder-${{ matrix.tag }}-vulnerabilities.json
+          severity: CRITICAL,HIGH
+          exit-code: '1'
+      - name: Preserve build dependency scan
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: builder-scan-${{ matrix.tag }}
+          path: builder-${{ matrix.tag }}-vulnerabilities.json
+          if-no-files-found: warn
+      # Collect runtime evidence even when the build-image scan fails; both scans remain gates.
+      - name: Inventory runtime image
+        id: inventory
+        if: ${{ !cancelled() && steps.build_image.outcome == 'success' }}
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c  # v0.24.3
+        with:
+          image: wasp2:release-smoke-${{ matrix.tag }}
+          format: cyclonedx-json
+          output-file: container-${{ matrix.tag }}.cdx.json
+          upload-artifact: false
+      - name: Inventory linked native libraries
+        id: native_inventory
+        if: ${{ !cancelled() && steps.inventory.outcome == 'success' }}
+        env:
+          IMAGE: wasp2:release-smoke-${{ matrix.tag }}
+          INVENTORY: container-${{ matrix.tag }}.cdx.json
+        run: |
+          docker run --rm "$IMAGE" python /opt/wasp2/scripts/native_sbom.py collect /opt/wasp2/native-sources.json > native-libraries.json
+          python3 scripts/native_sbom.py merge "$INVENTORY" native-libraries.json
+      - name: Check native security baselines
+        if: ${{ !cancelled() && steps.native_inventory.outcome == 'success' }}
+        run: python3 scripts/native_sbom.py check native-libraries.json
+      - name: Verify image inventory
+        if: ${{ !cancelled() && steps.inventory.outcome == 'success' }}
+        run: python3 scripts/check_sbom.py container-${{ matrix.tag }}.cdx.json wasp2 numpy scipy samtools bcftools bedtools htslib
+      - if: ${{ !cancelled() && steps.inventory.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: release-container-sbom-${{ matrix.tag }}
+          path: container-${{ matrix.tag }}.cdx.json
+          if-no-files-found: error
+      - name: Scan runtime image vulnerabilities
+        id: runtime_scan
+        if: ${{ !cancelled() && steps.build_image.outcome == 'success' }}
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+        with:
+          image-ref: wasp2:release-smoke-${{ matrix.tag }}
+          format: json
+          output: container-${{ matrix.tag }}-vulnerabilities.json
+          version: v0.76.0
+          severity: CRITICAL,HIGH
+          exit-code: '1'
+      - name: Preserve container scan
+        if: ${{ !cancelled() && steps.runtime_scan.outcome != 'skipped' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: release-container-scan-${{ matrix.tag }}
+          path: container-${{ matrix.tag }}-vulnerabilities.json
+          if-no-files-found: error
+      - name: Save tested image
+        id: save_image
+        if: ${{ !cancelled() && steps.smoke.outcome == 'success' }}
+        env:
+          IMAGE: wasp2:release-smoke-${{ matrix.tag }}
+        run: docker save "$IMAGE" | gzip > "${RUNNER_TEMP}/image-${{ matrix.tag }}.tar.gz"
+      - if: ${{ !cancelled() && steps.save_image.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: tested-image-${{ matrix.tag }}
+          path: ${{ runner.temp }}/image-${{ matrix.tag }}.tar.gz
+          if-no-files-found: error
 
   singularity-smoke:
     name: Singularity smoke
     needs: [validate, package, container-smoke]
+    # Test conversion independently; publication still requires successful container security gates.
+    if: ${{ !cancelled() && needs.validate.result == 'success' && needs.package.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
       - uses: eWaterCycle/setup-apptainer@3f706d898c9db585b1d741b4692e66755f3a1b40
         with:
           apptainer-version: 1.4.5
       - name: Verify container runtime
         run: apptainer --version
-      - name: Build local Docker archive
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
-          context: .
-          platforms: linux/amd64
-          tags: wasp2:release-singularity
-          build-args: |
-            VERSION=${{ needs.validate.outputs.version }}
-            REVISION=${{ github.sha }}
-          outputs: type=docker,dest=${{ runner.temp }}/wasp2-docker.tar
-          cache-from: type=gha,scope=release-amd64
-          cache-to: type=gha,mode=max,scope=release-amd64
+          name: tested-image-amd64
+          path: ${{ runner.temp }}/tested-image
+      - name: Unpack tested Docker archive
+        run: gzip -dc "$RUNNER_TEMP/tested-image/image-amd64.tar.gz" > "$RUNNER_TEMP/wasp2-docker.tar"
       - name: Build and test local Singularity artifact
         env:
           RELEASE_VERSION: ${{ needs.validate.outputs.version }}
         run: |
           apptainer build "wasp2_${RELEASE_VERSION}.sif" "docker-archive://${RUNNER_TEMP}/wasp2-docker.tar"
-          apptainer exec "wasp2_${RELEASE_VERSION}.sif" /opt/wasp2/scripts/container_smoke_test.sh
+          apptainer exec --env EXPECTED_WASP2_VERSION="$RELEASE_VERSION" "wasp2_${RELEASE_VERSION}.sif" /opt/wasp2/scripts/container_smoke_test.sh
+          sed -e 's/^Bootstrap: docker$/Bootstrap: localimage/' \
+              -e "s|^From: .*|From: $PWD/wasp2_${RELEASE_VERSION}.sif|" \
+              Singularity.def > "$RUNNER_TEMP/Singularity.candidate.def"
+          apptainer build "wasp2_definition_${RELEASE_VERSION}.sif" "$RUNNER_TEMP/Singularity.candidate.def"
+          apptainer test "wasp2_definition_${RELEASE_VERSION}.sif"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: candidate-sif
+          path: wasp2_${{ needs.validate.outputs.version }}.sif
+          if-no-files-found: error
 
   publish-pypi:
     name: Publish PyPI
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [package, singularity]
+    needs: [validate, package, singularity]
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -349,17 +645,29 @@ jobs:
     permissions:
       id-token: write  # Authenticate to PyPI using trusted publishing.
     steps:
-      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
           name: release-packages
           path: packages
-      - uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e  # release/v1
+      - name: Reconcile immutable PyPI artifacts
+        id: upload
+        env:
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+        run: python scripts/prepare_pypi_upload.py packages upload "$RELEASE_VERSION"
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33  # v1.14.2
+        if: steps.upload.outputs.count != '0'
         with:
-          packages-dir: packages/
+          packages-dir: upload/
           attestations: true
 
   container:
-    name: Publish multi-architecture container
+    name: Stage tested multi-architecture container
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [validate, package, container-smoke, singularity-smoke]
     runs-on: ubuntu-latest
@@ -369,39 +677,59 @@ jobs:
       id-token: write  # Authenticate container provenance attestations.
       attestations: write  # Publish container provenance attestations.
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-      - uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392  # v3
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
-      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1  # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f  # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and publish image
-        id: image
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
-          context: .
-          push: true
-          platforms: linux/amd64,linux/arm64
-          tags: |
-            ${{ env.IMAGE_NAME }}:${{ needs.validate.outputs.version }}
-            ${{ env.IMAGE_NAME }}:latest
-          build-args: |
-            VERSION=${{ needs.validate.outputs.version }}
-            REVISION=${{ github.sha }}
-          provenance: mode=max
-          sbom: true
-      - name: Smoke-test published architectures
+          pattern: tested-image-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/tested-images
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          pattern: release-container-sbom-*
+          merge-multiple: true
+          path: container-sboms
+      - name: Publish exact tested candidate images
+        id: image
         env:
-          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+          CANDIDATE: candidate-${{ github.sha }}-${{ github.run_attempt }}
         run: |
-          docker run --rm --platform linux/amd64 "${IMAGE_NAME}:${RELEASE_VERSION}" wasp2-count count-cohort --help
-          docker run --rm --platform linux/arm64 "${IMAGE_NAME}:${RELEASE_VERSION}" wasp2-count count-cohort --help
+          for arch in amd64 arm64; do
+            gzip -dc "$RUNNER_TEMP/tested-images/image-${arch}.tar.gz" | docker load
+            docker tag "wasp2:release-smoke-${arch}" "${IMAGE_NAME}:${CANDIDATE}-${arch}"
+            docker push "${IMAGE_NAME}:${CANDIDATE}-${arch}"
+            ARCH_DIGEST=$(docker buildx imagetools inspect "${IMAGE_NAME}:${CANDIDATE}-${arch}" --format '{{json .Manifest.Digest}}' | tr -d '\"')
+            echo "${arch}_digest=$ARCH_DIGEST" >> "$GITHUB_OUTPUT"
+          done
+          docker buildx imagetools create --tag "${IMAGE_NAME}:${CANDIDATE}" \
+            "${IMAGE_NAME}:${CANDIDATE}-amd64" "${IMAGE_NAME}:${CANDIDATE}-arm64"
+          DIGEST=$(docker buildx imagetools inspect "${IMAGE_NAME}:${CANDIDATE}" --format '{{json .Manifest.Digest}}' | tr -d '\"')
+          test -n "$DIGEST"
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+      - name: Attest amd64 dependency inventory
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6  # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.image.outputs.amd64_digest }}
+          sbom-path: container-sboms/container-amd64.cdx.json
+          push-to-registry: true
+      - name: Attest arm64 dependency inventory
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6  # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.image.outputs.arm64_digest }}
+          sbom-path: container-sboms/container-arm64.cdx.json
+          push-to-registry: true
       - name: Attest container provenance
-        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45  # v2
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6  # v4.2.2
         with:
           subject-name: ${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.image.outputs.digest }}
@@ -410,7 +738,7 @@ jobs:
         env:
           CONTAINER_DIGEST: ${{ steps.image.outputs.digest }}
         run: printf '%s\n' "$CONTAINER_DIGEST" > container-digest.txt
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: container-metadata
           path: container-digest.txt
@@ -430,54 +758,120 @@ jobs:
           apptainer-version: 1.4.5
       - name: Verify container runtime
         run: apptainer --version
-      - name: Build from released image
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          name: container-metadata
+      - name: Build from tested candidate digest
         env:
           RELEASE_VERSION: ${{ needs.validate.outputs.version }}
-        run: apptainer build "wasp2_${RELEASE_VERSION}.sif" "docker://${IMAGE_NAME}:${RELEASE_VERSION}"
+        run: |
+          DIGEST=$(cat container-digest.txt)
+          apptainer build "wasp2_${RELEASE_VERSION}.sif" "docker://${IMAGE_NAME}@${DIGEST}"
       - name: Test Singularity artifact
         env:
           RELEASE_VERSION: ${{ needs.validate.outputs.version }}
-        run: apptainer exec "wasp2_${RELEASE_VERSION}.sif" wasp2-count count-cohort --help
-      - uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45  # v2
+        run: apptainer exec --env EXPECTED_WASP2_VERSION="$RELEASE_VERSION" "wasp2_${RELEASE_VERSION}.sif" /opt/wasp2/scripts/container_smoke_test.sh
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6  # v4.2.2
         with:
           subject-path: "wasp2_${{ needs.validate.outputs.version }}.sif"
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: singularity-artifact
           path: "wasp2_${{ needs.validate.outputs.version }}.sif"
           if-no-files-found: error
 
+  promote-container:
+    name: Promote validated container tags
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [validate, publish-pypi, singularity, container]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          name: container-metadata
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f  # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Promote digest without rebuilding
+        env:
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          DIGEST=$(cat container-digest.txt)
+          if docker buildx imagetools inspect "${IMAGE_NAME}:${RELEASE_VERSION}" --format '{{json .Manifest.Digest}}' > existing-digest.txt 2> inspect-error.txt; then
+            EXISTING=$(tr -d '\"\n' < existing-digest.txt)
+            test "$EXISTING" = "$DIGEST" || { echo "Refusing to replace an existing version tag" >&2; exit 1; }
+          else
+            grep -Eiq 'manifest unknown|not found' inspect-error.txt || { cat inspect-error.txt >&2; exit 1; }
+            docker buildx imagetools create --tag "${IMAGE_NAME}:${RELEASE_VERSION}" "${IMAGE_NAME}@${DIGEST}"
+          fi
+          docker buildx imagetools create --tag "${IMAGE_NAME}:latest" "${IMAGE_NAME}@${DIGEST}"
+
   github-release:
     name: Publish GitHub Release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [publish-pypi, container, singularity]
+    needs: [publish-pypi, promote-container, singularity]
     runs-on: ubuntu-latest
     permissions:
       contents: write  # Create the GitHub release and upload its assets.
     steps:
-      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
           name: release-packages
           path: release-assets
-      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
           name: release-metadata
           path: release-assets
-      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
           name: container-metadata
           path: release-assets
-      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
           name: singularity-artifact
           path: release-assets
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          pattern: release-container-sbom-*
+          merge-multiple: true
+          path: release-assets
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          pattern: release-container-scan-*
+          merge-multiple: true
+          path: release-assets
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          pattern: builder-scan-*
+          merge-multiple: true
+          path: release-assets
+      - name: Flatten release metadata without overwriting assets
+        run: |
+          python - <<'PYASSETS'
+          from pathlib import Path
+          root = Path("release-assets")
+          for path in list(root.rglob("*")):
+              if path.is_file() and path.parent != root:
+                  target = root / path.name
+                  assert not target.exists(), f"Duplicate release asset: {path.name}"
+                  path.rename(target)
+          for path in sorted(root.rglob("*"), key=lambda p: len(p.parts), reverse=True):
+              if path.is_dir():
+                  path.rmdir()
+          PYASSETS
       - name: Generate release checksums
         run: |
           cd release-assets
           find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > "$RUNNER_TEMP/SHA256SUMS"
           mv "$RUNNER_TEMP/SHA256SUMS" SHA256SUMS
           sha256sum --check SHA256SUMS
-      - uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b  # v2
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64  # v3.0.3
         with:
           files: release-assets/*
           generate_release_notes: true

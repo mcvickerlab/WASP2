@@ -97,11 +97,13 @@ The ``linear`` model carries four inseparable nuisance values:
 
 Linear fitting follows archived Python's balanced-null objective on
 pseudocounted depth, with Nelder-Mead starting at ``(0, 0)`` and SciPy's default
-simplex, tolerances, and evaluation limits. The fitted coefficients are then
-converted to the standardized raw-depth representation above. Equal-depth
-inputs use a unit scale, preserving their fitted predictions. The ``[-10, 10]``
-predictor guard applies during fitting only; testing uses the unclipped sigmoid
-prediction with the existing numerical rho boundary guard.
+simplex, tolerances, and evaluation limits. New fits preserve the original
+adjusted-depth intercept and slope, with ``linear_depth_center`` set to
+``-2 * pseudocount`` and ``linear_depth_scale`` set to 1. This preserves the
+original predictor without rounding from conversion to mean/std coordinates.
+Existing fixed parameter sets use their supplied center and scale. The
+``[-10, 10]`` predictor guard applies during fitting only; testing uses the
+unclipped sigmoid prediction with the existing numerical rho boundary guard.
 
 The fit ID includes all four, and fixed-nuisance donor
 runs must echo all four exactly. The dispersion TSV and provenance JSON retain

@@ -1,20 +1,11 @@
 name: wasp2_analyze
 channels:
-  - bioconda
   - conda-forge
-  - defaults
+  - bioconda
+  - nodefaults
 dependencies:
   - python=3.11.*
-  - numpy
-  - pandas>=2.0.0
-  - polars>=0.19
-  - scipy
-  - anndata>=0.8.0
-  - scanpy>=1.9.0
-  - typer
-  - rich
-  - rust
-  - libclang
-  - pip
-  - pip:
-    - maturin>=1.4
+  - bioconda::wasp2=1.5.0
+  - samtools>=1.10
+  - bcftools>=1.10
+  - bedtools>=2.30

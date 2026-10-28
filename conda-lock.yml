@@ -13,8 +13,8 @@
 version: 1
 metadata:
   content_hash:
-    linux-64: bb05ae664cf9071c5d535fcaa891330ef6f0682ccc971f598a0457b78816e150
-    osx-64: 88e11e31b2d33d94f6c2834de4ee7908ebd89cd666ee28fd01489c60801ff44e
+    linux-64: 4f6271d6ae442485f8c64326613758fe51969625c378fae293272672f6b0ee14
+    osx-64: 9e848e5c81542c773e40f60a29864f6d26d060accaaf234fa330c1276940d714
   channels:
   - url: conda-forge
     used_env_vars: []
@@ -3607,62 +3607,62 @@ package:
   category: main
   optional: false
 - name: polars
-  version: 1.42.1
+  version: 1.44.2
   manager: conda
   platform: linux-64
   dependencies:
-    polars-runtime-32: 1.42.1
-    python: '>=3.10'
-  url: https://conda.anaconda.org/conda-forge/noarch/polars-1.42.1-pyh58ad624_0.conda
+    polars-runtime-32: 1.44.2
+    python: '>=3.11'
+  url: https://conda.anaconda.org/conda-forge/noarch/polars-1.44.2-pyh3138b34_0.conda
   hash:
-    md5: 4e315d6adb68e84890cd7a630b2f316f
-    sha256: 8b55f3021a72b098195ea9fddf125cd5a2e1bd288f8ae8d899e70c1d7b132b18
+    md5: 716482997743170f404e0c2a29ab406d
+    sha256: df9834da83b1eab9296aae08b4b00516be213ba0610fd3592426df2d2e025123
   category: main
   optional: false
 - name: polars
-  version: 1.42.1
+  version: 1.44.2
   manager: conda
   platform: osx-64
   dependencies:
-    polars-runtime-32: 1.42.1
-    python: '>=3.10'
-  url: https://conda.anaconda.org/conda-forge/noarch/polars-1.42.1-pyh58ad624_0.conda
+    polars-runtime-32: 1.44.2
+    python: '>=3.11'
+  url: https://conda.anaconda.org/conda-forge/noarch/polars-1.44.2-pyh3138b34_0.conda
   hash:
-    md5: 4e315d6adb68e84890cd7a630b2f316f
-    sha256: 8b55f3021a72b098195ea9fddf125cd5a2e1bd288f8ae8d899e70c1d7b132b18
+    md5: 716482997743170f404e0c2a29ab406d
+    sha256: df9834da83b1eab9296aae08b4b00516be213ba0610fd3592426df2d2e025123
   category: main
   optional: false
 - name: polars-runtime-32
-  version: 1.42.1
+  version: 1.44.2
   manager: conda
   platform: linux-64
   dependencies:
     __glibc: '>=2.17,<3.0.a0'
     _python_abi3_support: 1.*
-    cpython: '>=3.10'
-    libgcc: '>=14'
-    libstdcxx: '>=14'
+    cpython: '>=3.11'
+    libgcc: '>=15'
+    libstdcxx: '>=15'
     python: ''
-  url: https://conda.anaconda.org/conda-forge/linux-64/polars-runtime-32-1.42.1-py310h49dadd8_0.conda
+  url: https://conda.anaconda.org/conda-forge/linux-64/polars-runtime-32-1.44.2-py311hb519a9e_0.conda
   hash:
-    md5: 393bb50f17571c2e8b129461919296be
-    sha256: 7fdca7044d5377fbed66864644f52430789876c7571dfe0868e4082dc711b83d
+    md5: 76e398db25e6e9cd7e09ad16110a0c5e
+    sha256: b21cb18cbf8bdf706a1b43d0f1228b409105d1d7f29749ad2575b5e96dba2abd
   category: main
   optional: false
 - name: polars-runtime-32
-  version: 1.42.1
+  version: 1.44.2
   manager: conda
   platform: osx-64
   dependencies:
     __osx: '>=11.0'
     _python_abi3_support: 1.*
-    cpython: '>=3.10'
-    libcxx: '>=19'
+    cpython: '>=3.11'
+    libcxx: '>=21'
     python: ''
-  url: https://conda.anaconda.org/conda-forge/osx-64/polars-runtime-32-1.42.1-py310h3769acf_0.conda
+  url: https://conda.anaconda.org/conda-forge/osx-64/polars-runtime-32-1.44.2-py311hb25e4a4_0.conda
   hash:
-    md5: f1db8c1d8f2b729ae05eecf4aa43f4e5
-    sha256: 5a8b1285412ff848ee4e892244a9aedd682c3308a9f54fe9c7c89edfafc355f4
+    md5: 49c59abeaf114775439186ccf48d0dac
+    sha256: ed6cf1f6b81e93ad39603ef8c02a9a409ad50182e8edd4ce7f952a164a0c7079
   category: main
   optional: false
 - name: psutil

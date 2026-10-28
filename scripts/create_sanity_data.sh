@@ -50,7 +50,7 @@ log_error() {
 check_prerequisites() {
     log_info "Checking prerequisites..."
 
-    for cmd in samtools bcftools tabix bgzip; do
+    for cmd in samtools bcftools tabix bgzip wasp2-count wasp2-map wasp2-analyze; do
         if ! command -v "$cmd" &> /dev/null; then
             log_error "$cmd is required but not installed."
             exit 1
@@ -112,51 +112,21 @@ generate_expected_outputs() {
     local temp_dir="$OUT_DIR/temp"
     mkdir -p "$temp_dir"
 
-    # Generate expected counts
-    log_info "Running counting pipeline..."
-    WASP2 counting count-variants \
-        "$bam" \
-        "$vcf" \
-        --out_file "$OUT_DIR/expected_counts.tsv" \
-        --temp_loc "$temp_dir" \
-        2>&1 | tee "$OUT_DIR/counting.log" || {
-        log_warn "Counting pipeline may have warnings, check log"
-    }
-
-    # Generate expected remapping outputs
-    log_info "Running mapping pipeline..."
-    WASP2 mapping make-reads \
-        "$bam" \
-        "$vcf" \
-        --out_dir "$OUT_DIR/wasp_output" \
-        --temp_loc "$temp_dir" \
-        2>&1 | tee "$OUT_DIR/mapping.log" || {
-        log_warn "Mapping pipeline may have warnings, check log"
-    }
-
-    # Move FASTQ outputs to expected locations
-    if [[ -d "$OUT_DIR/wasp_output" ]]; then
-        # Find and copy R1/R2 FASTQ files
-        find "$OUT_DIR/wasp_output" -name "*_R1*.fq*" -o -name "*_1.fq*" | head -1 | while read -r f; do
-            if [[ -n "$f" ]]; then
-                if [[ "$f" == *.gz ]]; then
-                    cp "$f" "$OUT_DIR/expected_r1.fq.gz"
-                else
-                    gzip -c "$f" > "$OUT_DIR/expected_r1.fq.gz"
-                fi
-            fi
-        done
-
-        find "$OUT_DIR/wasp_output" -name "*_R2*.fq*" -o -name "*_2.fq*" | head -1 | while read -r f; do
-            if [[ -n "$f" ]]; then
-                if [[ "$f" == *.gz ]]; then
-                    cp "$f" "$OUT_DIR/expected_r2.fq.gz"
-                else
-                    gzip -c "$f" > "$OUT_DIR/expected_r2.fq.gz"
-                fi
-            fi
-        done
-    fi
+    local sample
+    sample="${WASP2_SANITY_SAMPLE:-$(bcftools query -l "$vcf" | head -1)}"
+    test -n "$sample"
+    wasp2-count count-variants "$bam" "$vcf" --samples "$sample" \
+        --out "$OUT_DIR/expected_counts.tsv" --temp_loc "$temp_dir" \
+        2>&1 | tee "$OUT_DIR/counting.log"
+    wasp2-map make-reads "$bam" "$vcf" --samples "$sample" --paired \
+        --out_dir "$OUT_DIR/wasp_output" --temp_loc "$temp_dir" \
+        2>&1 | tee "$OUT_DIR/mapping.log"
+    gzip -c "$OUT_DIR/wasp_output/chr21_swapped_alleles_r1.fq" > "$OUT_DIR/expected_r1.fq.gz"
+    gzip -c "$OUT_DIR/wasp_output/chr21_swapped_alleles_r2.fq" > "$OUT_DIR/expected_r2.fq.gz"
+    wasp2-analyze find-imbalance "$OUT_DIR/expected_counts.tsv" \
+        --out "$OUT_DIR/expected_analysis.tsv"
+    # These are generated candidates, not an independent scientific reference.
+    log_warn "Review these outputs independently before distributing them as baselines."
 
     # Cleanup temp
     rm -rf "$temp_dir"
@@ -198,7 +168,7 @@ create_metadata() {
             "lines": $counts_lines
         }
     },
-    "wasp2_version": "$(WASP2 --version 2>&1 | head -1 || echo 'unknown')"
+    "wasp2_version": "$(python -c 'from importlib.metadata import version; print(version("wasp2"))')"
 }
 EOF
 

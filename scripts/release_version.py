@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SEMVER = r"[0-9]+\.[0-9]+\.[0-9]+(?:[a-z0-9.-]+)?"
+SEMVER = r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)"
 
 
 def read(path: str) -> str:
@@ -62,6 +62,9 @@ def release_pin_files() -> list[Path]:
 def set_version(version: str, release_date: str) -> None:
     if re.fullmatch(SEMVER, version) is None:
         raise RuntimeError(f"invalid release version: {version}")
+
+    if dt.date.fromisoformat(release_date).isoformat() != release_date:
+        raise ValueError("Release dates must use YYYY-MM-DD")
 
     replace_one("rust/Cargo.toml", rf'^(version\s*=\s*)"{SEMVER}"', rf'\1"{version}"')
     replace_one(
@@ -120,7 +123,7 @@ def check_version() -> list[str]:
     if lock_match is None or lock_match.group(1) != expected:
         errors.append("rust/Cargo.lock root package version differs from rust/Cargo.toml")
 
-    pixi_version = toml_section_version("pixi.toml", "project")
+    pixi_version = toml_section_version("pixi.toml", "workspace")
     if pixi_version != expected:
         errors.append(f"pixi.toml: {pixi_version} != {expected}")
 
@@ -165,11 +168,31 @@ def check_version() -> list[str]:
     return errors
 
 
+def check_release_metadata() -> list[str]:
+    """Require finalized metadata only when publishing a stable release."""
+    expected = cargo_version()
+    citation = read("CITATION.cff")
+    match = re.search(r'^date-released:\s*"(.*?)"\s*$', citation, re.MULTILINE)
+    if match is None:
+        return ["CITATION.cff: add date-released before publishing"]
+    date = match.group(1)
+    try:
+        if dt.date.fromisoformat(date).isoformat() != date:
+            raise ValueError(date)
+    except ValueError:
+        return ["CITATION.cff: date-released must use YYYY-MM-DD"]
+    heading = rf"^## \[?{re.escape(expected)}\]?\s*[-–]\s*{re.escape(date)}\s*$"
+    if not re.search(heading, read("CHANGELOG.md"), re.MULTILINE):
+        return [f"CHANGELOG.md: require '## [{expected}] - {date}' matching the citation"]
+    return []
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--check", action="store_true", help="validate all active version pins")
     group.add_argument("--set", metavar="VERSION", help="update all active version pins")
+    parser.add_argument("--release", action="store_true", help="require finalized release metadata")
     parser.add_argument("--date", default=dt.date.today().isoformat(), help="release date")
     args = parser.parse_args()
 
@@ -177,6 +200,8 @@ def main() -> int:
         set_version(args.set, args.date)
 
     errors = check_version()
+    if args.release:
+        errors.extend(check_release_metadata())
     if errors:
         print("Version consistency failed:", file=sys.stderr)
         for error in sorted(set(errors)):

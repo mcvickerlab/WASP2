@@ -21,6 +21,9 @@ sphinx-design>=0.5
 
 # Project dependencies needed for autodoc
 numpy>=1.24
-pandas>=2.0
-scipy>=1.10
+pandas>=1.5,<3.0
+scipy>=1.13.1
 tomli>=2.0; python_version < "3.11"
+polars>=1.0,<2.0
+typer>=0.12
+rich>=13.0

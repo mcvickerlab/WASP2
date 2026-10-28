@@ -122,7 +122,8 @@ class VariantSource(ABC):
     - Abstract methods: iter_variants, get_genotype, query_region, to_bed
     - Optional: close() for cleanup
 
-    Usage:
+    Usage::
+
         # Factory pattern with automatic format detection
         with VariantSource.open("variants.vcf.gz") as source:
             for vg in source.iter_variants(het_only=True):
@@ -130,15 +131,18 @@ class VariantSource(ABC):
 
         # Direct subclass instantiation
         from wasp2.io.vcf_source import VCFSource
+
         source = VCFSource("variants.vcf.gz")
         samples = source.samples
         source.close()
 
-    Registering a new format handler:
+    Registering a new format handler::
+
         @VariantSource.register("vcf", "bcf")
         class VCFSource(VariantSource):
             def __init__(self, path: str):
                 self.path = path
+
             # ... implement abstract methods
     """
 
@@ -160,10 +164,12 @@ class VariantSource(ABC):
         Returns:
             Decorator function that registers the subclass and returns it unchanged.
 
-        Example:
+        Example::
+
             @VariantSource.register("vcf", "bcf")
             class VCFSource(VariantSource):
                 pass
+
 
             @VariantSource.register(".pgen")
             class PGENSource(VariantSource):

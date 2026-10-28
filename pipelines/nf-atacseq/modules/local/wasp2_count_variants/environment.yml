@@ -3,5 +3,6 @@
 channels:
   - conda-forge
   - bioconda
+  - nodefaults
 dependencies:
   - bioconda::wasp2=1.5.0

@@ -3,10 +3,18 @@ from pathlib import Path
 
 import pytest
 
+from tests.regression.mapping_fixtures import (
+    counter_diff,
+    fastq_counter,
+    quickbench_snv_variants,
+    write_bed,
+    write_synthetic_bam,
+)
+
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src"
 
-# Allow importing `benchmarking.quickbench.*` and `mapping.*`
+# Resolve project modules for source-checkout test runs.
 for p in (ROOT, SRC):
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
@@ -16,17 +24,6 @@ for p in (ROOT, SRC):
 def test_quickbench_snv_parity(tmp_path: Path) -> None:
     """Unified make-reads matches the established multi-pass path on SNVs."""
     wasp2_rust = pytest.importorskip("wasp2_rust")
-
-    # Skip if benchmarking module not available (not included in release)
-    try:
-        from benchmarking.quickbench.fastq_utils import counter_diff, fastq_counter
-        from benchmarking.quickbench.synthetic_dataset import (
-            quickbench_snv_variants,
-            write_bed,
-            write_synthetic_bam,
-        )
-    except ImportError:
-        pytest.skip("benchmarking module not available (not included in release)")
 
     from mapping.intersect_variant_data import intersect_reads, process_bam
     from mapping.make_remap_reads import write_remap_bam
@@ -89,6 +86,7 @@ def test_quickbench_snv_parity(tmp_path: Path) -> None:
 
     baseline_counter = fastq_counter(baseline_r1, baseline_r2)
     unified_counter = fastq_counter(unified_r1, unified_r2)
+    assert baseline_counter and unified_counter
     only_baseline, only_unified = counter_diff(baseline_counter, unified_counter)
 
     assert only_baseline == [] and only_unified == [], (
@@ -99,7 +97,7 @@ def test_quickbench_snv_parity(tmp_path: Path) -> None:
 
     # Strand sanity check: `pairR` has R2 flagged reverse in the BAM and should be
     # written to FASTQ in the original read orientation (rev-comp + qual reversal).
-    from benchmarking.quickbench.fastq_utils import CanonicalFastqRecord
+    from tests.regression.mapping_fixtures import CanonicalFastqRecord
 
     hap2_aligned = ["A"] * 50
     hap2_aligned[10] = "G"

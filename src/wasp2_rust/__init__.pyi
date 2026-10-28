@@ -5,6 +5,7 @@ for allele-specific analysis in WASP2.
 """
 
 __version__: str
+__htslib_version__: str
 
 from typing import TypedDict
 

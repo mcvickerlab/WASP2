@@ -5,6 +5,26 @@ All notable changes to WASP2 will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- Build standalone HTS tools from verified patched sources and enforce security
+  baselines for independently inventoried embedded native libraries.
+- Prevent optional Parquet validation from hanging during Python 3.13 shutdown
+  by using Arrow's native local filesystem for the read-back check.
+- Reserve macOS extension header space for Conda library-path relocation.
+- Refresh maintained CI actions and remove unused Python build helpers from runtime images.
+- Refresh Rust HTSlib wrapper/binding patch releases and collect independent runtime
+  scans and SIF checks when a build-image security gate fails.
+- Resolve numeric mapping genotypes to allele sequences and label swapped FASTQs
+  with the number of pairs actually written, preserving valid remapped reads.
+- Preserve PGEN sample order and phase during BED export and accept the common
+  variant-selection options used by counting and mapping.
+- Correct supported Polars/SciPy dependency floors, position join types, Conda
+  environments, Pixi tasks and the current Pixi manifest format.
+- Fail installation smoke tests on missing inputs and incorrect counts, swapped
+  sequences, remap decisions or single-cell matrices; reuse them for release artifacts.
+- Require complete documentation imports and meaningful SBOM inventories; stage
+  tested images by digest and reconcile immutable PyPI artifacts before publication.
+- Provide optional Zarr/Parquet export dependencies and repair executable tutorial
+  examples, sample identifiers and Singularity validation.
 - Restore archived single-cell phasing fallback for mixed phased/unphased
   genotypes and require the native counter for normal single-cell counting.
 - Reject overflowing bulk count, threshold, pseudocount and regional-total

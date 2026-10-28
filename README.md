@@ -21,7 +21,7 @@
 
 Published packages and container tags may lag behind `dev`. This branch targets
 the unreleased 1.5.0 version. To test development fixes, install from `dev`
-using the [source installation instructions](https://mcvickerlab.github.io/WASP2/installation.html#development-installation).
+using the [source installation instructions](https://github.com/mcvickerlab/WASP2/blob/dev/docs/source/installation.rst#development-installation).
 
 ### Bioconda
 
@@ -70,13 +70,16 @@ backend performs the calculations.
 
 ## Quick Start
 
-> **Prerequisite — normalize your VCF first.** WASP2's allelic-imbalance model is biallelic.
-> Split multi-allelic records and left-align before running:
+> **Variant selection:** the standard workflow uses biallelic SNVs. Ensure the
+> VCF and BAM use the same reference and chromosome names. To select these sites:
 >
 > ```bash
-> bcftools norm -m- -f reference.fa input.vcf.gz -Oz -o input.norm.vcf.gz
-> bcftools index -t input.norm.vcf.gz
+> bcftools view -m2 -M2 -v snps input.vcf.gz -Oz -o input.snvs.vcf.gz
+> bcftools index -t input.snvs.vcf.gz
 > ```
+>
+> Splitting multiallelic records beforehand changes which sites pass this filter;
+> choose that preprocessing explicitly rather than treating it as equivalent.
 >
 > By default WASP2 keeps **biallelic SNVs only** (multi-allelic sites are dropped, equivalent to
 > `bcftools view -m2 -M2`). Pass `--include-multiallelic` to `count-variants`, `count-variants-sc`,

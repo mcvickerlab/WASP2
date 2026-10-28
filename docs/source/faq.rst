@@ -157,7 +157,7 @@ to harmonize the VCF.
 
 This happens if the wheel was built for a different platform or Python version.
 Try reinstalling: ``pip install --force-reinstall wasp2``. If building from source,
-run ``pixi run verify`` to rebuild.
+run ``pixi run build`` to rebuild, then ``pixi run verify`` to check it.
 
 **WASP2 runs but produces an empty counts file.**
 

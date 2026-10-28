@@ -3,6 +3,7 @@
 channels:
   - conda-forge
   - bioconda
+  - nodefaults
 dependencies:
   - bioconda::wasp2=1.5.0
   - bioconda::samtools=1.17
